@@ -13,6 +13,7 @@ from datetime import date
 
 from redops.contexts.engagement.domain.entities import ClientWorkspace
 from redops.contexts.engagement.domain.value_objects import IntakePackage
+from redops.contexts.governance.domain.entities import StageRun
 from redops.contexts.governance.domain.value_objects import StageTemplate
 from redops.contexts.knowledge.domain.entities import Claim
 
@@ -27,12 +28,19 @@ class RecordStageZeroGateCommand:
     itself from the package, so a caller cannot substitute a hand-built gate and
     skip the owner-authority and sourced-evidence checks (SPEC.md sections 3, 4
     and 6).
+
+    It also carries the stage 0 ``StageRun`` to close. Recording a passing gate
+    and completing the stage are one application operation, so the durable
+    ``GateDecision`` and the stage status cannot drift apart, and SPEC.md section
+    4's "stage completion requires gate acceptance, not merely activity" holds at
+    the application boundary.
     """
 
     template: StageTemplate
     workspace: ClientWorkspace
     package: IntakePackage
     claims: tuple[Claim, ...]
+    stage_run: StageRun
     approver: str
     scope: str
     checkpoint_evidence: str
@@ -40,5 +48,6 @@ class RecordStageZeroGateCommand:
     assigned_owner: str
     due_on: date
     on: date
+    correlation_id: str
     proposed_by: str | None = None
     next_action: str = ""

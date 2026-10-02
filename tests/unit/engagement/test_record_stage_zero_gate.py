@@ -34,6 +34,8 @@ from redops.contexts.engagement.domain.errors import (
     GateApproverNotAuthorizedError,
     IncompleteIntakePackageError,
     IntakeOwnerNotAuthorizedError,
+    StageRunNotCompletableError,
+    StageRunNotStageZeroError,
     UnsourcedIntakeEvidenceError,
 )
 from redops.contexts.engagement.domain.value_objects import (
@@ -43,11 +45,12 @@ from redops.contexts.engagement.domain.value_objects import (
     IntakeAssetKind,
     IntakePackage,
 )
-from redops.contexts.governance.domain.entities import GateLedger
+from redops.contexts.governance.domain.entities import GateLedger, StageRun
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
 from redops.contexts.governance.domain.value_objects import (
     GateDisposition,
     PipelineProgress,
+    StageStatus,
 )
 from redops.contexts.knowledge.domain.entities import Claim
 from redops.contexts.knowledge.domain.value_objects import (
@@ -61,6 +64,7 @@ TENANT = "client-3f"
 OWNER = "red-owner"
 APPROVER = "client-approver-1"
 SCOPE = "stage-1-diagnosis"
+CORRELATION = "corr-stage-0"
 
 
 def workspace(**overrides) -> ClientWorkspace:
@@ -74,6 +78,24 @@ def workspace(**overrides) -> ClientWorkspace:
     }
     values.update(overrides)
     return ClientWorkspace(**values)
+
+
+def working_stage_run(**overrides) -> StageRun:
+    values = {
+        "engagement": "ws-3f",
+        "stage_number": 0,
+        "template_version": stage_zero_to_ten_template().version,
+        "assigned_owner": OWNER,
+    }
+    values.update(overrides)
+    run = StageRun(**values)
+    run.start(
+        actor=OWNER,
+        reason="intake work began",
+        on=ON,
+        correlation_id=CORRELATION,
+    )
+    return run
 
 
 def sourced_claim(
@@ -124,12 +146,21 @@ class RecordStageZeroGateHandlerTests(unittest.TestCase):
         self.handler = RecordStageZeroGateHandler()
         self.template = stage_zero_to_ten_template()
 
-    def command(self, *, workspace_=None, package_=None, claims=None, **overrides):
+    def command(
+        self,
+        *,
+        workspace_=None,
+        package_=None,
+        claims=None,
+        stage_run_=None,
+        **overrides,
+    ):
         values = {
             "template": self.template,
             "workspace": workspace_ or workspace(),
             "package": package_ or package(),
             "claims": claims if claims is not None else (sourced_claim(),),
+            "stage_run": stage_run_ if stage_run_ is not None else working_stage_run(),
             "approver": APPROVER,
             "proposed_by": OWNER,
             "scope": SCOPE,
@@ -138,6 +169,7 @@ class RecordStageZeroGateHandlerTests(unittest.TestCase):
             "assigned_owner": OWNER,
             "due_on": DUE,
             "on": ON,
+            "correlation_id": CORRELATION,
         }
         values.update(overrides)
         return RecordStageZeroGateCommand(**values)
@@ -154,6 +186,77 @@ class RecordStageZeroGateHandlerTests(unittest.TestCase):
         self.assertEqual(
             1, PipelineProgress.from_ledger(ledger, on=ON).approved_gates
         )
+
+    def test_recording_closes_the_stage_zero_run_from_the_durable_decision(self):
+        ledger = GateLedger(self.template)
+        run = working_stage_run()
+
+        decision = self.handler.handle(self.command(stage_run_=run), ledger=ledger)
+
+        self.assertTrue(run.is_complete)
+        self.assertIs(StageStatus.COMPLETE, run.status)
+        self.assertIs(decision, run.accepted_decision)
+        self.assertEqual(ON, run.exited_at)
+
+    def test_stage_status_and_verified_progress_agree_after_recording(self):
+        ledger = GateLedger(self.template)
+        run = working_stage_run()
+
+        self.handler.handle(self.command(stage_run_=run), ledger=ledger)
+
+        progress = PipelineProgress.from_ledger(ledger, on=ON)
+        self.assertEqual(1, progress.approved_gates)
+        self.assertTrue(run.is_complete)
+
+    def test_the_closure_records_the_accepting_approver_and_correlation(self):
+        ledger = GateLedger(self.template)
+        run = working_stage_run()
+
+        self.handler.handle(self.command(stage_run_=run), ledger=ledger)
+
+        transition = run.transitions[-1]
+        self.assertEqual(APPROVER, transition.actor)
+        self.assertEqual(CORRELATION, transition.correlation_id)
+        self.assertIs(StageStatus.COMPLETE, transition.new_status)
+
+    def test_a_run_for_another_stage_cannot_be_closed(self):
+        ledger = GateLedger(self.template)
+
+        with self.assertRaises(StageRunNotStageZeroError):
+            self.handler.handle(
+                self.command(stage_run_=working_stage_run(stage_number=1)),
+                ledger=ledger,
+            )
+
+        self.assertIsNone(ledger.decision_for(0))
+
+    def test_a_run_for_another_template_version_cannot_be_closed(self):
+        ledger = GateLedger(self.template)
+
+        with self.assertRaises(StageRunNotStageZeroError):
+            self.handler.handle(
+                self.command(
+                    stage_run_=working_stage_run(template_version="2025.9")
+                ),
+                ledger=ledger,
+            )
+
+        self.assertIsNone(ledger.decision_for(0))
+
+    def test_a_not_completable_run_does_not_record_a_decision(self):
+        ledger = GateLedger(self.template)
+        run = StageRun(
+            engagement="ws-3f",
+            stage_number=0,
+            template_version=self.template.version,
+            assigned_owner=OWNER,
+        )
+
+        with self.assertRaises(StageRunNotCompletableError):
+            self.handler.handle(self.command(stage_run_=run), ledger=ledger)
+
+        self.assertIsNone(ledger.decision_for(0))
+        self.assertFalse(run.is_complete)
 
     def test_the_use_case_pins_the_exact_version_each_asset_carries(self):
         ledger = GateLedger(self.template)

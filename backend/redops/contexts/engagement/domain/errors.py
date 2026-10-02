@@ -127,6 +127,28 @@ class NotStageZeroGateError(EngagementError):
     """
 
 
+class StageRunNotStageZeroError(EngagementError):
+    """A stage 0 closure was handed a StageRun for another stage or template.
+
+    SPEC.md sections 3 and 4 make a StageRun track one stage of one versioned
+    template. Completing a stage 0 gate must close the matching stage 0 run for
+    the same template version, so a run for another stage or version cannot be
+    closed by the stage 0 path and left showing verified progress the run does
+    not represent.
+    """
+
+
+class StageRunNotCompletableError(EngagementError):
+    """A stage 0 closure was handed a StageRun whose state cannot complete.
+
+    SPEC.md section 4 rejects illegal transitions rather than silently coercing
+    state: a stage reaches COMPLETE only from an active Working or In Review run,
+    never from Not Started, Changes Required, Blocked, Waived, Complete or
+    Superseded. A run that cannot complete must not cause the gate decision to be
+    recorded first, so the ledger and the stage status cannot drift.
+    """
+
+
 class UnsourcedIntakeEvidenceError(EngagementError):
     """A stage 0 intake asset was asked to use unsourced or foreign evidence.
 
