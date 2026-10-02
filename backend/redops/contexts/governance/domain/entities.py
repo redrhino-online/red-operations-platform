@@ -643,6 +643,7 @@ class StageRun:
         self,
         *,
         decision: GateDecision,
+        ledger: GateLedger,
         actor: str,
         reason: str,
         on: date,
@@ -659,6 +660,12 @@ class StageRun:
         stale evidence (SPEC.md section 4: "a failed or expired prerequisite
         blocks dependent authorization until resolved"). Activity alone never
         reaches here.
+
+        The durable ``GateLedger`` is consulted for the stage's transitive
+        prerequisite chain. The accepted decision carries no upstream state, so
+        a stage whose own approvals are current could otherwise complete on top
+        of a prerequisite that has lapsed. The completion is refused unless
+        every prerequisite stage authorizes at the transition instant.
         """
         if decision.stage_number != self.stage_number:
             raise StageGateNotAcceptedError(
@@ -670,10 +677,26 @@ class StageRun:
                 f"decision template version {decision.template_version!r} does "
                 f"not match stage template version {self.template_version!r}"
             )
+        if ledger.template.version != self.template_version:
+            raise StageGateNotAcceptedError(
+                f"ledger template version {ledger.template.version!r} does "
+                f"not match stage template version {self.template_version!r}"
+            )
         if not decision.authorizes_downstream_at(on):
             raise StageGateNotAcceptedError(
                 "decision is not passing, has no intended downstream scope, "
                 "or its pinned approvals have expired at the transition instant"
+            )
+        unsatisfied = sorted(
+            dependency
+            for dependency in ledger.template.dependencies_of(self.stage_number)
+            if not ledger.has_passing_decision(dependency, on=on)
+        )
+        if unsatisfied:
+            names = ", ".join(str(stage) for stage in unsatisfied)
+            raise StageGateNotAcceptedError(
+                "stage cannot complete while prerequisite stages lack a "
+                f"passing, unexpired decision at the transition instant: {names}"
             )
         transition = self._transition(
             StageStatus.COMPLETE,

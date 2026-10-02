@@ -4,74 +4,70 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T13:38:00Z (Ralph cycle 41).
-- Selected item: gate integrity — make prerequisite authorization
-  transitively time-aware. `GateLedger.has_passing_decision(stage, on)`
-  previously checked only the stage's own latest `GateDecision`, so a stage
-  whose own approvals were still current kept reporting passing even when an
-  upstream stage's pinned approvals had lapsed; `dependency_states` marked only
-  the immediately expired stage `BLOCKED` and `PipelineProgress.from_ledger`
-  over-counted gates behind an expired chain. This was the highest priority
-  ready next item named by cycle 40; it outranked the Operations command-center
-  intervention ranking (a downstream view, SPEC.md section 7) and the stage
-  2-10 `GateDecision` wiring (blocked on the asset-version representation),
-  needs no unresolved decision, and is independently verifiable.
+- Cycle timestamp: 2026-10-02T13:39:30Z (Ralph cycle 42).
+- Selected item: close the StageRun completion boundary. `StageRun.complete`
+  previously re-checked only the accepted `GateDecision`'s own pinned approvals
+  at the transition instant and had no view of the stage's upstream chain, so a
+  stage whose own approvals were current could complete on top of a transitive
+  prerequisite that had lapsed. `GateLedger.has_passing_decision`,
+  `dependency_states` and `PipelineProgress` already reported that
+  authorization correctly, but the state-machine boundary itself was not
+  closed. This was the highest priority ready next item named by cycle 41; it
+  outranked the Operations command-center intervention ranking (a downstream
+  view, SPEC.md section 7) and the stage 2-10 `GateDecision` wiring (blocked on
+  the asset-version representation), needs no unresolved decision, and is
+  independently verifiable.
 - Outcome: completed and verified.
-- Evidence: five new behavioral tests in
-  `tests/unit/governance/test_gate_prerequisite_expiry.py`
-  (`GateLedgerTransitivePrerequisiteExpiryTests`): an intact chain still
-  authorizes later; an expired upstream revokes a directly dependent stage and
-  a transitively dependent stage; `dependency_states` reports every stage
-  behind the expired chain as `BLOCKED`; and `PipelineProgress.from_ledger`
-  counts zero approved gates behind the expired chain. Before the change the
-  direct and transitive cases reported passing and the ledger counted 2
-  approved gates. `GateLedger.has_passing_decision` now recurses over
-  `template.dependencies_of(stage)` and returns false when the stage or any
-  transitive prerequisite does not authorize at `on`; `dependency_states`
-  derives `BLOCKED` through the same method, and `GateLedger.record`,
-  `GateDecision.from_gate` and `PipelineProgress.from_ledger` inherit the fix.
+- Evidence: three new behavioral tests in
+  `tests/unit/governance/test_stage_run.py`
+  (`StageCompletionPrerequisiteTests`): a transitive upstream lapse refuses
+  completion, a lapsed immediate prerequisite refuses completion, and an intact
+  chain completes and pins the accepted decision. Before the change the calls
+  failed with `TypeError` because `complete` had no ledger; with only the
+  existing decision check they would have completed on the lapsed stage.
+  `StageRun.complete` now takes a required `ledger: GateLedger`, rejects a
+  ledger whose template version differs from the run's, and raises
+  `StageGateNotAcceptedError` when any transitive prerequisite lacks a
+  passing, unexpired decision at the transition instant `on`, leaving the stage
+  WORKING with no `exited_at` or `accepted_decision`. Every existing
+  `StageRun` completion test was updated to supply an authorizing ledger.
   Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 384 passed, up from 379. `python3 -m pyflakes` on the touched
-  governance entity module and expiry test module is clean. `ruff` and `mypy`
-  remain uninstalled.
-- New findings: `StageRun.complete` still re-checks only the accepted decision's
-  own approvals at the transition instant (`decision.authorizes_downstream_at`),
-  not the stage's transitive prerequisites through the ledger. A stage can
-  therefore be completed on a decision that was recorded while its prerequisite
-  was valid but whose prerequisite approvals have lapsed by the completion date.
-  The ledger and `PipelineProgress` now report that authorization correctly, but
-  the StageRun transition boundary itself is not yet closed. Closing it requires
-  the `StageRun` aggregate to consult the durable `GateLedger` (or its
-  prerequisite decisions) at `on`, because the accepted decision alone carries
-  no upstream state.
+  reports 387 passed, up from 384. `python3 -m pyflakes` on the touched
+  governance entity module and stage-run test module is clean. `ruff` and
+  `mypy` remain uninstalled.
+- New findings: `StageRun.complete` still accepts a caller-supplied
+  `GateDecision` without requiring it to be the stage's durable, currently
+  recorded `GateLedger` decision. The transitive prerequisite chain is now
+  enforced against the ledger, but the accepted decision itself is not
+  confirmed to have been committed through `GateLedger.record`, so a transient
+  passing decision could complete a stage while the durable ledger held a
+  different or absent decision for that stage. The asset-version representation
+  (integer versus semantic) also remains unresolved and continues to block
+  stage 2-10 `GateDecision` wiring; every gate asset in code is integer-valued
+  today (`AssetVersionRef.version: int`) while method versions are semantic
+  (`SemanticVersion`).
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, scheduler/worker
   topology, the client-designated approver identities, and pilot metric targets.
-  The asset-version representation (integer versus semantic) remains unresolved
-  in the plan and continues to block stage 2-10 `GateDecision` wiring, although
-  every gate asset in code is integer-valued today (`AssetVersionRef.version:
-  int`) while method versions are semantic (`SemanticVersion`). No fork or
-  cluster facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or
-  `argocd` present.
-- Highest priority ready next item: close the StageRun completion boundary —
-  `StageRun.complete` must refuse to complete a stage when the durable
-  `GateLedger` shows the stage's transitive prerequisite chain is not
-  authorizing at the transition instant `on`, not only when the accepted
-  decision's own approvals have expired. Give `complete` access to the
-  prerequisite authorization (a `GateLedger` reference or the ledger's template
-  dependencies) and raise `StageGateNotAcceptedError` otherwise. It outranks
-  the Operations command-center intervention ranking (a downstream view) and
-  the stage 2-10 wiring (blocked on the asset-version representation), because
-  it closes the remaining verified dependency-enforcement gap at a
-  state-machine boundary and needs no unresolved decision. Prerequisite: none.
-  Pipeline mapping: no single stage; it hardens the completion boundary for
-  every stage 0-10 dependency edge. Blocked downstream dependency: persistence
-  and the production manager view, blocked on the storage ADR. Deferred
-  cross-context items: the stage 2/3/4/5/6/7/8/9/10 `GateDecision` wiring,
-  blocked on the asset-version representation decision, and all persistence,
-  blocked on the storage ADR.
+  No fork or cluster facts invented; no `docs/`, fork checkout, `kubectl`,
+  `helm`, or `argocd` present.
+- Highest priority ready next item: require StageRun completion to be
+  authorized by the stage's durable ledger entry. `complete` must confirm that
+  the accepted decision is the stage's current recorded `GateLedger` decision
+  (and still authorizes at `on`) before transitioning, so completion cannot
+  rest on a transient decision that was never committed; raise
+  `StageGateNotAcceptedError` otherwise. It outranks the Operations
+  command-center intervention ranking (a downstream view) and the stage 2-10
+  wiring (blocked on the asset-version representation), because it closes the
+  remaining durability gap at the same state-machine boundary and needs no
+  unresolved decision. Prerequisite: none. Pipeline mapping: no single stage;
+  it hardens the durable completion boundary for every stage 0-10 dependency
+  edge. Blocked downstream dependency: persistence and the production manager
+  view, blocked on the storage ADR. Deferred cross-context items: the stage
+  2/3/4/5/6/7/8/9/10 `GateDecision` wiring, blocked on the asset-version
+  representation decision, and all persistence, blocked on the storage ADR.
 
 ## Product priority: the gated production engagement
 

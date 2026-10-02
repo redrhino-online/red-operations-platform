@@ -16,11 +16,15 @@ from datetime import date
 from redops.contexts.governance.domain.entities import (
     ApprovalRequest,
     GateDecision,
+    GateLedger,
     StageRun,
 )
 from redops.contexts.governance.domain.errors import (
     IllegalStageTransitionError,
     StageGateNotAcceptedError,
+)
+from redops.contexts.governance.domain.templates import (
+    stage_zero_to_ten_template,
 )
 from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
@@ -34,6 +38,60 @@ TODAY = date(2026, 10, 2)
 DATE_DUE = date(2026, 10, 16)
 CORRELATION = "corr-123"
 SCOPE = "stage-8-funnel-integration"
+TEMPLATE = stage_zero_to_ten_template("2026.1")
+
+
+def canonical_decision(
+    stage_number: int,
+    *,
+    decided_on: date = TODAY,
+    expires_on: date | None = None,
+) -> GateDecision:
+    definition = TEMPLATE.definition_for(stage_number)
+    assets = frozenset(
+        AssetVersionRef(kind, 1)
+        for kind in TEMPLATE.required_asset_kinds(stage_number)
+    )
+    scope = f"stage-{stage_number + 1}-downstream"
+    approvals = []
+    for asset in assets:
+        request = ApprovalRequest(
+            asset=asset,
+            scope=scope,
+            requested_by="specialist-1",
+            approver="client-approver-1",
+            expires_on=expires_on,
+        )
+        request.approve(actor="client-approver-1", on=decided_on)
+        approvals.append(request)
+    return GateDecision(
+        stage_number=stage_number,
+        template_version="2026.1",
+        required_assets=assets,
+        checkpoint=definition.checkpoint,
+        checkpoint_evidence=f"stage {stage_number} rubric passed",
+        reviewer="client-approver-1",
+        scope=scope,
+        disposition=GateDisposition.APPROVED,
+        rationale="reviewed against the canonical checkpoint",
+        decided_on=decided_on,
+        assigned_owner="production-manager",
+        due_on=DATE_DUE,
+        asset_approvals=tuple(approvals),
+    )
+
+
+def prerequisite_ledger(expiries) -> GateLedger:
+    ledger = GateLedger(TEMPLATE)
+    for stage_number, expires_on in enumerate(expiries):
+        ledger.record(
+            canonical_decision(stage_number, expires_on=expires_on)
+        )
+    return ledger
+
+
+def authorizing_ledger() -> GateLedger:
+    return prerequisite_ledger([date(2026, 12, 31)] * 7)
 
 
 def script_approval(expires_on=None):
@@ -144,6 +202,7 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
         with self.assertRaises(StageGateNotAcceptedError):
             run.complete(
                 decision=blocked,
+                ledger=authorizing_ledger(),
                 actor="specialist-1",
                 reason="looks done",
                 on=TODAY,
@@ -180,6 +239,7 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
         with self.assertRaises(StageGateNotAcceptedError):
             run.complete(
                 decision=waived,
+                ledger=authorizing_ledger(),
                 actor="specialist-1",
                 reason="waived",
                 on=TODAY,
@@ -195,6 +255,7 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
         with self.assertRaises(StageGateNotAcceptedError):
             run.complete(
                 decision=accepted_decision(stage_number=6),
+                ledger=authorizing_ledger(),
                 actor="specialist-1",
                 reason="wrong stage decision",
                 on=TODAY,
@@ -210,6 +271,7 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
         with self.assertRaises(StageGateNotAcceptedError):
             run.complete(
                 decision=accepted_decision(template_version="2025.9"),
+                ledger=authorizing_ledger(),
                 actor="specialist-1",
                 reason="stale template decision",
                 on=TODAY,
@@ -225,6 +287,7 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
 
         run.complete(
             decision=decision,
+            ledger=authorizing_ledger(),
             actor="client-approver-1",
             reason="gate approved",
             on=TODAY,
@@ -256,6 +319,7 @@ class StageCompletionExpiryTests(unittest.TestCase):
         with self.assertRaises(StageGateNotAcceptedError):
             run.complete(
                 decision=decision,
+                ledger=authorizing_ledger(),
                 actor="client-approver-1",
                 reason="accepting after the approvals lapsed",
                 on=self.AFTER_EXPIRY,
@@ -274,6 +338,7 @@ class StageCompletionExpiryTests(unittest.TestCase):
 
         run.complete(
             decision=decision,
+            ledger=authorizing_ledger(),
             actor="client-approver-1",
             reason="gate approved within the evidence window",
             on=DATE_DUE,
@@ -296,6 +361,7 @@ class StageTransitionIntegrityTests(unittest.TestCase):
         with self.assertRaises(IllegalStageTransitionError):
             stage_run().complete(
                 decision=accepted_decision(stage_number=7),
+                ledger=authorizing_ledger(),
                 actor="client-approver-1",
                 reason="nothing was produced",
                 on=TODAY,
@@ -307,6 +373,7 @@ class StageTransitionIntegrityTests(unittest.TestCase):
         run.start(actor="specialist-1", reason="begin", on=TODAY, correlation_id=CORRELATION)
         run.complete(
             decision=accepted_decision(stage_number=7),
+            ledger=authorizing_ledger(),
             actor="client-approver-1",
             reason="approved",
             on=TODAY,
@@ -337,6 +404,97 @@ class StageTransitionRecordTests(unittest.TestCase):
         run.start(actor="specialist-1", reason="begin", on=TODAY, correlation_id=CORRELATION)
 
         self.assertIsInstance(run.transitions, tuple)
+
+
+class StageCompletionPrerequisiteTests(unittest.TestCase):
+    """Stage completion consults the durable prerequisite chain.
+
+    SPEC.md section 4 makes the 0-10 pipeline a dependency graph and says "a
+    failed or expired prerequisite blocks dependent authorization until
+    resolved". Completing a stage is the downstream authorization its accepted
+    decision grants, so it must be refused while any transitive prerequisite
+    stage is lapsed at the transition instant, even when the accepted decision's
+    own pinned approvals are still current. Before this change StageRun.complete
+    read only the accepted decision, which carries no upstream state, so a stage
+    could complete on top of an expired prerequisite.
+    """
+
+    AFTER_UPSTREAM_EXPIRY = date(2026, 10, 20)
+
+    def test_a_stage_cannot_complete_when_a_transitive_prerequisite_has_lapsed(self):
+        ledger = prerequisite_ledger(
+            [date(2026, 10, 15)] + [date(2026, 12, 31)] * 6
+        )
+        run = stage_run(stage_number=7)
+        run.start(
+            actor="specialist-1",
+            reason="begin",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            run.complete(
+                decision=accepted_decision(stage_number=7),
+                ledger=ledger,
+                actor="client-approver-1",
+                reason="accepting on top of an expired upstream stage",
+                on=self.AFTER_UPSTREAM_EXPIRY,
+                correlation_id=CORRELATION,
+            )
+
+        self.assertIs(StageStatus.WORKING, run.status)
+        self.assertFalse(run.is_complete)
+        self.assertIsNone(run.exited_at)
+        self.assertIsNone(run.accepted_decision)
+
+    def test_a_stage_cannot_complete_when_a_direct_prerequisite_has_lapsed(self):
+        ledger = prerequisite_ledger(
+            [date(2026, 12, 31)] * 6 + [date(2026, 10, 15)]
+        )
+        run = stage_run(stage_number=7)
+        run.start(
+            actor="specialist-1",
+            reason="begin",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            run.complete(
+                decision=accepted_decision(stage_number=7),
+                ledger=ledger,
+                actor="client-approver-1",
+                reason="immediate prerequisite lapsed",
+                on=self.AFTER_UPSTREAM_EXPIRY,
+                correlation_id=CORRELATION,
+            )
+
+        self.assertFalse(run.is_complete)
+
+    def test_a_stage_completes_when_its_prerequisite_chain_authorizes(self):
+        ledger = prerequisite_ledger([date(2026, 12, 31)] * 7)
+        run = stage_run(stage_number=7)
+        run.start(
+            actor="specialist-1",
+            reason="begin",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+        decision = accepted_decision(stage_number=7)
+
+        run.complete(
+            decision=decision,
+            ledger=ledger,
+            actor="client-approver-1",
+            reason="gate approved with current prerequisites",
+            on=self.AFTER_UPSTREAM_EXPIRY,
+            correlation_id=CORRELATION,
+        )
+
+        self.assertIs(StageStatus.COMPLETE, run.status)
+        self.assertTrue(run.is_complete)
+        self.assertIs(decision, run.accepted_decision)
 
 
 if __name__ == "__main__":
