@@ -50,3 +50,57 @@ class IllegalLifecycleTransitionError(EngagementError):
     rather than silently coercing state. A workspace cannot skip, reverse or leave
     its terminal state.
     """
+
+
+class InvalidIntakeAssetError(EngagementError, ValueError):
+    """A stage 0 intake asset was built without its required identity or content.
+
+    SPEC.md section 1: every output has a source, status, owner and next action.
+    SPEC.md section 4, stage 0 "Intake": the required asset package names the
+    client record, signed scope, billing confirmation, questionnaire, brand asset
+    inventory, access checklist, baseline measures, workspace, communication
+    channel, timeline, responsibilities and launch definition. An asset that
+    leaves its kind, owner, summary or source unspecified cannot be represented
+    as a real intake asset.
+    """
+
+
+class InvalidIntakePackageError(EngagementError, ValueError):
+    """A stage 0 intake package was built with inconsistent or duplicate assets.
+
+    SPEC.md section 4, stage 0 "Intake": the required asset package is the set of
+    named assets behind the "Production Ready" checkpoint, and SPEC.md section 3
+    requires every child resource to belong to exactly one client. A package that
+    repeats an asset kind or mixes tenants cannot be represented as a coherent
+    intake package.
+    """
+
+
+class IncompleteIntakePackageError(EngagementError):
+    """A stage 0 intake package was asked to be production ready while incomplete.
+
+    SPEC.md section 4, stage 0 and its "Production Ready" checkpoint: "building
+    for whom, success measure, owners, boundaries, and prerequisites are
+    explicit". Every canonical stage 0 asset kind must be present, so a missing
+    asset is surfaced rather than hidden behind a passed gate.
+    """
+
+
+class IntakeOwnerNotAuthorizedError(EngagementError):
+    """A stage 0 intake asset names an owner who holds no authority.
+
+    SPEC.md section 4: a stage completion has an assigned owner, and SPEC.md
+    section 1 requires every output to have an owner. An owner who is not a named
+    authority on the client workspace cannot be accountable for the asset.
+    """
+
+
+class UnsourcedIntakeEvidenceError(EngagementError):
+    """A stage 0 intake asset was asked to use unsourced or foreign evidence.
+
+    SPEC.md sections 1 and 4: every output has a source, and previously approved
+    client assets satisfy a gate only after source, authority, version and fit are
+    checked. An intake asset's evidence must be a known, directly sourced
+    Knowledge claim of the same client; an unsourced, merely derived or proposed,
+    or foreign claim cannot support it.
+    """

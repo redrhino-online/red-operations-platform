@@ -9,11 +9,25 @@ terminal.
 
 from __future__ import annotations
 
-from redops.contexts.engagement.domain.errors import IllegalLifecycleTransitionError
+from typing import TYPE_CHECKING, Iterable
+
+from redops.contexts.engagement.domain.errors import (
+    IllegalLifecycleTransitionError,
+    IncompleteIntakePackageError,
+    IntakeOwnerNotAuthorizedError,
+    TenantBoundaryError,
+    UnsourcedIntakeEvidenceError,
+)
 from redops.contexts.engagement.domain.value_objects import (
     CANONICAL_PROGRESSION,
     EngagementLifecycle,
+    IntakePackage,
 )
+from redops.contexts.knowledge.domain.entities import Claim
+from redops.contexts.knowledge.domain.policies import sourced_claim_ids
+
+if TYPE_CHECKING:
+    from redops.contexts.engagement.domain.entities import ClientWorkspace
 
 
 class WorkspaceLifecyclePolicy:
@@ -60,3 +74,53 @@ class WorkspaceLifecyclePolicy:
             raise IllegalLifecycleTransitionError(
                 f"engagement in {current.value!r} is not paused and cannot resume"
             )
+
+
+class ProductionReadyPolicy:
+    """Evaluates the stage 0 "Production Ready" checkpoint for an intake package.
+
+    SPEC.md section 4, stage 0 "Intake" and its "Production Ready" checkpoint:
+    "building for whom, success measure, owners, boundaries, and prerequisites
+    are explicit", and the stage is complete only when its required assets exist.
+    The policy refuses to declare an intake package production ready unless every
+    canonical stage 0 asset kind is present, each asset's named owner is a
+    designated authority on the same client workspace, and each asset's evidence
+    is a known, directly sourced Knowledge claim of the same client. A missing
+    asset, an unaccountable owner or unsourced evidence is surfaced rather than
+    hidden behind a passed gate (SPEC.md sections 1, 3 and 4).
+    """
+
+    def require(
+        self,
+        package: IntakePackage,
+        workspace: "ClientWorkspace",
+        claims: Iterable[Claim],
+    ) -> None:
+        if package.tenant_id != workspace.tenant_id:
+            raise TenantBoundaryError(
+                f"intake package {package.package_id!r} belongs to tenant "
+                f"{package.tenant_id!r}, not workspace tenant "
+                f"{workspace.tenant_id!r}"
+            )
+        missing = package.missing_kinds()
+        if missing:
+            names = ", ".join(kind.value for kind in missing)
+            raise IncompleteIntakePackageError(
+                f"intake package {package.package_id!r} cannot be production "
+                f"ready: missing required assets {names}"
+            )
+        sourced = sourced_claim_ids(package.tenant_id, claims)
+        for asset in package.assets:
+            if not workspace.has_authority(asset.owner):
+                raise IntakeOwnerNotAuthorizedError(
+                    f"intake asset {asset.asset_id!r} names owner "
+                    f"{asset.owner!r}, who holds no authority on workspace "
+                    f"{workspace.workspace_id!r}"
+                )
+            for claim_id in asset.evidence_claim_ids:
+                if claim_id not in sourced:
+                    raise UnsourcedIntakeEvidenceError(
+                        f"intake asset {asset.asset_id!r} cannot be evidenced: "
+                        f"claim {claim_id!r} is not a known, directly sourced "
+                        "claim for this tenant"
+                    )

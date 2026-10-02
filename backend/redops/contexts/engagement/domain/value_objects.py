@@ -13,7 +13,12 @@ from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 
-from redops.contexts.engagement.domain.errors import InvalidAuthorityError
+from redops.contexts.engagement.domain.errors import (
+    InvalidAuthorityError,
+    InvalidIntakeAssetError,
+    InvalidIntakePackageError,
+    TenantBoundaryError,
+)
 
 
 class EngagementLifecycle(Enum):
@@ -110,3 +115,144 @@ class LifecycleTransition:
             raise ValueError("lifecycle transition reason is required")
         if not self.correlation_id or not self.correlation_id.strip():
             raise ValueError("lifecycle transition correlation id is required")
+
+
+class IntakeAssetKind(Enum):
+    """The canonical stage 0 "Intake" required asset kinds.
+
+    SPEC.md section 4, stage 0 "Intake" names the required asset package: client
+    record, signed scope, billing confirmation, questionnaire, existing and brand
+    asset inventories, access checklist, baseline measures, workspace,
+    communication channel, timeline, responsibilities and launch definition. The
+    string values match the governance stage 0-10 template's asset kinds exactly
+    so a gate can pin an exact asset version per kind.
+    """
+
+    CLIENT_RECORD = "client-record"
+    SIGNED_SCOPE = "signed-scope"
+    BILLING_CONFIRMATION = "billing-confirmation"
+    INTAKE_QUESTIONNAIRE = "intake-questionnaire"
+    BRAND_ASSET_INVENTORY = "brand-asset-inventory"
+    ACCESS_CHECKLIST = "access-checklist"
+    BASELINE_MEASURES = "baseline-measures"
+    WORKSPACE = "workspace"
+    COMMUNICATION_CHANNEL = "communication-channel"
+    TIMELINE = "timeline"
+    RESPONSIBILITIES = "responsibilities"
+    LAUNCH_DEFINITION = "launch-definition"
+
+
+CANONICAL_INTAKE_KINDS: tuple[IntakeAssetKind, ...] = tuple(IntakeAssetKind)
+
+
+def _require_intake_text(value: str, label: str) -> str:
+    if not value or not value.strip():
+        raise InvalidIntakeAssetError(f"{label} is required")
+    return value
+
+
+@dataclass(frozen=True)
+class IntakeAsset:
+    """One stage 0 intake asset with a kind, a named owner and a source.
+
+    SPEC.md section 1: every output has a source, status, owner and next action.
+    SPEC.md section 4, stage 0: the required asset package is a set of named
+    assets. The asset is frozen and reject-only, so an asset that leaves its
+    kind, owner, summary or evidence unspecified cannot be represented as a real
+    intake asset. Evidence is recorded as Knowledge claim ids so the checkpoint
+    can require it to be directly sourced.
+    """
+
+    asset_id: str
+    tenant_id: str
+    kind: IntakeAssetKind
+    owner: str
+    summary: str
+    evidence_claim_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("intake asset id", self.asset_id),
+            ("intake asset tenant id", self.tenant_id),
+            ("intake asset owner", self.owner),
+            ("intake asset summary", self.summary),
+        ):
+            _require_intake_text(value, label)
+        if not isinstance(self.kind, IntakeAssetKind):
+            raise InvalidIntakeAssetError(
+                "intake asset kind must be a canonical IntakeAssetKind"
+            )
+        if not self.evidence_claim_ids:
+            raise InvalidIntakeAssetError(
+                "an intake asset requires at least one source claim"
+            )
+        for claim_id in self.evidence_claim_ids:
+            _require_intake_text(claim_id, "intake asset evidence claim id")
+
+
+@dataclass(frozen=True)
+class IntakePackage:
+    """The collected stage 0 intake assets behind the "Production Ready" gate.
+
+    SPEC.md section 4, stage 0 "Intake": the required asset package is a
+    collection of required assets, and SPEC.md section 3 requires every child
+    resource to belong to exactly one client. The package may be built up while
+    incomplete, and reports its missing kinds; the "Production Ready" checkpoint
+    is a separate policy decision, so an incomplete package is never silently
+    treated as complete.
+    """
+
+    package_id: str
+    tenant_id: str
+    assets: tuple[IntakeAsset, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("intake package id", self.package_id),
+            ("intake package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidIntakePackageError(f"{label} is required")
+        seen: set[IntakeAssetKind] = set()
+        for asset in self.assets:
+            if not isinstance(asset, IntakeAsset):
+                raise InvalidIntakePackageError(
+                    "an intake package may only contain IntakeAsset entries"
+                )
+            if asset.tenant_id != self.tenant_id:
+                raise TenantBoundaryError(
+                    f"intake asset {asset.asset_id!r} belongs to tenant "
+                    f"{asset.tenant_id!r}, not package tenant {self.tenant_id!r}"
+                )
+            if asset.kind in seen:
+                raise InvalidIntakePackageError(
+                    f"intake package repeats asset kind {asset.kind.value!r}"
+                )
+            seen.add(asset.kind)
+
+    @property
+    def kinds(self) -> frozenset[IntakeAssetKind]:
+        return frozenset(asset.kind for asset in self.assets)
+
+    def has(self, kind: IntakeAssetKind) -> bool:
+        return kind in self.kinds
+
+    def asset(self, kind: IntakeAssetKind) -> IntakeAsset:
+        for asset in self.assets:
+            if asset.kind is kind:
+                return asset
+        raise InvalidIntakePackageError(
+            f"intake package has no {kind.value!r} asset"
+        )
+
+    def missing_kinds(self) -> tuple[IntakeAssetKind, ...]:
+        present = self.kinds
+        return tuple(kind for kind in CANONICAL_INTAKE_KINDS if kind not in present)
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_kinds()
+
+    @property
+    def owners(self) -> frozenset[str]:
+        return frozenset(asset.owner for asset in self.assets)

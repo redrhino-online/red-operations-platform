@@ -30,7 +30,7 @@ from redops.contexts.commercial.domain.value_objects import (
     OfferImpactAssessment,
 )
 from redops.contexts.knowledge.domain.entities import Claim
-from redops.contexts.knowledge.domain.value_objects import ProvenanceClass
+from redops.contexts.knowledge.domain.policies import sourced_claim_ids
 from redops.contexts.method.domain.entities import MethodVersion
 from redops.contexts.method.domain.policies import MethodChangeImpactPolicy
 from redops.contexts.method.domain.value_objects import (
@@ -240,23 +240,6 @@ class CampaignMessageAlignmentPolicy:
             ):
                 return method
         return None
-
-
-def sourced_claim_ids(tenant_id: str, claims: Iterable[Claim]) -> frozenset[str]:
-    """Return the claim ids that are known, directly sourced and same-tenant.
-
-    SPEC.md sections 1 and 4: every output has a source, and derived or proposed
-    material must never silently become known. A claim is usable as evidence only
-    when it is a ``KNOWN`` claim with a direct source and belongs to the same
-    client.
-    """
-    return frozenset(
-        claim.claim_id
-        for claim in claims
-        if claim.tenant_id == tenant_id
-        and claim.provenance is ProvenanceClass.KNOWN
-        and claim.is_directly_sourced
-    )
 
 
 class AvatarLockedPolicy:
