@@ -157,27 +157,25 @@ class GateLedgerDerivedStateTests(unittest.TestCase):
         with self.assertRaises(GateDecisionError):
             GateDecision.from_gate(
                 gate,
+                ledger=self.ledger,
                 reviewer="client-approver-1",
                 scope="stage-2-downstream",
                 checkpoint_evidence="avatar rubric passed",
                 disposition=GateDisposition.APPROVED,
                 rationale="avatar locked",
                 on=TODAY,
-                dependency_states=self.ledger.dependency_states(),
-                template=self.template,
             )
 
         self.ledger.record(passing(0))
         decision = GateDecision.from_gate(
             gate,
+            ledger=self.ledger,
             reviewer="client-approver-1",
             scope="stage-2-downstream",
             checkpoint_evidence="avatar rubric passed",
             disposition=GateDisposition.APPROVED,
             rationale="avatar locked",
             on=TODAY,
-            dependency_states=self.ledger.dependency_states(),
-            template=self.template,
         )
         self.ledger.record(decision)
 

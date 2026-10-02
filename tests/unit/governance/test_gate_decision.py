@@ -16,8 +16,13 @@ import unittest
 from dataclasses import FrozenInstanceError
 from datetime import date
 
-from redops.contexts.governance.domain.entities import GateDecision, StageGate
+from redops.contexts.governance.domain.entities import (
+    GateDecision,
+    GateLedger,
+    StageGate,
+)
 from redops.contexts.governance.domain.errors import GateDecisionError
+from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
 from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
     GateDisposition,
@@ -28,21 +33,45 @@ from redops.contexts.governance.domain.value_objects import (
 TODAY = date(2026, 10, 2)
 SCRIPT_V1 = AssetVersionRef("authority-amplifier-script", 1)
 VIDEO_V1 = AssetVersionRef("authority-amplifier-video", 1)
+TEMPLATE = stage_zero_to_ten_template("2026.1")
 
 
 def approvable_gate(**overrides) -> StageGate:
-    values = {
-        "stage_number": 7,
-        "template_version": "2026.1",
-        "required_assets": frozenset({SCRIPT_V1, VIDEO_V1}),
-        "dependencies": frozenset({6}),
-        "approved_assets": frozenset({SCRIPT_V1, VIDEO_V1}),
-        "state": GateState.APPROVED,
-        "proposed_by": "specialist-1",
-        "approver": "client-approver-1",
-    }
-    values.update(overrides)
-    return StageGate(**values)
+    versions = {kind: 1 for kind in TEMPLATE.required_asset_kinds(7)}
+    gate = StageGate.from_template(TEMPLATE, 7, versions)
+    gate.state = GateState.APPROVED
+    gate.approved_assets = gate.required_assets
+    gate.proposed_by = "specialist-1"
+    gate.approver = "client-approver-1"
+    for name, value in overrides.items():
+        setattr(gate, name, value)
+    return gate
+
+
+def passing_decision_for(stage_number: int) -> GateDecision:
+    assets = frozenset(
+        AssetVersionRef(kind, 1)
+        for kind in TEMPLATE.required_asset_kinds(stage_number)
+    )
+    return GateDecision(
+        stage_number=stage_number,
+        template_version=TEMPLATE.version,
+        required_assets=assets,
+        checkpoint_evidence=f"stage {stage_number} rubric passed",
+        reviewer="client-approver-1",
+        scope=f"stage-{stage_number + 1}-downstream",
+        disposition=GateDisposition.APPROVED,
+        rationale="reviewed against the checkpoint",
+        decided_on=TODAY,
+    )
+
+
+def ledger_through(stage_number: int) -> GateLedger:
+    """Record passing decisions for stages 0..stage_number-1, in order."""
+    ledger = GateLedger(TEMPLATE)
+    for stage in range(stage_number):
+        ledger.record(passing_decision_for(stage))
+    return ledger
 
 
 def passing_decision(**overrides) -> GateDecision:
@@ -141,13 +170,13 @@ class GateDecisionFromGateTests(unittest.TestCase):
 
         decision = GateDecision.from_gate(
             gate,
+            ledger=ledger_through(7),
             reviewer="client-approver-1",
             scope="stage-8-funnel-integration",
             checkpoint_evidence="rubric passed",
             disposition=GateDisposition.APPROVED,
             rationale="client approved the exact script and creative",
             on=TODAY,
-            dependency_states={6: GateState.APPROVED},
         )
 
         self.assertEqual(gate.required_assets, decision.required_assets)
@@ -156,36 +185,38 @@ class GateDecisionFromGateTests(unittest.TestCase):
 
     def test_cannot_record_approval_for_a_gate_with_missing_assets(self):
         gate = approvable_gate(
-            approved_assets=frozenset({SCRIPT_V1}),
+            approved_assets=frozenset(),
             state=GateState.IN_REVIEW,
         )
 
         with self.assertRaises(GateDecisionError):
             GateDecision.from_gate(
                 gate,
+                ledger=ledger_through(7),
                 reviewer="client-approver-1",
                 scope="stage-8-funnel-integration",
                 checkpoint_evidence="rubric passed",
                 disposition=GateDisposition.APPROVED,
                 rationale="premature",
                 on=TODAY,
-                dependency_states={6: GateState.APPROVED},
             )
 
-    def test_cannot_record_approval_over_an_unapproved_dependency(self):
+    def test_cannot_record_approval_while_the_ledger_lacks_the_prerequisite(self):
         gate = approvable_gate()
+        ledger = ledger_through(6)
 
         with self.assertRaises(GateDecisionError):
             GateDecision.from_gate(
                 gate,
+                ledger=ledger,
                 reviewer="client-approver-1",
                 scope="stage-8-funnel-integration",
                 checkpoint_evidence="rubric passed",
                 disposition=GateDisposition.APPROVED,
                 rationale="dependency not done",
                 on=TODAY,
-                dependency_states={6: GateState.IN_REVIEW},
             )
+        self.assertFalse(ledger.has_passing_decision(6))
 
     def test_cannot_record_approval_by_an_actor_without_the_designated_authority(self):
         gate = approvable_gate()
@@ -193,13 +224,13 @@ class GateDecisionFromGateTests(unittest.TestCase):
         with self.assertRaises(GateDecisionError):
             GateDecision.from_gate(
                 gate,
+                ledger=ledger_through(7),
                 reviewer="specialist-1",
                 scope="stage-8-funnel-integration",
                 checkpoint_evidence="rubric passed",
                 disposition=GateDisposition.APPROVED,
                 rationale="self approval attempt",
                 on=TODAY,
-                dependency_states={6: GateState.APPROVED},
             )
         self.assertEqual("client-approver-1", gate.approver)
 
@@ -208,6 +239,7 @@ class GateDecisionFromGateTests(unittest.TestCase):
 
         decision = GateDecision.from_gate(
             gate,
+            ledger=GateLedger(TEMPLATE),
             reviewer="governance-manager",
             scope="stage-8-funnel-integration",
             checkpoint_evidence="dependency failed",

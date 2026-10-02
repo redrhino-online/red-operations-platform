@@ -165,6 +165,7 @@ class GateDecision:
         cls,
         gate: StageGate,
         *,
+        ledger: GateLedger,
         reviewer: str,
         scope: str,
         checkpoint_evidence: str,
@@ -173,16 +174,17 @@ class GateDecision:
         on: date,
         next_action: str = "",
         waiver: Waiver | None = None,
-        dependency_states: Mapping[int, GateState] | None = None,
-        template: StageTemplate | None = None,
     ) -> GateDecision:
         """Record a decision against a gate, refusing to coerce a bad gate.
 
         For a passing disposition the gate must pass GateIntegrityPolicy and
         authorize downstream use, and the reviewer must be the gate's designated
-        approver. This prevents recording an approval for a gate that is missing
-        an exact asset version, has an unapproved prerequisite, or lacks a
-        designated approver.
+        approver. Prerequisite state and the canonical template are read from the
+        durable ``GateLedger`` rather than a caller-supplied map, so an
+        application boundary cannot inject an approved prerequisite that has no
+        recorded ``GateDecision`` (SPEC.md section 4). This prevents recording an
+        approval for a gate that is missing an exact asset version, has an
+        unapproved prerequisite, or lacks a designated approver.
         """
         if disposition.is_passing:
             from redops.contexts.governance.domain.policies import (
@@ -190,7 +192,7 @@ class GateDecision:
             )
 
             evaluation = GateIntegrityPolicy().evaluate(
-                gate, dependency_states or {}, template
+                gate, ledger.dependency_states(), ledger.template
             )
             if not evaluation.approvable:
                 raise GateDecisionError(
