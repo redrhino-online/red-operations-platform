@@ -37,3 +37,12 @@ class UnknownStageError(GovernanceError, ValueError):
 
 class AssetPackageMismatchError(GovernanceError, ValueError):
     """A supplied asset package does not match the stage's required asset kinds."""
+
+
+class GateDecisionError(GovernanceError, ValueError):
+    """A gate decision was recorded in a way its invariant forbids.
+
+    Raised when a passing decision omits the pinned evidence, reviewer or
+    intended scope, when a waiver has no risk owner, or when an approval is
+    recorded for a gate that is not approvable.
+    """

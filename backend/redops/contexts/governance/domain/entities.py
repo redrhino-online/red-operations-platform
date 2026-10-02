@@ -10,6 +10,7 @@ from redops.contexts.governance.domain.errors import (
     ApprovalAuthorityError,
     ApprovalExpiredError,
     AssetPackageMismatchError,
+    GateDecisionError,
     SelfApprovalError,
     StageGateNotAcceptedError,
     UnknownStageError,
@@ -17,6 +18,7 @@ from redops.contexts.governance.domain.errors import (
 from redops.contexts.governance.domain.value_objects import (
     ApprovalOutcome,
     AssetVersionRef,
+    GateDisposition,
     GateState,
     StageStatus,
     StageTemplate,
@@ -97,6 +99,136 @@ class StageGate:
 
     def authorizes_downstream(self) -> bool:
         return self.state is GateState.APPROVED and not self.missing_assets()
+
+
+@dataclass(frozen=True)
+class GateDecision:
+    """The durable, immutable record of a stage gate decision (SPEC.md section 3).
+
+    It persists the stage, the pinned required asset versions, the checkpoint
+    evidence, the reviewer, the intended downstream scope, the disposition, the
+    rationale and the next action. A passing decision pins the exact evidence
+    and intended downstream use; a non-passing disposition, including a waiver,
+    never authorizes downstream work. History is append-only: a later decision
+    supersedes an earlier one by being recorded alongside it, never by editing.
+    """
+
+    stage_number: int
+    template_version: str
+    required_assets: frozenset[AssetVersionRef]
+    checkpoint_evidence: str
+    reviewer: str
+    scope: str
+    disposition: GateDisposition
+    rationale: str
+    decided_on: date
+    next_action: str = ""
+    waiver: Waiver | None = None
+
+    def __post_init__(self) -> None:
+        if self.stage_number < 0:
+            raise GateDecisionError("gate decision stage number must be >= 0")
+        if not self.template_version or not self.template_version.strip():
+            raise GateDecisionError("gate decision template version is required")
+        if not self.reviewer or not self.reviewer.strip():
+            raise GateDecisionError("gate decision reviewer is required")
+        if not self.rationale or not self.rationale.strip():
+            raise GateDecisionError("gate decision rationale is required")
+
+        if self.disposition.is_passing:
+            if not self.required_assets:
+                raise GateDecisionError(
+                    "a passing gate decision must pin the required asset versions"
+                )
+            if not self.checkpoint_evidence or not self.checkpoint_evidence.strip():
+                raise GateDecisionError(
+                    "a passing gate decision must record checkpoint evidence"
+                )
+            if not self.scope or not self.scope.strip():
+                raise GateDecisionError(
+                    "a passing gate decision must record its intended downstream scope"
+                )
+            if self.waiver is not None:
+                raise GateDecisionError(
+                    "a passing gate decision cannot be recorded as a waiver"
+                )
+
+        if self.disposition is GateDisposition.WAIVED and self.waiver is None:
+            raise GateDecisionError(
+                "a waived gate decision requires a scoped waiver with a risk owner"
+            )
+
+    @classmethod
+    def from_gate(
+        cls,
+        gate: StageGate,
+        *,
+        reviewer: str,
+        scope: str,
+        checkpoint_evidence: str,
+        disposition: GateDisposition,
+        rationale: str,
+        on: date,
+        next_action: str = "",
+        waiver: Waiver | None = None,
+        dependency_states: Mapping[int, GateState] | None = None,
+        template: StageTemplate | None = None,
+    ) -> GateDecision:
+        """Record a decision against a gate, refusing to coerce a bad gate.
+
+        For a passing disposition the gate must pass GateIntegrityPolicy and
+        authorize downstream use, and the reviewer must be the gate's designated
+        approver. This prevents recording an approval for a gate that is missing
+        an exact asset version, has an unapproved prerequisite, or lacks a
+        designated approver.
+        """
+        if disposition.is_passing:
+            from redops.contexts.governance.domain.policies import (
+                GateIntegrityPolicy,
+            )
+
+            evaluation = GateIntegrityPolicy().evaluate(
+                gate, dependency_states or {}, template
+            )
+            if not evaluation.approvable:
+                raise GateDecisionError(
+                    "cannot record an approval for a gate that is not approvable: "
+                    + "; ".join(evaluation.reasons)
+                )
+            if reviewer != gate.approver:
+                raise GateDecisionError(
+                    f"reviewer {reviewer!r} is not the gate's designated "
+                    f"approver {gate.approver!r}"
+                )
+            if not gate.authorizes_downstream():
+                raise GateDecisionError(
+                    "gate does not authorize downstream use for this decision"
+                )
+
+        return cls(
+            stage_number=gate.stage_number,
+            template_version=gate.template_version,
+            required_assets=gate.required_assets,
+            checkpoint_evidence=checkpoint_evidence,
+            reviewer=reviewer,
+            scope=scope,
+            disposition=disposition,
+            rationale=rationale,
+            decided_on=on,
+            next_action=next_action,
+            waiver=waiver,
+        )
+
+    @property
+    def is_passing(self) -> bool:
+        return self.disposition.is_passing
+
+    def authorizes_downstream(self) -> bool:
+        return (
+            self.is_passing
+            and bool(self.required_assets)
+            and bool(self.scope and self.scope.strip())
+        )
 
 
 @dataclass

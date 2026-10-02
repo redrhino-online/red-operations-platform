@@ -33,6 +33,26 @@ class ApprovalOutcome(Enum):
     SUPERSEDED = "superseded"
 
 
+class GateDisposition(Enum):
+    """The recorded outcome of a stage gate decision (SPEC.md section 4).
+
+    Only APPROVED passes the gate. A waiver is a scoped human decision that
+    records risk; it never makes an absent asset present and never passes a
+    gate. Changes Required, Blocked and Superseded never authorize downstream
+    work.
+    """
+
+    APPROVED = "approved"
+    CHANGES_REQUIRED = "changes_required"
+    BLOCKED = "blocked"
+    WAIVED = "waived"
+    SUPERSEDED = "superseded"
+
+    @property
+    def is_passing(self) -> bool:
+        return self is GateDisposition.APPROVED
+
+
 class StageStatus(Enum):
     """Status of a StageRun (SPEC.md section 3 aggregate table).
 
