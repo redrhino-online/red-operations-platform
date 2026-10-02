@@ -267,6 +267,29 @@ class GateLedger:
                 f"{self._template.version!r}"
             )
         if decision.is_passing:
+            canonical_kinds = self._template.required_asset_kinds(
+                decision.stage_number
+            )
+            declared_kinds = {
+                asset.asset_id for asset in decision.required_assets
+            }
+            if declared_kinds != canonical_kinds:
+                missing = sorted(canonical_kinds - declared_kinds)
+                extra = sorted(declared_kinds - canonical_kinds)
+                detail: list[str] = []
+                if missing:
+                    detail.append(
+                        f"missing asset kinds: {', '.join(missing)}"
+                    )
+                if extra:
+                    detail.append(
+                        f"unexpected asset kinds: {', '.join(extra)}"
+                    )
+                raise AssetPackageMismatchError(
+                    f"stage {decision.stage_number} passing decision does not "
+                    f"match template {self._template.version!r} required asset "
+                    f"package: {'; '.join(detail)}"
+                )
             unsatisfied = sorted(
                 stage
                 for stage in self._template.dependencies_of(decision.stage_number)

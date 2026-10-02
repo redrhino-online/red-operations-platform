@@ -19,6 +19,7 @@ from redops.contexts.governance.domain.entities import (
     StageGate,
 )
 from redops.contexts.governance.domain.errors import (
+    AssetPackageMismatchError,
     GateDecisionError,
     GateLedgerError,
     UnsatisfiedPrerequisiteError,
@@ -35,13 +36,19 @@ VERSION = "2026.1"
 TODAY = date(2026, 10, 2)
 
 
+def canonical_assets(stage_number: int, version: str = VERSION) -> frozenset[AssetVersionRef]:
+    template = stage_zero_to_ten_template(version)
+    kinds = template.required_asset_kinds(stage_number)
+    if not kinds:
+        return frozenset({AssetVersionRef(f"stage-{stage_number}-asset", 1)})
+    return frozenset(AssetVersionRef(kind, 1) for kind in kinds)
+
+
 def passing(stage_number: int, version: str = VERSION) -> GateDecision:
     return GateDecision(
         stage_number=stage_number,
         template_version=version,
-        required_assets=frozenset(
-            {AssetVersionRef(f"stage-{stage_number}-asset", 1)}
-        ),
+        required_assets=canonical_assets(stage_number, version),
         checkpoint_evidence=f"stage {stage_number} rubric passed",
         reviewer="client-approver-1",
         scope=f"stage-{stage_number + 1}-downstream",
@@ -55,9 +62,7 @@ def blocked(stage_number: int, version: str = VERSION) -> GateDecision:
     return GateDecision(
         stage_number=stage_number,
         template_version=version,
-        required_assets=frozenset(
-            {AssetVersionRef(f"stage-{stage_number}-asset", 1)}
-        ),
+        required_assets=canonical_assets(stage_number, version),
         checkpoint_evidence="checkpoint failed",
         reviewer="client-approver-1",
         scope=f"stage-{stage_number + 1}-downstream",
@@ -124,6 +129,48 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
     def test_record_refuses_a_stage_absent_from_the_template(self):
         with self.assertRaises(UnknownStageError):
             self.ledger.record(passing(99))
+
+    def test_refuses_a_passing_decision_that_omits_a_canonical_asset_kind(self):
+        under_declared = GateDecision(
+            stage_number=0,
+            template_version=VERSION,
+            required_assets=frozenset({AssetVersionRef("client-record", 1)}),
+            checkpoint_evidence="partial package",
+            reviewer="client-approver-1",
+            scope="stage-1-downstream",
+            disposition=GateDisposition.APPROVED,
+            rationale="self-declared smaller package",
+            decided_on=TODAY,
+        )
+
+        with self.assertRaises(AssetPackageMismatchError):
+            self.ledger.record(under_declared)
+
+        self.assertFalse(self.ledger.has_passing_decision(0))
+
+    def test_refuses_a_passing_decision_with_a_non_canonical_asset_kind(self):
+        substituted = GateDecision(
+            stage_number=0,
+            template_version=VERSION,
+            required_assets=canonical_assets(0)
+            | frozenset({AssetVersionRef("made-up-asset", 1)}),
+            checkpoint_evidence="substituted package",
+            reviewer="client-approver-1",
+            scope="stage-1-downstream",
+            disposition=GateDisposition.APPROVED,
+            rationale="self-declared substituted package",
+            decided_on=TODAY,
+        )
+
+        with self.assertRaises(AssetPackageMismatchError):
+            self.ledger.record(substituted)
+
+        self.assertFalse(self.ledger.has_passing_decision(0))
+
+    def test_records_a_passing_decision_whose_kinds_match_the_template(self):
+        self.ledger.record(passing(0))
+
+        self.assertTrue(self.ledger.has_passing_decision(0))
 
 
 class GateLedgerDerivedStateTests(unittest.TestCase):
