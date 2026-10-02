@@ -16,6 +16,7 @@ from redops.contexts.engagement.domain.errors import (
     IllegalLifecycleTransitionError,
     IncompleteIntakePackageError,
     IntakeOwnerNotAuthorizedError,
+    StageOwnerNotAuthorizedError,
     TenantBoundaryError,
     UnsourcedIntakeEvidenceError,
 )
@@ -157,5 +158,36 @@ class GateApproverAuthorityPolicy:
         if not workspace.has_authority(approver):
             raise GateApproverNotAuthorizedError(
                 f"gate approver {approver!r} holds no authority on workspace "
+                f"{workspace.workspace_id!r} for tenant {workspace.tenant_id!r}"
+            )
+
+
+class GateOwnerAuthorityPolicy:
+    """Evaluates that a stage decision's assigned work owner is accountable.
+
+    SPEC.md sections 1, 3 and 4: every output has an owner, a stage completion
+    records an assigned work owner and a due date, and the production view must
+    answer "who is accountable" for a stage. The durable ``GateDecision`` carries
+    a free ``assigned_owner`` string, so nothing binds it to the client. This
+    policy refuses an absent owner, or an owner who is not a named authority on
+    the ``ClientWorkspace``, before the stage 0 "Production Ready" (or any other
+    stage) decision is recorded. It never invents a concrete owner identity or
+    authority role; the workspace registry supplies the named people (SPEC.md
+    section 11).
+    """
+
+    def require(
+        self,
+        owner: str,
+        workspace: "ClientWorkspace",
+    ) -> None:
+        if not owner or not owner.strip():
+            raise StageOwnerNotAuthorizedError(
+                "a stage gate decision requires an assigned work owner who holds "
+                f"a named authority on workspace {workspace.workspace_id!r}"
+            )
+        if not workspace.has_authority(owner):
+            raise StageOwnerNotAuthorizedError(
+                f"stage assigned owner {owner!r} holds no authority on workspace "
                 f"{workspace.workspace_id!r} for tenant {workspace.tenant_id!r}"
             )

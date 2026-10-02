@@ -30,6 +30,7 @@ from redops.contexts.engagement.domain.errors import (
 )
 from redops.contexts.engagement.domain.policies import (
     GateApproverAuthorityPolicy,
+    GateOwnerAuthorityPolicy,
     ProductionReadyPolicy,
 )
 from redops.contexts.engagement.domain.value_objects import IntakePackage
@@ -95,10 +96,12 @@ class StageZeroGateRecorder:
     author, has the workspace's designated approver approve each one, records them
     on the gate, and stores the immutable ``GateDecision`` in the durable
     ``GateLedger``. It refuses a gate for another stage, an absent author or
-    approver, and an approver who holds no authority on the workspace, so the
-    stage 0 rubric can never approve an unrelated asset package or a self-issued
-    approval (SPEC.md sections 3, 4, 5 and 11). It mutates only the gate it is
-    given and the ledger; it never invents a concrete human identity.
+    approver, an approver who holds no authority on the workspace, and an
+    assigned work owner who holds no authority on the workspace, so the
+    stage 0 rubric can never approve an unrelated asset package, a self-issued
+    approval or an unaccountable owner (SPEC.md sections 3, 4, 5 and 11). It
+    mutates only the gate it is given and the ledger; it never invents a concrete
+    human identity.
     """
 
     def record(
@@ -127,6 +130,7 @@ class StageZeroGateRecorder:
                 "request has a requester distinct from the designated approver"
             )
         GateApproverAuthorityPolicy().require(gate, workspace)
+        GateOwnerAuthorityPolicy().require(assigned_owner, workspace)
         approver = gate.approver
         if not approver or not approver.strip():
             raise GateApproverNotAuthorizedError(

@@ -4,38 +4,40 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T14:17:22Z (Ralph cycle 67).
-- Selected item: persist the concrete blockers on the durable `GateDecision` and
-  derive them for a blocked gate, closing SPEC.md section 4's gate-record field
-  list ("... dependencies, blockers ...") so the production manager view can
-  answer "which dependency blocks work". `GateDecision` now carries a
-  `blockers: frozenset[str]`, refuses a blank blocker, and
-  `GateDecision.from_gate` derives the gate's evidence-backed
-  `GateIntegrityPolicy` reasons for a `BLOCKED` disposition (or keeps
-  caller-supplied blockers). This outranked the stage 1 nine-kind/three-asset
-  representation mismatch (blocked on a RED methodology owner), the stage 1-10
-  gate wiring (blocked on the same representation decision) and the Engagement
-  persistence port (speculative while no infrastructure exists): it is a
-  concrete, spec-named gap in the durable gate record, stays within the pure
-  Governance domain, and directly serves the "which dependency blocks work"
-  production view.
+- Cycle timestamp: 2026-10-02T14:20:26Z (Ralph cycle 68).
+- Selected item: bind the durable `GateDecision`'s assigned work owner to the
+  client workspace authority registry. SPEC.md section 4 names "assigned work
+  owner" as a required gate-record field and its production view must answer
+  "who is accountable" for a stage, but `GateDecision.assigned_owner` was a free
+  caller-supplied string while the stage 0 intake-asset owners and the gate
+  approver were already bound to the `ClientWorkspace` registry. A new pure
+  Engagement domain `GateOwnerAuthorityPolicy` refuses an absent owner, or an
+  owner who holds no named authority on the workspace, and `StageZeroGateRecorder`
+  now applies it before writing the decision, so a passing stage 0 decision can no
+  longer name an unaccountable owner. This outranked the remaining alternatives:
+  the stage 1 nine-kind/three-asset representation mismatch is still blocked on a
+  RED methodology owner; the Engagement persistence port is still speculative
+  while no infrastructure exists; and a production-manager readiness view is best
+  built after the owner and blocker dimensions it must report are real. This item
+  is a concrete, spec-named gate-integrity/accountability gap, stays within the
+  pure Engagement domain, and is independently verifiable now.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: 5 new behavioral tests in
-  `tests/unit/governance/test_gate_decision.py` (`GateDecisionBlockerTests`): a
-  decision persists named blockers; a blank/whitespace blocker is refused; a
-  passing decision records no blockers; `from_gate` derives the concrete
-  prerequisite blocker for a `BLOCKED` gate; and `from_gate` keeps
-  caller-supplied blockers. Running `PYTHONPATH=backend python3 -m unittest
-  discover -s tests -p 'test_*.py'` reports 576 passed, up from 571.
-  `python3 -m pyflakes` on the changed module and test file is clean. `ruff` and
+- Evidence: 6 new behavioral tests in
+  `tests/unit/engagement/test_gate_owner_authority.py`: a named-authority owner is
+  accepted; a non-authority owner is refused naming the owner and workspace; a
+  blank owner is refused; authority is checked against the workspace tenant; the
+  policy does not mutate the workspace; and the recorder refuses an unaccountable
+  owner and leaves the ledger empty. Running `PYTHONPATH=backend python3 -m
+  unittest discover -s tests -p 'test_*.py'` reports 582 passed, up from 576.
+  `python3 -m pyflakes` on the changed modules and test file is clean. `ruff` and
   `mypy` remain uninstalled.
-- New findings: `blockers` is an appended field with a default, so existing
-  positional and keyword `GateDecision` construction is unaffected and every
-  prior test still passes. The derivation reuses `GateIntegrityPolicy` against
-  the ledger's time-aware `dependency_states`, so a blocked decision names the
-  same reasons the policy would refuse an approval for, not free text.
-  Governance remains pure domain; no new cross-context import was added,
-  preserving SPEC.md section 6.
+- New findings: `GateDecision` already requires `assigned_owner` to be non-empty,
+  but nothing tied it to the client. Binding it mirrors the existing
+  `GateApproverAuthorityPolicy` and `IntakeOwnerNotAuthorizedError` rules, and
+  every prior stage 0 test used an authority owner, so all 576 prior tests still
+  pass. The owner is checked before any per-asset approval is issued, so a refused
+  owner does not leave partial approval state behind. Governance remains pure
+  domain; no new cross-context import was added, preserving SPEC.md section 6.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -68,6 +70,11 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   recorder and application use case, and its stage run now closes atomically);
   per-kind stage 0 asset content schemas; the stage 1 through 10 `GateDecision`
   wiring; and all persistence, blocked on the storage ADR. [DONE 2026-10-02
+  (Ralph cycle 68): binding the durable `GateDecision`'s assigned work owner to
+  the client workspace authority registry via `GateOwnerAuthorityPolicy`, wired
+  into `StageZeroGateRecorder`, so a stage cannot close with an unaccountable
+  owner; verified by `tests/unit/engagement/test_gate_owner_authority.py`.]
+  [DONE 2026-10-02
   (Ralph cycle 67): persisting the concrete blockers on the durable
   `GateDecision` and deriving them for a `BLOCKED` gate from the
   `GateIntegrityPolicy` reasons; verified by

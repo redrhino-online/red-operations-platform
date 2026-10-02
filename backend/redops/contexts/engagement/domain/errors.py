@@ -106,6 +106,18 @@ class GateApproverNotAuthorizedError(EngagementError):
     """
 
 
+class StageOwnerNotAuthorizedError(EngagementError):
+    """A stage gate decision names an assigned work owner who holds no authority.
+
+    SPEC.md sections 1, 3 and 4: every output has an owner, a stage completion
+    records an assigned work owner and a due date, and the production view must
+    answer "who is accountable" for a stage. An assigned work owner who is not a
+    named authority on the client workspace cannot be accountable for the stage,
+    so the durable decision would show an owner who does not exist on the client
+    (SPEC.md section 11: the aggregate never invents a human authority).
+    """
+
+
 class GateAuthorRequiredError(EngagementError):
     """A stage gate recording path was given a gate with no named author.
 
