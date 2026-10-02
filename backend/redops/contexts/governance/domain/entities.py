@@ -10,6 +10,7 @@ from redops.contexts.governance.domain.errors import (
     ApprovalAuthorityError,
     ApprovalExpiredError,
     AssetPackageMismatchError,
+    CheckpointMismatchError,
     GateDecisionError,
     GateLedgerError,
     SelfApprovalError,
@@ -41,6 +42,7 @@ class StageGate:
     stage_number: int
     template_version: str
     required_assets: frozenset[AssetVersionRef]
+    checkpoint: str = ""
     dependencies: frozenset[int] = field(default_factory=frozenset)
     approved_assets: frozenset[AssetVersionRef] = field(default_factory=frozenset)
     state: GateState = GateState.NOT_STARTED
@@ -93,6 +95,7 @@ class StageGate:
                 AssetVersionRef(kind, version)
                 for kind, version in asset_versions.items()
             ),
+            checkpoint=definition.checkpoint,
             dependencies=definition.dependencies,
         )
 
@@ -121,6 +124,7 @@ class GateDecision:
     stage_number: int
     template_version: str
     required_assets: frozenset[AssetVersionRef]
+    checkpoint: str
     checkpoint_evidence: str
     reviewer: str
     scope: str
@@ -148,6 +152,10 @@ class GateDecision:
         if not isinstance(self.due_on, date):
             raise GateDecisionError(
                 "gate decision due date is required for every stage"
+            )
+        if not self.checkpoint or not self.checkpoint.strip():
+            raise GateDecisionError(
+                "a gate decision must pin the checkpoint rubric for its stage"
             )
 
         if self.disposition.is_passing:
@@ -228,6 +236,7 @@ class GateDecision:
             stage_number=gate.stage_number,
             template_version=gate.template_version,
             required_assets=gate.required_assets,
+            checkpoint=gate.checkpoint,
             checkpoint_evidence=checkpoint_evidence,
             reviewer=reviewer,
             scope=scope,
@@ -306,6 +315,16 @@ class GateLedger:
                     f"stage {decision.stage_number} passing decision does not "
                     f"match template {self._template.version!r} required asset "
                     f"package: {'; '.join(detail)}"
+                )
+            canonical_checkpoint = self._template.definition_for(
+                decision.stage_number
+            ).checkpoint
+            if decision.checkpoint != canonical_checkpoint:
+                raise CheckpointMismatchError(
+                    f"stage {decision.stage_number} passing decision names "
+                    f"checkpoint {decision.checkpoint!r} but template "
+                    f"{self._template.version!r} requires "
+                    f"{canonical_checkpoint!r}"
                 )
             unsatisfied = sorted(
                 stage

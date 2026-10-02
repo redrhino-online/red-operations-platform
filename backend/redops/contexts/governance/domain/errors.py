@@ -47,6 +47,10 @@ class UnsatisfiedPrerequisiteError(GateLedgerError):
     """A passing decision was recorded while a prerequisite stage had not passed."""
 
 
+class CheckpointMismatchError(GateLedgerError):
+    """A passing decision named a checkpoint rubric other than the stage's canonical one."""
+
+
 class GateDecisionError(GovernanceError, ValueError):
     """A gate decision was recorded in a way its invariant forbids.
 

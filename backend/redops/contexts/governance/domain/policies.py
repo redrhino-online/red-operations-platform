@@ -113,6 +113,12 @@ class GateIntegrityPolicy:
             names = ", ".join(extra)
             reasons.append(f"gate declares non-canonical asset kinds: {names}")
 
+        if gate.checkpoint != definition.checkpoint:
+            reasons.append(
+                f"gate checkpoint {gate.checkpoint!r} does not match template "
+                f"checkpoint {definition.checkpoint!r}"
+            )
+
         return reasons
 
 

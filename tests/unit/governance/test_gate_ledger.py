@@ -46,10 +46,12 @@ def canonical_assets(stage_number: int, version: str = VERSION) -> frozenset[Ass
 
 
 def passing(stage_number: int, version: str = VERSION) -> GateDecision:
+    definition = stage_zero_to_ten_template(version).definition_for(stage_number)
     return GateDecision(
         stage_number=stage_number,
         template_version=version,
         required_assets=canonical_assets(stage_number, version),
+        checkpoint=definition.checkpoint if definition else "unknown-stage",
         checkpoint_evidence=f"stage {stage_number} rubric passed",
         reviewer="client-approver-1",
         scope=f"stage-{stage_number + 1}-downstream",
@@ -66,6 +68,9 @@ def blocked(stage_number: int, version: str = VERSION) -> GateDecision:
         stage_number=stage_number,
         template_version=version,
         required_assets=canonical_assets(stage_number, version),
+        checkpoint=stage_zero_to_ten_template(version).definition_for(
+            stage_number
+        ).checkpoint,
         checkpoint_evidence="checkpoint failed",
         reviewer="client-approver-1",
         scope=f"stage-{stage_number + 1}-downstream",
@@ -140,6 +145,7 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
             stage_number=0,
             template_version=VERSION,
             required_assets=frozenset({AssetVersionRef("client-record", 1)}),
+            checkpoint="Production Ready",
             checkpoint_evidence="partial package",
             reviewer="client-approver-1",
             scope="stage-1-downstream",
@@ -161,6 +167,7 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
             template_version=VERSION,
             required_assets=canonical_assets(0)
             | frozenset({AssetVersionRef("made-up-asset", 1)}),
+            checkpoint="Production Ready",
             checkpoint_evidence="substituted package",
             reviewer="client-approver-1",
             scope="stage-1-downstream",

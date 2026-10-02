@@ -124,6 +124,7 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
 
     def canonical_gate(self, stage_number: int, **overrides) -> StageGate:
         kinds = self.template.required_asset_kinds(stage_number)
+        definition = self.template.definition_for(stage_number)
         values = {
             "stage_number": stage_number,
             "template_version": VERSION,
@@ -134,6 +135,7 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
                 AssetVersionRef(kind, 1) for kind in kinds
             ),
             "dependencies": self.template.dependencies_of(stage_number),
+            "checkpoint": definition.checkpoint if definition else "",
             "state": GateState.APPROVED,
             "proposed_by": "specialist-1",
             "approver": "client-approver-1",
