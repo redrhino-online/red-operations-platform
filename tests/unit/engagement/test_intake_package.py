@@ -34,7 +34,10 @@ from redops.contexts.engagement.domain.value_objects import (
     IntakeAssetKind,
     IntakePackage,
 )
+from redops.contexts.governance.domain.entities import StageGate
+from redops.contexts.governance.domain.errors import AssetPackageMismatchError
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
+from redops.contexts.governance.domain.value_objects import StageAssetVersion
 from redops.contexts.knowledge.domain.entities import Claim
 from redops.contexts.knowledge.domain.value_objects import (
     ProvenanceClass,
@@ -84,6 +87,7 @@ def asset(kind: IntakeAssetKind, **overrides) -> IntakeAsset:
         "asset_id": f"{kind.value}-3f@1",
         "tenant_id": TENANT,
         "kind": kind,
+        "version": 1,
         "owner": OWNER,
         "summary": f"Recorded {kind.value}",
         "evidence_claim_ids": ("claim-intake-1",),
@@ -152,6 +156,7 @@ class IntakeAssetTests(unittest.TestCase):
                 asset_id="client-record-3f@1",
                 tenant_id=TENANT,
                 kind="client-record",
+                version=1,
                 owner=OWNER,
                 summary="Recorded client record",
                 evidence_claim_ids=("claim-intake-1",),
@@ -160,6 +165,18 @@ class IntakeAssetTests(unittest.TestCase):
     def test_an_asset_is_immutable(self):
         with self.assertRaises(FrozenInstanceError):
             asset(IntakeAssetKind.CLIENT_RECORD).owner = "mallory"
+
+    def test_an_asset_records_its_exact_positive_version(self):
+        entry = asset(IntakeAssetKind.SIGNED_SCOPE, version=3)
+
+        self.assertEqual(3, entry.version)
+        self.assertEqual("signed-scope", entry.canonical_kind)
+
+    def test_a_versionless_or_non_positive_version_is_rejected(self):
+        for override in ({"version": 0}, {"version": -1}):
+            with self.subTest(override=override):
+                with self.assertRaises(InvalidIntakeAssetError):
+                    asset(IntakeAssetKind.TIMELINE, **override)
 
 
 class IntakePackageTests(unittest.TestCase):
@@ -225,6 +242,62 @@ class IntakePackageTests(unittest.TestCase):
         )
 
         self.assertEqual(frozenset({"owner-a", "owner-b"}), root.owners)
+
+
+class IntakePackageStageAssetProjectionTests(unittest.TestCase):
+    def test_a_complete_package_yields_a_governance_stage_asset_per_kind(self):
+        root = package()
+
+        projected = root.stage_asset_versions()
+
+        self.assertEqual(len(CANONICAL_INTAKE_KINDS), len(projected))
+        self.assertTrue(
+            all(isinstance(entry, StageAssetVersion) for entry in projected)
+        )
+        self.assertEqual(
+            {kind.value for kind in CANONICAL_INTAKE_KINDS},
+            {entry.kind for entry in projected},
+        )
+        self.assertEqual({TENANT}, {entry.tenant_id for entry in projected})
+        self.assertEqual({1}, {entry.version for entry in projected})
+        self.assertEqual(
+            {f"{kind.value}-3f@1" for kind in CANONICAL_INTAKE_KINDS},
+            {entry.asset_id for entry in projected},
+        )
+
+    def test_a_package_projects_the_exact_version_each_asset_carries(self):
+        root = package(assets=complete_assets(version=4))
+
+        projected = root.stage_asset_versions()
+
+        self.assertEqual({4}, {entry.version for entry in projected})
+
+    def test_projected_assets_assemble_the_canonical_stage_zero_gate(self):
+        template = stage_zero_to_ten_template()
+
+        gate = StageGate.from_assets(
+            template,
+            0,
+            tenant_id=TENANT,
+            assets=package().stage_asset_versions(),
+        )
+
+        self.assertEqual(
+            template.required_asset_kinds(0),
+            {ref.asset_id for ref in gate.required_assets},
+        )
+        self.assertEqual({1}, {ref.version for ref in gate.required_assets})
+
+    def test_a_partial_package_cannot_assemble_a_complete_gate(self):
+        partial = package(assets=(asset(IntakeAssetKind.CLIENT_RECORD),))
+
+        with self.assertRaises(AssetPackageMismatchError):
+            StageGate.from_assets(
+                stage_zero_to_ten_template(),
+                0,
+                tenant_id=TENANT,
+                assets=partial.stage_asset_versions(),
+            )
 
 
 class ProductionReadyPolicyTests(unittest.TestCase):

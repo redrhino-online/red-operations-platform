@@ -19,6 +19,7 @@ from redops.contexts.engagement.domain.errors import (
     InvalidIntakePackageError,
     TenantBoundaryError,
 )
+from redops.contexts.governance.domain.value_objects import StageAssetVersion
 
 
 class EngagementLifecycle(Enum):
@@ -153,19 +154,22 @@ def _require_intake_text(value: str, label: str) -> str:
 
 @dataclass(frozen=True)
 class IntakeAsset:
-    """One stage 0 intake asset with a kind, a named owner and a source.
+    """One stage 0 intake asset with a kind, an exact version, an owner and a source.
 
     SPEC.md section 1: every output has a source, status, owner and next action.
     SPEC.md section 4, stage 0: the required asset package is a set of named
-    assets. The asset is frozen and reject-only, so an asset that leaves its
-    kind, owner, summary or evidence unspecified cannot be represented as a real
-    intake asset. Evidence is recorded as Knowledge claim ids so the checkpoint
-    can require it to be directly sourced.
+    assets. SPEC.md sections 3 and 4 require a passing gate to pin the exact
+    asset versions, so an asset carries a typed positive version rather than
+    burying it in its display id. The asset is frozen and reject-only, so an asset
+    that leaves its kind, version, owner, summary or evidence unspecified cannot
+    be represented as a real intake asset. Evidence is recorded as Knowledge claim
+    ids so the checkpoint can require it to be directly sourced.
     """
 
     asset_id: str
     tenant_id: str
     kind: IntakeAssetKind
+    version: int
     owner: str
     summary: str
     evidence_claim_ids: tuple[str, ...]
@@ -182,12 +186,38 @@ class IntakeAsset:
             raise InvalidIntakeAssetError(
                 "intake asset kind must be a canonical IntakeAssetKind"
             )
+        if not isinstance(self.version, int) or self.version < 1:
+            raise InvalidIntakeAssetError(
+                "an intake asset requires a positive integer version to be "
+                "pinned as exact gate evidence"
+            )
         if not self.evidence_claim_ids:
             raise InvalidIntakeAssetError(
                 "an intake asset requires at least one source claim"
             )
         for claim_id in self.evidence_claim_ids:
             _require_intake_text(claim_id, "intake asset evidence claim id")
+
+    @property
+    def canonical_kind(self) -> str:
+        """The asset kind exactly as the governance stage template names it."""
+        return self.kind.value
+
+    def stage_asset_version(self) -> StageAssetVersion:
+        """Project this real asset onto the governance exact-version evidence.
+
+        The projection reuses the asset's own id, tenant, canonical kind and
+        version; governance still pins it for the workspace tenant, so a
+        cross-client asset is refused rather than silently authorized (SPEC.md
+        sections 3 and 11).
+        """
+        return StageAssetVersion(
+            asset_id=self.asset_id,
+            tenant_id=self.tenant_id,
+            kind=self.canonical_kind,
+            version=self.version,
+        )
+
 
 
 @dataclass(frozen=True)
@@ -256,3 +286,14 @@ class IntakePackage:
     @property
     def owners(self) -> frozenset[str]:
         return frozenset(asset.owner for asset in self.assets)
+
+    def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
+        """Yield the governance exact-version evidence for the assets present.
+
+        This is the bridge from the Engagement stage 0 intake assets to the
+        version-per-kind evidence a governance ``StageGate`` pins. Projecting only
+        the assets the package holds keeps a partial package honest: the gate
+        assembler still refuses a package that is missing a canonical kind
+        (SPEC.md sections 3, 4 and 11).
+        """
+        return tuple(asset.stage_asset_version() for asset in self.assets)
