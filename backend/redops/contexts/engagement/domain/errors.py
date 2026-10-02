@@ -106,6 +106,27 @@ class GateApproverNotAuthorizedError(EngagementError):
     """
 
 
+class GateAuthorRequiredError(EngagementError):
+    """A stage gate recording path was given a gate with no named author.
+
+    SPEC.md sections 3, 4 and 5: approval pins the proposed version, and the
+    author cannot impersonate the approver. The stage 0 recording path issues one
+    version-specific approval request per required asset on behalf of the gate's
+    author, so a gate that names no author cannot establish who requested the
+    client's approval.
+    """
+
+
+class NotStageZeroGateError(EngagementError):
+    """A stage 0 recording path was handed a gate for another stage.
+
+    SPEC.md section 4 makes stage 0 "Intake" the first production checkpoint.
+    The stage 0 recording path pins and approves only the canonical stage 0 gate;
+    a gate for another stage must be recorded by that stage's own path so the
+    wrong asset package is never approved under the stage 0 rubric.
+    """
+
+
 class UnsourcedIntakeEvidenceError(EngagementError):
     """A stage 0 intake asset was asked to use unsourced or foreign evidence.
 
