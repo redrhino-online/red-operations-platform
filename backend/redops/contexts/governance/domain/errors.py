@@ -1,0 +1,19 @@
+"""Named domain errors for the Governance bounded context (pure domain)."""
+
+from __future__ import annotations
+
+
+class GovernanceError(Exception):
+    """Base class for governance domain rule violations."""
+
+
+class SelfApprovalError(GovernanceError, ValueError):
+    """An author was designated as the approver of their own proposal."""
+
+
+class ApprovalAuthorityError(GovernanceError):
+    """An actor without the designated authority attempted to decide an approval."""
+
+
+class ApprovalExpiredError(GovernanceError):
+    """An approval was acted on after its expiry date."""

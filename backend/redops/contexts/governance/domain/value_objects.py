@@ -20,6 +20,17 @@ class GateState(Enum):
     SUPERSEDED = "superseded"
 
 
+class ApprovalOutcome(Enum):
+    """Outcome of a version-specific approval request (SPEC.md section 3)."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+    WITHDRAWN = "withdrawn"
+    SUPERSEDED = "superseded"
+
+
 @dataclass(frozen=True)
 class AssetVersionRef:
     """An exact, pinned asset version. Gate approval pins these, not bare asset names."""
