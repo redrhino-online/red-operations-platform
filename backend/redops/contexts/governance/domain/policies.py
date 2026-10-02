@@ -8,6 +8,7 @@ stage completion requires gate acceptance, not activity.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Mapping
 
 from redops.contexts.governance.domain.entities import StageGate
@@ -36,13 +37,15 @@ class GateIntegrityPolicy:
         gate: StageGate,
         dependency_states: Mapping[int, GateState],
         template: StageTemplate | None = None,
+        *,
+        on: date,
     ) -> GateEvaluation:
         reasons: list[str] = []
 
         if gate.state is GateState.SUPERSEDED:
             reasons.append("gate is superseded")
 
-        missing = gate.missing_assets()
+        missing = gate.missing_assets(on)
         if missing:
             names = ", ".join(sorted(str(asset) for asset in missing))
             reasons.append(f"required asset versions not approved: {names}")

@@ -124,7 +124,7 @@ class StageGateCheckpointTests(unittest.TestCase):
         gate = approvable_gate(checkpoint="Totally Made Up Rubric")
 
         result = GateIntegrityPolicy().evaluate(
-            gate, {6: GateState.APPROVED}, template=TEMPLATE
+            gate, {6: GateState.APPROVED}, template=TEMPLATE, on=TODAY
         )
 
         self.assertFalse(result.approvable)
@@ -134,7 +134,7 @@ class StageGateCheckpointTests(unittest.TestCase):
         gate = approvable_gate()
 
         result = GateIntegrityPolicy().evaluate(
-            gate, {6: GateState.APPROVED}, template=TEMPLATE
+            gate, {6: GateState.APPROVED}, template=TEMPLATE, on=TODAY
         )
 
         self.assertTrue(result.approvable, result.reasons)

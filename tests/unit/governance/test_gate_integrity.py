@@ -61,20 +61,20 @@ class GateIntegrityPolicyTests(unittest.TestCase):
             state=GateState.WORKING,
         )
 
-        result = self.policy.evaluate(gate, {6: GateState.APPROVED})
+        result = self.policy.evaluate(gate, {6: GateState.APPROVED}, on=TODAY)
 
         self.assertFalse(result.approvable)
         self.assertIn("authority-amplifier-video@1", " ".join(result.reasons))
-        self.assertFalse(gate.authorizes_downstream())
+        self.assertFalse(gate.authorizes_downstream(TODAY))
 
     def test_unapproved_dependency_blocks_approval(self):
         gate = self.gate()
 
-        result = self.policy.evaluate(gate, {6: GateState.IN_REVIEW})
+        result = self.policy.evaluate(gate, {6: GateState.IN_REVIEW}, on=TODAY)
 
         self.assertFalse(result.approvable)
         self.assertIn("6", " ".join(result.reasons))
-        self.assertFalse(gate.authorizes_downstream())
+        self.assertFalse(gate.authorizes_downstream(TODAY))
 
     def test_waiver_does_not_substitute_for_a_missing_asset(self):
         waiver = Waiver(
@@ -88,15 +88,15 @@ class GateIntegrityPolicyTests(unittest.TestCase):
             waiver=waiver,
         )
 
-        result = self.policy.evaluate(gate, {6: GateState.APPROVED})
+        result = self.policy.evaluate(gate, {6: GateState.APPROVED}, on=TODAY)
 
         self.assertFalse(result.approvable)
-        self.assertFalse(gate.authorizes_downstream())
+        self.assertFalse(gate.authorizes_downstream(TODAY))
 
     def test_author_cannot_approve_own_proposal(self):
         gate = self.gate(proposed_by="same-person", approver="same-person")
 
-        result = self.policy.evaluate(gate, {6: GateState.APPROVED})
+        result = self.policy.evaluate(gate, {6: GateState.APPROVED}, on=TODAY)
 
         self.assertFalse(result.approvable)
         self.assertIn("own proposal", " ".join(result.reasons))
@@ -104,22 +104,22 @@ class GateIntegrityPolicyTests(unittest.TestCase):
     def test_approval_requires_a_designated_approver(self):
         gate = self.gate(approver=None)
 
-        result = self.policy.evaluate(gate, {6: GateState.APPROVED})
+        result = self.policy.evaluate(gate, {6: GateState.APPROVED}, on=TODAY)
 
         self.assertFalse(result.approvable)
 
     def test_complete_gate_with_all_dependencies_approves_and_authorizes(self):
         gate = self.gate(state=GateState.APPROVED)
 
-        result = self.policy.evaluate(gate, {6: GateState.APPROVED})
+        result = self.policy.evaluate(gate, {6: GateState.APPROVED}, on=TODAY)
 
         self.assertTrue(result.approvable)
-        self.assertTrue(gate.authorizes_downstream())
+        self.assertTrue(gate.authorizes_downstream(TODAY))
 
     def test_superseded_gate_never_authorizes_downstream(self):
         gate = self.gate(state=GateState.SUPERSEDED)
 
-        self.assertFalse(gate.authorizes_downstream())
+        self.assertFalse(gate.authorizes_downstream(TODAY))
 
     def test_waiver_requires_a_named_risk_owner(self):
         with self.assertRaises(ValueError):

@@ -102,19 +102,20 @@ class StageGate:
             dependencies=definition.dependencies,
         )
 
-    def missing_assets(self) -> frozenset[AssetVersionRef]:
-        return frozenset(self.required_assets - self.approved_assets)
+    def missing_assets(self, on: date) -> frozenset[AssetVersionRef]:
+        return frozenset(self.required_assets - self.approved_assets(on))
 
-    @property
-    def approved_assets(self) -> frozenset[AssetVersionRef]:
+    def approved_assets(self, on: date) -> frozenset[AssetVersionRef]:
         """Required asset versions evidenced by a recorded approval.
 
         The set is derived from the gate's durable ``ApprovalRequest``s, not
         self-declared, so the assets the policy evaluates are the evidence a
-        passing ``GateDecision`` pins. An approval for another version, or a
-        request that is not approved, does not evidence a pinned asset. Scope and
-        expiry exactness are enforced when the decision is recorded (SPEC.md
-        sections 3 and 4).
+        passing ``GateDecision`` pins. An approval for another version, a request
+        that is not approved, and an approval already expired at the evaluation
+        instant ``on`` do not evidence a pinned asset. Scope exactness is
+        enforced when the decision is recorded (SPEC.md sections 3, 4 and 11:
+        "a failed or expired prerequisite blocks dependent authorization until
+        resolved").
         """
         return frozenset(
             asset
@@ -122,6 +123,7 @@ class StageGate:
             if any(
                 approval.asset == asset
                 and approval.outcome is ApprovalOutcome.APPROVED
+                and not approval.is_expired(on)
                 for approval in self.asset_approvals
             )
         )
@@ -139,8 +141,8 @@ class StageGate:
             )
         self.asset_approvals = (*self.asset_approvals, request)
 
-    def authorizes_downstream(self) -> bool:
-        return self.state is GateState.APPROVED and not self.missing_assets()
+    def authorizes_downstream(self, on: date) -> bool:
+        return self.state is GateState.APPROVED and not self.missing_assets(on)
 
 
 @dataclass(frozen=True)
@@ -272,7 +274,10 @@ class GateDecision:
             )
 
             evaluation = GateIntegrityPolicy().evaluate(
-                gate, ledger.dependency_states(), ledger.template
+                gate,
+                ledger.dependency_states(),
+                ledger.template,
+                on=on,
             )
             if not evaluation.approvable:
                 raise GateDecisionError(
@@ -284,7 +289,7 @@ class GateDecision:
                     f"reviewer {reviewer!r} is not the gate's designated "
                     f"approver {gate.approver!r}"
                 )
-            if not gate.authorizes_downstream():
+            if not gate.authorizes_downstream(on):
                 raise GateDecisionError(
                     "gate does not authorize downstream use for this decision"
                 )

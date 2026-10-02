@@ -10,9 +10,10 @@ Rules under test come from SPEC.md sections 3 and 4:
 ``StageGate.approved_assets`` was a self-managed set that GateIntegrityPolicy
 consulted, so a gate could declare its own asset package approved with no durable
 ``ApprovalRequest`` behind it, and the gate the policy evaluated could diverge
-from the evidence the durable decision pinned. A gate's approved set must instead
-be derived from recorded, version-specific approvals. Scope and expiry exactness
-remain validated at decision time by ``GateDecision``.
+from the evidence the durable decision pinned. A gate's evidenced set must
+instead be derived from recorded, version-specific approvals that are unexpired
+at the evaluation instant. Scope exactness is still validated at decision time by
+``GateDecision``.
 """
 
 import unittest
@@ -26,6 +27,7 @@ from redops.contexts.governance.domain.entities import (
 )
 from redops.contexts.governance.domain.errors import (
     AssetPackageMismatchError,
+    GateDecisionError,
     UnapprovedAssetError,
 )
 from redops.contexts.governance.domain.policies import GateIntegrityPolicy
@@ -112,17 +114,13 @@ class GateAssetEvidenceTests(unittest.TestCase):
     def setUp(self):
         self.policy = GateIntegrityPolicy()
 
-    def test_gate_does_not_accept_a_directly_assigned_approved_asset_set(self):
-        gate = gate_with_required(SCRIPT_V1)
-
-        with self.assertRaises(AttributeError):
-            gate.approved_assets = frozenset({SCRIPT_V1})
-
     def test_gate_with_no_recorded_approval_does_not_evidence_the_asset(self):
         gate = gate_with_required(SCRIPT_V1)
 
-        self.assertFalse(gate.authorizes_downstream())
-        result = self.policy.evaluate(gate, {6: GateState.APPROVED}, TEMPLATE)
+        self.assertFalse(gate.authorizes_downstream(TODAY))
+        result = self.policy.evaluate(
+            gate, {6: GateState.APPROVED}, TEMPLATE, on=TODAY
+        )
         self.assertFalse(result.approvable)
         self.assertIn("authority-amplifier-script@1", " ".join(result.reasons))
 
@@ -130,9 +128,9 @@ class GateAssetEvidenceTests(unittest.TestCase):
         gate = gate_with_required(SCRIPT_V1)
         gate.record_asset_approval(request_for(SCRIPT_V1))
 
-        self.assertEqual(frozenset({SCRIPT_V1}), gate.approved_assets)
-        self.assertTrue(gate.authorizes_downstream())
-        result = self.policy.evaluate(gate, {6: GateState.APPROVED})
+        self.assertEqual(frozenset({SCRIPT_V1}), gate.approved_assets(TODAY))
+        self.assertTrue(gate.authorizes_downstream(TODAY))
+        result = self.policy.evaluate(gate, {6: GateState.APPROVED}, on=TODAY)
         self.assertTrue(result.approvable, result.reasons)
 
     def test_approval_for_another_version_does_not_evidence_the_pinned_asset(self):
@@ -141,14 +139,14 @@ class GateAssetEvidenceTests(unittest.TestCase):
         with self.assertRaises(AssetPackageMismatchError):
             gate.record_asset_approval(request_for(SCRIPT_V2))
 
-        self.assertEqual(frozenset(), gate.approved_assets)
-        self.assertFalse(gate.authorizes_downstream())
+        self.assertEqual(frozenset(), gate.approved_assets(TODAY))
+        self.assertFalse(gate.authorizes_downstream(TODAY))
 
     def test_pending_request_does_not_evidence_the_asset(self):
         gate = gate_with_required(SCRIPT_V1)
         gate.record_asset_approval(request_for(SCRIPT_V1, approved=False))
 
-        self.assertEqual(frozenset(), gate.approved_assets)
+        self.assertEqual(frozenset(), gate.approved_assets(TODAY))
 
     def test_recording_an_approval_for_an_asset_outside_the_package_is_rejected(self):
         gate = gate_with_required(SCRIPT_V1)
@@ -160,7 +158,7 @@ class GateAssetEvidenceTests(unittest.TestCase):
         gate = gate_with_required(SCRIPT_V1, VIDEO_V1)
         gate.record_asset_approval(request_for(SCRIPT_V1))
 
-        self.assertEqual(frozenset({VIDEO_V1}), gate.missing_assets())
+        self.assertEqual(frozenset({VIDEO_V1}), gate.missing_assets(TODAY))
 
 
 class GateDecisionEvidenceUnificationTests(unittest.TestCase):
@@ -215,6 +213,86 @@ class GateDecisionEvidenceUnificationTests(unittest.TestCase):
             GateDecision.from_gate(
                 gate, **self.decision_kwargs("stage-8-funnel-integration")
             )
+
+
+class GateApprovalExpiryTests(unittest.TestCase):
+    """An expired approval must not evidence a gate asset at evaluation.
+
+    SPEC.md section 4: "a failed or expired prerequisite blocks dependent
+    authorization until resolved"; section 11: approval is version specific.
+    The gate's evidenced asset set and ``GateIntegrityPolicy`` must agree with
+    the durable ``GateDecision``, which already refuses an expired approval
+    through ``ApprovalRequest.authorizes``.
+    """
+
+    def setUp(self):
+        self.policy = GateIntegrityPolicy()
+
+    def stage7_gate(self, *, approved_on, expires_on):
+        kinds = TEMPLATE.required_asset_kinds(7)
+        gate = StageGate.from_template(
+            TEMPLATE, 7, {kind: 1 for kind in kinds}
+        )
+        gate.state = GateState.APPROVED
+        gate.proposed_by = "specialist-1"
+        gate.approver = "client-approver-1"
+        for asset in gate.required_assets:
+            request = ApprovalRequest(
+                asset=asset,
+                scope="stage-8-funnel-integration",
+                requested_by="specialist-1",
+                approver="client-approver-1",
+                expires_on=expires_on,
+            )
+            request.approve(actor="client-approver-1", on=approved_on)
+            gate.record_asset_approval(request)
+        return gate
+
+    def decision_kwargs(self):
+        return dict(
+            ledger=ledger_through(7),
+            reviewer="client-approver-1",
+            scope="stage-8-funnel-integration",
+            checkpoint_evidence="authority-amplifier-approved-rubric passed",
+            disposition=GateDisposition.APPROVED,
+            rationale="client approved the exact script and creative",
+            on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DUE,
+        )
+
+    def test_expired_approval_does_not_evidence_a_gate_asset_at_evaluation(self):
+        gate = self.stage7_gate(
+            approved_on=date(2026, 9, 30), expires_on=date(2026, 10, 1)
+        )
+
+        self.assertFalse(gate.authorizes_downstream(TODAY))
+        result = self.policy.evaluate(
+            gate, {6: GateState.APPROVED}, TEMPLATE, on=TODAY
+        )
+        self.assertFalse(result.approvable)
+        self.assertIn(
+            "authority-amplifier-script@1", " ".join(result.reasons)
+        )
+
+    def test_unexpired_approval_evidences_the_gate_asset(self):
+        gate = self.stage7_gate(
+            approved_on=TODAY, expires_on=date(2026, 12, 31)
+        )
+
+        self.assertTrue(gate.authorizes_downstream(TODAY))
+        result = self.policy.evaluate(
+            gate, {6: GateState.APPROVED}, TEMPLATE, on=TODAY
+        )
+        self.assertTrue(result.approvable, result.reasons)
+
+    def test_factory_refuses_a_passing_decision_after_the_approval_expires(self):
+        gate = self.stage7_gate(
+            approved_on=date(2026, 9, 30), expires_on=date(2026, 10, 1)
+        )
+
+        with self.assertRaises(GateDecisionError):
+            GateDecision.from_gate(gate, **self.decision_kwargs())
 
 
 if __name__ == "__main__":
