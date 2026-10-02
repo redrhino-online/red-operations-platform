@@ -4,18 +4,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Mapping
 
 from redops.contexts.governance.domain.errors import (
     ApprovalAuthorityError,
     ApprovalExpiredError,
+    AssetPackageMismatchError,
     SelfApprovalError,
     StageGateNotAcceptedError,
+    UnknownStageError,
 )
 from redops.contexts.governance.domain.value_objects import (
     ApprovalOutcome,
     AssetVersionRef,
     GateState,
     StageStatus,
+    StageTemplate,
     StageTransition,
     Waiver,
 )
@@ -39,6 +43,54 @@ class StageGate:
     proposed_by: str | None = None
     approver: str | None = None
     waiver: Waiver | None = None
+
+    @classmethod
+    def from_template(
+        cls,
+        template: StageTemplate,
+        stage_number: int,
+        asset_versions: Mapping[str, int],
+    ) -> StageGate:
+        """Build the canonical gate for a stage from the pipeline template.
+
+        Dependencies, template version, and the required asset kinds come
+        from the template rather than the caller, so an application boundary
+        cannot under-declare a gate's prerequisites or its asset package. The
+        caller supplies only the exact version pinned for each required asset
+        kind (SPEC.md sections 3 and 4).
+        """
+        definition = template.definition_for(stage_number)
+        if definition is None:
+            raise UnknownStageError(
+                f"stage {stage_number} is not defined in template "
+                f"{template.version!r}"
+            )
+
+        supplied = set(asset_versions)
+        missing = definition.required_asset_kinds - supplied
+        extra = supplied - definition.required_asset_kinds
+        if missing or extra:
+            detail: list[str] = []
+            if missing:
+                detail.append(f"missing asset kinds: {', '.join(sorted(missing))}")
+            if extra:
+                detail.append(
+                    f"unexpected asset kinds: {', '.join(sorted(extra))}"
+                )
+            raise AssetPackageMismatchError(
+                f"stage {stage_number} asset package does not match template "
+                f"{template.version!r}: {'; '.join(detail)}"
+            )
+
+        return cls(
+            stage_number=stage_number,
+            template_version=template.version,
+            required_assets=frozenset(
+                AssetVersionRef(kind, version)
+                for kind, version in asset_versions.items()
+            ),
+            dependencies=definition.dependencies,
+        )
 
     def missing_assets(self) -> frozenset[AssetVersionRef]:
         return frozenset(self.required_assets - self.approved_assets)

@@ -29,3 +29,11 @@ class StageGateNotAcceptedError(GovernanceError):
 
 class InvalidStageTemplateError(GovernanceError, ValueError):
     """A stage 0-10 template was constructed in a way its invariant forbids."""
+
+
+class UnknownStageError(GovernanceError, ValueError):
+    """A gate was requested for a stage the template does not define."""
+
+
+class AssetPackageMismatchError(GovernanceError, ValueError):
+    """A supplied asset package does not match the stage's required asset kinds."""
