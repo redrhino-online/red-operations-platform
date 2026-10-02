@@ -119,21 +119,21 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
     def test_records_a_passing_decision_for_a_stage_with_no_prerequisites(self):
         self.ledger.record(passing(0))
 
-        self.assertTrue(self.ledger.has_passing_decision(0))
+        self.assertTrue(self.ledger.has_passing_decision(0, on=TODAY))
         self.assertEqual(passing(0), self.ledger.decision_for(0))
 
     def test_refuses_a_passing_decision_whose_prerequisite_is_absent(self):
         with self.assertRaises(UnsatisfiedPrerequisiteError):
             self.ledger.record(passing(1))
 
-        self.assertFalse(self.ledger.has_passing_decision(1))
+        self.assertFalse(self.ledger.has_passing_decision(1, on=TODAY))
         self.assertIsNone(self.ledger.decision_for(1))
 
     def test_records_a_passing_decision_once_its_prerequisite_passes(self):
         self.ledger.record(passing(0))
         self.ledger.record(passing(1))
 
-        self.assertTrue(self.ledger.has_passing_decision(1))
+        self.assertTrue(self.ledger.has_passing_decision(1, on=TODAY))
 
     def test_a_blocked_prerequisite_does_not_authorize_the_dependent_stage(self):
         self.ledger.record(blocked(0))
@@ -145,7 +145,7 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
         self.ledger.record(passing(0))
         self.ledger.record(blocked(0))
 
-        self.assertFalse(self.ledger.has_passing_decision(0))
+        self.assertFalse(self.ledger.has_passing_decision(0, on=TODAY))
         with self.assertRaises(UnsatisfiedPrerequisiteError):
             self.ledger.record(passing(1))
 
@@ -182,7 +182,7 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
         with self.assertRaises(AssetPackageMismatchError):
             self.ledger.record(under_declared)
 
-        self.assertFalse(self.ledger.has_passing_decision(0))
+        self.assertFalse(self.ledger.has_passing_decision(0, on=TODAY))
 
     def test_refuses_a_passing_decision_with_a_non_canonical_asset_kind(self):
         substituted_assets = canonical_assets(0) | frozenset(
@@ -209,12 +209,12 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
         with self.assertRaises(AssetPackageMismatchError):
             self.ledger.record(substituted)
 
-        self.assertFalse(self.ledger.has_passing_decision(0))
+        self.assertFalse(self.ledger.has_passing_decision(0, on=TODAY))
 
     def test_records_a_passing_decision_whose_kinds_match_the_template(self):
         self.ledger.record(passing(0))
 
-        self.assertTrue(self.ledger.has_passing_decision(0))
+        self.assertTrue(self.ledger.has_passing_decision(0, on=TODAY))
 
 
 class GateLedgerDerivedStateTests(unittest.TestCase):
@@ -225,7 +225,7 @@ class GateLedgerDerivedStateTests(unittest.TestCase):
     def test_dependency_states_are_derived_from_recorded_decisions(self):
         self.ledger.record(passing(0))
 
-        states = self.ledger.dependency_states()
+        states = self.ledger.dependency_states(on=TODAY)
 
         self.assertIs(GateState.APPROVED, states[0])
         self.assertIs(GateState.NOT_STARTED, states[1])
@@ -233,7 +233,7 @@ class GateLedgerDerivedStateTests(unittest.TestCase):
     def test_dependency_states_reflect_a_non_passing_disposition(self):
         self.ledger.record(blocked(0))
 
-        self.assertIs(GateState.BLOCKED, self.ledger.dependency_states()[0])
+        self.assertIs(GateState.BLOCKED, self.ledger.dependency_states(on=TODAY)[0])
 
     def test_decision_history_is_append_only_and_immutable(self):
         self.ledger.record(passing(0))
@@ -274,7 +274,7 @@ class GateLedgerDerivedStateTests(unittest.TestCase):
         )
         self.ledger.record(decision)
 
-        self.assertTrue(self.ledger.has_passing_decision(1))
+        self.assertTrue(self.ledger.has_passing_decision(1, on=TODAY))
 
 
 if __name__ == "__main__":

@@ -284,18 +284,22 @@ class PipelineProgress:
         cls,
         ledger: "GateLedger",
         *,
+        on: date,
         verified_post_launch_milestones: int = 0,
         activity_entries: int = 0,
     ) -> "PipelineProgress":
-        """Derive verified progress from the durable gate ledger.
+        """Derive verified progress from the durable gate ledger at ``on``.
 
-        Only the ledger's passing gate decisions count as gates; milestone
-        observations are supplied by the caller because they are owned by the
-        Measurement context, not inferred here.
+        Only gates whose latest passing decision still authorizes at ``on``
+        count as approved; a gate whose pinned approvals have expired is not
+        verified progress. Milestone observations are supplied by the caller
+        because they are owned by the Measurement context, not inferred here.
         """
         stages = ledger.template.stages
         approved = sum(
-            1 for stage in stages if ledger.has_passing_decision(stage.stage_number)
+            1
+            for stage in stages
+            if ledger.has_passing_decision(stage.stage_number, on=on)
         )
         return cls(
             approved_gates=approved,

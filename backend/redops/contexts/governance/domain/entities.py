@@ -282,7 +282,7 @@ class GateDecision:
 
             evaluation = GateIntegrityPolicy().evaluate(
                 gate,
-                ledger.dependency_states(),
+                ledger.dependency_states(on=on),
                 ledger.template,
                 on=on,
                 scope=scope,
@@ -327,25 +327,46 @@ class GateDecision:
     def unapproved_assets(self) -> frozenset[AssetVersionRef]:
         """Pinned assets with no covering approved, in-scope, unexpired request.
 
-        Each asset must be approved for its exact version and the decision's
-        intended downstream scope. A pending, rejected, superseded or expired
-        request, a request for another version, or a request for another scope
-        does not cover the pinned asset (SPEC.md sections 3, 4 and 11).
+        Evaluated at the instant the decision was recorded. Each asset must be
+        approved for its exact version and the decision's intended downstream
+        scope. A pending, rejected, superseded or expired request, a request for
+        another version, or a request for another scope does not cover the
+        pinned asset (SPEC.md sections 3, 4 and 11).
+        """
+        return self.unapproved_assets_at(self.decided_on)
+
+    def unapproved_assets_at(self, on: date) -> frozenset[AssetVersionRef]:
+        """Pinned assets not covered by a still-effective approval at ``on``.
+
+        The same version, scope and expiry rule as ``unapproved_assets``, but
+        evaluated at an arbitrary instant so a prerequisite decision can be
+        re-checked long after it was recorded (SPEC.md section 4: "a failed or
+        expired prerequisite blocks dependent authorization until resolved").
         """
         return frozenset(
             asset
             for asset in self.required_assets
             if not any(
-                approval.authorizes(asset, self.scope, self.decided_on)
+                approval.authorizes(asset, self.scope, on)
                 for approval in self.asset_approvals
             )
         )
 
     def authorizes_downstream(self) -> bool:
+        return self.authorizes_downstream_at(self.decided_on)
+
+    def authorizes_downstream_at(self, on: date) -> bool:
+        """Whether this decision still authorizes its scope at instant ``on``.
+
+        Structural authorization plus the exact pinned approvals are checked
+        against the evaluation instant, so a passing decision whose approvals
+        have since expired no longer authorizes dependent work.
+        """
         return (
             self.is_passing
             and bool(self.required_assets)
             and bool(self.scope and self.scope.strip())
+            and not self.unapproved_assets_at(on)
         )
 
 
@@ -424,7 +445,9 @@ class GateLedger:
             unsatisfied = sorted(
                 stage
                 for stage in self._template.dependencies_of(decision.stage_number)
-                if not self.has_passing_decision(stage)
+                if not self.has_passing_decision(
+                    stage, on=decision.decided_on
+                )
             )
             if unsatisfied:
                 names = ", ".join(str(stage) for stage in unsatisfied)
@@ -441,19 +464,34 @@ class GateLedger:
         entries = self._decisions.get(stage_number)
         return entries[-1] if entries else None
 
-    def has_passing_decision(self, stage_number: int) -> bool:
-        latest = self.decision_for(stage_number)
-        return latest is not None and latest.is_passing
+    def has_passing_decision(self, stage_number: int, *, on: date) -> bool:
+        """Whether the stage's latest decision still authorizes at ``on``.
 
-    def dependency_states(self) -> Mapping[int, GateState]:
+        A passing decision whose exact pinned approvals have since expired no
+        longer counts, so an expired prerequisite blocks dependent
+        authorization until it is resolved (SPEC.md section 4).
+        """
+        latest = self.decision_for(stage_number)
+        return latest is not None and latest.authorizes_downstream_at(on)
+
+    def dependency_states(self, *, on: date) -> Mapping[int, GateState]:
+        """Prerequisite gate states, time-aware at the evaluation instant.
+
+        A latest passing decision whose pinned approvals have expired at ``on``
+        is reported as ``BLOCKED`` rather than ``APPROVED``: the prerequisite
+        no longer authorizes dependent work even though no newer decision has
+        been recorded. There is no separate expired gate state in SPEC.md
+        section 4, and an expired prerequisite is exactly a blocked dependency.
+        """
         states: dict[int, GateState] = {}
         for stage in self._template.stages:
             latest = self.decision_for(stage.stage_number)
-            states[stage.stage_number] = (
-                self._gate_state(latest.disposition)
-                if latest is not None
-                else GateState.NOT_STARTED
-            )
+            if latest is None:
+                states[stage.stage_number] = GateState.NOT_STARTED
+            elif latest.is_passing and not latest.authorizes_downstream_at(on):
+                states[stage.stage_number] = GateState.BLOCKED
+            else:
+                states[stage.stage_number] = self._gate_state(latest.disposition)
         return states
 
     @staticmethod

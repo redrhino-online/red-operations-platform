@@ -81,7 +81,7 @@ def ledger_through(stage_number: int) -> GateLedger:
 class PipelineProgressDerivationTests(unittest.TestCase):
     def test_empty_pipeline_reports_no_verified_progress(self):
         progress = PipelineProgress.from_ledger(
-            GateLedger(stage_zero_to_ten_template(VERSION))
+            GateLedger(stage_zero_to_ten_template(VERSION)), on=TODAY
         )
 
         self.assertEqual(0, progress.approved_gates)
@@ -92,7 +92,7 @@ class PipelineProgressDerivationTests(unittest.TestCase):
         )
 
     def test_an_approved_gate_adds_to_verified_progress(self):
-        progress = PipelineProgress.from_ledger(ledger_through(1))
+        progress = PipelineProgress.from_ledger(ledger_through(1), on=TODAY)
 
         self.assertEqual(1, progress.approved_gates)
         self.assertEqual(1, progress.verified_progress)
@@ -104,6 +104,7 @@ class PipelineProgressDerivationTests(unittest.TestCase):
     def test_activity_is_counted_separately_and_never_adds_progress(self):
         progress = PipelineProgress.from_ledger(
             ledger_through(2),
+            on=TODAY,
             activity_entries=17,
         )
 
@@ -121,7 +122,7 @@ class PipelineProgressDerivationTests(unittest.TestCase):
                 ledger = GateLedger(stage_zero_to_ten_template(VERSION))
                 ledger.record(decision(0, disposition))
 
-                progress = PipelineProgress.from_ledger(ledger)
+                progress = PipelineProgress.from_ledger(ledger, on=TODAY)
 
                 self.assertEqual(0, progress.approved_gates)
                 self.assertEqual(0, progress.verified_progress)
@@ -131,7 +132,7 @@ class PipelineProgressDerivationTests(unittest.TestCase):
         ledger.record(decision(0, GateDisposition.APPROVED))
         ledger.record(decision(0, GateDisposition.CHANGES_REQUIRED))
 
-        progress = PipelineProgress.from_ledger(ledger)
+        progress = PipelineProgress.from_ledger(ledger, on=TODAY)
 
         self.assertEqual(0, progress.approved_gates)
         self.assertEqual(0, progress.verified_progress)
@@ -139,6 +140,7 @@ class PipelineProgressDerivationTests(unittest.TestCase):
     def test_verified_post_launch_milestones_add_to_progress_not_gates(self):
         progress = PipelineProgress.from_ledger(
             ledger_through(11),
+            on=TODAY,
             verified_post_launch_milestones=2,
         )
 

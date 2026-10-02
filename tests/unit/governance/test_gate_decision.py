@@ -294,7 +294,7 @@ class GateDecisionFromGateTests(unittest.TestCase):
                 assigned_owner="production-manager",
                 due_on=DATE_DUE,
             )
-        self.assertFalse(ledger.has_passing_decision(6))
+        self.assertFalse(ledger.has_passing_decision(6, on=TODAY))
 
     def test_cannot_record_approval_by_an_actor_without_the_designated_authority(self):
         gate = approvable_gate()

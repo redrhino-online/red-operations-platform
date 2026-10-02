@@ -166,7 +166,7 @@ class GateLedgerExactnessTests(unittest.TestCase):
         with self.assertRaises(AmbiguousAssetPackageError):
             passing_decision(7, ambiguous)
 
-        self.assertFalse(ledger.has_passing_decision(7))
+        self.assertFalse(ledger.has_passing_decision(7, on=TODAY))
 
 
 if __name__ == "__main__":

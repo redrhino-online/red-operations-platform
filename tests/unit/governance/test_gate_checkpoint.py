@@ -191,14 +191,14 @@ class GateLedgerCheckpointTests(unittest.TestCase):
         with self.assertRaises(CheckpointMismatchError):
             ledger.record(canonical_passing(0, checkpoint="Not The Stage 0 Rubric"))
 
-        self.assertFalse(ledger.has_passing_decision(0))
+        self.assertFalse(ledger.has_passing_decision(0, on=TODAY))
 
     def test_records_a_passing_decision_with_the_canonical_checkpoint(self):
         ledger = GateLedger(TEMPLATE)
 
         ledger.record(canonical_passing(0))
 
-        self.assertTrue(ledger.has_passing_decision(0))
+        self.assertTrue(ledger.has_passing_decision(0, on=TODAY))
         self.assertEqual(
             "Production Ready", ledger.decision_for(0).checkpoint
         )
