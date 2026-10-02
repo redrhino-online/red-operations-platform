@@ -5,9 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
 from redops.contexts.governance.domain.errors import InvalidStageTemplateError
+
+if TYPE_CHECKING:
+    from redops.contexts.governance.domain.entities import GateLedger
 
 
 class GateState(Enum):
@@ -245,3 +248,66 @@ class StageTemplate:
             if definition is not None
             else frozenset()
         )
+
+
+@dataclass(frozen=True)
+class PipelineProgress:
+    """Verified progress across the stage 0-10 pipeline (SPEC.md section 4).
+
+    Progress is reported as the number of stages whose latest durable gate
+    decision is passing plus caller-supplied verified post-launch milestones.
+    Activity is reported separately and never contributes to verified progress,
+    so progress is never displayed as tasks checked off. A blocked, changes
+    required, waived or superseded stage is not an approved gate and does not
+    count.
+    """
+
+    approved_gates: int
+    total_gates: int
+    verified_post_launch_milestones: int = 0
+    activity_entries: int = 0
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("approved gates", self.approved_gates),
+            ("total gates", self.total_gates),
+            ("verified post launch milestones", self.verified_post_launch_milestones),
+            ("activity entries", self.activity_entries),
+        ):
+            if value < 0:
+                raise ValueError(f"{name} cannot be negative")
+        if self.approved_gates > self.total_gates:
+            raise ValueError("approved gates cannot exceed total gates")
+
+    @classmethod
+    def from_ledger(
+        cls,
+        ledger: "GateLedger",
+        *,
+        verified_post_launch_milestones: int = 0,
+        activity_entries: int = 0,
+    ) -> "PipelineProgress":
+        """Derive verified progress from the durable gate ledger.
+
+        Only the ledger's passing gate decisions count as gates; milestone
+        observations are supplied by the caller because they are owned by the
+        Measurement context, not inferred here.
+        """
+        stages = ledger.template.stages
+        approved = sum(
+            1 for stage in stages if ledger.has_passing_decision(stage.stage_number)
+        )
+        return cls(
+            approved_gates=approved,
+            total_gates=len(stages),
+            verified_post_launch_milestones=verified_post_launch_milestones,
+            activity_entries=activity_entries,
+        )
+
+    @property
+    def verified_progress(self) -> int:
+        return self.approved_gates + self.verified_post_launch_milestones
+
+    @property
+    def gates_remaining(self) -> int:
+        return self.total_gates - self.approved_gates
