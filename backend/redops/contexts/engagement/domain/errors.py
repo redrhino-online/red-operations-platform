@@ -95,6 +95,17 @@ class IntakeOwnerNotAuthorizedError(EngagementError):
     """
 
 
+class GateApproverNotAuthorizedError(EngagementError):
+    """A stage gate names a designated approver who holds no workspace authority.
+
+    SPEC.md sections 4 and 5: a stage gate is approved by the client-designated
+    authority, and an agent cannot confer human approval upon itself. A gate whose
+    ``approver`` is absent, or names an actor who is not a named authority on the
+    client workspace, cannot be approved on behalf of that client (SPEC.md
+    section 11: the aggregate never invents a human authority).
+    """
+
+
 class UnsourcedIntakeEvidenceError(EngagementError):
     """A stage 0 intake asset was asked to use unsourced or foreign evidence.
 

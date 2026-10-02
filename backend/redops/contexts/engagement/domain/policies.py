@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Iterable
 
 from redops.contexts.engagement.domain.errors import (
+    GateApproverNotAuthorizedError,
     IllegalLifecycleTransitionError,
     IncompleteIntakePackageError,
     IntakeOwnerNotAuthorizedError,
@@ -28,6 +29,7 @@ from redops.contexts.knowledge.domain.policies import sourced_claim_ids
 
 if TYPE_CHECKING:
     from redops.contexts.engagement.domain.entities import ClientWorkspace
+    from redops.contexts.governance.domain.entities import StageGate
 
 
 class WorkspaceLifecyclePolicy:
@@ -124,3 +126,36 @@ class ProductionReadyPolicy:
                         f"claim {claim_id!r} is not a known, directly sourced "
                         "claim for this tenant"
                     )
+
+
+class GateApproverAuthorityPolicy:
+    """Evaluates that a stage gate is approved by a client-designated authority.
+
+    SPEC.md sections 4 and 5: a gate is approved by the client-designated
+    authority, and an agent cannot confer human approval upon itself. The
+    governance ``StageGate`` carries a free ``approver`` string, and the
+    ``GateIntegrityPolicy`` only requires it to be non-empty and distinct from the
+    author, so nothing yet binds it to the client. This policy refuses a gate
+    whose designated approver is absent, or names an actor who is not a named
+    authority on the ``ClientWorkspace``, before the stage 0 "Production Ready"
+    (or any other stage) ``GateDecision`` can be recorded. It never invents a
+    concrete approver identity or authority role; the workspace registry supplies
+    the named people (SPEC.md section 11).
+    """
+
+    def require(
+        self,
+        gate: "StageGate",
+        workspace: "ClientWorkspace",
+    ) -> None:
+        approver = gate.approver
+        if not approver or not approver.strip():
+            raise GateApproverNotAuthorizedError(
+                "a stage gate requires a designated approver who holds a named "
+                f"authority on workspace {workspace.workspace_id!r}"
+            )
+        if not workspace.has_authority(approver):
+            raise GateApproverNotAuthorizedError(
+                f"gate approver {approver!r} holds no authority on workspace "
+                f"{workspace.workspace_id!r} for tenant {workspace.tenant_id!r}"
+            )
