@@ -31,6 +31,7 @@ from redops.contexts.governance.domain.value_objects import (
 )
 
 TODAY = date(2026, 10, 2)
+DATE_DUE = date(2026, 10, 16)
 SCRIPT_V1 = AssetVersionRef("authority-amplifier-script", 1)
 VIDEO_V1 = AssetVersionRef("authority-amplifier-video", 1)
 TEMPLATE = stage_zero_to_ten_template("2026.1")
@@ -63,6 +64,8 @@ def passing_decision_for(stage_number: int) -> GateDecision:
         disposition=GateDisposition.APPROVED,
         rationale="reviewed against the checkpoint",
         decided_on=TODAY,
+        assigned_owner="production-manager",
+        due_on=DATE_DUE,
     )
 
 
@@ -85,6 +88,8 @@ def passing_decision(**overrides) -> GateDecision:
         "disposition": GateDisposition.APPROVED,
         "rationale": "script and final creative reviewed with the client",
         "decided_on": TODAY,
+        "assigned_owner": "production-manager",
+        "due_on": DATE_DUE,
         "next_action": "release stage 8 work",
     }
     values.update(overrides)
@@ -115,6 +120,48 @@ class GateDecisionRecordTests(unittest.TestCase):
 
         with self.assertRaises(FrozenInstanceError):
             decision.disposition = GateDisposition.BLOCKED
+
+
+class GateDecisionAccountabilityTests(unittest.TestCase):
+    """SPEC.md section 4 gate record: for every stage persist the assigned work
+    owner and due date, so the production view can answer who is accountable and
+    when the next approval is due. A decision that omits either is rejected
+    rather than silently recorded as complete."""
+
+    def test_decision_records_the_assigned_owner_and_due_date(self):
+        decision = passing_decision()
+
+        self.assertEqual("production-manager", decision.assigned_owner)
+        self.assertEqual(DATE_DUE, decision.due_on)
+
+    def test_decision_requires_an_assigned_work_owner(self):
+        for override in ({"assigned_owner": ""}, {"assigned_owner": "   "}):
+            with self.subTest(override=override):
+                with self.assertRaises(GateDecisionError):
+                    passing_decision(**override)
+
+    def test_decision_requires_a_due_date(self):
+        with self.assertRaises(GateDecisionError):
+            passing_decision(due_on=None)
+
+    def test_factory_records_the_assigned_owner_and_due_date(self):
+        gate = approvable_gate()
+
+        decision = GateDecision.from_gate(
+            gate,
+            ledger=ledger_through(7),
+            reviewer="client-approver-1",
+            scope="stage-8-funnel-integration",
+            checkpoint_evidence="rubric passed",
+            disposition=GateDisposition.APPROVED,
+            rationale="client approved the exact script and creative",
+            on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
+        )
+
+        self.assertEqual("production-manager", decision.assigned_owner)
+        self.assertEqual(DATE_DUE, decision.due_on)
 
 
 class GateDecisionInvariantTests(unittest.TestCase):
@@ -177,6 +224,8 @@ class GateDecisionFromGateTests(unittest.TestCase):
             disposition=GateDisposition.APPROVED,
             rationale="client approved the exact script and creative",
             on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
         )
 
         self.assertEqual(gate.required_assets, decision.required_assets)
@@ -199,6 +248,8 @@ class GateDecisionFromGateTests(unittest.TestCase):
                 disposition=GateDisposition.APPROVED,
                 rationale="premature",
                 on=TODAY,
+                assigned_owner="production-manager",
+                due_on=DATE_DUE,
             )
 
     def test_cannot_record_approval_while_the_ledger_lacks_the_prerequisite(self):
@@ -215,6 +266,8 @@ class GateDecisionFromGateTests(unittest.TestCase):
                 disposition=GateDisposition.APPROVED,
                 rationale="dependency not done",
                 on=TODAY,
+                assigned_owner="production-manager",
+                due_on=DATE_DUE,
             )
         self.assertFalse(ledger.has_passing_decision(6))
 
@@ -231,6 +284,8 @@ class GateDecisionFromGateTests(unittest.TestCase):
                 disposition=GateDisposition.APPROVED,
                 rationale="self approval attempt",
                 on=TODAY,
+                assigned_owner="production-manager",
+                due_on=DATE_DUE,
             )
         self.assertEqual("client-approver-1", gate.approver)
 
@@ -246,6 +301,8 @@ class GateDecisionFromGateTests(unittest.TestCase):
             disposition=GateDisposition.BLOCKED,
             rationale="upstream method change",
             on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
         )
 
         self.assertFalse(decision.authorizes_downstream())

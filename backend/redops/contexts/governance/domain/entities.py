@@ -109,10 +109,13 @@ class GateDecision:
 
     It persists the stage, the pinned required asset versions, the checkpoint
     evidence, the reviewer, the intended downstream scope, the disposition, the
-    rationale and the next action. A passing decision pins the exact evidence
-    and intended downstream use; a non-passing disposition, including a waiver,
-    never authorizes downstream work. History is append-only: a later decision
-    supersedes an earlier one by being recorded alongside it, never by editing.
+    rationale and the next action. It also persists the assigned work owner and
+    due date so the production view can answer who is accountable for the stage
+    and when the next approval is due (SPEC.md section 4). A passing decision
+    pins the exact evidence and intended downstream use; a non-passing
+    disposition, including a waiver, never authorizes downstream work. History
+    is append-only: a later decision supersedes an earlier one by being recorded
+    alongside it, never by editing.
     """
 
     stage_number: int
@@ -124,6 +127,8 @@ class GateDecision:
     disposition: GateDisposition
     rationale: str
     decided_on: date
+    assigned_owner: str
+    due_on: date
     next_action: str = ""
     waiver: Waiver | None = None
 
@@ -136,6 +141,14 @@ class GateDecision:
             raise GateDecisionError("gate decision reviewer is required")
         if not self.rationale or not self.rationale.strip():
             raise GateDecisionError("gate decision rationale is required")
+        if not self.assigned_owner or not self.assigned_owner.strip():
+            raise GateDecisionError(
+                "gate decision assigned work owner is required for every stage"
+            )
+        if not isinstance(self.due_on, date):
+            raise GateDecisionError(
+                "gate decision due date is required for every stage"
+            )
 
         if self.disposition.is_passing:
             if not self.required_assets:
@@ -172,6 +185,8 @@ class GateDecision:
         disposition: GateDisposition,
         rationale: str,
         on: date,
+        assigned_owner: str,
+        due_on: date,
         next_action: str = "",
         waiver: Waiver | None = None,
     ) -> GateDecision:
@@ -219,6 +234,8 @@ class GateDecision:
             disposition=disposition,
             rationale=rationale,
             decided_on=on,
+            assigned_owner=assigned_owner,
+            due_on=due_on,
             next_action=next_action,
             waiver=waiver,
         )

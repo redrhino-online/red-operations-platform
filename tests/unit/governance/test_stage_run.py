@@ -27,6 +27,7 @@ from redops.contexts.governance.domain.value_objects import (
 
 SCRIPT_V1 = AssetVersionRef("authority-amplifier-script", 1)
 TODAY = date(2026, 10, 2)
+DATE_DUE = date(2026, 10, 16)
 CORRELATION = "corr-123"
 
 
@@ -43,6 +44,8 @@ def accepted_decision(
         disposition=GateDisposition.APPROVED,
         rationale="script and supported claims reviewed with the client",
         decided_on=TODAY,
+        assigned_owner="production-manager",
+        due_on=DATE_DUE,
     )
 
 
@@ -112,6 +115,8 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
             disposition=GateDisposition.BLOCKED,
             rationale="dependency not approved",
             decided_on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
         )
 
         with self.assertRaises(StageGateNotAcceptedError):
@@ -140,6 +145,8 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
             disposition=GateDisposition.WAIVED,
             rationale="scoped client waiver",
             decided_on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
             waiver=Waiver(
                 reason="video delayed by vendor",
                 risk_owner="production-manager",

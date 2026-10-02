@@ -34,6 +34,7 @@ from redops.contexts.governance.domain.value_objects import (
 
 VERSION = "2026.1"
 TODAY = date(2026, 10, 2)
+DATE_DUE = date(2026, 10, 16)
 
 
 def canonical_assets(stage_number: int, version: str = VERSION) -> frozenset[AssetVersionRef]:
@@ -55,6 +56,8 @@ def passing(stage_number: int, version: str = VERSION) -> GateDecision:
         disposition=GateDisposition.APPROVED,
         rationale="reviewed against the checkpoint",
         decided_on=TODAY,
+        assigned_owner="production-manager",
+        due_on=DATE_DUE,
     )
 
 
@@ -69,6 +72,8 @@ def blocked(stage_number: int, version: str = VERSION) -> GateDecision:
         disposition=GateDisposition.BLOCKED,
         rationale="prerequisite incomplete",
         decided_on=TODAY,
+        assigned_owner="production-manager",
+        due_on=DATE_DUE,
     )
 
 
@@ -141,6 +146,8 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
             disposition=GateDisposition.APPROVED,
             rationale="self-declared smaller package",
             decided_on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
         )
 
         with self.assertRaises(AssetPackageMismatchError):
@@ -160,6 +167,8 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
             disposition=GateDisposition.APPROVED,
             rationale="self-declared substituted package",
             decided_on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
         )
 
         with self.assertRaises(AssetPackageMismatchError):
@@ -211,6 +220,8 @@ class GateLedgerDerivedStateTests(unittest.TestCase):
                 disposition=GateDisposition.APPROVED,
                 rationale="avatar locked",
                 on=TODAY,
+                assigned_owner="production-manager",
+                due_on=DATE_DUE,
             )
 
         self.ledger.record(passing(0))
@@ -223,6 +234,8 @@ class GateLedgerDerivedStateTests(unittest.TestCase):
             disposition=GateDisposition.APPROVED,
             rationale="avatar locked",
             on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
         )
         self.ledger.record(decision)
 
