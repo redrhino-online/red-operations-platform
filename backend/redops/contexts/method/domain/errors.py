@@ -66,3 +66,31 @@ class MethodDependencyError(MethodError):
     stage 3 diagnostic model, so it must pin those exact tenant assets and may
     not mix another client's asset into its own evidence.
     """
+
+
+class InvalidSignatureStepError(MethodError, ValueError):
+    """A transformation step was built without its name, states or deliverables.
+
+    SPEC.md section 4, stage 4: each named stage records starting and final
+    states and its inputs, actions and outputs. A step that does not move the
+    client between two distinct states cannot describe part of the transformation.
+    """
+
+
+class InvalidTransformationPhaseError(MethodError, ValueError):
+    """A transformation phase was built without an identity, a name or any step.
+
+    SPEC.md section 4, stage 4: three named phases group the named stages, and a
+    phase that contains no step cannot carry part of the transformation.
+    """
+
+
+class InvalidSignatureSolutionError(MethodError):
+    """A Signature Solution was not a coherent stage 4 transformation.
+
+    SPEC.md section 4, stage 4 "IP Architecture Locked": the transformation must
+    be coherent and explainable without listing every tactic. The canonical
+    template fixes the shape at three phases and nine steps, the named stages
+    must form one continuous chain, and the declared starting and final states
+    must be the ends of that chain.
+    """

@@ -4,67 +4,66 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T13:06:55Z (Ralph cycle 21).
-- Selected item: wire the stage 2 `PrimaryCurrency` and stage 3 `DiagnosticModel`
-  into `MethodVersion` so an approved Signature Solution pins the exact upstream
-  currency and diagnostic model, rejects mixing another tenant's assets, and
-  drops them from any revised version (SPEC.md section 3 aggregate table for
-  `MethodVersion`; section 4 stages 2-4 gate dependency). This was the prior
-  cycle's explicit next item. It was selected over starting the stage 4
-  three-phase/nine-step Signature Solution aggregate because the stage 4 gate can
-  only pin real upstream dependencies once stage 2/3 assets are referenced by the
-  method, it is pure domain, and it extends the existing `MethodVersion` fields
-  and `revised` rather than adding a new data path.
+- Cycle timestamp: 2026-10-02T13:08:38Z (Ralph cycle 22).
+- Selected item: implement the stage 4 three-phase and nine-step Signature
+  Solution structure as pure domain (transformation map, process inventory,
+  three phases, nine steps, named stages, starting and final states, stage
+  inputs/actions/outputs, narrative and visual) with the "IP Architecture
+  Locked" checkpoint rule. This was the prior cycle's explicit next item and the
+  first missing aggregate of the product backbone (SPEC.md section 4 stage 4).
+  It outranked the known smaller gap (`MethodVersion.currency` not yet cross
+  checked against the pinned `primary_currency.currency`) because the stage 4
+  asset package had no domain value at all, so the stage 4 gate could not pin
+  real evidence and stages 5-10 had no grounded Signature Solution to build on.
 - Outcome: completed and verified.
-- Evidence: new `tests/unit/method/test_method_dependencies.py` (9 tests) first
+- Evidence: new `tests/unit/method/test_signature_solution.py` (17 tests) first
   failed for the right reason (`ImportError: cannot import name
-  'MethodDependencyError'`). `MethodVersion` (frozen) gained optional
-  `primary_currency` and `diagnostic_model` fields; `__post_init__` rejects a pin
-  from another tenant via the new named `MethodDependencyError`; `approve()`
-  refuses a method missing either upstream pin (SPEC.md section 3, "Production
-  requires approved dependencies"); and `revised()` drops both pins unless the
-  caller re-pins them, mirroring how approval is dropped so a revision cannot
-  reuse evidence granted for a different exact asset version. Shared pure-domain
-  test data moved to `tests/unit/method/fixtures.py`; the four existing
-  `approve()` helpers in the method and commercial suites were updated to pin the
-  now-required dependencies. Command:
-  `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  (193 passed, up from 184, 9 new); `python3 -m pyflakes` on the two touched
-  domain modules and six touched test modules clean. `ruff` and `mypy` remain
-  uninstalled.
-- New findings: an approved `MethodVersion` now pins exact, tenant-checked stage
-  2 and stage 3 assets, closing the cross-context dependency the prior cycle
-  named. The next backbone gap is again cross-context: there is still no stage 4
-  three-phase/nine-step Signature Solution aggregate, so the stage 4 "IP
-  Architecture Locked" required asset package (transformation map, process
-  inventory, three phases, nine steps, named stages, starting/final state, stage
-  inputs/actions/outputs, narrative and visual) has no domain value to pin.
-  Also, `MethodVersion.currency` (the summary label) is not yet cross-checked
-  against the pinned `primary_currency.currency`; a later consistency rule could
-  tie the two. No repository defect was found that should outrank the stage 4
-  gap.
+  'SignatureSolution'`). New pure-domain value objects `SignatureStep` (named
+  stage with distinct starting/final states and non-empty inputs/actions/outputs)
+  and `TransformationPhase` (named, at least one step, tenant-checked), and a
+  frozen `SignatureSolution` aggregate that requires exactly three phases and
+  exactly nine steps (the canonical Governance template's `three-phases` and
+  `nine-steps` kinds), a `process_inventory`, transformation map, narrative and
+  visual, one continuous chain of named stages (`current.continues_from(previous)`),
+  and declared starting/final states that are the ends of that chain. Named
+  errors `InvalidSignatureStepError`, `InvalidTransformationPhaseError` and
+  `InvalidSignatureSolutionError`; no cross-tenant phase or step is accepted.
+  Command: `PYTHONPATH=backend python3 -m unittest discover -s tests -p
+  'test_*.py'` (210 passed, up from 193, 17 new); `python3 -m pyflakes` on the
+  three touched domain modules and the new test module clean. `ruff` and `mypy`
+  remain uninstalled.
+- New findings: stage 4 "IP Architecture Locked" now has a real, reject-only
+  domain value that cannot represent an incoherent or tactic-exhaustive
+  transformation. However, `SignatureSolution` is not yet referenced by
+  `MethodVersion`, so an approved method does not yet require its own stage 4
+  structure and the stage 4 `GateDecision` cannot yet pin that structure as exact
+  evidence. `MethodVersion.currency` is still a free summary label not
+  cross-checked against `primary_currency.currency`. No repository defect was
+  found that should outrank wiring the stage 4 asset into the method.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, scheduler/worker
   topology, and the client-designated approver identities. No fork or cluster
   facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or `argocd`
   present.
-- Highest priority ready next item: implement the stage 4 three-phase and nine
-  step Signature Solution structure as pure domain (transformation map, process
-  inventory, three phases, nine steps, named stages, starting and final states,
-  stage inputs/actions/outputs, narrative and visual) with the "IP Architecture
-  Locked" checkpoint rule that the transformation is coherent and explainable
-  without listing every tactic (SPEC.md section 4 stage 4). Prerequisites: none;
-  pure domain, building on the `MethodVersion` that now pins stages 2 and 3.
-  Pipeline mapping: stages 2 "Currency Locked" and 3 "Diagnostic Model Approved"
-  feed stage 4 "IP Architecture Locked"; required assets = the stage 4 asset
-  package in the canonical template; checkpoint = "IP Architecture Locked";
-  approver = the stage's designated approver role (client identity still an open
-  decision); blocked downstream dependency = stages 5-10, since the offer,
-  message and journey are built on the Signature Solution. Persistence of
-  `MethodVersion`, `DiagnosticModel`, `PrimaryCurrency`, `SourceRecord`/`Claim`,
-  `OfferVersion` and the gate ledger, and cross-tenant retrieval isolation,
-  remain blocked on the storage ADR.
+- Highest priority ready next item: pin the stage 4 `SignatureSolution` onto
+  `MethodVersion` as the method's exact required structure (tenant-checked, and
+  dropped on `revised`) so `approve()` refuses a method that has no locked stage
+  4 structure and the stage 4 gate can pin that exact structure as evidence, the
+  same way stages 2 and 3 are now pinned. Prerequisites: none; pure domain,
+  extending the existing `MethodVersion`, `MethodDependencyError` and
+  `revised()`. Pipeline mapping: stage 4 "Package IP"; required assets = the
+  stage 4 package (`transformation-map`, `process-inventory`, `three-phases`,
+  `nine-steps`, `named-stages`, `starting-state`, `final-state`, `stage-inputs`,
+  `stage-actions`, `stage-outputs`, `transformation-narrative`,
+  `transformation-visual`); checkpoint = "IP Architecture Locked"; approver =
+  the stage's designated approver role (client identity still an open decision);
+  blocked downstream dependency = stage 5 "Offer Locked" and stages 6-10, since
+  the offer, message and journey are built on the Signature Solution.
+  Persistence of `MethodVersion`, `SignatureSolution`, `DiagnosticModel`,
+  `PrimaryCurrency`, `SourceRecord`/`Claim`, `OfferVersion` and the gate ledger,
+  and cross-tenant retrieval isolation, remain blocked on the storage ADR.
+
 
 ## Product priority: the gated production engagement
 
@@ -160,7 +159,7 @@ CI gate order: format and types, domain and application tests, adapter contracts
 4. Implement SourceRecord, Claim, approval, decision, BuildObject, StageRun and GateDecision aggregates. [DONE 2026-10-02: Governance `StageGate` + `GateIntegrityPolicy` — missing exact asset version, unapproved dependency, self-approval, and waiver-without-asset all block gate approval; verified by `tests/unit/governance/test_gate_integrity.py`. DONE 2026-10-02 (Ralph cycle 2): version-specific `ApprovalRequest` (exact version + scope, designated approver, expiry) and append-only `Decision` / `DecisionLog`; verified by `tests/unit/governance/test_approval_record.py`. DONE 2026-10-02 (Ralph cycle 3): `StageRun` completes only via an accepted gate for the same stage, never via activity, with `StageStatus` / `StageTransition` and a `StageTransitionPolicy` that rejects illegal transitions; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 4): `BuildObject` in the Production context requires an owner and next action while active and rejects illegal lifecycle transitions; verified by `tests/unit/production/test_build_object.py`. DONE 2026-10-02 (Ralph cycle 5): versioned stage 0–10 `StageTemplate` seeded in Governance and `GateIntegrityPolicy` rejects gates that omit a canonical prerequisite, under-declare required asset kinds, or pin a different template version; verified by `tests/unit/governance/test_stage_template.py`. DONE 2026-10-02 (Ralph cycle 6): `StageGate.from_template` derives dependencies, template version and required asset kinds from the canonical template so gate evidence is not self-declared; verified by `tests/unit/governance/test_gate_factory.py`. DONE 2026-10-02 (Ralph cycle 7): immutable `GateDecision` / `GateDisposition` records the stage, pinned required asset versions, checkpoint evidence, reviewer, scope, disposition, rationale and next action, and `GateDecision.from_gate` refuses an approval for a non-approvable gate; verified by `tests/unit/governance/test_gate_decision.py`. DONE 2026-10-02 (Ralph cycle 8): `StageRun.complete` now requires a passing, same-stage, same-template-version `GateDecision` and pins it as immutable `accepted_decision`, replacing the transient `StageGate`; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 9): `GateLedger` derives prerequisite state from durable `GateDecision`s and refuses a passing decision while a prerequisite stage lacks a passing decision, so the dependency map is no longer caller-supplied; verified by `tests/unit/governance/test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 10): `GateDecision.from_gate` now requires a `GateLedger` and reads prerequisite state and the canonical template only from the ledger, removing the caller-supplied `dependency_states` map from the decision boundary; verified by `tests/unit/governance/test_gate_decision.py` and `test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 11): Knowledge `SourceRecord` (frozen original: locator, checksum, capture time, access rule; `cite` returns a checksum-pinned citation) and `Claim` (statement, `Known`/`Derived`/`Proposed`/`Unknown`, citations, confidence note) with `reclassify` records an audited `ClaimRevision`, refuses `Known` without a direct citation, and preserves the original so Derived/Proposed never silently become Known; verified by `tests/unit/knowledge/test_source_record.py` and `test_claim.py`. DONE 2026-10-02 (Ralph cycle 12): Method `SemanticVersion` / `MethodVersion` / `MethodApproval` pin an exact semantic version and intended use, revisions must advance the version and drop the old approval, and `MethodChangeImpactPolicy` emits an owned review queue (offer, brief, asset, journey, claim with human owner and due date) for a change to an approved method, rejecting unapproved or non-advancing or cross-tenant changes; verified by `tests/unit/method/test_method_version.py` and `test_method_impact.py`. DONE 2026-10-02 (Ralph cycle 13): Commercial Design `MethodReference` / `OfferVersion` records audience, promise, eligibility, price hypothesis and at least one exact method reference, and `OfferReadinessPolicy` refuses production readiness unless every reference is an approved `MethodVersion` of the same tenant at the exact version and intended use; `mark_review_required` drops readiness after an upstream change and a terminal offer cannot be revived; verified by `tests/unit/commercial/test_offer_version.py`. DONE 2026-10-02 (Ralph cycle 15): `GateLedger.record` refuses a passing `GateDecision` whose pinned asset kinds do not exactly match the canonical `StageTemplate` required package for the stage (under-declared or substituted), closing the durable boundary previously checked only at the `from_gate` factory; ledger fixtures now use canonical kinds; verified by `tests/unit/governance/test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 16): `GateIntegrityPolicy._template_reasons` now applies the same exact asset-package rule as the durable ledger, rejecting a gate that declares a non-canonical extra asset kind as well as one that omits a canonical kind, so `GateDecision.from_gate` can no longer produce a passing decision the `GateLedger` must refuse and gate evaluation and durable recording are consistent; verified by `tests/unit/governance/test_stage_template.py`. DONE 2026-10-02 (Ralph cycle 18): `GateDecision` now persists the assigned work owner and due date for every stage and rejects a decision that omits either, closing the SPEC.md section 4 gate-record gap where the production view must answer who is accountable and when the next approval is due; verified by `tests/unit/governance/test_gate_decision.py` (with `from_gate` factory passthrough). DONE 2026-10-02 (Ralph cycle 20): `StageGate` and `GateDecision` now pin the canonical checkpoint rubric derived from `StageDefinition.checkpoint`, and `GateLedger` and `GateIntegrityPolicy` reject a passing gate or decision whose checkpoint differs from the template, closing the last SPEC.md section 4 gate-record field; verified by `tests/unit/governance/test_gate_checkpoint.py`. Remaining: SourceRecord, Claim, MethodVersion and OfferVersion repository adapters blocked on the storage ADR.]
 5. Implement stages 0 and 1 from intake to approved avatar and diagnosis.
 6. Implement stages 2 and 3 from primary currency to observable Profit Pyramid. [DONE 2026-10-02 (Ralph cycle 17): Method `PrimaryCurrency` value object requires a specific audience, distinct current/desired measures, and a distinct mechanism, rejecting an unspecified person or unmeasured outcome, so the stage 2 "Currency Locked" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_primary_currency.py`. DONE 2026-10-02 (Ralph cycle 19): Method `ProfitPyramidLevel` and `DiagnosticModel` require each level's observable measures, symptoms, behaviors and problems and reject adjacent levels that cannot be told apart by an observable difference, so the stage 3 "Diagnostic Model Approved" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_diagnostic_model.py`. DONE 2026-10-02 (Ralph cycle 21): `MethodVersion` pins the exact tenant-checked stage 2 `PrimaryCurrency` and stage 3 `DiagnosticModel`, refuses approval without both pins, rejects a cross-tenant pin, and drops both pins on `revised`; verified by `tests/unit/method/test_method_dependencies.py`. Stage 3 wiring into the stage 3 `GateDecision` and the stage 4 three-phase/nine-step Signature Solution structure remain.]
-7. Implement stages 4 and 5 from grounded Signature Solution to offer approval. [DONE 2026-10-02 (Ralph cycle 14): commercial `OfferVersion` requires an accountable owner and `OfferChangeImpactPolicy` discovers dependent offers from an approved method change and marks them review required, so the SPEC.md section 11 "changing a method version identifies dependents" acceptance test is met by a real aggregate; verified by `tests/unit/commercial/test_offer_change_impact.py`. Stage 2/3 currency and Profit Pyramid, and the stage 4/5 gate wiring, remain.]
+7. Implement stages 4 and 5 from grounded Signature Solution to offer approval. [DONE 2026-10-02 (Ralph cycle 14): commercial `OfferVersion` requires an accountable owner and `OfferChangeImpactPolicy` discovers dependent offers from an approved method change and marks them review required, so the SPEC.md section 11 "changing a method version identifies dependents" acceptance test is met by a real aggregate; verified by `tests/unit/commercial/test_offer_change_impact.py`. DONE 2026-10-02 (Ralph cycle 22): Method `SignatureStep`, `TransformationPhase` and frozen `SignatureSolution` require exactly three phases and nine steps, a process inventory, transformation map, narrative and visual, one continuous chain of named stages, and declared starting/final states that are the ends of that chain, so the stage 4 "IP Architecture Locked" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_signature_solution.py`. Wiring the stage 4 structure into `MethodVersion` approval and the stage 4 `GateDecision`, the stage 2/3 currency and Profit Pyramid gate wiring, and the stage 5 gate wiring remain.]
 8. Implement stages 6 and 7 with message congruence and script approval before creative production.
 9. Implement stages 8 and 9 with complete prospect path and three part QA.
 10. Implement stage 10 baseline, command center and improvement loop.

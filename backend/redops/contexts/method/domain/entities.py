@@ -13,6 +13,7 @@ from datetime import date
 from redops.contexts.method.domain.errors import (
     InvalidDiagnosticModelError,
     InvalidMethodError,
+    InvalidSignatureSolutionError,
     MethodApprovalError,
     MethodDependencyError,
 )
@@ -21,6 +22,8 @@ from redops.contexts.method.domain.value_objects import (
     PrimaryCurrency,
     ProfitPyramidLevel,
     SemanticVersion,
+    SignatureStep,
+    TransformationPhase,
 )
 
 
@@ -203,3 +206,96 @@ class DiagnosticModel:
                     f"adjacent levels {lower.level_id!r} and {higher.level_id!r} "
                     "cannot be told apart by any observable difference"
                 )
+
+
+SIGNATURE_PHASE_COUNT = 3
+SIGNATURE_STEP_COUNT = 9
+
+
+@dataclass(frozen=True)
+class SignatureSolution:
+    """The stage 4 transformation structure, locked at "IP Architecture Locked".
+
+    SPEC.md section 4, stage 4 "Package IP": the required asset package is the
+    transformation map, process inventory, three phases, nine steps, named
+    stages, starting and final states, stage inputs/actions/outputs, narrative
+    and visual. The checkpoint requires that "the transformation is coherent and
+    explainable without listing every tactic", which this aggregate enforces by
+    fixing the canonical three phase, nine step shape (the Governance template's
+    `three-phases` and `nine-steps` kinds) and requiring the named stages to form
+    one continuous chain from the declared starting state to the declared final
+    state. It is frozen: an approval pins an exact asset version rather than
+    mutating it (SPEC.md section 3).
+    """
+
+    solution_id: str
+    tenant_id: str
+    transformation_map: str
+    process_inventory: tuple[str, ...]
+    phases: tuple[TransformationPhase, ...]
+    starting_state: str
+    final_state: str
+    narrative: str
+    visual: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("signature solution id", self.solution_id),
+            ("signature solution tenant id", self.tenant_id),
+            ("transformation map", self.transformation_map),
+            ("signature solution starting state", self.starting_state),
+            ("signature solution final state", self.final_state),
+            ("transformation narrative", self.narrative),
+            ("transformation visual", self.visual),
+        ):
+            if not value or not value.strip():
+                raise InvalidSignatureSolutionError(f"{label} is required")
+        if not self.process_inventory:
+            raise InvalidSignatureSolutionError(
+                "a Signature Solution requires a process inventory"
+            )
+        for entry in self.process_inventory:
+            if not entry or not entry.strip():
+                raise InvalidSignatureSolutionError(
+                    "process inventory entries must not be blank"
+                )
+        if len(self.phases) != SIGNATURE_PHASE_COUNT:
+            raise InvalidSignatureSolutionError(
+                "a Signature Solution requires exactly "
+                f"{SIGNATURE_PHASE_COUNT} phases, got {len(self.phases)}"
+            )
+        if self.step_count != SIGNATURE_STEP_COUNT:
+            raise InvalidSignatureSolutionError(
+                "a Signature Solution requires exactly "
+                f"{SIGNATURE_STEP_COUNT} steps, got {self.step_count}"
+            )
+        for candidate in self.phases:
+            if candidate.tenant_id != self.tenant_id:
+                raise InvalidSignatureSolutionError(
+                    "a Signature Solution cannot mix phases from another tenant"
+                )
+        named_stages = self.steps
+        for previous, current in zip(named_stages, named_stages[1:]):
+            if not current.continues_from(previous):
+                raise InvalidSignatureSolutionError(
+                    f"named stage {current.step_id!r} must begin where "
+                    f"{previous.step_id!r} ended"
+                )
+        if named_stages[0].starting_state != self.starting_state:
+            raise InvalidSignatureSolutionError(
+                "the declared starting state must be the first named stage's "
+                "starting state"
+            )
+        if named_stages[-1].final_state != self.final_state:
+            raise InvalidSignatureSolutionError(
+                "the declared final state must be the last named stage's final state"
+            )
+
+    @property
+    def steps(self) -> tuple[SignatureStep, ...]:
+        """The named stages in phase order, forming one transformation chain."""
+        return tuple(step for phase in self.phases for step in phase.steps)
+
+    @property
+    def step_count(self) -> int:
+        return sum(len(phase.steps) for phase in self.phases)

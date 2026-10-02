@@ -11,6 +11,8 @@ from redops.contexts.method.domain.errors import (
     InvalidMethodError,
     InvalidMethodVersionError,
     InvalidProfitPyramidLevelError,
+    InvalidSignatureStepError,
+    InvalidTransformationPhaseError,
     MethodApprovalError,
 )
 
@@ -211,6 +213,94 @@ class ProfitPyramidLevel:
     def distinguishable_from(self, other: "ProfitPyramidLevel") -> bool:
         """Whether an observer can tell this level apart from another level."""
         return self.observable_signature != other.observable_signature
+
+
+@dataclass(frozen=True)
+class SignatureStep:
+    """One named stage of the stage 4 Signature Solution.
+
+    SPEC.md section 4, stage 4 "Package IP": the transformation records named
+    stages with starting and final states and each stage's inputs, actions and
+    outputs. A step is frozen and reject-only, so a step that names no
+    deliverable, or that does not move the client between two distinct states,
+    cannot be represented as part of a coherent transformation.
+    """
+
+    step_id: str
+    tenant_id: str
+    name: str
+    starting_state: str
+    final_state: str
+    inputs: tuple[str, ...]
+    actions: tuple[str, ...]
+    outputs: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("step id", self.step_id),
+            ("step tenant id", self.tenant_id),
+            ("step name", self.name),
+            ("step starting state", self.starting_state),
+            ("step final state", self.final_state),
+        ):
+            if not value or not value.strip():
+                raise InvalidSignatureStepError(f"{label} is required")
+        if self.starting_state.strip() == self.final_state.strip():
+            raise InvalidSignatureStepError(
+                f"step {self.step_id!r} must move the client between two distinct "
+                "states"
+            )
+        for label, entries in (
+            ("inputs", self.inputs),
+            ("actions", self.actions),
+            ("outputs", self.outputs),
+        ):
+            if not entries:
+                raise InvalidSignatureStepError(
+                    f"step {self.step_id!r} requires at least one {label} entry"
+                )
+            for entry in entries:
+                if not entry or not entry.strip():
+                    raise InvalidSignatureStepError(
+                        f"step {self.step_id!r} {label} entries must not be blank"
+                    )
+
+    def continues_from(self, previous: "SignatureStep") -> bool:
+        """Whether this step begins where the previous named stage ended."""
+        return self.starting_state == previous.final_state
+
+
+@dataclass(frozen=True)
+class TransformationPhase:
+    """One of the three phases grouping the named stage 4 stages.
+
+    SPEC.md section 4, stage 4: the Signature Solution has three phases and nine
+    steps. A phase is frozen, requires an identity and a name, and cannot mix in
+    a step from another client's solution (SPEC.md section 3 tenant isolation).
+    """
+
+    phase_id: str
+    tenant_id: str
+    name: str
+    steps: tuple[SignatureStep, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("phase id", self.phase_id),
+            ("phase tenant id", self.tenant_id),
+            ("phase name", self.name),
+        ):
+            if not value or not value.strip():
+                raise InvalidTransformationPhaseError(f"{label} is required")
+        if not self.steps:
+            raise InvalidTransformationPhaseError(
+                f"phase {self.phase_id!r} requires at least one step"
+            )
+        for candidate in self.steps:
+            if candidate.tenant_id != self.tenant_id:
+                raise InvalidTransformationPhaseError(
+                    "a phase cannot mix steps from another tenant"
+                )
 
 
 @dataclass(frozen=True)
