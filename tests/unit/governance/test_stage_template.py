@@ -173,6 +173,20 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
         self.assertFalse(result.approvable)
         self.assertIn("authority-amplifier-script", " ".join(result.reasons))
 
+    def test_gate_declaring_a_non_canonical_asset_kind_is_rejected(self):
+        gate = self.canonical_gate(7)
+        gate.required_assets = gate.required_assets | frozenset(
+            {AssetVersionRef("made-up-asset", 1)}
+        )
+        gate.approved_assets = gate.required_assets
+
+        result = self.policy.evaluate(
+            gate, {6: GateState.APPROVED}, template=self.template
+        )
+
+        self.assertFalse(result.approvable)
+        self.assertIn("made-up-asset", " ".join(result.reasons))
+
     def test_gate_pinned_to_a_different_template_version_is_rejected(self):
         gate = self.canonical_gate(7, template_version="2025.9")
 

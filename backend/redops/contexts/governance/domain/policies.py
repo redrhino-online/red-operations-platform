@@ -76,8 +76,11 @@ class GateIntegrityPolicy:
         """Reject a gate that diverges from the canonical pipeline template.
 
         A self-declared gate must not omit a canonical prerequisite or
-        under-declare the required asset package, and it must pin the same
-        template version it is evaluated against (SPEC.md section 4).
+        diverge from the required asset package (whether by omitting a
+        canonical kind or declaring a non-canonical extra kind), and it must
+        pin the same template version it is evaluated against (SPEC.md
+        section 4). This matches the exact-package rule the durable
+        ``GateLedger`` enforces at record time.
         """
         reasons: list[str] = []
         if gate.template_version != template.version:
@@ -104,6 +107,11 @@ class GateIntegrityPolicy:
         if unstated:
             names = ", ".join(unstated)
             reasons.append(f"gate omits required asset kinds: {names}")
+
+        extra = sorted(declared_kinds - definition.required_asset_kinds)
+        if extra:
+            names = ", ".join(extra)
+            reasons.append(f"gate declares non-canonical asset kinds: {names}")
 
         return reasons
 
