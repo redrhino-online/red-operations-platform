@@ -26,7 +26,11 @@ from redops.contexts.commercial.domain.value_objects import (
 from redops.contexts.method.domain.entities import MethodVersion
 from redops.contexts.method.domain.value_objects import SemanticVersion
 
-from ..method.fixtures import diagnostic_model, primary_currency
+from ..method.fixtures import (
+    diagnostic_model,
+    primary_currency,
+    signature_solution,
+)
 
 TODAY = date(2026, 10, 2)
 USE = "3f pilot campaign"
@@ -48,6 +52,7 @@ def approved_method(
         claims=frozenset({"claim-1"}),
         primary_currency=primary_currency(tenant_id),
         diagnostic_model=diagnostic_model(tenant_id),
+        signature_solution=signature_solution(tenant_id),
     ).approve(approved_by="client-authority", intended_use=intended_use, on=TODAY)
 
 

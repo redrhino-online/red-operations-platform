@@ -43,11 +43,11 @@ class MethodVersion:
     and a revision must advance the semantic version so the prior approved
     method remains historically identifiable (SPEC.md section 4).
 
-    The stage 2 primary currency and stage 3 diagnostic model are pinned as
-    exact tenant assets because production requires approved dependencies
-    (SPEC.md section 3). They are optional while a method is still a draft so
-    work can be drafted in parallel, but approval cannot proceed without them
-    (SPEC.md section 4).
+    The stage 2 primary currency, stage 3 diagnostic model and stage 4 Signature
+    Solution are pinned as exact tenant assets because production requires
+    approved dependencies (SPEC.md section 3). They are optional while a method
+    is still a draft so work can be drafted in parallel, but approval cannot
+    proceed without them (SPEC.md section 4).
     """
 
     method_id: str
@@ -60,6 +60,7 @@ class MethodVersion:
     approval: MethodApproval | None = None
     primary_currency: PrimaryCurrency | None = None
     diagnostic_model: "DiagnosticModel | None" = None
+    signature_solution: "SignatureSolution | None" = None
 
     def __post_init__(self) -> None:
         _require_text(self.method_id, "method id")
@@ -84,6 +85,13 @@ class MethodVersion:
             raise MethodDependencyError(
                 "a method cannot pin another tenant's diagnostic model"
             )
+        if (
+            self.signature_solution is not None
+            and self.signature_solution.tenant_id != self.tenant_id
+        ):
+            raise MethodDependencyError(
+                "a method cannot pin another tenant's signature solution"
+            )
         if self.approval is not None and self.approval.version != self.semantic_version:
             raise MethodApprovalError(
                 "method approval must pin this method's exact version"
@@ -105,8 +113,9 @@ class MethodVersion:
         SPEC.md section 3: approval pins an exact version and intended use. The
         approver identity is supplied by the caller; designation remains a
         governance decision. Production requires approved dependencies, so a
-        method cannot be approved until its stage 2 primary currency and stage 3
-        diagnostic model are pinned (SPEC.md section 3).
+        method cannot be approved until its stage 2 primary currency, stage 3
+        diagnostic model and stage 4 Signature Solution are pinned (SPEC.md
+        section 3).
         """
         _require_text(approved_by, "method approver")
         if self.primary_currency is None:
@@ -116,6 +125,10 @@ class MethodVersion:
         if self.diagnostic_model is None:
             raise MethodDependencyError(
                 "an approved method must pin its stage 3 diagnostic model"
+            )
+        if self.signature_solution is None:
+            raise MethodDependencyError(
+                "an approved method must pin its stage 4 signature solution"
             )
         return replace(
             self,
@@ -141,15 +154,16 @@ class MethodVersion:
         claims: frozenset[str] | None = None,
         primary_currency: PrimaryCurrency | None = None,
         diagnostic_model: "DiagnosticModel | None" = None,
+        signature_solution: "SignatureSolution | None" = None,
     ) -> "MethodVersion":
         """Return a new version of this method with no inherited approval.
 
         The new version must be strictly newer than the current one, and the
         approval is dropped so a revision cannot silently reuse an old approval
-        (SPEC.md section 4). The pinned stage 2 primary currency and stage 3
-        diagnostic model are dropped too, so the new version must re-state and
-        re-approve its upstream dependencies rather than inheriting an approval
-        granted to a different exact version.
+        (SPEC.md section 4). The pinned stage 2 primary currency, stage 3
+        diagnostic model and stage 4 Signature Solution are dropped too, so the
+        new version must re-state and re-approve its upstream dependencies rather
+        than inheriting an approval granted to a different exact version.
         """
         semantic_version.change_from(self.semantic_version)
         return replace(
@@ -160,6 +174,7 @@ class MethodVersion:
             claims=self.claims if claims is None else claims,
             primary_currency=primary_currency,
             diagnostic_model=diagnostic_model,
+            signature_solution=signature_solution,
             approval=None,
         )
 

@@ -1,16 +1,18 @@
 """Shared pure-domain fixtures for Method tests.
 
-These build valid stage 2 and stage 3 assets so tests that approve a
+These build valid stage 2, stage 3 and stage 4 assets so tests that approve a
 MethodVersion can pin its required upstream dependencies without restating the
 same content in every file. They are test data only and carry no behavior.
 """
 
 from __future__ import annotations
 
-from redops.contexts.method.domain.entities import DiagnosticModel
+from redops.contexts.method.domain.entities import DiagnosticModel, SignatureSolution
 from redops.contexts.method.domain.value_objects import (
     PrimaryCurrency,
     ProfitPyramidLevel,
+    SignatureStep,
+    TransformationPhase,
 )
 
 TENANT = "client-3f"
@@ -55,4 +57,53 @@ def diagnostic_model(tenant_id: str = TENANT) -> DiagnosticModel:
         ),
         progression="climb from Stuck to Scaling by installing the referral network",
         qualification_logic="rank the prospect by observable monthly referral count",
+    )
+
+
+def signature_step(
+    step_id: str,
+    name: str,
+    starting_state: str,
+    final_state: str,
+    tenant_id: str = TENANT,
+) -> SignatureStep:
+    return SignatureStep(
+        step_id=step_id,
+        tenant_id=tenant_id,
+        name=name,
+        starting_state=starting_state,
+        final_state=final_state,
+        inputs=(f"{name} inputs",),
+        actions=(f"{name} actions",),
+        outputs=(f"{name} outputs",),
+    )
+
+
+def signature_solution(tenant_id: str = TENANT) -> SignatureSolution:
+    steps = (
+        signature_step("step-1", "Diagnose", "chaotic", "diagnosed", tenant_id),
+        signature_step("step-2", "Position", "diagnosed", "positioned", tenant_id),
+        signature_step("step-3", "Model", "positioned", "modeled", tenant_id),
+        signature_step("step-4", "Package IP", "modeled", "packaged", tenant_id),
+        signature_step("step-5", "Productize", "packaged", "productized", tenant_id),
+        signature_step("step-6", "Message", "productized", "messaged", tenant_id),
+        signature_step("step-7", "Produce", "messaged", "produced", tenant_id),
+        signature_step("step-8", "Integrate", "produced", "integrated", tenant_id),
+        signature_step("step-9", "Launch", "integrated", "launched", tenant_id),
+    )
+    phases = (
+        TransformationPhase("phase-1", tenant_id, "Diagnose and Position", steps[0:3]),
+        TransformationPhase("phase-2", tenant_id, "Package and Productize", steps[3:6]),
+        TransformationPhase("phase-3", tenant_id, "Produce and Launch", steps[6:9]),
+    )
+    return SignatureSolution(
+        solution_id="solution-3f",
+        tenant_id=tenant_id,
+        transformation_map="from chaotic delivery to a launched campaign",
+        process_inventory=("diagnose", "position", "model", "package", "productize"),
+        phases=phases,
+        starting_state="chaotic",
+        final_state="launched",
+        narrative="the client moves from unpredictable work to a repeatable growth system",
+        visual="asset://transformations/3f-map.png",
     )

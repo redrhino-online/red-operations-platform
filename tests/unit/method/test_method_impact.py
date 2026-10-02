@@ -21,7 +21,7 @@ from redops.contexts.method.domain.value_objects import (
     SemanticVersion,
 )
 
-from .fixtures import diagnostic_model, primary_currency
+from .fixtures import diagnostic_model, primary_currency, signature_solution
 
 TODAY = date(2026, 10, 2)
 DUE = date(2026, 10, 16)
@@ -38,6 +38,7 @@ def approved_method(version: SemanticVersion = SemanticVersion(1, 0, 0)) -> Meth
         claims=frozenset({"claim-1"}),
         primary_currency=primary_currency(),
         diagnostic_model=diagnostic_model(),
+        signature_solution=signature_solution(),
     ).approve(
         approved_by="client-authority",
         intended_use="3f pilot campaign",
