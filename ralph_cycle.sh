@@ -30,6 +30,7 @@ trap release_lock EXIT
 
 readonly RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 readonly LOG_FILE="$RUN_DIR/$RUN_ID.log"
+readonly COMMIT_MSG_FILE="$RUN_DIR/$RUN_ID.commit-msg.txt"
 readonly SPEC_PATH="$(cd "$(dirname "$SPEC_FILE")" && pwd -P)/$(basename "$SPEC_FILE")"
 readonly PLAN_PATH="$(cd "$(dirname "$PLAN_FILE")" && pwd -P)/$(basename "$PLAN_FILE")"
 
@@ -47,7 +48,14 @@ Perform exactly one cycle:
 2. Complete only that item. For production code, work in the appropriate bounded context and onion layer: pure domain, application use cases and ports, infrastructure adapters, then entry points. Apply SOLID, clear naming, and focused interfaces. Write a failing behavioral test first for a new rule, then implement the smallest passing change and refactor. For characterization or investigation, write only tests that reveal a real risk. Avoid speculative abstractions, broad refactors, unrelated edits, and premature features.
 3. Run the smallest meaningful verification. Record commands and results. If blocked, do not pretend completion or start another item. Record the blocker, evidence, owner or needed input, and best ready next action.
 4. Reprioritize the implementation plan using verified findings, defects, changed dependencies, and results. Keep the long term phases intact unless evidence requires change. Maintain a short 'Current cycle status' section near the beginning with: cycle timestamp, selected item, outcome, evidence, new findings, blockers, and the highest priority ready next item with its prerequisites. For pipeline work, name the stage, required asset, checkpoint, approver, and blocked downstream dependency. Mark the completed item once. Preserve existing decisions and unresolved questions. Do not invent repository or cluster facts.
-5. Stop. Do not self invoke, loop, start a second item, auto commit, push, deploy, publish, or alter external systems. Human approval gates in the spec remain in force.
+5. Stop. Do not self invoke, loop, start a second item, push, deploy, publish, or alter external systems. The harness commits your changes after the cycle; do not run git commit yourself. Human approval gates in the spec remain in force.
+6. Before stopping, write the commit message for this cycle to this exact file: $COMMIT_MSG_FILE
+
+Commit message requirements (the harness uses this file verbatim):
+- Use Conventional Commits: a subject line shaped like 'type(scope): imperative summary' (types: feat, fix, refactor, perf, test, docs, build, ci, chore, style, revert). Keep it under 72 characters. The subject says WHAT changed.
+- Leave one blank line, then write a body that explains WHY the change was made in the context of the whole system: the problem or risk it addresses, the constraints and evidence that drove the decision, alternatives considered and rejected, dependencies and downstream effects (name the pipeline stage, gate, required asset, or approver where relevant), and how it changes the system's behavior or the plan. Assume the diff already shows the what; the body must preserve the reasoning that the diff cannot.
+- Reference the spec and plan items (section or item names) this cycle advances.
+- Plain text, wrap around 72 columns. No attribution, co-author, or tool footer lines. If the cycle produced no repository changes, still write a message describing the outcome and why nothing changed.
 
 If the plan cannot be updated, report failure explicitly. Final response: selected item, changed files, verification, plan update, next ready item or blocker. Be concise and honest.
 EOF
@@ -67,5 +75,25 @@ set -e
 if (( run_status != 0 )); then
   printf 'ralph: OpenCode failed with status %s; inspect %s\n' "$run_status" "$LOG_FILE" >&2
   exit "$run_status"
+fi
+
+# Commit the cycle's changes so every loop produces an auditable checkpoint.
+if [[ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=all -- . ':(exclude).ralph')" ]]; then
+  [[ -s "$COMMIT_MSG_FILE" ]] || die "agent did not write a commit message to $COMMIT_MSG_FILE; refusing to commit without the why"
+  commit_subject="$(sed -n '1p' "$COMMIT_MSG_FILE")"
+  cc_re='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?!?:[[:space:]].+'
+  if [[ ! "$commit_subject" =~ $cc_re ]]; then
+    die "commit subject is not Conventional Commits style: $commit_subject"
+  fi
+  if [[ "$(sed -n '2p' "$COMMIT_MSG_FILE")" != "" || -z "$(sed -n '3p' "$COMMIT_MSG_FILE")" ]]; then
+    die "commit message needs a blank second line followed by a body explaining why the change was made"
+  fi
+  git -C "$REPO_DIR" add -A -- . ':(exclude).ralph'
+  git -C "$REPO_DIR" -c user.name="${RALPH_GIT_NAME:-ralph}" \
+    -c user.email="${RALPH_GIT_EMAIL:-ralph@localhost}" \
+    commit -F "$COMMIT_MSG_FILE" || die "failed to commit cycle changes"
+  printf 'ralph: committed cycle changes as %s\n' "$(git -C "$REPO_DIR" rev-parse --short HEAD)"
+else
+  printf 'ralph: no repository changes to commit\n'
 fi
 printf 'ralph: cycle finished; review repository diff and %s\n' "$LOG_FILE"
