@@ -4,57 +4,59 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T12:32:37Z (Ralph cycle 18).
-- Selected item: persist the assigned work owner and due date on every
-  `GateDecision` and reject a decision that omits either (SPEC.md section 4,
-  "Gate record and production manager view": for every stage persist the
-  assigned work owner and due date, and the production view must answer who is
-  accountable and when the approval is due). This was not the plan's prior next
-  item. It was selected over the ready stage 3 Profit Pyramid rule and over
-  further stage 2 assets because it is gate-record accountability on the
-  product backbone: SPEC.md section 4 requires these fields "for every stage,"
-  the omission touched all stages 0-10 rather than one content rule, and it is
-  the gap the cycle 16 and cycle 17 notes explicitly left open. It is pure
-  domain with no storage or cluster dependency.
+- Cycle timestamp: 2026-10-02T13:04:17Z (Ralph cycle 19).
+- Selected item: implement the stage 3 "Diagnostic Model Approved" domain rule
+  so a Profit Pyramid level must be distinguishable by observable measures,
+  symptoms, behaviors and problems, rejecting adjacent levels that cannot be
+  told apart (SPEC.md section 4 stage 3 "Model" and its checkpoint; Phase 3 TDD
+  "pyramid levels require observable differences"). This was the prior cycle's
+  explicit next item. It was selected over the remaining gate-record rubric gap
+  because it is the next ready content slice the prior cycle named and it
+  unblocks the stage 4 Signature Solution that is built on the diagnostic
+  model.
 - Outcome: completed and verified.
-- Evidence: extended `tests/unit/governance/test_gate_decision.py` with a
-  `GateDecisionAccountabilityTests` class (4 tests) and factory passthrough
-  coverage; the suite first failed for the right reason
-  (`TypeError: GateDecision.__init__() got an unexpected keyword argument
-  'assigned_owner'`). `GateDecision` now carries required `assigned_owner` and
-  `due_on` fields validated in `__post_init__`, and `GateDecision.from_gate`
-  takes and forwards both. Command: `PYTHONPATH=backend python3 -m unittest
-  discover -s tests -p 'test_*.py'` (165 passed, up from 161); `python3 -m
-  pyflakes` on the touched entity and three governance tests clean. `ruff` and
-  `mypy` remain uninstalled.
-- New findings: the gate record now carries an accountable owner and due date,
-  but the remaining SPEC.md section 4 gate-record fields are still absent from
-  `GateDecision`: checkpoint rubric, dependencies and blockers. Dependencies
-  are already enforced from the canonical template and durable `GateLedger`, so
-  those are derivable rather than missing evidence; the checkpoint rubric is
-  the main remaining gate-record gap. The stage 2 currency is still not pinned
-  to an asset version or the stage 2 `GateDecision`, and `MethodVersion.currency`
-  is still a free string. No repository defect was found that should outrank the
-  next item.
+- Evidence: new `tests/unit/method/test_diagnostic_model.py` (10 tests) first
+  failed for the right reason (`ImportError: cannot import name
+  'DiagnosticModel'`). Method `ProfitPyramidLevel` (frozen; required tenant,
+  name, and at least one non-blank observable measure, symptom, behavior and
+  problem; `distinguishable_from` compares the combined observable signature)
+  and Method `DiagnosticModel` (frozen; requires model identity, name,
+  progression, qualification logic, at least two same-tenant levels, and
+  rejects any adjacent pair with an identical observable signature) were added,
+  with named `InvalidProfitPyramidLevelError` / `InvalidDiagnosticModelError`.
+  Command: `PYTHONPATH=backend python3 -m unittest discover -s tests -p
+  'test_*.py'` (175 passed, up from 165, 10 new); `python3 -m pyflakes` on the
+  three touched method domain modules and the new test clean. `ruff` and `mypy`
+  remain uninstalled.
+- New findings: stage 3 now has a real, reject-only domain value, but it is not
+  yet pinned to the stage 3 `GateDecision` and `MethodVersion` still does not
+  reference a `DiagnosticModel`; that wiring stays a later slice. The larger
+  remaining backbone gap is that `GateDecision.checkpoint_evidence` is a free
+  string while the canonical `StageDefinition.checkpoint` rubric is not pinned
+  onto the gate or the decision, so an application boundary can self-declare a
+  checkpoint that differs from the template. This is the last unaddressed
+  SPEC.md section 4 gate-record field. No repository defect was found that
+  should outrank it.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, scheduler/worker
   topology, and the client-designated approver identities. No fork or cluster
   facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or `argocd`
   present.
-- Highest priority ready next item: implement the stage 3 "Diagnostic Model
-  Approved" domain rule so a Profit Pyramid level must be distinguishable by
-  observable measures, symptoms, behaviors and problems, rejecting a level that
-  cannot be told apart from an adjacent one (SPEC.md section 4 stage 3
-  checkpoint; Phase 3 TDD "pyramid levels require observable differences").
-  Prerequisites: none; pure domain. Pipeline mapping: stage 3, required asset =
-  `profit-pyramid-levels` (with `observable-measures`, `level-symptoms`,
-  `level-behaviors`, `level-problems`, `progression`, `qualification-logic`,
-  diagnostic model name/visual/copy), checkpoint = Diagnostic Model Approved,
-  approver = the client-designated human authority (identity still an open
-  decision), blocked downstream dependency = stages 4-10, since the Signature
-  Solution and offer are built on the diagnostic model. Persistence of
-  `MethodVersion`, `SourceRecord`/`Claim`, `OfferVersion`, `PrimaryCurrency`
+- Highest priority ready next item: pin the canonical checkpoint rubric onto the
+  gate record so `StageGate.from_template` derives it from
+  `StageDefinition.checkpoint`, `GateDecision` persists it, and a passing
+  decision whose checkpoint does not match the template's rubric is rejected
+  (SPEC.md section 4, "Gate record and production manager view": persist the
+  checkpoint rubric for every stage). Prerequisites: none; pure domain, and it
+  extends the existing template-version pinning rather than adding a new data
+  path. Pipeline mapping: all stages 0-10, required asset = the canonical
+  checkpoint name per stage (e.g. stage 3 "Diagnostic Model Approved"),
+  checkpoint = the rubric itself, approver = each stage's designated approver
+  role (client identity still an open decision), blocked downstream dependency =
+  every stage whose gate currently carries only a self-declared
+  `checkpoint_evidence` string. Persistence of `MethodVersion`,
+  `DiagnosticModel`, `SourceRecord`/`Claim`, `OfferVersion`, `PrimaryCurrency`
   and the gate ledger, and cross-tenant retrieval isolation, remain blocked on
   the storage ADR.
 
@@ -151,7 +153,7 @@ CI gate order: format and types, domain and application tests, adapter contracts
 3. Add tenant boundary and authority tests around forked storage and retrieval.
 4. Implement SourceRecord, Claim, approval, decision, BuildObject, StageRun and GateDecision aggregates. [DONE 2026-10-02: Governance `StageGate` + `GateIntegrityPolicy` — missing exact asset version, unapproved dependency, self-approval, and waiver-without-asset all block gate approval; verified by `tests/unit/governance/test_gate_integrity.py`. DONE 2026-10-02 (Ralph cycle 2): version-specific `ApprovalRequest` (exact version + scope, designated approver, expiry) and append-only `Decision` / `DecisionLog`; verified by `tests/unit/governance/test_approval_record.py`. DONE 2026-10-02 (Ralph cycle 3): `StageRun` completes only via an accepted gate for the same stage, never via activity, with `StageStatus` / `StageTransition` and a `StageTransitionPolicy` that rejects illegal transitions; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 4): `BuildObject` in the Production context requires an owner and next action while active and rejects illegal lifecycle transitions; verified by `tests/unit/production/test_build_object.py`. DONE 2026-10-02 (Ralph cycle 5): versioned stage 0–10 `StageTemplate` seeded in Governance and `GateIntegrityPolicy` rejects gates that omit a canonical prerequisite, under-declare required asset kinds, or pin a different template version; verified by `tests/unit/governance/test_stage_template.py`. DONE 2026-10-02 (Ralph cycle 6): `StageGate.from_template` derives dependencies, template version and required asset kinds from the canonical template so gate evidence is not self-declared; verified by `tests/unit/governance/test_gate_factory.py`. DONE 2026-10-02 (Ralph cycle 7): immutable `GateDecision` / `GateDisposition` records the stage, pinned required asset versions, checkpoint evidence, reviewer, scope, disposition, rationale and next action, and `GateDecision.from_gate` refuses an approval for a non-approvable gate; verified by `tests/unit/governance/test_gate_decision.py`. DONE 2026-10-02 (Ralph cycle 8): `StageRun.complete` now requires a passing, same-stage, same-template-version `GateDecision` and pins it as immutable `accepted_decision`, replacing the transient `StageGate`; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 9): `GateLedger` derives prerequisite state from durable `GateDecision`s and refuses a passing decision while a prerequisite stage lacks a passing decision, so the dependency map is no longer caller-supplied; verified by `tests/unit/governance/test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 10): `GateDecision.from_gate` now requires a `GateLedger` and reads prerequisite state and the canonical template only from the ledger, removing the caller-supplied `dependency_states` map from the decision boundary; verified by `tests/unit/governance/test_gate_decision.py` and `test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 11): Knowledge `SourceRecord` (frozen original: locator, checksum, capture time, access rule; `cite` returns a checksum-pinned citation) and `Claim` (statement, `Known`/`Derived`/`Proposed`/`Unknown`, citations, confidence note) with `reclassify` records an audited `ClaimRevision`, refuses `Known` without a direct citation, and preserves the original so Derived/Proposed never silently become Known; verified by `tests/unit/knowledge/test_source_record.py` and `test_claim.py`. DONE 2026-10-02 (Ralph cycle 12): Method `SemanticVersion` / `MethodVersion` / `MethodApproval` pin an exact semantic version and intended use, revisions must advance the version and drop the old approval, and `MethodChangeImpactPolicy` emits an owned review queue (offer, brief, asset, journey, claim with human owner and due date) for a change to an approved method, rejecting unapproved or non-advancing or cross-tenant changes; verified by `tests/unit/method/test_method_version.py` and `test_method_impact.py`. DONE 2026-10-02 (Ralph cycle 13): Commercial Design `MethodReference` / `OfferVersion` records audience, promise, eligibility, price hypothesis and at least one exact method reference, and `OfferReadinessPolicy` refuses production readiness unless every reference is an approved `MethodVersion` of the same tenant at the exact version and intended use; `mark_review_required` drops readiness after an upstream change and a terminal offer cannot be revived; verified by `tests/unit/commercial/test_offer_version.py`. DONE 2026-10-02 (Ralph cycle 15): `GateLedger.record` refuses a passing `GateDecision` whose pinned asset kinds do not exactly match the canonical `StageTemplate` required package for the stage (under-declared or substituted), closing the durable boundary previously checked only at the `from_gate` factory; ledger fixtures now use canonical kinds; verified by `tests/unit/governance/test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 16): `GateIntegrityPolicy._template_reasons` now applies the same exact asset-package rule as the durable ledger, rejecting a gate that declares a non-canonical extra asset kind as well as one that omits a canonical kind, so `GateDecision.from_gate` can no longer produce a passing decision the `GateLedger` must refuse and gate evaluation and durable recording are consistent; verified by `tests/unit/governance/test_stage_template.py`. DONE 2026-10-02 (Ralph cycle 18): `GateDecision` now persists the assigned work owner and due date for every stage and rejects a decision that omits either, closing the SPEC.md section 4 gate-record gap where the production view must answer who is accountable and when the next approval is due; verified by `tests/unit/governance/test_gate_decision.py` (with `from_gate` factory passthrough). Remaining: SourceRecord, Claim, MethodVersion and OfferVersion repository adapters blocked on the storage ADR.]
 5. Implement stages 0 and 1 from intake to approved avatar and diagnosis.
-6. Implement stages 2 and 3 from primary currency to observable Profit Pyramid. [DONE 2026-10-02 (Ralph cycle 17): Method `PrimaryCurrency` value object requires a specific audience, distinct current/desired measures, and a distinct mechanism, rejecting an unspecified person or unmeasured outcome, so the stage 2 "Currency Locked" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_primary_currency.py`. Stage 3 Profit Pyramid remains.]
+6. Implement stages 2 and 3 from primary currency to observable Profit Pyramid. [DONE 2026-10-02 (Ralph cycle 17): Method `PrimaryCurrency` value object requires a specific audience, distinct current/desired measures, and a distinct mechanism, rejecting an unspecified person or unmeasured outcome, so the stage 2 "Currency Locked" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_primary_currency.py`. DONE 2026-10-02 (Ralph cycle 19): Method `ProfitPyramidLevel` and `DiagnosticModel` require each level's observable measures, symptoms, behaviors and problems and reject adjacent levels that cannot be told apart by an observable difference, so the stage 3 "Diagnostic Model Approved" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_diagnostic_model.py`. Stage 3 wiring into the stage 3 `GateDecision` remains.]
 7. Implement stages 4 and 5 from grounded Signature Solution to offer approval. [DONE 2026-10-02 (Ralph cycle 14): commercial `OfferVersion` requires an accountable owner and `OfferChangeImpactPolicy` discovers dependent offers from an approved method change and marks them review required, so the SPEC.md section 11 "changing a method version identifies dependents" acceptance test is met by a real aggregate; verified by `tests/unit/commercial/test_offer_change_impact.py`. Stage 2/3 currency and Profit Pyramid, and the stage 4/5 gate wiring, remain.]
 8. Implement stages 6 and 7 with message congruence and script approval before creative production.
 9. Implement stages 8 and 9 with complete prospect path and three part QA.

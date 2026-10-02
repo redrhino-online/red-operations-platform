@@ -11,11 +11,13 @@ from dataclasses import dataclass, field, replace
 from datetime import date
 
 from redops.contexts.method.domain.errors import (
+    InvalidDiagnosticModelError,
     InvalidMethodError,
     MethodApprovalError,
 )
 from redops.contexts.method.domain.value_objects import (
     MethodApproval,
+    ProfitPyramidLevel,
     SemanticVersion,
 )
 
@@ -116,3 +118,47 @@ class MethodVersion:
             claims=self.claims if claims is None else claims,
             approval=None,
         )
+
+
+@dataclass(frozen=True)
+class DiagnosticModel:
+    """A client's Profit Pyramid at the stage 3 "Diagnostic Model Approved" gate.
+
+    SPEC.md section 4, stage 3 "Model": the model records the ordered Profit
+    Pyramid levels, their progression and qualification logic. The checkpoint
+    requires a prospect to recognize their current and desired next level using
+    observable differences, so adjacent levels with an identical observable
+    signature are rejected. The model is frozen: approval pins an exact version
+    of the asset rather than mutating it (SPEC.md section 3).
+    """
+
+    model_id: str
+    tenant_id: str
+    name: str
+    levels: tuple[ProfitPyramidLevel, ...]
+    progression: str
+    qualification_logic: str
+
+    def __post_init__(self) -> None:
+        _require_text(self.model_id, "diagnostic model id")
+        _require_text(self.tenant_id, "diagnostic model tenant id")
+        _require_text(self.name, "diagnostic model name")
+        _require_text(self.progression, "diagnostic model progression")
+        _require_text(
+            self.qualification_logic, "diagnostic model qualification logic"
+        )
+        if len(self.levels) < 2:
+            raise InvalidDiagnosticModelError(
+                "a diagnostic model requires at least two pyramid levels"
+            )
+        for level in self.levels:
+            if level.tenant_id != self.tenant_id:
+                raise InvalidDiagnosticModelError(
+                    "a diagnostic model cannot mix levels from another tenant"
+                )
+        for lower, higher in zip(self.levels, self.levels[1:]):
+            if not lower.distinguishable_from(higher):
+                raise InvalidDiagnosticModelError(
+                    f"adjacent levels {lower.level_id!r} and {higher.level_id!r} "
+                    "cannot be told apart by any observable difference"
+                )

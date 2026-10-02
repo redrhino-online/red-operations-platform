@@ -10,6 +10,7 @@ from redops.contexts.method.domain.errors import (
     InvalidCurrencyError,
     InvalidMethodError,
     InvalidMethodVersionError,
+    InvalidProfitPyramidLevelError,
     MethodApprovalError,
 )
 
@@ -152,6 +153,64 @@ class PrimaryCurrency:
                 "a locked currency requires a measurable movement between the "
                 "current and desired measures"
             )
+
+
+@dataclass(frozen=True)
+class ProfitPyramidLevel:
+    """One level of a client's Profit Pyramid, distinguishable by observation.
+
+    SPEC.md section 4, stage 3 "Model": every level records observable measures,
+    symptoms, behaviors and problems so a prospect can recognize which level they
+    are on. The value object is frozen and reject-only, so a level that leaves any
+    observable dimension unspecified cannot exist (Phase 3 TDD example: "pyramid
+    levels require observable differences").
+    """
+
+    level_id: str
+    tenant_id: str
+    name: str
+    observable_measures: tuple[str, ...]
+    symptoms: tuple[str, ...]
+    behaviors: tuple[str, ...]
+    problems: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("level id", self.level_id),
+            ("level tenant id", self.tenant_id),
+            ("level name", self.name),
+        ):
+            if not value or not value.strip():
+                raise InvalidProfitPyramidLevelError(f"{label} is required")
+        for label, criteria in (
+            ("observable measures", self.observable_measures),
+            ("symptoms", self.symptoms),
+            ("behaviors", self.behaviors),
+            ("problems", self.problems),
+        ):
+            if not criteria:
+                raise InvalidProfitPyramidLevelError(
+                    f"level {self.level_id!r} requires at least one {label} entry"
+                )
+            for entry in criteria:
+                if not entry or not entry.strip():
+                    raise InvalidProfitPyramidLevelError(
+                        f"level {self.level_id!r} {label} entries must not be blank"
+                    )
+
+    @property
+    def observable_signature(self) -> frozenset[str]:
+        """The combined observable criteria a prospect uses to place this level."""
+        return frozenset(
+            self.observable_measures
+            + self.symptoms
+            + self.behaviors
+            + self.problems
+        )
+
+    def distinguishable_from(self, other: "ProfitPyramidLevel") -> bool:
+        """Whether an observer can tell this level apart from another level."""
+        return self.observable_signature != other.observable_signature
 
 
 @dataclass(frozen=True)

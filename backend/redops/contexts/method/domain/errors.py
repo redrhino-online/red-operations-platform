@@ -37,3 +37,22 @@ class InvalidCurrencyError(MethodError, ValueError):
     specific person, a measurable movement and a distinct mechanism. A currency
     that leaves any of these unspecified cannot be locked.
     """
+
+
+class InvalidProfitPyramidLevelError(MethodError, ValueError):
+    """A Profit Pyramid level was built without its observable criteria.
+
+    SPEC.md section 4, stage 3 "Model": each level records observable measures,
+    symptoms, behaviors and problems. A level missing any of these cannot be
+    recognized by a prospect and cannot be part of an approved model.
+    """
+
+
+class InvalidDiagnosticModelError(MethodError):
+    """A diagnostic model was built without distinguishable adjacent levels.
+
+    SPEC.md section 4, stage 3 "Diagnostic Model Approved": a prospect must be
+    able to recognize their current level and desired next level using
+    observable differences, so adjacent levels with an identical observable
+    signature cannot represent an approvable model.
+    """
