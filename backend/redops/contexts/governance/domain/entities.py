@@ -787,6 +787,36 @@ class StageRun:
         self.accepted_decision = decision
         return transition
 
+    def waive(
+        self,
+        *,
+        waiver: Waiver,
+        actor: str,
+        on: date,
+        correlation_id: str,
+    ) -> StageTransition:
+        """Mirror a scoped gate waiver onto the stage without completing it.
+
+        SPEC.md section 4 lists ``Waived`` among the stage states and requires a
+        waiver to be a scoped human decision with a reason, risk owner, expiry or
+        review trigger, and downstream effects; a waiver never makes an absent
+        asset appear present. The transition policy permits only
+        ``WORKING -> WAIVED``, so a not-started, in-review, completed or already
+        superseded stage is refused rather than silently coerced. The waiver
+        reason is recorded on the transition, and ``accepted_decision`` and
+        ``exited_at`` are never set, so a waived stage is never represented as
+        complete.
+        """
+        if waiver is None:
+            raise ValueError("a stage waiver requires a scoped Waiver")
+        return self._transition(
+            StageStatus.WAIVED,
+            actor=actor,
+            reason=waiver.reason,
+            on=on,
+            correlation_id=correlation_id,
+        )
+
     def _transition(
         self,
         target: StageStatus,

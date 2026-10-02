@@ -4,74 +4,65 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T13:51:36Z (Ralph cycle 49).
-- Selected item: persist the canonical prerequisite stages on every durable
-  `GateDecision` and have `GateLedger.record` verify them against the template.
-  This was the highest priority ready next item named by cycle 48. SPEC.md
-  section 4 requires the gate record to persist "template version, required
-  assets and their exact versions, checkpoint rubric, ... dependencies,
-  blockers ..." for every stage and the production view to answer "which
-  dependency blocks work". The canonical graph lives on
-  `StageDefinition.dependencies`, but `GateDecision` did not carry it, so a
-  durable decision read in isolation could not name the blocking prerequisite;
-  only the in-memory `GateLedger`, which holds the template, could recover the
-  chain. It outranked the `StageRun` `WAIVED` state wiring (a stage-level mirror
-  of an existing gate state, now the next item), the Operations command-center
-  ranking (downstream of the durable record), and the stage 2-10
-  `GateDecision` wiring (blocked on the asset-version representation).
+- Cycle timestamp: 2026-10-02T13:53:01Z (Ralph cycle 50).
+- Selected item: wire `StageStatus.WAIVED` through `StageRun` with a new
+  `waive()` transition. This was the highest priority ready next item named by
+  cycle 49. SPEC.md section 4 lists `Waived` among the gate states and requires
+  a waiver to be a scoped human decision with reason, risk owner, expiry or
+  review trigger, and downstream effects. `StageTransitionPolicy` already
+  permitted `WORKING -> WAIVED` and `WAIVED -> SUPERSEDED`, but `StageRun` had no
+  `waive()` transition, so the stage state machine could not mirror a gate
+  waiver and the production view could not show a waived stage. It outranked the
+  Operations command-center ranking (downstream of the durable record) and the
+  stage 2-10 `GateDecision` wiring (blocked on the asset-version representation).
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: ten new behavioral tests in
-  `tests/unit/governance/test_gate_dependencies.py`
-  (`GateDecisionPrerequisitePersistenceTests`,
-  `GateLedgerPrerequisiteRecordTests`): a decision persists its canonical
-  prerequisites for passing and non-passing dispositions, stage 0 persists none,
-  `GateDecision.from_gate` copies the gate's canonical prerequisites, and
-  `GateLedger.record` refuses a decision that omits, substitutes or adds a
-  prerequisite under every disposition while recording a canonical one.
-  `GateDecision` gained a required `dependencies` field; `from_gate` copies
-  `gate.dependencies`; `__post_init__` rejects negative or self-referential
-  prerequisites; `GateLedger.record` raises the new `PrerequisiteMismatchError`
-  before the `is_passing` branch so the check applies to every disposition.
+- Evidence: eight new behavioral tests in `StageWaiverTests` in
+  `tests/unit/governance/test_stage_run.py`: `waive()` moves a WORKING stage to
+  WAIVED without completing it, records the transition actor/time/correlation ID
+  and the waiver reason, never sets `accepted_decision` or `exited_at`, refuses a
+  missing waiver, refuses a NOT_STARTED or COMPLETE source status via the
+  transition policy, prevents a waived stage from restarting, and still allows
+  `WAIVED -> SUPERSEDED`. `StageRun.waive` derives the transition reason from the
+  scoped `Waiver` so the recorded reason cannot diverge from the waiver.
   Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
-  'test_*.py'` reports 419 passed, up from 409. `python3 -m pyflakes` on the
+  'test_*.py'` reports 427 passed, up from 419. `python3 -m pyflakes` on the
   touched domain and test modules is clean. `ruff` and `mypy` remain
   uninstalled.
-- New findings: every durable decision now names both the exact asset package,
-  the checkpoint and the canonical prerequisite stages, so a decision read in
-  isolation can answer "which dependency blocks work" without the ledger.
-  `StageStatus.WAIVED` is still unreachable: `StageTransitionPolicy` already
-  permits `WORKING -> WAIVED` and `WAIVED -> SUPERSEDED`, but `StageRun` exposes
-  no `waive()` transition, so a gate waiver has no stage-level mirror. The
-  waived/scope representation still cannot express a multi-effect downstream
-  surface and remains deferred to the asset-version representation decision. The
-  durable-decision identity check remains in-memory exact with rehydration
-  unresolved.
+- New findings: the stage-level state machine can now mirror a gate waiver, but
+  `StageRun.waive()` still accepts a caller-supplied `Waiver` and does not verify
+  that the durable `GateLedger` holds a recorded `GateDecision` waiver for this
+  stage, unlike `StageRun.complete()` which is authorized only by the stage's
+  current recorded decision. A stage could therefore be marked WAIVED with a
+  waiver that was never recorded as a human decision, so `waive()` lacks the
+  durability discipline established for completion. `StageRun` also does not
+  retain the `Waiver` object, so the risk owner and downstream effects remain
+  durable only on the `GateDecision`; the stage mirror records only the state
+  change and reason.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, scheduler/worker
   topology, the client-designated approver identities, and pilot metric targets.
   No fork or cluster facts invented; no `docs/`, fork checkout, `kubectl`,
   `helm`, or `argocd` present.
-- Highest priority ready next item: wire `StageStatus.WAIVED` through `StageRun`.
-  SPEC.md section 4 lists `Waived` among the gate states and requires a waiver to
-  be a scoped human decision with reason, risk owner, expiry or review trigger,
-  and downstream effects. `StageTransitionPolicy` already permits
-  `WORKING -> WAIVED` and `WAIVED -> SUPERSEDED`, but `StageRun` has no `waive()`
-  transition, so the stage-level state machine cannot mirror a gate waiver and
-  the production view cannot show a waived stage. Add a `waive()` method that
-  requires a scoped `Waiver`, moves `WORKING` to `WAIVED`, records the transition
-  actor/reason/time/correlation ID, and never sets `accepted_decision` or
-  `exited_at` (a waiver never completes a stage). It outranks the Operations
-  command-center ranking (downstream of the durable record) and the stage 2-10
-  `GateDecision` wiring (blocked on the asset-version representation). Cost: one
-  method plus behavioral tests. Prerequisite: none; `StageStatus.WAIVED`,
-  `Waiver` and the transition policy already exist. Pipeline mapping: every stage
-  0-10 gate. Required asset: none new. Checkpoint: unchanged. Approver: the
-  designated approver named by the waiver. Blocked downstream dependency: the
-  production manager view, blocked on the storage ADR. Deferred cross-context
-  items: the stage 2/3/4/5/6/7/8/9/10 `GateDecision` wiring, blocked on the
-  asset-version representation decision, and all persistence, blocked on the
-  storage ADR.
+- Highest priority ready next item: authorize `StageRun.waive()` by the durable
+  ledger decision, mirroring `complete()`. SPEC.md sections 3 and 4 make a
+  waiver a scoped human decision and a durable, append-only record; a stage
+  waiver that no `GateDecision` recorded is a transient bypass. Have `waive()`
+  require the `GateLedger` plus the accepted `GateDecision`, reject a
+  disposition other than `WAIVED`, reject a decision for another stage, template
+  version or waiver, and require the decision to be the stage's current recorded
+  entry. It outranks the Operations command-center ranking (gate integrity
+  before dashboards) and the stage 2-10 `GateDecision` wiring (blocked on the
+  asset-version representation). Cost: one method signature change plus
+  behavioral tests. Prerequisite: none; `GateLedger`, `GateDecision` and
+  `GateDisposition.WAIVED` already exist. Pipeline mapping: every stage 0-10
+  gate. Required asset: none new. Checkpoint: unchanged. Approver: the waiver's
+  named risk owner and the gate's designated approver. Blocked downstream
+  dependency: the production manager view, blocked on the storage ADR.
+  Deferred cross-context items: the stage 2/3/4/5/6/7/8/9/10 `GateDecision`
+  wiring, blocked on the asset-version representation decision, and all
+  persistence, blocked on the storage ADR.
+
 
 ## Product priority: the gated production engagement
 

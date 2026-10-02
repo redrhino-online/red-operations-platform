@@ -30,6 +30,7 @@ from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
     GateDisposition,
     StageStatus,
+    StageTransition,
     Waiver,
 )
 
@@ -623,6 +624,145 @@ class StageCompletionDurabilityTests(unittest.TestCase):
 
         self.assertIs(StageStatus.COMPLETE, run.status)
         self.assertIs(decision, run.accepted_decision)
+
+
+class StageWaiverTests(unittest.TestCase):
+    """A stage-level mirror of a scoped gate waiver.
+
+    SPEC.md section 4 lists ``Waived`` among the stage states and requires a
+    waiver to be a scoped human decision with a reason, risk owner, expiry or
+    review trigger, and downstream effects; a waiver never makes an absent asset
+    appear present. ``StageTransitionPolicy`` already permits
+    ``WORKING -> WAIVED`` and ``WAIVED -> SUPERSEDED``, but ``StageRun`` exposed
+    no ``waive()`` transition, so the stage state machine could not mirror a gate
+    waiver and the production view could not show a waived stage.
+    """
+
+    SCOPE = "stage-8-funnel-integration"
+
+    def waiver(self, **overrides) -> Waiver:
+        values = {
+            "reason": "video delayed by vendor",
+            "risk_owner": "production-manager",
+            "review_trigger": "vendor delivery",
+            "downstream_effects": frozenset({self.SCOPE}),
+        }
+        values.update(overrides)
+        return Waiver(**values)
+
+    def working_run(self) -> StageRun:
+        run = stage_run()
+        run.start(
+            actor="specialist-1",
+            reason="begin",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+        return run
+
+    def waive(self, run: StageRun, **overrides) -> StageTransition:
+        values = {
+            "waiver": self.waiver(),
+            "actor": "client-approver-1",
+            "on": TODAY,
+            "correlation_id": CORRELATION,
+        }
+        values.update(overrides)
+        return run.waive(**values)
+
+    def test_waive_moves_a_working_stage_to_waived(self):
+        run = self.working_run()
+
+        self.waive(run)
+
+        self.assertIs(StageStatus.WAIVED, run.status)
+        self.assertFalse(run.is_complete)
+
+    def test_waive_records_the_transition_with_the_waiver_reason(self):
+        run = self.working_run()
+
+        transition = self.waive(run)
+
+        self.assertEqual("client-approver-1", transition.actor)
+        self.assertEqual("video delayed by vendor", transition.reason)
+        self.assertEqual(TODAY, transition.occurred_at)
+        self.assertEqual(CORRELATION, transition.correlation_id)
+        self.assertIs(StageStatus.WORKING, transition.old_status)
+        self.assertIs(StageStatus.WAIVED, transition.new_status)
+
+    def test_waive_never_completes_the_stage_or_pins_evidence(self):
+        run = self.working_run()
+
+        self.waive(run)
+
+        self.assertIsNone(run.accepted_decision)
+        self.assertIsNone(run.exited_at)
+
+    def test_waive_requires_a_scoped_waiver(self):
+        run = self.working_run()
+
+        with self.assertRaises(ValueError):
+            self.waive(run, waiver=None)
+
+        self.assertIs(StageStatus.WORKING, run.status)
+
+    def test_a_not_started_stage_cannot_be_waived(self):
+        run = stage_run()
+
+        with self.assertRaises(IllegalStageTransitionError):
+            self.waive(run)
+
+        self.assertIs(StageStatus.NOT_STARTED, run.status)
+
+    def test_a_completed_stage_cannot_be_waived(self):
+        decision = accepted_decision(stage_number=7)
+        run = stage_run()
+        run.start(
+            actor="specialist-1",
+            reason="begin",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+        run.complete(
+            decision=decision,
+            ledger=authorizing_ledger(decision),
+            actor="client-approver-1",
+            reason="gate approved",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+
+        with self.assertRaises(IllegalStageTransitionError):
+            self.waive(run)
+
+        self.assertIs(StageStatus.COMPLETE, run.status)
+
+    def test_a_waived_stage_cannot_start_again(self):
+        run = self.working_run()
+        self.waive(run)
+
+        with self.assertRaises(IllegalStageTransitionError):
+            run.start(
+                actor="specialist-1",
+                reason="restart after waiver",
+                on=TODAY,
+                correlation_id=CORRELATION,
+            )
+
+        self.assertIs(StageStatus.WAIVED, run.status)
+
+    def test_a_waived_stage_can_be_superseded(self):
+        run = self.working_run()
+        self.waive(run)
+
+        run.supersede(
+            actor="governance-manager",
+            reason="method changed",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+
+        self.assertIs(StageStatus.SUPERSEDED, run.status)
 
 
 if __name__ == "__main__":
