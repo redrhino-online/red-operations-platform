@@ -165,6 +165,16 @@ class Waiver:
                     "waiver downstream effects must be non-empty identifiers"
                 )
 
+    def is_expired(self, on: date) -> bool:
+        """A waiver past its expiry date is no longer a live risk acceptance.
+
+        SPEC.md section 4 requires a waiver to carry an expiry or review trigger
+        and says a failed or expired prerequisite blocks dependent authorization
+        until resolved. A waiver without an explicit expiry relies on its review
+        trigger and never expires by date, mirroring ``ApprovalRequest``.
+        """
+        return self.expires_on is not None and on > self.expires_on
+
 
 @dataclass(frozen=True)
 class StageDefinition:

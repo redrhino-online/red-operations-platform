@@ -874,6 +874,31 @@ class StageWaiverTests(unittest.TestCase):
 
         self.assertIs(StageStatus.WORKING, run.status)
 
+    def test_waive_refuses_a_waiver_that_has_expired(self):
+        run = self.working_run()
+        waiver = self.waiver(
+            review_trigger="",
+            expires_on=date(2026, 9, 30),
+        )
+        decision = self.waived_decision(
+            waiver=waiver,
+            decided_on=date(2026, 9, 30),
+        )
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            self.waive(run, decision=decision, waiver=waiver)
+
+        self.assertIs(StageStatus.WORKING, run.status)
+
+    def test_waive_accepts_a_waiver_expiring_on_the_transition_date(self):
+        run = self.working_run()
+        waiver = self.waiver(review_trigger="", expires_on=TODAY)
+        decision = self.waived_decision(waiver=waiver)
+
+        self.waive(run, decision=decision, waiver=waiver)
+
+        self.assertIs(StageStatus.WAIVED, run.status)
+
 
 if __name__ == "__main__":
     unittest.main()

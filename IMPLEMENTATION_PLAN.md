@@ -4,58 +4,55 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T13:53:56Z (Ralph cycle 51).
-- Selected item: authorize `StageRun.waive()` by the durable ledger decision,
-  mirroring `complete()`. This was cycle 50's highest priority ready next item.
-  SPEC.md sections 3 and 4 make a waiver a scoped human decision and a durable,
-  append-only record, and section 4 requires a failed or expired prerequisite
-  not to release dependent work. `StageRun.waive()` accepted any caller-supplied
-  `Waiver`, so a WORKING stage could be marked WAIVED with a waiver no
-  `GateDecision` recorded — a transient bypass unlike `complete()`, which is
-  authorized only by the stage's current durable decision. It outranked the
-  Operations command-center ranking (gate integrity before dashboards) and the
-  stage 2-10 `GateDecision` wiring (blocked on the asset-version representation).
+- Cycle timestamp: 2026-10-02T13:55:13Z (Ralph cycle 52).
+- Selected item: enforce the scoped waiver's expiry in `StageRun.waive()`. This
+  was cycle 51's highest priority ready next item. SPEC.md section 4 requires a
+  waiver to carry an expiry or review trigger and says a failed or expired
+  prerequisite blocks dependent authorization until resolved. `StageRun.waive()`
+  mirrored any durable `WAIVED` `GateDecision` regardless of the waiver's own
+  `expires_on`, so a stage could be shown as `WAIVED` on a risk acceptance that
+  had already lapsed. It outranked the Operations command-center ranking (gate
+  integrity before dashboards) and the stage 2-10 `GateDecision` wiring (blocked
+  on the asset-version representation).
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: seven new behavioral tests in `StageWaiverTests` in
-  `tests/unit/governance/test_stage_run.py`: `waive()` refuses a waiver decision
-  the ledger never recorded, refuses a ledger for another template version,
-  refuses a decision for another stage, refuses a decision for another template
-  version, refuses a decision whose disposition is not `WAIVED`, refuses a
-  decision recorded for a different waiver than the one named, and refuses a
-  decision that is no longer the stage's current ledger entry (each leaves the
-  stage WORKING). Existing waiver tests were updated to supply the recorded
-  decision and ledger. `StageRun.waive` now requires the exact named waiver and
-  the stage's current durable `WAIVED` `GateDecision`, derives the transition
-  reason from that waiver, and still never sets `accepted_decision` or
-  `exited_at`. Running `PYTHONPATH=backend python3 -m unittest discover -s tests
-  -p 'test_*.py'` reports 434 passed, up from 427. `python3 -m pyflakes` on the
+- Evidence: two new behavioral tests in `StageWaiverTests` in
+  `tests/unit/governance/test_stage_run.py`: `waive()` refuses a waiver whose
+  `expires_on` precedes the transition instant (leaving the stage WORKING), and
+  still accepts a waiver expiring exactly on the transition date (an approval
+  remains valid through its expiry date, mirroring `ApprovalRequest`). Added a
+  pure `Waiver.is_expired(on)` value-object method and a guard in
+  `StageRun.waive()` that raises `StageGateNotAcceptedError` before mirroring.
+  Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
+  'test_*.py'` reports 436 passed, up from 434. `python3 -m pyflakes` on the
   touched domain and test modules is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: `StageRun.waive()` now requires the durable decision, but it
-  still does not evaluate the scoped waiver's expiry at the transition instant,
-  so a waiver whose `expires_on` precedes `on` can be mirrored onto a stage even
-  though SPEC.md section 4 treats an expired approval or prerequisite as no
-  longer in force. `StageRun` also still does not retain the waiver-bearing
-  `GateDecision`, so the risk owner and downstream effects remain durable only on
-  the `GateDecision`; the stage mirror records only the state change and reason.
+- New findings: the stage mirror now honors the waiver expiry, but the durable
+  `GateDecision` itself still accepts a waiver whose `expires_on` already
+  precedes its own `decided_on` (`GateDecision.__post_init__` and `from_gate`
+  check scope but not waiver expiry), so an internally inconsistent durable
+  `WAIVED` record can still be written. It never authorizes downstream work, but
+  the production view reads the durable decision. `StageRun` also still does not
+  retain the waiver-bearing `GateDecision`, so the risk owner and downstream
+  effects remain durable only on the `GateDecision`.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, scheduler/worker
   topology, the client-designated approver identities, and pilot metric targets.
   No fork or cluster facts invented; no `docs/`, fork checkout, `kubectl`,
   `helm`, or `argocd` present.
-- Highest priority ready next item: enforce the scoped waiver's expiry in
-  `StageRun.waive()`, refusing to mirror a waiver decision whose
-  `waiver.expires_on` is before the transition instant `on`. SPEC.md section 4
-  requires a waiver to carry an expiry or review trigger and says a failed or
-  expired prerequisite blocks dependent authorization until resolved; the gate
-  path already applies that rule to per-asset approvals, so a stage waiver must
-  not outlive its recorded risk acceptance. It outranks the Operations
-  command-center ranking (gate integrity before dashboards) and the stage 2-10
-  `GateDecision` wiring (blocked on the asset-version representation). Cost: one
-  conditional plus behavioral tests. Prerequisite: none; `Waiver.expires_on` and
-  `Waiver.review_trigger` already exist. Pipeline mapping: every stage 0-10
-  gate. Required asset: none new. Checkpoint: unchanged. Approver: the waiver's
-  named risk owner and the gate's designated approver. Blocked downstream
+- Highest priority ready next item: refuse to record a `WAIVED` `GateDecision`
+  whose scoped waiver is already expired at the decision instant, in
+  `GateDecision.from_gate` (and the shared `__post_init__` invariant where it
+  applies). SPEC.md sections 3 and 4 make a waiver a live scoped risk acceptance
+  with an expiry or review trigger; recording an already-lapsed waiver is
+  internally inconsistent even though a waiver never authorizes downstream work.
+  This closes the remaining waiver-expiry hole the stage guard exposed. It
+  outranks the Operations command-center ranking (gate integrity before
+  dashboards) and the stage 2-10 `GateDecision` wiring (blocked on the
+  asset-version representation). Cost: one conditional plus behavioral tests.
+  Prerequisite: none; `GateDecision.decided_on`, `GateDecision.waiver` and
+  `Waiver.is_expired` already exist. Pipeline mapping: every stage 0-10 gate.
+  Required asset: none new. Checkpoint: unchanged. Approver: the gate's
+  designated approver and the waiver's named risk owner. Blocked downstream
   dependency: the production manager view, blocked on the storage ADR.
   Deferred cross-context items: retaining the waiver-bearing `GateDecision` on
   the stage mirror; the stage 2/3/4/5/6/7/8/9/10 `GateDecision` wiring, blocked

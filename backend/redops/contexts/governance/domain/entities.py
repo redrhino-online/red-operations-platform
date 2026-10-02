@@ -813,9 +813,11 @@ class StageRun:
         durability discipline as ``complete()``: the decision must be for this
         stage and template version, must be a ``WAIVED`` disposition, must carry
         the same waiver the caller names, and must be the stage's current entry
-        in the ledger. The waiver reason is recorded on the transition, and
-        ``accepted_decision`` and ``exited_at`` are never set, so a waived stage
-        is never represented as complete.
+        in the ledger. A scoped waiver whose own expiry has passed at the
+        transition instant is no longer a live risk acceptance, so it cannot be
+        mirrored onto the stage (SPEC.md section 4). The waiver reason is
+        recorded on the transition, and ``accepted_decision`` and ``exited_at``
+        are never set, so a waived stage is never represented as complete.
         """
         if waiver is None:
             raise ValueError("a stage waiver requires a scoped Waiver")
@@ -844,6 +846,12 @@ class StageRun:
             raise StageGateNotAcceptedError(
                 "the accepted waiver decision is not recorded for the named "
                 "scoped waiver"
+            )
+        if waiver.is_expired(on):
+            raise StageGateNotAcceptedError(
+                "the scoped waiver has expired at the transition instant, so it "
+                "no longer authorizes a waived stage; SPEC.md section 4 requires "
+                "a failed or expired prerequisite to be resolved first"
             )
         recorded = ledger.decision_for(self.stage_number)
         if recorded is None:
