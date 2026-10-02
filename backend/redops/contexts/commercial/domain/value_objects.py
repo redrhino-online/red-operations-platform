@@ -7,6 +7,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from redops.contexts.commercial.domain.errors import (
+    InvalidAvatarProfileError,
     InvalidDeliverySpecificationError,
     InvalidOfferError,
 )
@@ -238,3 +239,59 @@ class DeliverySpecification:
         raise InvalidDeliverySpecificationError(
             f"method step {step_id!r} has no delivery"
         )
+
+
+@dataclass(frozen=True)
+class AvatarProfile:
+    """The stage 1 avatar, locked at the "Avatar Locked" checkpoint.
+
+    SPEC.md section 4, stage 1 "Diagnose": the required asset package is the
+    business snapshot, offer and funnel audit, avatar with demographics and
+    psychographics, pains, goals, consequences of inaction, awareness, customer
+    evidence and voice notes. The checkpoint requires that "a stranger can
+    recognize who the customer is, what matters, and why now". The profile is
+    frozen and reject-only, so an avatar that leaves the person, what matters or
+    why now unspecified cannot be represented as a lockable avatar. Customer
+    evidence is recorded as Knowledge claim ids so the lock can require it to be
+    directly sourced (SPEC.md sections 1 and 11).
+    """
+
+    avatar_id: str
+    tenant_id: str
+    name: str
+    demographics: str
+    psychographics: str
+    pains: tuple[str, ...]
+    goals: tuple[str, ...]
+    consequences_of_inaction: tuple[str, ...]
+    awareness: str
+    customer_evidence_claim_ids: tuple[str, ...]
+    voice_notes: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("avatar profile id", self.avatar_id),
+            ("avatar profile tenant id", self.tenant_id),
+            ("avatar name", self.name),
+            ("avatar demographics", self.demographics),
+            ("avatar psychographics", self.psychographics),
+            ("avatar awareness", self.awareness),
+        ):
+            if not value or not value.strip():
+                raise InvalidAvatarProfileError(f"{label} is required")
+        for label, entries in (
+            ("pains", self.pains),
+            ("goals", self.goals),
+            ("consequences of inaction", self.consequences_of_inaction),
+            ("customer evidence", self.customer_evidence_claim_ids),
+            ("voice notes", self.voice_notes),
+        ):
+            if not entries:
+                raise InvalidAvatarProfileError(
+                    f"an avatar profile requires at least one {label} entry"
+                )
+            for entry in entries:
+                if not entry or not entry.strip():
+                    raise InvalidAvatarProfileError(
+                        f"{label} entries must not be blank"
+                    )

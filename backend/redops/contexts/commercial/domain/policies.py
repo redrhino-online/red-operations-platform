@@ -17,13 +17,17 @@ from redops.contexts.commercial.domain.entities import (
     OfferVersion,
 )
 from redops.contexts.commercial.domain.errors import (
+    AvatarLockedError,
     CampaignMessageAlignmentError,
     OfferReadinessError,
 )
 from redops.contexts.commercial.domain.value_objects import (
+    AvatarProfile,
     MethodReference,
     OfferImpactAssessment,
 )
+from redops.contexts.knowledge.domain.entities import Claim
+from redops.contexts.knowledge.domain.value_objects import ProvenanceClass
 from redops.contexts.method.domain.entities import MethodVersion
 from redops.contexts.method.domain.policies import MethodChangeImpactPolicy
 from redops.contexts.method.domain.value_objects import (
@@ -233,3 +237,34 @@ class CampaignMessageAlignmentPolicy:
             ):
                 return method
         return None
+
+
+class AvatarLockedPolicy:
+    """Refuses the stage 1 "Avatar Locked" checkpoint on an unsourced avatar.
+
+    SPEC.md section 4, stage 1 "Diagnose" and its "Avatar Locked" checkpoint: a
+    stranger can recognize who the customer is, what matters, and why now, and
+    the required asset package names customer evidence. SPEC.md section 1
+    requires every output to have a source, so the avatar's customer evidence
+    must be a known, directly sourced Knowledge claim of the same client.
+    Evidence that is unsourced, merely derived or proposed, or belongs to another
+    client cannot support the lock (SPEC.md sections 1, 4 and 11).
+    """
+
+    def require_locked(
+        self, profile: AvatarProfile, claims: Iterable[Claim]
+    ) -> None:
+        sourced = {
+            claim.claim_id
+            for claim in claims
+            if claim.tenant_id == profile.tenant_id
+            and claim.provenance is ProvenanceClass.KNOWN
+            and claim.is_directly_sourced
+        }
+        for claim_id in profile.customer_evidence_claim_ids:
+            if claim_id not in sourced:
+                raise AvatarLockedError(
+                    f"avatar {profile.avatar_id!r} cannot lock: customer "
+                    f"evidence {claim_id!r} is not a known, directly sourced "
+                    "claim for this tenant"
+                )

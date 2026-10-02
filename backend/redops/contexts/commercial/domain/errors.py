@@ -71,3 +71,22 @@ class CampaignMessageAlignmentError(CommercialError):
     be approved.
     """
 
+
+class InvalidAvatarProfileError(CommercialError, ValueError):
+    """A stage 1 avatar profile was built without a recognizability dimension.
+
+    SPEC.md section 4, stage 1 "Diagnose": the required asset package names the
+    avatar with demographics and psychographics, pains, goals, consequences of
+    inaction, awareness, customer evidence and voice notes. An avatar that
+    leaves any of these unspecified cannot be represented as a lockable avatar.
+    """
+
+
+class AvatarLockedError(CommercialError):
+    """A stage 1 avatar was asked to lock on unsourced or foreign evidence.
+
+    SPEC.md sections 1 and 4: every output has a source, and the stage 1
+    "Avatar Locked" checkpoint requires customer evidence. Evidence that is not
+    a known, directly sourced claim of the same client cannot support the lock.
+    """
+
