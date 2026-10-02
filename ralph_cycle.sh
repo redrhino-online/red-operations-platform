@@ -25,6 +25,13 @@ command -v "$OPENCODE_BIN" >/dev/null 2>&1 || die "OpenCode CLI is unavailable: 
 # A repository is required so the agent can inspect changes and the operator can review them.
 git -C "$REPO_DIR" rev-parse --show-toplevel >/dev/null 2>&1 || die "target must be a git repository"
 mkdir -p "$RUN_DIR"
+# Keep the harness's own run directory out of commits without relying on the
+# target repository's .gitignore. Adding an ignored path as an explicit git
+# pathspec makes `git add` fail, so we register the exclusion in the repo-local
+# exclude file and then stage with a plain `.` pathspec.
+GIT_EXCLUDE_FILE="$(git -C "$REPO_DIR" rev-parse --git-path info/exclude)"
+mkdir -p "$(dirname "$GIT_EXCLUDE_FILE")"
+grep -qxF '.ralph/' "$GIT_EXCLUDE_FILE" 2>/dev/null || printf '.ralph/\n' >> "$GIT_EXCLUDE_FILE"
 mkdir "$LOCK_DIR" 2>/dev/null || die "another cycle is active; if a process crashed, inspect and remove $LOCK_DIR"
 trap release_lock EXIT
 
@@ -78,7 +85,7 @@ if (( run_status != 0 )); then
 fi
 
 # Commit the cycle's changes so every loop produces an auditable checkpoint.
-if [[ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=all -- . ':(exclude).ralph')" ]]; then
+if [[ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=all -- .)" ]]; then
   [[ -s "$COMMIT_MSG_FILE" ]] || die "agent did not write a commit message to $COMMIT_MSG_FILE; refusing to commit without the why"
   commit_subject="$(sed -n '1p' "$COMMIT_MSG_FILE")"
   cc_re='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?!?:[[:space:]].+'
@@ -88,7 +95,7 @@ if [[ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=all -- . ':(
   if [[ "$(sed -n '2p' "$COMMIT_MSG_FILE")" != "" || -z "$(sed -n '3p' "$COMMIT_MSG_FILE")" ]]; then
     die "commit message needs a blank second line followed by a body explaining why the change was made"
   fi
-  git -C "$REPO_DIR" add -A -- . ':(exclude).ralph'
+  git -C "$REPO_DIR" add -A -- .
   git -C "$REPO_DIR" -c user.name="${RALPH_GIT_NAME:-ralph}" \
     -c user.email="${RALPH_GIT_EMAIL:-ralph@localhost}" \
     commit -F "$COMMIT_MSG_FILE" || die "failed to commit cycle changes"
