@@ -285,6 +285,72 @@ class WaiverScopeTests(unittest.TestCase):
         )
 
 
+class WaiverDecisionScopeTests(unittest.TestCase):
+    """SPEC.md section 4: a waiver is a *scoped* human decision. A waived gate
+    decision must name the intended downstream scope it waives for, and the
+    waiver cannot claim a downstream effect broader than that scope, otherwise it
+    would release dependent work the gate never decided to release."""
+
+    def bounded_waiver(self, effects, **overrides) -> Waiver:
+        values = {
+            "reason": "video delayed by vendor",
+            "risk_owner": "production-manager",
+            "review_trigger": "vendor delivery",
+            "downstream_effects": frozenset(effects),
+        }
+        values.update(overrides)
+        return Waiver(**values)
+
+    def test_waived_decision_requires_an_intended_downstream_scope(self):
+        waiver = self.bounded_waiver({"stage-8-funnel-integration"})
+
+        for scope in ("", "   "):
+            with self.subTest(scope=scope):
+                with self.assertRaises(GateDecisionError):
+                    passing_decision(
+                        disposition=GateDisposition.WAIVED,
+                        scope=scope,
+                        required_assets=frozenset(),
+                        waiver=waiver,
+                    )
+
+    def test_waiver_effect_within_the_decision_scope_is_accepted(self):
+        waiver = self.bounded_waiver({"stage-8-funnel-integration"})
+
+        decision = passing_decision(
+            disposition=GateDisposition.WAIVED,
+            scope="stage-8-funnel-integration",
+            waiver=waiver,
+        )
+
+        self.assertEqual(
+            frozenset({"stage-8-funnel-integration"}),
+            decision.waiver.downstream_effects,
+        )
+
+    def test_waiver_effect_broader_than_the_decision_scope_is_refused(self):
+        waiver = self.bounded_waiver({"stage-9-launch-qa"})
+
+        with self.assertRaises(GateDecisionError):
+            passing_decision(
+                disposition=GateDisposition.WAIVED,
+                scope="stage-8-funnel-integration",
+                waiver=waiver,
+            )
+
+    def test_waiver_effect_outside_the_decision_scope_is_refused(self):
+        waiver = self.bounded_waiver(
+            {"stage-8-funnel-integration", "stage-10-performance"}
+        )
+
+        with self.assertRaises(GateDecisionError):
+            passing_decision(
+                disposition=GateDisposition.WAIVED,
+                scope="stage-8-funnel-integration",
+                waiver=waiver,
+            )
+
+
 class GateDecisionFromGateTests(unittest.TestCase):
     def test_factory_pins_the_gates_exact_required_assets(self):
         gate = approvable_gate()

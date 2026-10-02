@@ -238,10 +238,24 @@ class GateDecision:
                     f"unapproved: {names}"
                 )
 
-        if self.disposition is GateDisposition.WAIVED and self.waiver is None:
-            raise GateDecisionError(
-                "a waived gate decision requires a scoped waiver with a risk owner"
-            )
+        if self.disposition is GateDisposition.WAIVED:
+            if self.waiver is None:
+                raise GateDecisionError(
+                    "a waived gate decision requires a scoped waiver with a "
+                    "risk owner"
+                )
+            if not self.scope or not self.scope.strip():
+                raise GateDecisionError(
+                    "a waived gate decision must record the intended downstream "
+                    "scope it waives for"
+                )
+            broader = self.waiver.downstream_effects - frozenset({self.scope})
+            if broader:
+                names = ", ".join(sorted(broader))
+                raise GateDecisionError(
+                    "a waiver cannot claim downstream effects broader than the "
+                    f"gate decision scope {self.scope!r}: {names}"
+                )
 
     @classmethod
     def from_gate(
