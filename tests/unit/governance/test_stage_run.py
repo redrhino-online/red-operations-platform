@@ -660,9 +660,47 @@ class StageWaiverTests(unittest.TestCase):
         )
         return run
 
-    def waive(self, run: StageRun, **overrides) -> StageTransition:
+    def waived_decision(
+        self,
+        *,
+        stage_number: int = 7,
+        template_version: str = "2026.1",
+        waiver: Waiver | None = None,
+        decided_on: date = TODAY,
+    ) -> GateDecision:
+        waiver = waiver if waiver is not None else self.waiver()
+        definition = TEMPLATE.definition_for(stage_number)
+        assets = frozenset(
+            AssetVersionRef(kind, 1)
+            for kind in TEMPLATE.required_asset_kinds(stage_number)
+        )
+        return GateDecision(
+            stage_number=stage_number,
+            template_version=template_version,
+            required_assets=assets,
+            checkpoint=definition.checkpoint,
+            checkpoint_evidence="vendor delay recorded as a scoped waiver",
+            reviewer="client-approver-1",
+            scope=self.SCOPE,
+            disposition=GateDisposition.WAIVED,
+            rationale="risk accepted against the stage checkpoint",
+            decided_on=decided_on,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
+            dependencies=TEMPLATE.dependencies_of(stage_number),
+            waiver=waiver,
+        )
+
+    def waive(
+        self, run: StageRun, *, decision=None, ledger=None, **overrides
+    ) -> StageTransition:
+        decision = decision if decision is not None else self.waived_decision()
+        if ledger is None:
+            ledger = authorizing_ledger(decision)
         values = {
-            "waiver": self.waiver(),
+            "waiver": decision.waiver,
+            "decision": decision,
+            "ledger": ledger,
             "actor": "client-approver-1",
             "on": TODAY,
             "correlation_id": CORRELATION,
@@ -763,6 +801,78 @@ class StageWaiverTests(unittest.TestCase):
         )
 
         self.assertIs(StageStatus.SUPERSEDED, run.status)
+
+    def test_waive_requires_the_durable_ledger_decision(self):
+        run = self.working_run()
+        decision = self.waived_decision()
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            self.waive(run, decision=decision, ledger=authorizing_ledger())
+
+        self.assertIs(StageStatus.WORKING, run.status)
+
+    def test_waive_rejects_a_ledger_for_another_template_version(self):
+        run = self.working_run()
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            self.waive(
+                run,
+                ledger=GateLedger(stage_zero_to_ten_template("2025.9")),
+            )
+
+        self.assertIs(StageStatus.WORKING, run.status)
+
+    def test_waive_rejects_a_decision_for_another_stage(self):
+        run = self.working_run()
+        decision = self.waived_decision(stage_number=6)
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            self.waive(run, decision=decision)
+
+        self.assertIs(StageStatus.WORKING, run.status)
+
+    def test_waive_rejects_a_decision_for_another_template_version(self):
+        run = self.working_run()
+        decision = self.waived_decision(template_version="2025.9")
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            self.waive(run, decision=decision, ledger=authorizing_ledger())
+
+        self.assertIs(StageStatus.WORKING, run.status)
+
+    def test_waive_rejects_a_decision_that_is_not_a_waiver(self):
+        run = self.working_run()
+        decision = accepted_decision(stage_number=7)
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            self.waive(run, decision=decision, waiver=self.waiver())
+
+        self.assertIs(StageStatus.WORKING, run.status)
+
+    def test_waive_rejects_a_decision_recorded_for_another_waiver(self):
+        run = self.working_run()
+        decision = self.waived_decision(waiver=self.waiver(reason="first"))
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            self.waive(
+                run,
+                decision=decision,
+                waiver=self.waiver(reason="second"),
+            )
+
+        self.assertIs(StageStatus.WORKING, run.status)
+
+    def test_waive_requires_the_stages_current_recorded_decision(self):
+        run = self.working_run()
+        first = self.waived_decision(waiver=self.waiver(reason="first"))
+        second = self.waived_decision(waiver=self.waiver(reason="second"))
+        ledger = authorizing_ledger(first)
+        ledger.record(second)
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            self.waive(run, decision=first, ledger=ledger)
+
+        self.assertIs(StageStatus.WORKING, run.status)
 
 
 if __name__ == "__main__":

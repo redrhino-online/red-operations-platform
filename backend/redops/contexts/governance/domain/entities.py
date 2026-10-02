@@ -791,24 +791,71 @@ class StageRun:
         self,
         *,
         waiver: Waiver,
+        decision: GateDecision,
+        ledger: GateLedger,
         actor: str,
         on: date,
         correlation_id: str,
     ) -> StageTransition:
-        """Mirror a scoped gate waiver onto the stage without completing it.
+        """Mirror a durable scoped gate waiver onto the stage.
 
         SPEC.md section 4 lists ``Waived`` among the stage states and requires a
         waiver to be a scoped human decision with a reason, risk owner, expiry or
         review trigger, and downstream effects; a waiver never makes an absent
         asset appear present. The transition policy permits only
         ``WORKING -> WAIVED``, so a not-started, in-review, completed or already
-        superseded stage is refused rather than silently coerced. The waiver
-        reason is recorded on the transition, and ``accepted_decision`` and
-        ``exited_at`` are never set, so a waived stage is never represented as
-        complete.
+        superseded stage is refused rather than silently coerced.
+
+        The waiver must be the exact scoped waiver recorded on the stage's
+        current durable ``GateDecision`` and that decision must be recorded in
+        the ``GateLedger``. A caller-supplied ``Waiver`` that no recorded human
+        decision backs is a transient bypass, so ``waive()`` applies the same
+        durability discipline as ``complete()``: the decision must be for this
+        stage and template version, must be a ``WAIVED`` disposition, must carry
+        the same waiver the caller names, and must be the stage's current entry
+        in the ledger. The waiver reason is recorded on the transition, and
+        ``accepted_decision`` and ``exited_at`` are never set, so a waived stage
+        is never represented as complete.
         """
         if waiver is None:
             raise ValueError("a stage waiver requires a scoped Waiver")
+        if decision.stage_number != self.stage_number:
+            raise StageGateNotAcceptedError(
+                f"waiver decision is for stage {decision.stage_number}, "
+                f"not stage {self.stage_number}"
+            )
+        if decision.template_version != self.template_version:
+            raise StageGateNotAcceptedError(
+                f"waiver decision template version "
+                f"{decision.template_version!r} does not match stage template "
+                f"version {self.template_version!r}"
+            )
+        if ledger.template.version != self.template_version:
+            raise StageGateNotAcceptedError(
+                f"ledger template version {ledger.template.version!r} does "
+                f"not match stage template version {self.template_version!r}"
+            )
+        if decision.disposition is not GateDisposition.WAIVED:
+            raise StageGateNotAcceptedError(
+                "a stage can only be waived by a gate decision whose "
+                f"disposition is WAIVED, not {decision.disposition.value!r}"
+            )
+        if decision.waiver != waiver:
+            raise StageGateNotAcceptedError(
+                "the accepted waiver decision is not recorded for the named "
+                "scoped waiver"
+            )
+        recorded = ledger.decision_for(self.stage_number)
+        if recorded is None:
+            raise StageGateNotAcceptedError(
+                f"stage {self.stage_number} has no durable gate decision "
+                "recorded in the ledger"
+            )
+        if recorded is not decision:
+            raise StageGateNotAcceptedError(
+                "the accepted waiver decision is not the stage's current "
+                "durable ledger decision"
+            )
         return self._transition(
             StageStatus.WAIVED,
             actor=actor,
