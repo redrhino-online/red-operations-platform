@@ -900,5 +900,145 @@ class StageWaiverTests(unittest.TestCase):
         self.assertIs(StageStatus.WAIVED, run.status)
 
 
+class StageWaiverDecisionRetentionTests(unittest.TestCase):
+    """The stage mirror keeps the durable waiver decision that produced it.
+
+    SPEC.md section 4 makes the production view answer, for each client, "which
+    dependency blocks work, what approval is next, and when it is due" and names
+    ``Waived`` among the stage states; a waiver is a scoped human decision with a
+    reason, risk owner, expiry or review trigger, and downstream effects. A
+    completed stage retains its accepted ``GateDecision`` so the exact evidence is
+    pinned     on the stage mirror. A waived stage is the symmetric case: without the
+    waiver decision the stage cannot show who accepted the risk, when the waiver
+    must be reviewed, or which effects it covers, and the stage state and the
+    durable decision can drift.
+    """
+
+    SCOPE = "stage-8-funnel-integration"
+
+    def waiver(self, **overrides) -> Waiver:
+        values = {
+            "reason": "video delayed by vendor",
+            "risk_owner": "production-manager",
+            "review_trigger": "vendor delivery",
+            "downstream_effects": frozenset({self.SCOPE}),
+        }
+        values.update(overrides)
+        return Waiver(**values)
+
+    def working_run(self) -> StageRun:
+        run = stage_run()
+        run.start(
+            actor="specialist-1",
+            reason="begin",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+        return run
+
+    def waived_decision(self, *, waiver: Waiver | None = None) -> GateDecision:
+        waiver = waiver if waiver is not None else self.waiver()
+        definition = TEMPLATE.definition_for(7)
+        assets = frozenset(
+            AssetVersionRef(kind, 1)
+            for kind in TEMPLATE.required_asset_kinds(7)
+        )
+        return GateDecision(
+            stage_number=7,
+            template_version="2026.1",
+            required_assets=assets,
+            checkpoint=definition.checkpoint,
+            checkpoint_evidence="vendor delay recorded as a scoped waiver",
+            reviewer="client-approver-1",
+            scope=self.SCOPE,
+            disposition=GateDisposition.WAIVED,
+            rationale="risk accepted against the stage checkpoint",
+            decided_on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
+            dependencies=TEMPLATE.dependencies_of(7),
+            waiver=waiver,
+        )
+
+    def test_a_fresh_stage_run_retains_no_waiver_decision(self):
+        self.assertIsNone(stage_run().waiver_decision)
+
+    def test_waive_retains_the_durable_waiver_decision_on_the_stage(self):
+        run = self.working_run()
+        decision = self.waived_decision()
+
+        run.waive(
+            waiver=decision.waiver,
+            decision=decision,
+            ledger=authorizing_ledger(decision),
+            actor="client-approver-1",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+
+        self.assertIs(decision, run.waiver_decision)
+        self.assertIsNone(run.accepted_decision)
+
+    def test_the_retained_decision_carries_the_scoped_waiver_details(self):
+        run = self.working_run()
+        decision = self.waived_decision()
+
+        run.waive(
+            waiver=decision.waiver,
+            decision=decision,
+            ledger=authorizing_ledger(decision),
+            actor="client-approver-1",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+
+        retained = run.waiver_decision
+        self.assertIsNotNone(retained)
+        self.assertEqual("production-manager", retained.waiver.risk_owner)
+        self.assertEqual("vendor delivery", retained.waiver.review_trigger)
+        self.assertEqual(
+            frozenset({self.SCOPE}), retained.waiver.downstream_effects
+        )
+        self.assertEqual("client-approver-1", retained.reviewer)
+
+    def test_a_refused_waiver_retains_no_decision(self):
+        run = self.working_run()
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            run.waive(
+                waiver=self.waiver(),
+                decision=self.waived_decision(),
+                ledger=authorizing_ledger(),
+                actor="client-approver-1",
+                on=TODAY,
+                correlation_id=CORRELATION,
+            )
+
+        self.assertIsNone(run.waiver_decision)
+        self.assertIs(StageStatus.WORKING, run.status)
+
+    def test_completion_retains_the_accepted_decision_not_a_waiver_decision(self):
+        decision = accepted_decision(stage_number=7)
+        run = stage_run()
+        run.start(
+            actor="specialist-1",
+            reason="begin",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+
+        run.complete(
+            decision=decision,
+            ledger=authorizing_ledger(decision),
+            actor="client-approver-1",
+            reason="gate approved",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+
+        self.assertIs(decision, run.accepted_decision)
+        self.assertIsNone(run.waiver_decision)
+
+
 if __name__ == "__main__":
     unittest.main()

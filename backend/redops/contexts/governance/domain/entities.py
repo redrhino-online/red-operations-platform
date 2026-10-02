@@ -635,6 +635,7 @@ class StageRun:
     entered_at: date | None = None
     exited_at: date | None = None
     accepted_decision: GateDecision | None = None
+    waiver_decision: GateDecision | None = None
     _transitions: list[StageTransition] = field(
         default_factory=list, repr=False, compare=False
     )
@@ -853,8 +854,11 @@ class StageRun:
         in the ledger. A scoped waiver whose own expiry has passed at the
         transition instant is no longer a live risk acceptance, so it cannot be
         mirrored onto the stage (SPEC.md section 4). The waiver reason is
-        recorded on the transition, and ``accepted_decision`` and ``exited_at``
-        are never set, so a waived stage is never represented as complete.
+        recorded on the transition, the exact durable ``GateDecision`` is
+        retained on ``waiver_decision`` so the production view can show the
+        scoped risk owner, expiry or review trigger, downstream effects, reviewer
+        and next action, and ``accepted_decision`` and ``exited_at`` are never
+        set, so a waived stage is never represented as complete.
         """
         if waiver is None:
             raise ValueError("a stage waiver requires a scoped Waiver")
@@ -901,13 +905,15 @@ class StageRun:
                 "the accepted waiver decision is not the stage's current "
                 "durable ledger decision"
             )
-        return self._transition(
+        transition = self._transition(
             StageStatus.WAIVED,
             actor=actor,
             reason=waiver.reason,
             on=on,
             correlation_id=correlation_id,
         )
+        self.waiver_decision = decision
+        return transition
 
     def _transition(
         self,

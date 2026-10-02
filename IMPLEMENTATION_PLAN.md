@@ -4,50 +4,48 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T14:14:32Z (Ralph cycle 65).
-- Selected item: close the stage 0 `StageRun` from the durable decision inside
-  the existing `RecordStageZeroGateHandler`, extending its
-  `RecordStageZeroGateCommand` with the stage 0 `StageRun` and a correlation id.
-  This was cycle 64's highest priority ready next item. It outranked stage 1 gate
-  assembly (blocked on the nine-kind/three-asset representation decision) because
-  it closes a live consistency gap: the use case wrote a passing `GateDecision`
-  to the ledger while leaving the stage `StageRun` at Working, so
-  `PipelineProgress` (approved gates) and the stage status could report different
-  truths for the same stage, and SPEC.md section 4's "stage completion requires
-  gate acceptance, not merely activity" did not hold at the application boundary.
+- Cycle timestamp: 2026-10-02T14:16:20Z (Ralph cycle 66).
+- Selected item: retain the durable waiver-bearing `GateDecision` on the
+  `StageRun` mirror. `waive()` now sets a `waiver_decision` field after every
+  durability check passes, mirroring how `complete()` pins `accepted_decision`.
+  This was a listed deferred cross-context item ("retaining the waiver-bearing
+  `GateDecision` on the stage mirror"). It outranked the stage 1 nine-kind/
+  three-asset representation mismatch (blocked on a RED methodology owner) and
+  the fallback Engagement persistence port because it is a concrete
+  traceability defect, not an abstraction: `complete()` retained its accepted
+  decision but `waive()` discarded the decision, so a waived stage could show
+  the reason but not the scoped risk owner, expiry or review trigger, downstream
+  effects, reviewer, or next action that SPEC.md section 4's production view
+  requires, and the stage status could not be traced to the durable decision
+  that produced it. The port is speculative while no infrastructure exists to
+  exercise it.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: 6 new behavioral tests in
-  `tests/unit/engagement/test_record_stage_zero_gate.py`. Recording now completes
-  the stage 0 run from the durable ledger decision (status COMPLETE,
-  `accepted_decision` is the current ledger entry, `exited_at` set, transition
-  actor and correlation recorded), so `PipelineProgress.approved_gates` and stage
-  status agree; a run for another stage or template version is refused with
-  `StageRunNotStageZeroError`; a Not Started (or otherwise non-completable) run is
-  refused with `StageRunNotCompletableError` before any decision is written, so a
-  bad run cannot leave the ledger with a passing decision for an open stage.
+- Evidence: 5 new behavioral tests in
+  `tests/unit/governance/test_stage_run.py`
+  (`StageWaiverDecisionRetentionTests`): a fresh run retains no waiver decision;
+  `waive()` retains the exact durable decision while leaving `accepted_decision`
+  and `exited_at` unset; the retained decision carries the scoped waiver's risk
+  owner, review trigger, downstream effects and reviewer; a refused waiver
+  (decision not current in the ledger) retains nothing and stays Working; and
+  `complete()` retains `accepted_decision` but never a `waiver_decision`.
   Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
-  'test_*.py'` reports 566 passed, up from 560. `python3 -m pyflakes` on the
-  changed modules is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the stage 0 application path is now atomic across the ledger and
-  the stage run: a passing gate cannot be recorded while the stage stays open.
-  Engagement's `application` package still imports only domain types (Engagement,
-  Governance, Knowledge) and no web, ORM, queue or vendor code, preserving the
-  SPEC.md section 6 onion rule. The `StageRun` aggregate carries no `tenant_id`,
-  so the use case binds a run to the workspace only through stage number and
-  template version and cannot yet reject a foreign client's run; that
-  cross-client binding and durable persistence remain blocked on the storage ADR.
-  The closure uses the accepting approver as transition actor and requires an
-  active Working or In Review run rather than silently starting a Not Started run.
+  'test_*.py'` reports 571 passed, up from 566. `python3 -m pyflakes` on the
+  changed module and test file is clean. `ruff` and `mypy` remain uninstalled.
+- New findings: the waiver decision is retained only after `_transition`
+  succeeds, so an illegal or refused waiver mutates nothing. `accepted_decision`
+  and `waiver_decision` are disjoint because the transition graph forbids
+  `WAIVED -> COMPLETE` and `COMPLETE -> WAIVED`. Governance remains pure domain;
+  no new cross-context import was added, preserving SPEC.md section 6.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
   graph assumed in cycle 56, scheduler/worker topology, the client-designated
   approver identities, and pilot metric targets. Still named: the stage 1
   nine-kind/three-asset representation decision needs a RED methodology owner.
-  Durable persistence of any `GateDecision` or `StageRun` still depends on the
-  storage ADR; no real client approver identity may be invented. No fork or
-  cluster facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or
-  `argocd` present.
+  Durable persistence of any `GateDecision`, `StageRun` or retained waiver
+  decision still depends on the storage ADR; no real client approver identity may
+  be invented. No fork or cluster facts invented; no `docs/`, fork checkout,
+  `kubectl`, `helm`, or `argocd` present.
 - Highest priority ready next item: resolve the stage 1 nine-kind/three-asset
   representation mismatch. The canonical stage 1 template requires nine asset
   kinds (`avatar-profile`, `awareness-map`, `business-snapshot`,
@@ -69,9 +67,12 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   mismatch; wiring `AvatarProfile`, `BusinessSnapshot` and `OfferFunnelAudit` into
   the stage 1 `GateDecision` (the stage 0 `IntakePackage` is now wired through the
   recorder and application use case, and its stage run now closes atomically);
-  retaining the waiver-bearing `GateDecision` on the stage mirror; per-kind stage
-  0 asset content schemas; the stage 1 through 10 `GateDecision` wiring; and all
-  persistence, blocked on the storage ADR.
+  per-kind stage 0 asset content schemas; the stage 1 through 10 `GateDecision`
+  wiring; and all persistence, blocked on the storage ADR. [DONE 2026-10-02
+  (Ralph cycle 66): retaining the waiver-bearing `GateDecision` on the stage
+  mirror — `StageRun.waive()` now sets `waiver_decision` to the exact durable
+  decision; verified by `tests/unit/governance/test_stage_run.py`.]
+
 
 
 
