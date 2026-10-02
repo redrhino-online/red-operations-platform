@@ -20,6 +20,8 @@ from redops.contexts.method.domain.errors import (
 )
 from redops.contexts.method.domain.value_objects import SemanticVersion
 
+from .fixtures import diagnostic_model, primary_currency
+
 TODAY = date(2026, 10, 2)
 
 
@@ -32,6 +34,8 @@ def method_version(**overrides) -> MethodVersion:
         "stages": ("diagnose", "position", "model"),
         "currency": "qualified-referrals",
         "claims": frozenset({"claim-1"}),
+        "primary_currency": primary_currency(),
+        "diagnostic_model": diagnostic_model(),
     }
     values.update(overrides)
     return MethodVersion(**values)

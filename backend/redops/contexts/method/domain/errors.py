@@ -56,3 +56,13 @@ class InvalidDiagnosticModelError(MethodError):
     observable differences, so adjacent levels with an identical observable
     signature cannot represent an approvable model.
     """
+
+
+class MethodDependencyError(MethodError):
+    """A method pinned a missing, foreign or unapproved upstream dependency.
+
+    SPEC.md section 3: "Production requires approved dependencies." An approved
+    Signature Solution is downstream of the stage 2 primary currency and the
+    stage 3 diagnostic model, so it must pin those exact tenant assets and may
+    not mix another client's asset into its own evidence.
+    """

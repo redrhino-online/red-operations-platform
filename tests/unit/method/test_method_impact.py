@@ -21,6 +21,8 @@ from redops.contexts.method.domain.value_objects import (
     SemanticVersion,
 )
 
+from .fixtures import diagnostic_model, primary_currency
+
 TODAY = date(2026, 10, 2)
 DUE = date(2026, 10, 16)
 
@@ -34,6 +36,8 @@ def approved_method(version: SemanticVersion = SemanticVersion(1, 0, 0)) -> Meth
         stages=("diagnose", "position", "model"),
         currency="qualified-referrals",
         claims=frozenset({"claim-1"}),
+        primary_currency=primary_currency(),
+        diagnostic_model=diagnostic_model(),
     ).approve(
         approved_by="client-authority",
         intended_use="3f pilot campaign",

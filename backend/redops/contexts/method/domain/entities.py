@@ -14,9 +14,11 @@ from redops.contexts.method.domain.errors import (
     InvalidDiagnosticModelError,
     InvalidMethodError,
     MethodApprovalError,
+    MethodDependencyError,
 )
 from redops.contexts.method.domain.value_objects import (
     MethodApproval,
+    PrimaryCurrency,
     ProfitPyramidLevel,
     SemanticVersion,
 )
@@ -37,6 +39,12 @@ class MethodVersion:
     exact version and intended use; it never carries over to a revised version,
     and a revision must advance the semantic version so the prior approved
     method remains historically identifiable (SPEC.md section 4).
+
+    The stage 2 primary currency and stage 3 diagnostic model are pinned as
+    exact tenant assets because production requires approved dependencies
+    (SPEC.md section 3). They are optional while a method is still a draft so
+    work can be drafted in parallel, but approval cannot proceed without them
+    (SPEC.md section 4).
     """
 
     method_id: str
@@ -47,6 +55,8 @@ class MethodVersion:
     currency: str
     claims: frozenset[str] = field(default_factory=frozenset)
     approval: MethodApproval | None = None
+    primary_currency: PrimaryCurrency | None = None
+    diagnostic_model: "DiagnosticModel | None" = None
 
     def __post_init__(self) -> None:
         _require_text(self.method_id, "method id")
@@ -57,6 +67,20 @@ class MethodVersion:
             raise InvalidMethodError("a method requires at least one stage")
         for stage in self.stages:
             _require_text(stage, "method stage")
+        if (
+            self.primary_currency is not None
+            and self.primary_currency.tenant_id != self.tenant_id
+        ):
+            raise MethodDependencyError(
+                "a method cannot pin another tenant's primary currency"
+            )
+        if (
+            self.diagnostic_model is not None
+            and self.diagnostic_model.tenant_id != self.tenant_id
+        ):
+            raise MethodDependencyError(
+                "a method cannot pin another tenant's diagnostic model"
+            )
         if self.approval is not None and self.approval.version != self.semantic_version:
             raise MethodApprovalError(
                 "method approval must pin this method's exact version"
@@ -77,9 +101,19 @@ class MethodVersion:
 
         SPEC.md section 3: approval pins an exact version and intended use. The
         approver identity is supplied by the caller; designation remains a
-        governance decision.
+        governance decision. Production requires approved dependencies, so a
+        method cannot be approved until its stage 2 primary currency and stage 3
+        diagnostic model are pinned (SPEC.md section 3).
         """
         _require_text(approved_by, "method approver")
+        if self.primary_currency is None:
+            raise MethodDependencyError(
+                "an approved method must pin its stage 2 primary currency"
+            )
+        if self.diagnostic_model is None:
+            raise MethodDependencyError(
+                "an approved method must pin its stage 3 diagnostic model"
+            )
         return replace(
             self,
             approval=MethodApproval(
@@ -102,12 +136,17 @@ class MethodVersion:
         stages: tuple[str, ...] | None = None,
         currency: str | None = None,
         claims: frozenset[str] | None = None,
+        primary_currency: PrimaryCurrency | None = None,
+        diagnostic_model: "DiagnosticModel | None" = None,
     ) -> "MethodVersion":
         """Return a new version of this method with no inherited approval.
 
         The new version must be strictly newer than the current one, and the
         approval is dropped so a revision cannot silently reuse an old approval
-        (SPEC.md section 4).
+        (SPEC.md section 4). The pinned stage 2 primary currency and stage 3
+        diagnostic model are dropped too, so the new version must re-state and
+        re-approve its upstream dependencies rather than inheriting an approval
+        granted to a different exact version.
         """
         semantic_version.change_from(self.semantic_version)
         return replace(
@@ -116,6 +155,8 @@ class MethodVersion:
             stages=self.stages if stages is None else stages,
             currency=self.currency if currency is None else currency,
             claims=self.claims if claims is None else claims,
+            primary_currency=primary_currency,
+            diagnostic_model=diagnostic_model,
             approval=None,
         )
 
