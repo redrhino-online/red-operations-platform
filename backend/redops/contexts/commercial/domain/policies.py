@@ -27,7 +27,13 @@ from redops.contexts.method.domain.value_objects import (
 
 
 class OfferReadinessPolicy:
-    """Refuses production readiness when a method dependency is not approved."""
+    """Refuses production readiness when a method dependency is not approved.
+
+    It also enforces that the stage 5 `DeliverySpecification` is grounded on the
+    exact stage 4 Signature Solution pinned by an approved method reference, so
+    an offer cannot carry a delivery package for a different transformation than
+    the method it is grounded on (SPEC.md sections 3 and 4).
+    """
 
     def require(
         self, offer: OfferVersion, approved_methods: Iterable[MethodVersion]
@@ -38,25 +44,42 @@ class OfferReadinessPolicy:
             )
         methods = tuple(approved_methods)
         for reference in offer.method_refs:
-            if not self._is_satisfied(offer, reference, methods):
+            if not any(self._matches(offer, reference, method) for method in methods):
                 raise OfferReadinessError(
                     f"offer {offer.offer_id!r} cannot be production ready: "
                     f"method {reference.method_id!r} version "
                     f"{reference.version} for {reference.intended_use!r} is not "
                     "an approved dependency for this tenant"
                 )
+        if offer.delivery_specification is not None:
+            self._require_grounded_delivery_specification(offer, methods)
+
+    def _require_grounded_delivery_specification(
+        self, offer: OfferVersion, methods: tuple[MethodVersion, ...]
+    ) -> None:
+        specification = offer.delivery_specification
+        assert specification is not None
+        grounded = specification.signature_solution
+        for reference in offer.method_refs:
+            for method in methods:
+                if self._matches(offer, reference, method) and (
+                    method.signature_solution == grounded
+                ):
+                    return
+        raise OfferReadinessError(
+            f"offer {offer.offer_id!r} cannot be production ready: its stage 5 "
+            "delivery specification is not grounded on the Signature Solution "
+            "pinned by an approved method reference"
+        )
 
     @staticmethod
-    def _is_satisfied(
-        offer: OfferVersion,
-        reference: MethodReference,
-        methods: tuple[MethodVersion, ...],
+    def _matches(
+        offer: OfferVersion, reference: MethodReference, method: MethodVersion
     ) -> bool:
-        return any(
+        return (
             method.method_id == reference.method_id
             and method.tenant_id == offer.tenant_id
             and method.authorizes(reference.version, reference.intended_use)
-            for method in methods
         )
 
 

@@ -11,7 +11,7 @@ Rules under test come from SPEC.md sections 3, 4 and 11:
 """
 
 import unittest
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from datetime import date
 
 from redops.contexts.commercial.domain.entities import OfferVersion
@@ -43,6 +43,7 @@ def approved_method(
     tenant_id: str = "client-3f",
     method_id: str = "method-3f",
     intended_use: str = USE,
+    solution=None,
 ) -> MethodVersion:
     return MethodVersion(
         method_id=method_id,
@@ -54,7 +55,9 @@ def approved_method(
         claims=frozenset({"claim-1"}),
         primary_currency=primary_currency(tenant_id),
         diagnostic_model=diagnostic_model(tenant_id),
-        signature_solution=signature_solution(tenant_id),
+        signature_solution=(
+            signature_solution(tenant_id) if solution is None else solution
+        ),
     ).approve(approved_by="client-authority", intended_use=intended_use, on=TODAY)
 
 
@@ -221,6 +224,44 @@ class OfferDeliverySpecificationPinTests(unittest.TestCase):
 
         self.assertTrue(ready.is_production_ready)
         self.assertIs(spec, ready.delivery_specification)
+
+    def test_production_ready_rejects_a_spec_grounded_on_a_different_solution(self):
+        other_solution = replace(
+            signature_solution(), narrative="a different transformation"
+        )
+        offer = offer_version(
+            delivery_specification=delivery_specification(
+                signature_solution=other_solution
+            )
+        )
+
+        with self.assertRaises(OfferReadinessError):
+            offer.require_production_ready([approved_method()])
+
+    def test_production_ready_accepts_a_spec_grounded_on_a_referenced_method(self):
+        first = replace(signature_solution(), narrative="the first transformation")
+        second = replace(signature_solution(), narrative="the second transformation")
+        offer = offer_version(
+            method_refs=(
+                MethodReference(
+                    method_id="method-a",
+                    version=SemanticVersion(1, 0, 0),
+                    intended_use=USE,
+                ),
+                MethodReference(
+                    method_id="method-b",
+                    version=SemanticVersion(1, 0, 0),
+                    intended_use=USE,
+                ),
+            ),
+            delivery_specification=delivery_specification(signature_solution=second),
+        )
+
+        ready = offer.require_production_ready(
+            [approved_method(method_id="method-a", solution=first), approved_method(method_id="method-b", solution=second)]
+        )
+
+        self.assertTrue(ready.is_production_ready)
 
 
 class OfferRevisionTests(unittest.TestCase):
