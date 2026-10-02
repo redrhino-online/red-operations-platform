@@ -39,6 +39,14 @@ class AssetPackageMismatchError(GovernanceError, ValueError):
     """A supplied asset package does not match the stage's required asset kinds."""
 
 
+class GateLedgerError(GovernanceError, ValueError):
+    """A gate ledger was asked to record a decision its invariants forbid."""
+
+
+class UnsatisfiedPrerequisiteError(GateLedgerError):
+    """A passing decision was recorded while a prerequisite stage had not passed."""
+
+
 class GateDecisionError(GovernanceError, ValueError):
     """A gate decision was recorded in a way its invariant forbids.
 

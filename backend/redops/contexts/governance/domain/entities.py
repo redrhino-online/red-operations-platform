@@ -11,9 +11,11 @@ from redops.contexts.governance.domain.errors import (
     ApprovalExpiredError,
     AssetPackageMismatchError,
     GateDecisionError,
+    GateLedgerError,
     SelfApprovalError,
     StageGateNotAcceptedError,
     UnknownStageError,
+    UnsatisfiedPrerequisiteError,
 )
 from redops.contexts.governance.domain.value_objects import (
     ApprovalOutcome,
@@ -229,6 +231,84 @@ class GateDecision:
             and bool(self.required_assets)
             and bool(self.scope and self.scope.strip())
         )
+
+
+class GateLedger:
+    """Append-only ledger of stage gate decisions for one pipeline template.
+
+    Each stage's current prerequisite state is derived from the durable
+    ``GateDecision`` records the ledger holds, not from a caller-supplied map.
+    A passing decision is refused while any prerequisite stage in the template
+    lacks a passing decision, so an unapproved dependency can never authorize
+    downstream work (SPEC.md section 4: "a failed or expired prerequisite blocks
+    dependent authorization until resolved"). The template is data; named human
+    approver identities remain an open decision.
+    """
+
+    def __init__(self, template: StageTemplate) -> None:
+        self._template = template
+        self._decisions: dict[int, list[GateDecision]] = {}
+
+    @property
+    def template(self) -> StageTemplate:
+        return self._template
+
+    def record(self, decision: GateDecision) -> None:
+        if decision.template_version != self._template.version:
+            raise GateLedgerError(
+                f"decision template version {decision.template_version!r} does "
+                f"not match ledger template version {self._template.version!r}"
+            )
+        if self._template.definition_for(decision.stage_number) is None:
+            raise UnknownStageError(
+                f"stage {decision.stage_number} is not defined in template "
+                f"{self._template.version!r}"
+            )
+        if decision.is_passing:
+            unsatisfied = sorted(
+                stage
+                for stage in self._template.dependencies_of(decision.stage_number)
+                if not self.has_passing_decision(stage)
+            )
+            if unsatisfied:
+                names = ", ".join(str(stage) for stage in unsatisfied)
+                raise UnsatisfiedPrerequisiteError(
+                    f"stage {decision.stage_number} cannot pass while "
+                    f"prerequisite stages lack a passing decision: {names}"
+                )
+        self._decisions.setdefault(decision.stage_number, []).append(decision)
+
+    def decisions_for(self, stage_number: int) -> tuple[GateDecision, ...]:
+        return tuple(self._decisions.get(stage_number, ()))
+
+    def decision_for(self, stage_number: int) -> GateDecision | None:
+        entries = self._decisions.get(stage_number)
+        return entries[-1] if entries else None
+
+    def has_passing_decision(self, stage_number: int) -> bool:
+        latest = self.decision_for(stage_number)
+        return latest is not None and latest.is_passing
+
+    def dependency_states(self) -> Mapping[int, GateState]:
+        states: dict[int, GateState] = {}
+        for stage in self._template.stages:
+            latest = self.decision_for(stage.stage_number)
+            states[stage.stage_number] = (
+                self._gate_state(latest.disposition)
+                if latest is not None
+                else GateState.NOT_STARTED
+            )
+        return states
+
+    @staticmethod
+    def _gate_state(disposition: GateDisposition) -> GateState:
+        return {
+            GateDisposition.APPROVED: GateState.APPROVED,
+            GateDisposition.CHANGES_REQUIRED: GateState.CHANGES_REQUIRED,
+            GateDisposition.BLOCKED: GateState.BLOCKED,
+            GateDisposition.WAIVED: GateState.WAIVED,
+            GateDisposition.SUPERSEDED: GateState.SUPERSEDED,
+        }[disposition]
 
 
 @dataclass
