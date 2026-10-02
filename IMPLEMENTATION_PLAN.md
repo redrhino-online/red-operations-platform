@@ -2,6 +2,16 @@
 
 Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This is a fork implementation plan, not a claim that the OpenExecutive repository or home cluster has been inspected.
 
+## Current cycle status
+
+- Cycle timestamp: 2026-10-02T11:05:00Z (manual Phase 0 execution).
+- Selected item: Phase 0 fork inventory — inspect, license-verify, and baseline-test the OpenExecutive fork.
+- Outcome: completed. Fork exists and is licensable: `redrhino-online/OpenExecutive` from `SenteLabsAI/OpenExecutive`, pinned upstream commit `4b370b0b8e6939c247d5a3541de86617408f7462`, Apache-2.0 with NOTICE. Checkout cloned to a sibling directory of this planning repo. Full inventory in the fork's `docs/fork_inventory.md` (uncommitted).
+- Evidence: unit tests 7213 passed / 1 skipped (pytest, 16 workers, 411 s); integration tests 52 passed (40 s); ruff and mypy clean (334 source files). UI build and `make dev` boot not yet exercised.
+- New findings: actual stack is FastAPI + Next.js 15 + SQLite + ChromaDB (not PostgreSQL as SPEC §3 assumed); scheduler and API must run single-instance; multi-client support is slot-based single-active-client switching (`clients/slots.py`), not concurrent multi-tenancy; workflow engine already has `wait_for_human` approval-gate primitives with SQLite persistence and resume; departments already carry an authority model (auto_execute / propose_only / escalate) and charters; the 9 C-suite specialist agents are exactly the persona layer SPEC says to replace.
+- Blockers: none for Phase 1 core work. Open named-owner decisions (RED principal): storage strategy given SQLite reality (ADR), tenant model given slot-based isolation (ADR), scheduler/worker topology, where RED code lives in the fork.
+- Highest priority ready next item: Phase 1 skeleton in the fork — map the cycle-1 governance domain (StageGate, GateIntegrityPolicy) onto the existing `workflows/gate.py` and departments AuthorityLevel, add version-pinned ApprovalRequest/GateDecision with append-only decision records, and write the storage and tenant ADRs. Prerequisites satisfied: fork access, license, passing baseline.
+
 ## Product priority: the gated production engagement
 
 Implement a versioned stage 0 to 10 template from intake through campaign launch. Each stage is a collection of required asset versions, a checkpoint rubric, dependencies, owner, approver, milestone, and gate decision. A task being marked done does not pass its stage. An approved gate pins the exact versions authorized for downstream use. Preserve the distinction between these production stages and the three phase, nine step client Signature Solution.
@@ -93,7 +103,7 @@ CI gate order: format and types, domain and application tests, adapter contracts
 1. Pin upstream commit and record license, environment and component inventory.
 2. Write domain glossary, context map, permission matrix and ten ADRs only as decisions arise, with no arbitrary ADR quota.
 3. Add tenant boundary and authority tests around forked storage and retrieval.
-4. Implement SourceRecord, Claim, approval, decision, BuildObject, StageRun and GateDecision aggregates.
+4. Implement SourceRecord, Claim, approval, decision, BuildObject, StageRun and GateDecision aggregates. [DONE 2026-10-02: Governance `StageGate` + `GateIntegrityPolicy` — missing exact asset version, unapproved dependency, self-approval, and waiver-without-asset all block gate approval; verified by `tests/unit/governance/test_gate_integrity.py`. Remaining: SourceRecord, Claim, approval request, decision record, BuildObject, StageRun.]
 5. Implement stages 0 and 1 from intake to approved avatar and diagnosis.
 6. Implement stages 2 and 3 from primary currency to observable Profit Pyramid.
 7. Implement stages 4 and 5 from grounded Signature Solution to offer approval.
