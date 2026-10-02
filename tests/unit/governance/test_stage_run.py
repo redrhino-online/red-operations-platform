@@ -90,14 +90,17 @@ def prerequisite_ledger(expiries) -> GateLedger:
     return ledger
 
 
-def authorizing_ledger() -> GateLedger:
-    return prerequisite_ledger([date(2026, 12, 31)] * 7)
+def authorizing_ledger(decision: GateDecision | None = None) -> GateLedger:
+    ledger = prerequisite_ledger([date(2026, 12, 31)] * 7)
+    if decision is not None:
+        ledger.record(decision)
+    return ledger
 
 
-def script_approval(expires_on=None):
+def script_approval(expires_on=None, asset=SCRIPT_V1, scope=SCOPE):
     request = ApprovalRequest(
-        asset=SCRIPT_V1,
-        scope=SCOPE,
+        asset=asset,
+        scope=scope,
         requested_by="specialist-1",
         approver="client-approver-1",
         expires_on=expires_on,
@@ -111,11 +114,16 @@ def accepted_decision(
     template_version: str = "2026.1",
     expires_on=None,
 ) -> GateDecision:
+    definition = TEMPLATE.definition_for(stage_number)
+    assets = frozenset(
+        AssetVersionRef(kind, 1)
+        for kind in TEMPLATE.required_asset_kinds(stage_number)
+    )
     return GateDecision(
         stage_number=stage_number,
         template_version=template_version,
-        required_assets=frozenset({SCRIPT_V1}),
-        checkpoint="Authority Amplifier Approved",
+        required_assets=assets,
+        checkpoint=definition.checkpoint,
         checkpoint_evidence="authority-amplifier-approved-rubric passed",
         reviewer="client-approver-1",
         scope=SCOPE,
@@ -124,7 +132,9 @@ def accepted_decision(
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
-        asset_approvals=(script_approval(expires_on),),
+        asset_approvals=tuple(
+            script_approval(expires_on, asset=asset) for asset in assets
+        ),
     )
 
 
@@ -287,7 +297,7 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
 
         run.complete(
             decision=decision,
-            ledger=authorizing_ledger(),
+            ledger=authorizing_ledger(decision),
             actor="client-approver-1",
             reason="gate approved",
             on=TODAY,
@@ -338,7 +348,7 @@ class StageCompletionExpiryTests(unittest.TestCase):
 
         run.complete(
             decision=decision,
-            ledger=authorizing_ledger(),
+            ledger=authorizing_ledger(decision),
             actor="client-approver-1",
             reason="gate approved within the evidence window",
             on=DATE_DUE,
@@ -358,10 +368,11 @@ class StageTransitionIntegrityTests(unittest.TestCase):
             run.start(actor="specialist-1", reason="begin again", on=TODAY, correlation_id=CORRELATION)
 
     def test_completing_a_not_started_stage_is_rejected(self):
+        decision = accepted_decision(stage_number=7)
         with self.assertRaises(IllegalStageTransitionError):
             stage_run().complete(
-                decision=accepted_decision(stage_number=7),
-                ledger=authorizing_ledger(),
+                decision=decision,
+                ledger=authorizing_ledger(decision),
                 actor="client-approver-1",
                 reason="nothing was produced",
                 on=TODAY,
@@ -371,9 +382,10 @@ class StageTransitionIntegrityTests(unittest.TestCase):
     def test_superseded_stage_cannot_transition_again(self):
         run = stage_run()
         run.start(actor="specialist-1", reason="begin", on=TODAY, correlation_id=CORRELATION)
+        decision = accepted_decision(stage_number=7)
         run.complete(
-            decision=accepted_decision(stage_number=7),
-            ledger=authorizing_ledger(),
+            decision=decision,
+            ledger=authorizing_ledger(decision),
             actor="client-approver-1",
             reason="approved",
             on=TODAY,
@@ -422,9 +434,11 @@ class StageCompletionPrerequisiteTests(unittest.TestCase):
     AFTER_UPSTREAM_EXPIRY = date(2026, 10, 20)
 
     def test_a_stage_cannot_complete_when_a_transitive_prerequisite_has_lapsed(self):
+        decision = accepted_decision(stage_number=7)
         ledger = prerequisite_ledger(
             [date(2026, 10, 15)] + [date(2026, 12, 31)] * 6
         )
+        ledger.record(decision)
         run = stage_run(stage_number=7)
         run.start(
             actor="specialist-1",
@@ -435,7 +449,7 @@ class StageCompletionPrerequisiteTests(unittest.TestCase):
 
         with self.assertRaises(StageGateNotAcceptedError):
             run.complete(
-                decision=accepted_decision(stage_number=7),
+                decision=decision,
                 ledger=ledger,
                 actor="client-approver-1",
                 reason="accepting on top of an expired upstream stage",
@@ -449,9 +463,11 @@ class StageCompletionPrerequisiteTests(unittest.TestCase):
         self.assertIsNone(run.accepted_decision)
 
     def test_a_stage_cannot_complete_when_a_direct_prerequisite_has_lapsed(self):
+        decision = accepted_decision(stage_number=7)
         ledger = prerequisite_ledger(
             [date(2026, 12, 31)] * 6 + [date(2026, 10, 15)]
         )
+        ledger.record(decision)
         run = stage_run(stage_number=7)
         run.start(
             actor="specialist-1",
@@ -462,7 +478,7 @@ class StageCompletionPrerequisiteTests(unittest.TestCase):
 
         with self.assertRaises(StageGateNotAcceptedError):
             run.complete(
-                decision=accepted_decision(stage_number=7),
+                decision=decision,
                 ledger=ledger,
                 actor="client-approver-1",
                 reason="immediate prerequisite lapsed",
@@ -473,7 +489,9 @@ class StageCompletionPrerequisiteTests(unittest.TestCase):
         self.assertFalse(run.is_complete)
 
     def test_a_stage_completes_when_its_prerequisite_chain_authorizes(self):
+        decision = accepted_decision(stage_number=7)
         ledger = prerequisite_ledger([date(2026, 12, 31)] * 7)
+        ledger.record(decision)
         run = stage_run(stage_number=7)
         run.start(
             actor="specialist-1",
@@ -481,7 +499,6 @@ class StageCompletionPrerequisiteTests(unittest.TestCase):
             on=TODAY,
             correlation_id=CORRELATION,
         )
-        decision = accepted_decision(stage_number=7)
 
         run.complete(
             decision=decision,
@@ -494,6 +511,108 @@ class StageCompletionPrerequisiteTests(unittest.TestCase):
 
         self.assertIs(StageStatus.COMPLETE, run.status)
         self.assertTrue(run.is_complete)
+        self.assertIs(decision, run.accepted_decision)
+
+
+class StageCompletionDurabilityTests(unittest.TestCase):
+    """Stage completion is authorized by the stage's durable ledger entry.
+
+    SPEC.md section 3 makes a passing gate decision the durable, append-only
+    record that pins the exact evidence and intended downstream use, and section
+    4 says stage completion requires gate acceptance. A caller-supplied passing
+    ``GateDecision`` the ledger never recorded is a transient object, not durable
+    evidence, so it must not complete a stage. Likewise, when a later durable
+    decision for the same stage supersedes the passing one, the stage's current
+    ledger entry no longer authorizes completion even though the earlier passing
+    decision once did.
+    """
+
+    def test_a_decision_not_recorded_in_the_ledger_cannot_complete_a_stage(self):
+        run = stage_run(stage_number=7)
+        run.start(
+            actor="specialist-1",
+            reason="begin",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+        transient = accepted_decision(stage_number=7)
+        ledger = prerequisite_ledger([date(2026, 12, 31)] * 7)
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            run.complete(
+                decision=transient,
+                ledger=ledger,
+                actor="client-approver-1",
+                reason="accepting on a decision the ledger never recorded",
+                on=TODAY,
+                correlation_id=CORRELATION,
+            )
+
+        self.assertIs(StageStatus.WORKING, run.status)
+        self.assertFalse(run.is_complete)
+        self.assertIsNone(run.exited_at)
+        self.assertIsNone(run.accepted_decision)
+
+    def test_a_later_ledger_decision_supersedes_the_accepted_pass(self):
+        decision = accepted_decision(stage_number=7)
+        ledger = authorizing_ledger(decision)
+        ledger.record(
+            GateDecision(
+                stage_number=7,
+                template_version="2026.1",
+                required_assets=frozenset(),
+                checkpoint=TEMPLATE.definition_for(7).checkpoint,
+                checkpoint_evidence="",
+                reviewer="client-approver-1",
+                scope="",
+                disposition=GateDisposition.CHANGES_REQUIRED,
+                rationale="client requested changes after reviewing the cut",
+                decided_on=TODAY,
+                assigned_owner="production-manager",
+                due_on=DATE_DUE,
+            )
+        )
+        run = stage_run(stage_number=7)
+        run.start(
+            actor="specialist-1",
+            reason="begin",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            run.complete(
+                decision=decision,
+                ledger=ledger,
+                actor="client-approver-1",
+                reason="completing on an entry the ledger has since superseded",
+                on=TODAY,
+                correlation_id=CORRELATION,
+            )
+
+        self.assertFalse(run.is_complete)
+
+    def test_the_current_recorded_passing_decision_completes_the_stage(self):
+        decision = accepted_decision(stage_number=7)
+        ledger = authorizing_ledger(decision)
+        run = stage_run(stage_number=7)
+        run.start(
+            actor="specialist-1",
+            reason="begin",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+
+        run.complete(
+            decision=decision,
+            ledger=ledger,
+            actor="client-approver-1",
+            reason="the recorded decision authorizes downstream use",
+            on=TODAY,
+            correlation_id=CORRELATION,
+        )
+
+        self.assertIs(StageStatus.COMPLETE, run.status)
         self.assertIs(decision, run.accepted_decision)
 
 

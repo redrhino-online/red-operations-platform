@@ -666,6 +666,13 @@ class StageRun:
         a stage whose own approvals are current could otherwise complete on top
         of a prerequisite that has lapsed. The completion is refused unless
         every prerequisite stage authorizes at the transition instant.
+
+        The ledger is also the stage's durable decision record. A caller-supplied
+        passing ``GateDecision`` the ledger never recorded is a transient object,
+        not the accepted gate, and a later durable decision for the same stage
+        supersedes the pass, so completion must be authorized by the stage's
+        *current* recorded decision, not merely by a decision that once passed
+        (SPEC.md sections 3 and 4).
         """
         if decision.stage_number != self.stage_number:
             raise StageGateNotAcceptedError(
@@ -686,6 +693,17 @@ class StageRun:
             raise StageGateNotAcceptedError(
                 "decision is not passing, has no intended downstream scope, "
                 "or its pinned approvals have expired at the transition instant"
+            )
+        recorded = ledger.decision_for(self.stage_number)
+        if recorded is None:
+            raise StageGateNotAcceptedError(
+                f"stage {self.stage_number} has no durable gate decision "
+                "recorded in the ledger"
+            )
+        if recorded is not decision:
+            raise StageGateNotAcceptedError(
+                "the accepted decision is not the stage's current durable "
+                "ledger decision"
             )
         unsatisfied = sorted(
             dependency
