@@ -19,6 +19,15 @@ class OfferReadinessError(CommercialError):
     """
 
 
+class OfferDependencyError(CommercialError):
+    """An OfferVersion pinned an upstream asset that does not belong to its tenant.
+
+    SPEC.md section 3: every tenant resource belongs to exactly one client. The
+    stage 5 delivery specification is grounded on the tenant's locked stage 4
+    Signature Solution, so it cannot be pinned across a tenant boundary.
+    """
+
+
 class InvalidDeliverySpecificationError(CommercialError, ValueError):
     """A stage 5 delivery specification was not a complete offer delivery package.
 

@@ -17,6 +17,7 @@ from datetime import date
 from redops.contexts.commercial.domain.entities import OfferVersion
 from redops.contexts.commercial.domain.errors import (
     InvalidOfferError,
+    OfferDependencyError,
     OfferReadinessError,
 )
 from redops.contexts.commercial.domain.value_objects import (
@@ -31,6 +32,7 @@ from ..method.fixtures import (
     primary_currency,
     signature_solution,
 )
+from .fixtures import delivery_specification
 
 TODAY = date(2026, 10, 2)
 USE = "3f pilot campaign"
@@ -72,6 +74,7 @@ def offer_version(**overrides) -> OfferVersion:
             ),
         ),
         "owner": "offer-owner",
+        "delivery_specification": delivery_specification(),
     }
     values.update(overrides)
     return OfferVersion(**values)
@@ -180,6 +183,80 @@ class OfferChangeImpactTests(unittest.TestCase):
             offer_version(state=OfferState.SUPERSEDED).mark_review_required(
                 reason="late change"
             )
+
+
+class OfferDeliverySpecificationPinTests(unittest.TestCase):
+    def test_an_offer_pins_its_exact_stage_5_delivery_specification(self):
+        spec = delivery_specification()
+
+        offer = offer_version(delivery_specification=spec)
+
+        self.assertIs(spec, offer.delivery_specification)
+
+    def test_a_draft_offer_may_still_be_drafted_without_a_delivery_spec(self):
+        offer = offer_version(delivery_specification=None)
+
+        self.assertIsNone(offer.delivery_specification)
+
+    def test_an_offer_cannot_pin_another_tenants_delivery_specification(self):
+        with self.assertRaises(OfferDependencyError):
+            offer_version(
+                delivery_specification=delivery_specification(
+                    signature_solution=signature_solution(tenant_id="client-other")
+                )
+            )
+
+    def test_production_ready_requires_a_complete_stage_5_delivery_spec(self):
+        offer = offer_version(delivery_specification=None)
+
+        with self.assertRaises(OfferReadinessError):
+            offer.require_production_ready([approved_method()])
+
+    def test_a_production_ready_offer_carries_its_delivery_specification(self):
+        spec = delivery_specification()
+
+        ready = offer_version(delivery_specification=spec).require_production_ready(
+            [approved_method()]
+        )
+
+        self.assertTrue(ready.is_production_ready)
+        self.assertIs(spec, ready.delivery_specification)
+
+
+class OfferRevisionTests(unittest.TestCase):
+    def test_revising_an_offer_drops_the_delivery_specification_and_readiness(self):
+        ready = offer_version().require_production_ready([approved_method()])
+
+        revised = ready.revised()
+
+        self.assertIsNone(revised.delivery_specification)
+        self.assertIs(OfferState.DRAFT, revised.state)
+        self.assertFalse(revised.is_production_ready)
+
+    def test_revising_an_offer_can_re_pin_a_new_delivery_specification(self):
+        ready = offer_version().require_production_ready([approved_method()])
+        new_spec = delivery_specification()
+
+        revised = ready.revised(delivery_specification=new_spec)
+
+        self.assertIs(new_spec, revised.delivery_specification)
+
+    def test_changing_the_method_reference_drops_the_stale_delivery_spec(self):
+        ready = offer_version().require_production_ready([approved_method()])
+        new_reference = MethodReference(
+            method_id="method-3f",
+            version=SemanticVersion(2, 0, 0),
+            intended_use=USE,
+        )
+
+        revised = ready.revised(method_refs=(new_reference,))
+
+        self.assertIsNone(revised.delivery_specification)
+        self.assertEqual(SemanticVersion(2, 0, 0), revised.method_refs[0].version)
+
+    def test_a_terminal_offer_cannot_be_revised(self):
+        with self.assertRaises(InvalidOfferError):
+            offer_version(state=OfferState.SUPERSEDED).revised()
 
 
 if __name__ == "__main__":

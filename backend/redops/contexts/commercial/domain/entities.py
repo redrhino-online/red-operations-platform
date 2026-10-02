@@ -10,8 +10,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Iterable
 
-from redops.contexts.commercial.domain.errors import InvalidOfferError
+from redops.contexts.commercial.domain.errors import (
+    InvalidOfferError,
+    OfferDependencyError,
+    OfferReadinessError,
+)
 from redops.contexts.commercial.domain.value_objects import (
+    DeliverySpecification,
     MethodReference,
     OfferState,
 )
@@ -44,6 +49,7 @@ class OfferVersion:
     method_refs: tuple[MethodReference, ...]
     owner: str
     state: OfferState = OfferState.DRAFT
+    delivery_specification: DeliverySpecification | None = field(default=None)
     review_reason: str | None = field(default=None)
 
     def __post_init__(self) -> None:
@@ -58,6 +64,13 @@ class OfferVersion:
             raise InvalidOfferError(
                 "an offer requires at least one method reference"
             )
+        if (
+            self.delivery_specification is not None
+            and self.delivery_specification.tenant_id != self.tenant_id
+        ):
+            raise OfferDependencyError(
+                "an offer cannot pin another tenant's delivery specification"
+            )
 
     @property
     def is_production_ready(self) -> bool:
@@ -70,15 +83,62 @@ class OfferVersion:
 
         Every method reference must be satisfied by an approved method version:
         same method id, same tenant, exact semantic version and intended use.
-        An absent or stale approval leaves the offer in its current state rather
-        than being represented as approved (SPEC.md sections 3 and 4).
+        The offer must also carry its complete stage 5 `DeliverySpecification`,
+        because the stage 5 "Offer Locked" checkpoint requires the delivery
+        package before an offer can authorize production (SPEC.md section 4).
+        An absent or stale approval, or a missing delivery package, leaves the
+        offer in its current state rather than being represented as approved
+        (SPEC.md sections 3 and 4).
         """
         from redops.contexts.commercial.domain.policies import (
             OfferReadinessPolicy,
         )
 
         OfferReadinessPolicy().require(self, approved_methods)
+        if self.delivery_specification is None:
+            raise OfferReadinessError(
+                f"offer {self.offer_id!r} cannot be production ready: it is "
+                "missing the stage 5 delivery specification (Offer Locked)"
+            )
         return replace(self, state=OfferState.PRODUCTION_READY, review_reason=None)
+
+    def revised(
+        self,
+        *,
+        audience: str | None = None,
+        promise: str | None = None,
+        eligibility: str | None = None,
+        price_hypothesis: str | None = None,
+        method_refs: tuple[MethodReference, ...] | None = None,
+        owner: str | None = None,
+        delivery_specification: DeliverySpecification | None = None,
+    ) -> "OfferVersion":
+        """Return a new draft offer with no inherited stage 5 asset or readiness.
+
+        SPEC.md section 4: changing an approved upstream method marks dependent
+        offers review required, and an approval is version specific rather than
+        transferable. The stage 5 delivery specification is grounded on the
+        locked stage 4 Signature Solution, so a revision (especially one that
+        changes the method reference) cannot carry the old specification or the
+        production ready state forward. The specification is dropped unless a
+        fresh one is supplied, and the offer returns to draft for re-approval.
+        """
+        if self.state.is_terminal:
+            raise InvalidOfferError("a terminal offer cannot be revised")
+        return replace(
+            self,
+            audience=self.audience if audience is None else audience,
+            promise=self.promise if promise is None else promise,
+            eligibility=self.eligibility if eligibility is None else eligibility,
+            price_hypothesis=(
+                self.price_hypothesis if price_hypothesis is None else price_hypothesis
+            ),
+            method_refs=self.method_refs if method_refs is None else method_refs,
+            owner=self.owner if owner is None else owner,
+            delivery_specification=delivery_specification,
+            state=OfferState.DRAFT,
+            review_reason=None,
+        )
 
     def mark_review_required(self, *, reason: str) -> "OfferVersion":
         """Return this offer marked review required after a change upstream.
