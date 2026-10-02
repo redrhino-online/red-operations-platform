@@ -9,12 +9,21 @@ change impact rule.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Iterable
 
 from redops.contexts.commercial.domain.entities import OfferVersion
 from redops.contexts.commercial.domain.errors import OfferReadinessError
-from redops.contexts.commercial.domain.value_objects import MethodReference
+from redops.contexts.commercial.domain.value_objects import (
+    MethodReference,
+    OfferImpactAssessment,
+)
 from redops.contexts.method.domain.entities import MethodVersion
+from redops.contexts.method.domain.policies import MethodChangeImpactPolicy
+from redops.contexts.method.domain.value_objects import (
+    ArtifactKind,
+    DependentArtifact,
+)
 
 
 class OfferReadinessPolicy:
@@ -48,4 +57,53 @@ class OfferReadinessPolicy:
             and method.tenant_id == offer.tenant_id
             and method.authorizes(reference.version, reference.intended_use)
             for method in methods
+        )
+
+
+class OfferChangeImpactPolicy:
+    """Discovers dependent offers when an approved method version changes.
+
+    SPEC.md section 4 and section 11: changing an approved method version must
+    identify its dependents. This policy matches a candidate `OfferVersion` by
+    its pinned `method_refs` (method id, exact previous version and intended use)
+    and marks each non-terminal match review required, reusing the Method
+    context's assessment for validation, severity and the owned review queue.
+    """
+
+    def assess(
+        self,
+        previous: MethodVersion,
+        current: MethodVersion,
+        offers: Iterable[OfferVersion],
+        *,
+        due_on: date,
+        reason: str = "upstream method version changed",
+    ) -> OfferImpactAssessment:
+        dependents = tuple(
+            offer for offer in offers if self._depends_on(offer, previous)
+        )
+        requirements = tuple(
+            DependentArtifact(offer.offer_id, ArtifactKind.OFFER, offer.owner)
+            for offer in dependents
+        )
+        impact = MethodChangeImpactPolicy().assess(
+            previous, current, requirements, due_on=due_on, reason=reason
+        )
+        marked = tuple(
+            offer.mark_review_required(reason=reason) for offer in dependents
+        )
+        return OfferImpactAssessment(impact=impact, offers=marked)
+
+    @staticmethod
+    def _depends_on(offer: OfferVersion, previous: MethodVersion) -> bool:
+        if not previous.is_approved or offer.state.is_terminal:
+            return False
+        if offer.tenant_id != previous.tenant_id:
+            return False
+        intended_use = previous.approval.intended_use
+        return any(
+            reference.method_id == previous.method_id
+            and reference.version == previous.semantic_version
+            and reference.intended_use == intended_use
+            for reference in offer.method_refs
         )

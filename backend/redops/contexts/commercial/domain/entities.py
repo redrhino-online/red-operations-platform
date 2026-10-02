@@ -42,6 +42,7 @@ class OfferVersion:
     eligibility: str
     price_hypothesis: str
     method_refs: tuple[MethodReference, ...]
+    owner: str
     state: OfferState = OfferState.DRAFT
     review_reason: str | None = field(default=None)
 
@@ -52,6 +53,7 @@ class OfferVersion:
         _require_text(self.promise, "offer promise")
         _require_text(self.eligibility, "offer eligibility")
         _require_text(self.price_hypothesis, "offer price hypothesis")
+        _require_text(self.owner, "offer owner")
         if not self.method_refs:
             raise InvalidOfferError(
                 "an offer requires at least one method reference"

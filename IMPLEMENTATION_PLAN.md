@@ -4,57 +4,58 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T12:27:24Z (Ralph cycle 13).
-- Selected item: implement the Commercial Design `OfferVersion` aggregate and
-  `OfferReadinessPolicy` (SPEC.md sections 3 and 4; Phase 3 TDD example "offer
-  cannot become production ready without approved method"). This was the plan's
-  own prior next item and outranked the stage 0-1 vertical slice and stage 2/3
-  currency work because it is pure domain with no storage or cluster
-  dependency and it closes the offer end of the dependency edge the Method
-  context just opened.
+- Cycle timestamp: 2026-10-02T12:28:32Z (Ralph cycle 14).
+- Selected item: add Commercial Design method-change discovery — an
+  `OfferChangeImpactPolicy` that traverses `OfferVersion.method_refs` to find the
+  offers dependent on an approved `MethodVersion` that has advanced, marks each
+  review required, and emits an owned review queue (SPEC.md sections 3, 4 and 11;
+  Phase 3 exit "an upstream change creates a complete review queue"). This was
+  the plan's own prior next item and outranked the stage 0-1 vertical slice and
+  the stage 2/3 currency work because it is pure domain with no storage or
+  cluster dependency and it converts the method-change impact rule from a
+  caller-supplied dependent list into real aggregate discovery.
 - Outcome: completed and verified.
-- Evidence: added `backend/redops/contexts/commercial/domain/{errors,
-  value_objects,entities,policies}.py`. `MethodReference` pins method id, an
-  exact `SemanticVersion` and an intended use. `OfferVersion` records audience,
-  promise, eligibility, price hypothesis and at least one method reference;
-  `require_production_ready` refuses unless every reference is satisfied by an
-  approved `MethodVersion` of the same tenant at the exact version and intended
-  use; `mark_review_required` moves a production ready offer back to review and
-  a terminal offer cannot be revived. Tests:
-  `tests/unit/commercial/test_offer_version.py` (14). Commands:
+- Evidence: `OfferVersion` now requires an accountable `owner`. New
+  `OfferImpactAssessment` value object and `OfferChangeImpactPolicy` in
+  `backend/redops/contexts/commercial/domain/` match offers on method id, exact
+  previous semantic version and intended use for the same tenant, skip terminal
+  offers, delegate validation/severity/queue construction to the Method
+  `MethodChangeImpactPolicy`, and return the re-marked offers. Tests:
+  `tests/unit/commercial/test_offer_change_impact.py` (7 new) plus the updated
+  `tests/unit/commercial/test_offer_version.py` helper. Command:
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  (145 passed, up from 131); `python3 -m pyflakes` on the new files clean; AST
-  import scan shows no framework/ORM/HTTP imports in any domain package.
-  `ruff` and `mypy` remain uninstalled.
-- New findings: the offer dependency edge is now version- and
-  intended-use-specific and tenant-scoped; a method revision cannot be
-  inherited. This is the offer-side half of the SPEC.md section 4 method-change
-  impact rule. The acceptance test "changing a method version identifies
-  dependents" (SPEC.md section 11) is still only half met: the Method
-  `MethodChangeImpactPolicy` takes caller-supplied dependents, and nothing yet
-  discovers that an `OfferVersion` references the changed method.
-  `OfferVersion.method_refs` is the concrete dependent source for that.
+  (152 passed, up from 145); `python3 -m pyflakes` on the touched domain modules
+  clean; AST import scan shows no framework/ORM/HTTP imports in any domain
+  package. `ruff` and `mypy` remain uninstalled.
+- New findings: the offer side of "changing a method version identifies
+  dependents" (SPEC.md section 11) is now met by real traversal. The Method
+  `MethodChangeImpactPolicy` still only assesses caller-supplied dependents for
+  briefs, assets, journeys and claims because those aggregates do not yet exist.
+  A deeper gate-integrity defect was found while reviewing the durable boundary:
+  `GateLedger.record` accepts a passing `GateDecision` whose `required_assets`
+  kinds diverge from the canonical `StageTemplate` definition (the existing
+  ledger tests record arbitrary `stage-N-asset` kinds), so a self-declared
+  decision can under-declare or substitute the exact asset package at the
+  durable boundary.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, scheduler/worker
   topology, and the client-designated approver identities. No fork or cluster
   facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or `argocd`
   present.
-- Highest priority ready next item: add commercial-dependent discovery that
-  turns a method change into an owned offer review queue, e.g. an
-  `OfferChangeImpactPolicy` that matches `OfferVersion.method_refs` against the
-  changed method version and marks the offer review required, so the SPEC.md
-  section 11 acceptance test is satisfied by a real aggregate rather than a
-  caller-supplied list. Prerequisites: none; pure domain consuming
-  `MethodVersion` and `OfferVersion`. Pipeline mapping: stage 5 Productize /
-  Offer Locked; required asset = the re-reviewed `OfferVersion` pinned to the
-  new method version; checkpoint = the offer's method dependency is
-  re-confirmed after the change; approver = the client-designated authority
-  (identity still an open decision); blocked downstream dependency = stages 6-9
-  campaign message, production, integration and launch, which cannot use an
-  offer whose method dependency is stale. Persistence of `MethodVersion`,
-  `SourceRecord`/`Claim` and `OfferVersion`, and cross-tenant retrieval
-  isolation, remain blocked on the storage ADR.
+- Highest priority ready next item: close the durable gate-integrity gap by
+  making `GateLedger.record` refuse a passing `GateDecision` whose pinned
+  required asset kinds do not match the canonical stage template, and update the
+  ledger test fixtures to use canonical kinds. Prerequisites: none; pure domain
+  using `StageTemplate`, `StageGate`/`GateDecision` and `AssetVersionRef`.
+  Pipeline mapping: stages 0-10 generally; required asset = the canonical
+  `StageTemplate` asset kinds for the stage; checkpoint = the exact asset package
+  is enforced at the durable ledger rather than only at the `from_gate` factory;
+  approver = the designated human authority (identity still an open decision);
+  blocked downstream dependency = any later stage that would otherwise authorize
+  work on an under-declared asset package. Persistence of `MethodVersion`,
+  `SourceRecord`/`Claim`, `OfferVersion` and the gate ledger, and cross-tenant
+  retrieval isolation, remain blocked on the storage ADR.
 
 ## Product priority: the gated production engagement
 
@@ -150,7 +151,7 @@ CI gate order: format and types, domain and application tests, adapter contracts
 4. Implement SourceRecord, Claim, approval, decision, BuildObject, StageRun and GateDecision aggregates. [DONE 2026-10-02: Governance `StageGate` + `GateIntegrityPolicy` — missing exact asset version, unapproved dependency, self-approval, and waiver-without-asset all block gate approval; verified by `tests/unit/governance/test_gate_integrity.py`. DONE 2026-10-02 (Ralph cycle 2): version-specific `ApprovalRequest` (exact version + scope, designated approver, expiry) and append-only `Decision` / `DecisionLog`; verified by `tests/unit/governance/test_approval_record.py`. DONE 2026-10-02 (Ralph cycle 3): `StageRun` completes only via an accepted gate for the same stage, never via activity, with `StageStatus` / `StageTransition` and a `StageTransitionPolicy` that rejects illegal transitions; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 4): `BuildObject` in the Production context requires an owner and next action while active and rejects illegal lifecycle transitions; verified by `tests/unit/production/test_build_object.py`. DONE 2026-10-02 (Ralph cycle 5): versioned stage 0–10 `StageTemplate` seeded in Governance and `GateIntegrityPolicy` rejects gates that omit a canonical prerequisite, under-declare required asset kinds, or pin a different template version; verified by `tests/unit/governance/test_stage_template.py`. DONE 2026-10-02 (Ralph cycle 6): `StageGate.from_template` derives dependencies, template version and required asset kinds from the canonical template so gate evidence is not self-declared; verified by `tests/unit/governance/test_gate_factory.py`. DONE 2026-10-02 (Ralph cycle 7): immutable `GateDecision` / `GateDisposition` records the stage, pinned required asset versions, checkpoint evidence, reviewer, scope, disposition, rationale and next action, and `GateDecision.from_gate` refuses an approval for a non-approvable gate; verified by `tests/unit/governance/test_gate_decision.py`. DONE 2026-10-02 (Ralph cycle 8): `StageRun.complete` now requires a passing, same-stage, same-template-version `GateDecision` and pins it as immutable `accepted_decision`, replacing the transient `StageGate`; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 9): `GateLedger` derives prerequisite state from durable `GateDecision`s and refuses a passing decision while a prerequisite stage lacks a passing decision, so the dependency map is no longer caller-supplied; verified by `tests/unit/governance/test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 10): `GateDecision.from_gate` now requires a `GateLedger` and reads prerequisite state and the canonical template only from the ledger, removing the caller-supplied `dependency_states` map from the decision boundary; verified by `tests/unit/governance/test_gate_decision.py` and `test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 11): Knowledge `SourceRecord` (frozen original: locator, checksum, capture time, access rule; `cite` returns a checksum-pinned citation) and `Claim` (statement, `Known`/`Derived`/`Proposed`/`Unknown`, citations, confidence note) with `reclassify` records an audited `ClaimRevision`, refuses `Known` without a direct citation, and preserves the original so Derived/Proposed never silently become Known; verified by `tests/unit/knowledge/test_source_record.py` and `test_claim.py`. DONE 2026-10-02 (Ralph cycle 12): Method `SemanticVersion` / `MethodVersion` / `MethodApproval` pin an exact semantic version and intended use, revisions must advance the version and drop the old approval, and `MethodChangeImpactPolicy` emits an owned review queue (offer, brief, asset, journey, claim with human owner and due date) for a change to an approved method, rejecting unapproved or non-advancing or cross-tenant changes; verified by `tests/unit/method/test_method_version.py` and `test_method_impact.py`. DONE 2026-10-02 (Ralph cycle 13): Commercial Design `MethodReference` / `OfferVersion` records audience, promise, eligibility, price hypothesis and at least one exact method reference, and `OfferReadinessPolicy` refuses production readiness unless every reference is an approved `MethodVersion` of the same tenant at the exact version and intended use; `mark_review_required` drops readiness after an upstream change and a terminal offer cannot be revived; verified by `tests/unit/commercial/test_offer_version.py`. Remaining: SourceRecord, Claim, MethodVersion and OfferVersion repository adapters blocked on the storage ADR.]
 5. Implement stages 0 and 1 from intake to approved avatar and diagnosis.
 6. Implement stages 2 and 3 from primary currency to observable Profit Pyramid.
-7. Implement stages 4 and 5 from grounded Signature Solution to offer approval.
+7. Implement stages 4 and 5 from grounded Signature Solution to offer approval. [DONE 2026-10-02 (Ralph cycle 14): commercial `OfferVersion` requires an accountable owner and `OfferChangeImpactPolicy` discovers dependent offers from an approved method change and marks them review required, so the SPEC.md section 11 "changing a method version identifies dependents" acceptance test is met by a real aggregate; verified by `tests/unit/commercial/test_offer_change_impact.py`. Stage 2/3 currency and Profit Pyramid, and the stage 4/5 gate wiring, remain.]
 8. Implement stages 6 and 7 with message congruence and script approval before creative production.
 9. Implement stages 8 and 9 with complete prospect path and three part QA.
 10. Implement stage 10 baseline, command center and improvement loop.

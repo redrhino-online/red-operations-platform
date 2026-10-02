@@ -62,6 +62,7 @@ def offer_version(**overrides) -> OfferVersion:
                 intended_use=USE,
             ),
         ),
+        "owner": "offer-owner",
     }
     values.update(overrides)
     return OfferVersion(**values)
