@@ -7,11 +7,30 @@ center can always answer who is accountable and what happens next.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
+from typing import TYPE_CHECKING, Iterable
 
-from redops.contexts.production.domain.errors import InvalidBuildError
-from redops.contexts.production.domain.value_objects import BuildState, BuildTransition
+from redops.contexts.commercial.domain.entities import CampaignMessage
+from redops.contexts.knowledge.domain.entities import Claim
+from redops.contexts.production.domain.errors import (
+    AuthorityAmplifierApprovalOrderError,
+    AuthorityAmplifierDependencyError,
+    InvalidAuthorityAmplifierError,
+    InvalidBuildError,
+)
+from redops.contexts.production.domain.value_objects import (
+    SCRIPT_SECTION_ORDER,
+    AmplifierApproval,
+    AuthorityAmplifierState,
+    BuildState,
+    BuildTransition,
+    ScriptSection,
+    VisualProductionPackage,
+)
+
+if TYPE_CHECKING:
+    from redops.contexts.method.domain.entities import MethodVersion
 
 
 def _require_text(value: str, label: str) -> str:
@@ -251,3 +270,182 @@ class BuildObject:
         )
         self._transitions.append(transition)
         return transition
+
+
+@dataclass(frozen=True)
+class AuthorityAmplifier:
+    """The stage 7 Authority Amplifier, approved at "Authority Amplifier Approved".
+
+    SPEC.md section 4, stage 7 "Produce": the required asset package is the
+    approved script in Promise, Proof, Problems, Steps, Context, Action order,
+    plus the storyboard, brand treatment, presentation, speaker notes, recording,
+    edited and hosted video and player assets. Stage 7 has two distinct
+    approvals: the script and its supported claims pass review before any visual
+    or video production (Phase 4 TDD example: "visual Authority Amplifier
+    production cannot be authorized by an unapproved script"), and final creative
+    acceptance is separate.
+
+    The amplifier is grounded on the approved stage 6 `CampaignMessage` and the
+    method's claims (SPEC.md section 3: production requires approved
+    dependencies), so unsupported proof is flagged. It is frozen: approval pins
+    an exact asset rather than mutating it, and an upstream change returns it to
+    review required.
+    """
+
+    amplifier_id: str
+    tenant_id: str
+    message: CampaignMessage
+    owner: str
+    script: tuple[ScriptSection, ...]
+    proof_claim_ids: frozenset[str]
+    visuals: VisualProductionPackage | None = field(default=None)
+    script_approval: AmplifierApproval | None = field(default=None)
+    creative_approval: AmplifierApproval | None = field(default=None)
+    state: AuthorityAmplifierState = AuthorityAmplifierState.DRAFT
+    review_reason: str | None = field(default=None)
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("authority amplifier id", self.amplifier_id),
+            ("authority amplifier tenant id", self.tenant_id),
+            ("authority amplifier owner", self.owner),
+        ):
+            if not value or not value.strip():
+                raise InvalidAuthorityAmplifierError(f"{label} is required")
+        if self.message.tenant_id != self.tenant_id:
+            raise AuthorityAmplifierDependencyError(
+                "an authority amplifier cannot be grounded on another tenant's "
+                "message"
+            )
+        self._require_canonical_script()
+        if not self.proof_claim_ids:
+            raise InvalidAuthorityAmplifierError(
+                "an authority amplifier requires at least one proof claim"
+            )
+
+    def _require_canonical_script(self) -> None:
+        if len(self.script) != len(SCRIPT_SECTION_ORDER):
+            raise InvalidAuthorityAmplifierError(
+                "the authority amplifier script requires every section in "
+                "Promise, Proof, Problems, Steps, Context, Action order"
+            )
+        for expected, section in zip(SCRIPT_SECTION_ORDER, self.script):
+            if section.kind is not expected:
+                raise InvalidAuthorityAmplifierError(
+                    "the authority amplifier script must be in Promise, Proof, "
+                    "Problems, Steps, Context, Action order"
+                )
+
+    @property
+    def is_script_approved(self) -> bool:
+        return self.script_approval is not None
+
+    @property
+    def is_approved(self) -> bool:
+        return self.creative_approval is not None
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.state.is_terminal
+
+    def approve_script(
+        self,
+        *,
+        approved_by: str,
+        intended_use: str,
+        on: date,
+        approved_methods: Iterable["MethodVersion"],
+        claims: Iterable[Claim],
+    ) -> "AuthorityAmplifier":
+        """Return a script-approved amplifier once its proof is supported.
+
+        SPEC.md section 4, stage 7: the script and its supported claims pass
+        review before visual or video production. The message must be approved
+        and the method an approved dependency, and every proof claim must be a
+        claim of the approved method backed by a known, directly sourced
+        knowledge claim (Phase 4 TDD example: "unsupported proof is flagged").
+        """
+        from redops.contexts.production.domain.policies import (
+            AuthorityAmplifierPolicy,
+        )
+
+        AuthorityAmplifierPolicy().require_script_approvable(
+            self, approved_methods, claims
+        )
+        return replace(
+            self,
+            state=AuthorityAmplifierState.SCRIPT_APPROVED,
+            script_approval=AmplifierApproval(
+                approved_by=approved_by,
+                intended_use=intended_use,
+                approved_on=on,
+            ),
+            review_reason=None,
+        )
+
+    def produce_visuals(
+        self, *, package: VisualProductionPackage
+    ) -> "AuthorityAmplifier":
+        """Attach the visual package once the script is approved.
+
+        Visual or video production cannot be authorized by an unapproved script
+        (SPEC.md section 4, stage 7 and Phase 4 TDD example "visual Authority
+        Amplifier production cannot be authorized by an unapproved script").
+        """
+        if self.script_approval is None:
+            raise AuthorityAmplifierApprovalOrderError(
+                f"authority amplifier {self.amplifier_id!r} cannot produce "
+                "visuals before its script is approved"
+            )
+        return replace(self, visuals=package)
+
+    def approve_creative(
+        self, *, approved_by: str, intended_use: str, on: date
+    ) -> "AuthorityAmplifier":
+        """Return the final creative acceptance, which is separate from script.
+
+        SPEC.md section 4, stage 7: final creative acceptance requires the
+        complete visual and video package and the earlier script approval, so
+        script approval alone never completes the gate.
+        """
+        if self.script_approval is None:
+            raise AuthorityAmplifierApprovalOrderError(
+                f"authority amplifier {self.amplifier_id!r} cannot receive "
+                "creative acceptance before its script is approved"
+            )
+        if self.visuals is None:
+            raise AuthorityAmplifierDependencyError(
+                f"authority amplifier {self.amplifier_id!r} cannot receive "
+                "creative acceptance without its stage 7 visual package"
+            )
+        return replace(
+            self,
+            state=AuthorityAmplifierState.APPROVED,
+            creative_approval=AmplifierApproval(
+                approved_by=approved_by,
+                intended_use=intended_use,
+                approved_on=on,
+            ),
+            review_reason=None,
+        )
+
+    def mark_review_required(self, *, reason: str) -> "AuthorityAmplifier":
+        """Return this amplifier marked review required after a change upstream.
+
+        SPEC.md section 4: changing an approved upstream method or message marks
+        dependent assets review required. An approved amplifier loses that
+        approval until reviewed again, and a terminal amplifier stays terminal.
+        """
+        if not reason or not reason.strip():
+            raise InvalidAuthorityAmplifierError(
+                "authority amplifier review reason is required"
+            )
+        if self.state.is_terminal:
+            raise InvalidAuthorityAmplifierError(
+                "a terminal authority amplifier cannot be marked review required"
+            )
+        return replace(
+            self,
+            state=AuthorityAmplifierState.REVIEW_REQUIRED,
+            review_reason=reason,
+        )

@@ -4,59 +4,63 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T13:15:19Z (Ralph cycle 27).
-- Selected item: stage 6 "Message" — a pure Commercial domain `CampaignMessage`
-  whose "Campaign Message Approved" checkpoint requires the avatar, currency,
-  problem, promise, method, product and CTA to agree and the message to be
-  grounded on the approved stage 5 offer. This was cycle 26's explicit next item
-  and is the next gate after stage 5. It outranked the deferred `GateDecision`
-  wiring because that wiring is still blocked on the unresolved
-  integer-versus-semantic asset-version representation decision, whereas this is
-  unblocked, pure domain, and implements the Phase 4 TDD example "campaign
-  message conflicting with the offer blocks approval".
+- Cycle timestamp: 2026-10-02T13:16:54Z (Ralph cycle 28).
+- Selected item: stage 7 "Produce" — a pure Production domain
+  `AuthorityAmplifier` with two distinct approvals: the script and its supported
+  claims are approved before any visual or video production, and final creative
+  acceptance is separate. This was cycle 27's explicit next item and is the next
+  gate after stage 6. It outranked the deferred `GateDecision` wiring because
+  that wiring is still blocked on the unresolved integer-versus-semantic
+  asset-version representation decision, whereas this is unblocked, pure domain,
+  and implements the Phase 4 TDD examples "visual Authority Amplifier production
+  cannot be authorized by an unapproved script" and "unsupported proof is
+  flagged".
 - Outcome: completed and verified.
-- Evidence: new `tests/unit/commercial/test_campaign_message.py` (17 tests).
-  `CampaignMessage` is frozen, requires the stage 6 asset package, and rejects a
-  cross-tenant offer at construction. `CampaignMessageAlignmentPolicy.require`
-  refuses approval when the offer is not production ready, or when the avatar,
-  promise or product disagree with the offer, the method is not pinned by the
-  offer, the method is not an approved dependency for the tenant, the currency
-  disagrees with that method's locked stage 2 primary currency, or the problem is
-  not in that method's locked stage 3 diagnostic model. The first run failed to
-  import the missing errors; after implementation all 17 pass. Command:
+- Evidence: new `tests/unit/production/test_authority_amplifier.py` (19 tests)
+  and `tests/unit/production/fixtures.py`. `AuthorityAmplifier` is frozen,
+  requires the canonical Promise, Proof, Problems, Steps, Context, Action script
+  and at least one proof claim, and rejects a cross-tenant message at
+  construction. `AuthorityAmplifierPolicy.require_script_approvable` refuses
+  script approval unless the stage 6 message is approved and the method is an
+  approved dependency, and flags any proof claim that is not a claim of the
+  approved method backed by a known, directly sourced Knowledge `Claim`.
+  `produce_visuals` and `approve_creative` both refuse to run before script
+  approval, and creative acceptance also requires the complete stage 7 visual
+  package. The first run failed to import the missing errors; after
+  implementation all 19 pass. Command:
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  (253 passed, up from 236); `python3 -m pyflakes` on the six touched modules
+  (272 passed, up from 253); `python3 -m pyflakes` on the six touched modules
   clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the "problem" agreement is grounded in the approved method's
-  `DiagnosticModel` observable problems and the currency in its `PrimaryCurrency`,
-  both reached through the message's pinned `MethodReference`; this reuses the
-  same structural-value comparison as cycle 26, so exact asset-instance
-  provenance still needs the blocked version decision. Approval is still driven
-  by caller-supplied approved methods, the same pattern as
-  `OfferReadinessPolicy`; no governance `GateDecision` references the stage 6
-  asset or any stage 2/3/4/5 asset yet.
+- New findings: stage 7 proof support is now grounded in two places — the
+  approved method's `claims` ids and the Knowledge context's `Claim` provenance
+  (`ProvenanceClass.KNOWN`), so "unsupported proof" means both "not a method
+  claim" and "not directly sourced". This is the first cross-context grounding
+  from Production into Knowledge; it stays pure-domain and needs no persistence.
+  The two approvals are two fields on the frozen aggregate and are not yet wired
+  to a governance `GateDecision`, so the stage 7 gate record still has no pinned
+  stage 6/7 asset versions; that wiring remains blocked on the version decision.
+  Approval is still driven by caller-supplied approved methods and claims, the
+  same pattern as `OfferReadinessPolicy` and `CampaignMessageAlignmentPolicy`.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, scheduler/worker
   topology, and the client-designated approver identities. No fork or cluster
   facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or `argocd`
   present.
-- Highest priority ready next item: stage 7 "Produce" — a pure Production
-  domain `AuthorityAmplifier` (or equivalent) with two distinct approvals: the
-  script and its supported claims must be approved before any visual or video
-  production is authorized, and the final creative acceptance is separate (SPEC.md
-  section 4: "visual Authority Amplifier production cannot be authorized by an
-  unapproved script"). It should be grounded on the approved stage 6 message and
-  the approved method's claims so unsupported proof is flagged. Prerequisites:
-  none; pure domain in the Production context and the next stage after stage 6.
-  Pipeline mapping: stage 7 "Produce"; required asset = the Authority Amplifier
-  package (script, storyboard, brand treatment, presentation, speaker notes,
-  recording, edited and hosted video, player assets); checkpoint = "Authority
-  Amplifier Approved"; approver = the stage's designated approver role (client
-  identity still open); blocked downstream dependency = stages 8-10. Deferred
-  cross-context items: the stage 2/3/4/5/6 `GateDecision` wiring, blocked on the
-  integer-versus-semantic asset-version decision, and all persistence, blocked on
-  the storage ADR.
+- Highest priority ready next item: stage 8 "Integrate" — a pure Execution
+  domain funnel integration aggregate whose "Funnel Complete" checkpoint
+  requires a test prospect to complete capture, engagement and conversion
+  handoffs with reliable records and ownership (SPEC.md section 4, stage 8). It
+  is the next gate after stage 7 and implements the Phase 4 TDD example "failed
+  prospect routing prevents Funnel Complete". Prerequisites: none; pure domain
+  in the Execution context. Pipeline mapping: stage 8 "Integrate"; required
+  asset = the campaign architecture, pages, forms, qualification, booking,
+  sequences, CRM, tags, automation, analytics, tracking, sales handoff and SOPs;
+  checkpoint = "Funnel Complete"; approver = the stage's designated approver role
+  (client identity still open); blocked downstream dependency = stages 9-10.
+  Deferred cross-context items: the stage 2/3/4/5/6/7 `GateDecision` wiring,
+  blocked on the integer-versus-semantic asset-version decision, and all
+  persistence, blocked on the storage ADR.
 
 
 ## Product priority: the gated production engagement
@@ -154,7 +158,7 @@ CI gate order: format and types, domain and application tests, adapter contracts
 5. Implement stages 0 and 1 from intake to approved avatar and diagnosis.
 6. Implement stages 2 and 3 from primary currency to observable Profit Pyramid. [DONE 2026-10-02 (Ralph cycle 17): Method `PrimaryCurrency` value object requires a specific audience, distinct current/desired measures, and a distinct mechanism, rejecting an unspecified person or unmeasured outcome, so the stage 2 "Currency Locked" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_primary_currency.py`. DONE 2026-10-02 (Ralph cycle 19): Method `ProfitPyramidLevel` and `DiagnosticModel` require each level's observable measures, symptoms, behaviors and problems and reject adjacent levels that cannot be told apart by an observable difference, so the stage 3 "Diagnostic Model Approved" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_diagnostic_model.py`. DONE 2026-10-02 (Ralph cycle 21): `MethodVersion` pins the exact tenant-checked stage 2 `PrimaryCurrency` and stage 3 `DiagnosticModel`, refuses approval without both pins, rejects a cross-tenant pin, and drops both pins on `revised`; verified by `tests/unit/method/test_method_dependencies.py`. Stage 3 wiring into the stage 3 `GateDecision` and the stage 4 three-phase/nine-step Signature Solution structure remain.]
 7. Implement stages 4 and 5 from grounded Signature Solution to offer approval. [DONE 2026-10-02 (Ralph cycle 14): commercial `OfferVersion` requires an accountable owner and `OfferChangeImpactPolicy` discovers dependent offers from an approved method change and marks them review required, so the SPEC.md section 11 "changing a method version identifies dependents" acceptance test is met by a real aggregate; verified by `tests/unit/commercial/test_offer_change_impact.py`. DONE 2026-10-02 (Ralph cycle 22): Method `SignatureStep`, `TransformationPhase` and frozen `SignatureSolution` require exactly three phases and nine steps, a process inventory, transformation map, narrative and visual, one continuous chain of named stages, and declared starting/final states that are the ends of that chain, so the stage 4 "IP Architecture Locked" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_signature_solution.py`. DONE 2026-10-02 (Ralph cycle 23): `MethodVersion` pins the exact tenant-checked stage 4 `SignatureSolution`, refuses approval without it, rejects a cross-tenant pin, and drops the pin on `revised`, so an approved method must carry its locked stage 4 structure; verified by `tests/unit/method/test_method_dependencies.py`. DONE 2026-10-02 (Ralph cycle 24): commercial `StepDelivery` and `DeliverySpecification` require every locked stage 4 method step to carry an action, actor, deliverable, timing and measure, record the full stage 5 asset package, and reject a missing or extra method step, a duplicate delivery, a foreign-tenant method or step delivery, and any missing package field, so the stage 5 "Offer Locked" checkpoint rule is met by a real value; verified by `tests/unit/commercial/test_delivery_specification.py`. DONE 2026-10-02 (Ralph cycle 25): `OfferVersion` pins the tenant-checked stage 5 `DeliverySpecification`, refuses production readiness without it, and `revised` drops the delivery specification and readiness (including when the method reference changes) so an approved offer must carry a complete stage 5 delivery package; verified by `tests/unit/commercial/test_offer_version.py` with a shared fixture in `tests/unit/commercial/fixtures.py`. DONE 2026-10-02 (Ralph cycle 26): `OfferReadinessPolicy` refuses production readiness when the stage 5 `DeliverySpecification.signature_solution` is not equal to the `SignatureSolution` pinned by an approved method reference, so a stage 5 package cannot describe a different transformation than the approved stage 4 method; verified by `tests/unit/commercial/test_offer_version.py`. Wiring the stage 4 structure and the stage 2/3/4 currency, Profit Pyramid and delivery assets into their `GateDecision`s (blocked on the integer-versus-semantic asset-version decision) remain.]
-8. Implement stages 6 and 7 with message congruence and script approval before creative production. [DONE 2026-10-02 (Ralph cycle 27): commercial `CampaignMessage` records the stage 6 asset package, requires each message field, and rejects a cross-tenant offer at construction; `CampaignMessageAlignmentPolicy` refuses the "Campaign Message Approved" checkpoint unless the message is grounded on a production ready stage 5 offer and its avatar, promise, product, method, currency and problem agree with the offer and the approved method's locked stage 2 primary currency and stage 3 diagnostic model, so Phase 4's "campaign message conflicting with the offer blocks approval" example is met by a real aggregate; verified by `tests/unit/commercial/test_campaign_message.py`. Stage 7 two-part script-then-creative approval remains.]
+8. Implement stages 6 and 7 with message congruence and script approval before creative production. [DONE 2026-10-02 (Ralph cycle 27): commercial `CampaignMessage` records the stage 6 asset package, requires each message field, and rejects a cross-tenant offer at construction; `CampaignMessageAlignmentPolicy` refuses the "Campaign Message Approved" checkpoint unless the message is grounded on a production ready stage 5 offer and its avatar, promise, product, method, currency and problem agree with the offer and the approved method's locked stage 2 primary currency and stage 3 diagnostic model, so Phase 4's "campaign message conflicting with the offer blocks approval" example is met by a real aggregate; verified by `tests/unit/commercial/test_campaign_message.py`. DONE 2026-10-02 (Ralph cycle 28): Production `AuthorityAmplifier` records the canonical Promise, Proof, Problems, Steps, Context, Action script and the full stage 7 visual/video package, requires at least one proof claim, and rejects a cross-tenant stage 6 message at construction; `AuthorityAmplifierPolicy` refuses script approval unless the message is approved and the method is an approved dependency, and flags proof claims not backed by a known, directly sourced Knowledge claim; visual production and creative acceptance both refuse before script approval and creative acceptance also requires the complete visual package, so Phase 4's "visual Authority Amplifier production cannot be authorized by an unapproved script" and "unsupported proof is flagged" examples are met by a real aggregate; verified by `tests/unit/production/test_authority_amplifier.py`. Stage 7 wiring into a governance `GateDecision` remains, blocked on the asset-version representation decision.]
 9. Implement stages 8 and 9 with complete prospect path and three part QA.
 10. Implement stage 10 baseline, command center and improvement loop.
 11. Complete operational security, backup, GitOps and acceptance drills.
