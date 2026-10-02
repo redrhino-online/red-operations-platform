@@ -13,15 +13,16 @@ Rules under test come from SPEC.md sections 3 and 4:
 import unittest
 from datetime import date
 
-from redops.contexts.governance.domain.entities import StageGate, StageRun
+from redops.contexts.governance.domain.entities import GateDecision, StageRun
 from redops.contexts.governance.domain.errors import (
     IllegalStageTransitionError,
     StageGateNotAcceptedError,
 )
 from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
-    GateState,
+    GateDisposition,
     StageStatus,
+    Waiver,
 )
 
 SCRIPT_V1 = AssetVersionRef("authority-amplifier-script", 1)
@@ -29,15 +30,19 @@ TODAY = date(2026, 10, 2)
 CORRELATION = "corr-123"
 
 
-def authorized_gate(stage_number: int = 7) -> StageGate:
-    return StageGate(
+def accepted_decision(
+    stage_number: int = 7, template_version: str = "2026.1"
+) -> GateDecision:
+    return GateDecision(
         stage_number=stage_number,
-        template_version="2026.1",
+        template_version=template_version,
         required_assets=frozenset({SCRIPT_V1}),
-        approved_assets=frozenset({SCRIPT_V1}),
-        state=GateState.APPROVED,
-        proposed_by="specialist-1",
-        approver="client-approver-1",
+        checkpoint_evidence="authority-amplifier-approved-rubric passed",
+        reviewer="client-approver-1",
+        scope="stage-8-funnel-integration",
+        disposition=GateDisposition.APPROVED,
+        rationale="script and supported claims reviewed with the client",
+        decided_on=TODAY,
     )
 
 
@@ -93,21 +98,25 @@ class StageRunLifecycleTests(unittest.TestCase):
 
 
 class StageCompletionRequiresGateTests(unittest.TestCase):
-    def test_working_stage_cannot_complete_without_an_authorized_gate(self):
+    def test_working_stage_cannot_complete_without_a_passing_decision(self):
         run = stage_run()
         run.start(actor="specialist-1", reason="begin", on=TODAY, correlation_id=CORRELATION)
 
-        unapproved = StageGate(
+        blocked = GateDecision(
             stage_number=7,
             template_version="2026.1",
             required_assets=frozenset({SCRIPT_V1}),
-            approved_assets=frozenset(),
-            state=GateState.IN_REVIEW,
+            checkpoint_evidence="review outstanding",
+            reviewer="client-approver-1",
+            scope="stage-8-funnel-integration",
+            disposition=GateDisposition.BLOCKED,
+            rationale="dependency not approved",
+            decided_on=TODAY,
         )
 
         with self.assertRaises(StageGateNotAcceptedError):
             run.complete(
-                gate=unapproved,
+                decision=blocked,
                 actor="specialist-1",
                 reason="looks done",
                 on=TODAY,
@@ -117,28 +126,75 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
         self.assertIs(StageStatus.WORKING, run.status)
         self.assertFalse(run.is_complete)
 
-    def test_completion_requires_the_gate_for_this_exact_stage(self):
-        run = stage_run(stage_number=7)
+    def test_a_waived_decision_never_completes_a_stage(self):
+        run = stage_run()
         run.start(actor="specialist-1", reason="begin", on=TODAY, correlation_id=CORRELATION)
+
+        waived = GateDecision(
+            stage_number=7,
+            template_version="2026.1",
+            required_assets=frozenset({SCRIPT_V1}),
+            checkpoint_evidence="video delayed by vendor",
+            reviewer="client-approver-1",
+            scope="stage-8-funnel-integration",
+            disposition=GateDisposition.WAIVED,
+            rationale="scoped client waiver",
+            decided_on=TODAY,
+            waiver=Waiver(
+                reason="video delayed by vendor",
+                risk_owner="production-manager",
+                review_trigger="vendor delivery",
+            ),
+        )
 
         with self.assertRaises(StageGateNotAcceptedError):
             run.complete(
-                gate=authorized_gate(stage_number=6),
+                decision=waived,
                 actor="specialist-1",
-                reason="wrong stage gate",
+                reason="waived",
                 on=TODAY,
                 correlation_id=CORRELATION,
             )
 
         self.assertFalse(run.is_complete)
 
-    def test_an_authorized_gate_completes_the_stage_and_pins_evidence(self):
+    def test_completion_requires_the_decision_for_this_exact_stage(self):
+        run = stage_run(stage_number=7)
+        run.start(actor="specialist-1", reason="begin", on=TODAY, correlation_id=CORRELATION)
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            run.complete(
+                decision=accepted_decision(stage_number=6),
+                actor="specialist-1",
+                reason="wrong stage decision",
+                on=TODAY,
+                correlation_id=CORRELATION,
+            )
+
+        self.assertFalse(run.is_complete)
+
+    def test_completion_requires_the_decision_for_this_template_version(self):
+        run = stage_run(template_version="2026.1")
+        run.start(actor="specialist-1", reason="begin", on=TODAY, correlation_id=CORRELATION)
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            run.complete(
+                decision=accepted_decision(template_version="2025.9"),
+                actor="specialist-1",
+                reason="stale template decision",
+                on=TODAY,
+                correlation_id=CORRELATION,
+            )
+
+        self.assertFalse(run.is_complete)
+
+    def test_a_passing_decision_completes_the_stage_and_pins_evidence(self):
         run = stage_run()
         run.start(actor="specialist-1", reason="begin", on=TODAY, correlation_id=CORRELATION)
-        gate = authorized_gate(stage_number=7)
+        decision = accepted_decision(stage_number=7)
 
         run.complete(
-            gate=gate,
+            decision=decision,
             actor="client-approver-1",
             reason="gate approved",
             on=TODAY,
@@ -148,7 +204,7 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
         self.assertIs(StageStatus.COMPLETE, run.status)
         self.assertTrue(run.is_complete)
         self.assertEqual(TODAY, run.exited_at)
-        self.assertIs(gate, run.accepted_gate)
+        self.assertIs(decision, run.accepted_decision)
 
 
 class StageTransitionIntegrityTests(unittest.TestCase):
@@ -162,7 +218,7 @@ class StageTransitionIntegrityTests(unittest.TestCase):
     def test_completing_a_not_started_stage_is_rejected(self):
         with self.assertRaises(IllegalStageTransitionError):
             stage_run().complete(
-                gate=authorized_gate(stage_number=7),
+                decision=accepted_decision(stage_number=7),
                 actor="client-approver-1",
                 reason="nothing was produced",
                 on=TODAY,
@@ -173,7 +229,7 @@ class StageTransitionIntegrityTests(unittest.TestCase):
         run = stage_run()
         run.start(actor="specialist-1", reason="begin", on=TODAY, correlation_id=CORRELATION)
         run.complete(
-            gate=authorized_gate(stage_number=7),
+            decision=accepted_decision(stage_number=7),
             actor="client-approver-1",
             reason="approved",
             on=TODAY,

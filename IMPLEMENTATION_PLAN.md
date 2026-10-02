@@ -4,54 +4,56 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T12:15:47Z (Ralph cycle 7).
-- Selected item: implement the immutable `GateDecision` aggregate and
-  `GateDisposition` (SPEC.md section 3), the durable record of a stage gate
-  decision — stage, pinned required asset versions, checkpoint evidence,
-  reviewer, intended downstream scope, disposition, rationale and next action —
-  with `GateDecision.from_gate` refusing to record an approval for a gate that
-  fails `GateIntegrityPolicy`, has an unapproved prerequisite, or whose reviewer
-  is not the designated approver. Chosen because it is the plan's own prior next
-  item, converges on the SPEC.md section 4 product backbone ("passing a gate
-  pins the exact evidence and intended downstream use"), is pure domain with no
-  storage/cluster dependency, and now outranks `StageRun`/`GateDecision`
-  integration (which this record makes worth building) and `SourceRecord`/`Claim`
+- Cycle timestamp: 2026-10-02T12:16:39Z (Ralph cycle 8).
+- Selected item: require a passing,
+  downstream-authorizing `GateDecision` — for the same stage and template
+  version — to complete a `StageRun`, storing it as `run.accepted_decision`, so
+  completion is backed by the durable, immutable decision rather than a
+  transient `StageGate`. Chosen because it is the plan's own prior next item,
+  converges on the SPEC.md section 4 backbone ("stage completion requires gate
+  acceptance, not merely activity" and "passing a gate pins the exact evidence
+  and intended downstream use"), and is pure domain with no storage or cluster
+  dependency. It outranks dependency-graph enforcement (now the natural next
+  step, since decisions are the durable primitive) and `SourceRecord`/`Claim`
   (blocked on the storage ADR).
 - Outcome: completed and verified.
-- Evidence: `GateDecision` and `GateDisposition` in `entities.py` and
-  `value_objects.py`; `GateDecisionError` in `errors.py`;
-  `tests/unit/governance/test_gate_decision.py`. Commands:
+- Evidence: `StageRun.complete(decision=...)` and `accepted_decision` in
+  `entities.py`; `tests/unit/governance/test_stage_run.py`. Commands:
   `PYTHONPATH=backend python3 -m unittest
-  tests.unit.governance.test_gate_decision -v` (15 passed; first run failed with
-  `ImportError: cannot import name 'GateDecision'`, the intended TDD failure) and
-  `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'` (79
-  passed, up from 64). A scan of both domain packages found no
-  framework/ORM/HTTP imports. `ruff` and `mypy` are still not installed, so no
-  lint/type run was possible.
-- New findings: `GateDecision` is a frozen dataclass, so decision history is
-  append-only by construction. `from_gate` is the sanctioned guard (it delegates
-  to `GateIntegrityPolicy` and pins the gate's exact `required_assets`), while
-  direct construction still enforces the passing invariants but cannot know a
-  gate's dependencies — enforcing `from_gate` at the application boundary is a
-  later use-case/adapter concern, matching the StageGate factory decision. A
-  waived decision is required to carry a scoped `Waiver` and never authorizes
-  downstream. `StageRun.complete` still accepts a bare `StageGate`, not yet the
-  durable `GateDecision`.
+  tests.unit.governance.test_stage_run -v` (13 passed; the first run failed with
+  `TypeError: StageRun.complete() got an unexpected keyword argument 'decision'`,
+  the intended TDD failure) and `PYTHONPATH=backend python3 -m unittest discover
+  -s tests -p 'test_*.py'` (81 passed, up from 79). Import scan of both domain
+  packages still shows no framework/ORM/HTTP imports. `ruff` and `mypy` remain
+  uninstalled, so no lint/type run was possible.
+- New findings: `GateDecision` is frozen, so once pinned as `accepted_decision`
+  the stage's accepted evidence cannot be edited. Completion now rejects a
+  decision for the wrong stage, a mismatched template version, a non-passing or
+  waived disposition, and a decision with no downstream scope; `accepted_gate`
+  was replaced by `accepted_decision` and has no remaining references. A
+  `GateDecision.from_gate` call still accepts caller-supplied
+  `dependency_states`, so prerequisite status is still self-reported at the
+  decision boundary — deriving it from recorded decisions is the next integrity
+  gap.
 - Blockers: unchanged named-owner decisions — where RED code lives (planning repo
   vs a fork package), storage strategy given the SQLite reality, tenant model
   given slot-based single-active-client isolation, scheduler/worker topology, and
   the client-designated approver identities. No fork or cluster facts invented.
-- Highest priority ready next item: require a passing `GateDecision` (not a bare
-  `StageGate`) to complete a `StageRun`, recording it as the stage's accepted,
-  immutable evidence, so completion is backed by the durable decision and cannot
-  be satisfied by a transient gate object. Prerequisites: none for pure domain;
-  named human approver identities remain open, so it references roles. Pipeline
-  mapping: all stages 0–10; required asset = the decision's pinned
-  `AssetVersionRef` set; checkpoint = the stage rubric captured in
-  `checkpoint_evidence`; approver = the decision's reviewer; blocked downstream
-  dependency = any stage whose prerequisite has no passing `GateDecision`.
-  `SourceRecord`/`Claim` remain blocked on the storage ADR and the fork port on
-  the code-location ADR.
+- Highest priority ready next item: make the stage dependency graph derive from
+  durable decisions instead of caller-supplied `dependency_states` — a pure-domain
+  gate ledger that records each stage's accepted `GateDecision` and refuses a
+  passing decision for a stage while any prerequisite stage in the
+  `StageTemplate` lacks a passing decision. This removes the last self-reported
+  integrity input and directly serves SPEC.md section 4 ("a failed or expired
+  prerequisite blocks dependent authorization") and the section 11 scenario that
+  launch is blocked on a failed prerequisite. Prerequisites: none for pure
+  domain (the stage 0–10 `StageTemplate`, `StageGate`, and `GateDecision` all
+  exist); named human approver identities remain open, so it references roles.
+  Pipeline mapping: all stages 0–10; required asset = each decision's pinned
+  `AssetVersionRef` set; checkpoint = the stage rubric in `checkpoint_evidence`;
+  approver = the decision's reviewer; blocked downstream dependency = a stage
+  whose prerequisite has no passing `GateDecision`. `SourceRecord`/`Claim`
+  remain blocked on the storage ADR and the fork port on the code-location ADR.
 
 ## Product priority: the gated production engagement
 
@@ -144,7 +146,7 @@ CI gate order: format and types, domain and application tests, adapter contracts
 1. Pin upstream commit and record license, environment and component inventory.
 2. Write domain glossary, context map, permission matrix and ten ADRs only as decisions arise, with no arbitrary ADR quota.
 3. Add tenant boundary and authority tests around forked storage and retrieval.
-4. Implement SourceRecord, Claim, approval, decision, BuildObject, StageRun and GateDecision aggregates. [DONE 2026-10-02: Governance `StageGate` + `GateIntegrityPolicy` — missing exact asset version, unapproved dependency, self-approval, and waiver-without-asset all block gate approval; verified by `tests/unit/governance/test_gate_integrity.py`. DONE 2026-10-02 (Ralph cycle 2): version-specific `ApprovalRequest` (exact version + scope, designated approver, expiry) and append-only `Decision` / `DecisionLog`; verified by `tests/unit/governance/test_approval_record.py`. DONE 2026-10-02 (Ralph cycle 3): `StageRun` completes only via an accepted gate for the same stage, never via activity, with `StageStatus` / `StageTransition` and a `StageTransitionPolicy` that rejects illegal transitions; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 4): `BuildObject` in the Production context requires an owner and next action while active and rejects illegal lifecycle transitions; verified by `tests/unit/production/test_build_object.py`. DONE 2026-10-02 (Ralph cycle 5): versioned stage 0–10 `StageTemplate` seeded in Governance and `GateIntegrityPolicy` rejects gates that omit a canonical prerequisite, under-declare required asset kinds, or pin a different template version; verified by `tests/unit/governance/test_stage_template.py`. DONE 2026-10-02 (Ralph cycle 6): `StageGate.from_template` derives dependencies, template version and required asset kinds from the canonical template so gate evidence is not self-declared; verified by `tests/unit/governance/test_gate_factory.py`. DONE 2026-10-02 (Ralph cycle 7): immutable `GateDecision` / `GateDisposition` records the stage, pinned required asset versions, checkpoint evidence, reviewer, scope, disposition, rationale and next action, and `GateDecision.from_gate` refuses an approval for a non-approvable gate; verified by `tests/unit/governance/test_gate_decision.py`. Remaining: SourceRecord, Claim (blocked on the storage ADR).]
+4. Implement SourceRecord, Claim, approval, decision, BuildObject, StageRun and GateDecision aggregates. [DONE 2026-10-02: Governance `StageGate` + `GateIntegrityPolicy` — missing exact asset version, unapproved dependency, self-approval, and waiver-without-asset all block gate approval; verified by `tests/unit/governance/test_gate_integrity.py`. DONE 2026-10-02 (Ralph cycle 2): version-specific `ApprovalRequest` (exact version + scope, designated approver, expiry) and append-only `Decision` / `DecisionLog`; verified by `tests/unit/governance/test_approval_record.py`. DONE 2026-10-02 (Ralph cycle 3): `StageRun` completes only via an accepted gate for the same stage, never via activity, with `StageStatus` / `StageTransition` and a `StageTransitionPolicy` that rejects illegal transitions; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 4): `BuildObject` in the Production context requires an owner and next action while active and rejects illegal lifecycle transitions; verified by `tests/unit/production/test_build_object.py`. DONE 2026-10-02 (Ralph cycle 5): versioned stage 0–10 `StageTemplate` seeded in Governance and `GateIntegrityPolicy` rejects gates that omit a canonical prerequisite, under-declare required asset kinds, or pin a different template version; verified by `tests/unit/governance/test_stage_template.py`. DONE 2026-10-02 (Ralph cycle 6): `StageGate.from_template` derives dependencies, template version and required asset kinds from the canonical template so gate evidence is not self-declared; verified by `tests/unit/governance/test_gate_factory.py`. DONE 2026-10-02 (Ralph cycle 7): immutable `GateDecision` / `GateDisposition` records the stage, pinned required asset versions, checkpoint evidence, reviewer, scope, disposition, rationale and next action, and `GateDecision.from_gate` refuses an approval for a non-approvable gate; verified by `tests/unit/governance/test_gate_decision.py`. DONE 2026-10-02 (Ralph cycle 8): `StageRun.complete` now requires a passing, same-stage, same-template-version `GateDecision` and pins it as immutable `accepted_decision`, replacing the transient `StageGate`; verified by `tests/unit/governance/test_stage_run.py`. Remaining: SourceRecord, Claim (blocked on the storage ADR).]
 5. Implement stages 0 and 1 from intake to approved avatar and diagnosis.
 6. Implement stages 2 and 3 from primary currency to observable Profit Pyramid.
 7. Implement stages 4 and 5 from grounded Signature Solution to offer approval.

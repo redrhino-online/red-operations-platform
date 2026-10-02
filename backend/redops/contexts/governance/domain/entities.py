@@ -249,7 +249,7 @@ class StageRun:
     status: StageStatus = StageStatus.NOT_STARTED
     entered_at: date | None = None
     exited_at: date | None = None
-    accepted_gate: StageGate | None = None
+    accepted_decision: GateDecision | None = None
     _transitions: list[StageTransition] = field(
         default_factory=list, repr=False, compare=False
     )
@@ -354,24 +354,32 @@ class StageRun:
     def complete(
         self,
         *,
-        gate: StageGate,
+        decision: GateDecision,
         actor: str,
         reason: str,
         on: date,
         correlation_id: str,
     ) -> StageTransition:
-        """Complete the stage only with an accepted gate for this exact stage.
+        """Complete the stage only with an accepted decision for this exact stage.
 
-        The gate must belong to this stage and authorize downstream use (all
-        required asset versions approved). Activity alone never reaches here.
+        Completion must be backed by the durable GateDecision, not a transient
+        gate object, so the stage pins the exact evidence the reviewer accepted.
+        The decision must be for this stage and template version and must
+        authorize downstream use. Activity alone never reaches here.
         """
-        if gate.stage_number != self.stage_number:
+        if decision.stage_number != self.stage_number:
             raise StageGateNotAcceptedError(
-                f"gate is for stage {gate.stage_number}, not stage {self.stage_number}"
+                f"decision is for stage {decision.stage_number}, "
+                f"not stage {self.stage_number}"
             )
-        if not gate.authorizes_downstream():
+        if decision.template_version != self.template_version:
             raise StageGateNotAcceptedError(
-                "gate is not approved or still has missing required assets"
+                f"decision template version {decision.template_version!r} does "
+                f"not match stage template version {self.template_version!r}"
+            )
+        if not decision.authorizes_downstream():
+            raise StageGateNotAcceptedError(
+                "decision is not passing or has no intended downstream scope"
             )
         transition = self._transition(
             StageStatus.COMPLETE,
@@ -381,7 +389,7 @@ class StageRun:
             correlation_id=correlation_id,
         )
         self.exited_at = on
-        self.accepted_gate = gate
+        self.accepted_decision = decision
         return transition
 
     def _transition(
