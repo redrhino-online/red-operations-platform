@@ -31,6 +31,48 @@ class ApprovalOutcome(Enum):
     SUPERSEDED = "superseded"
 
 
+class StageStatus(Enum):
+    """Status of a StageRun (SPEC.md section 3 aggregate table).
+
+    A stage reaches COMPLETE only through an accepted gate decision, never by
+    activity. The other states mirror the gate states so a blocked or waived
+    stage never appears complete.
+    """
+
+    NOT_STARTED = "not_started"
+    WORKING = "working"
+    IN_REVIEW = "in_review"
+    COMPLETE = "complete"
+    CHANGES_REQUIRED = "changes_required"
+    BLOCKED = "blocked"
+    WAIVED = "waived"
+    SUPERSEDED = "superseded"
+
+
+@dataclass(frozen=True)
+class StageTransition:
+    """One recorded StageRun status change (SPEC.md section 4).
+
+    Records the actor, reason, timestamp, old and new status, and correlation
+    ID so a stage's history can be reconstructed and audited.
+    """
+
+    actor: str
+    reason: str
+    occurred_at: date
+    old_status: StageStatus
+    new_status: StageStatus
+    correlation_id: str
+
+    def __post_init__(self) -> None:
+        if not self.actor or not self.actor.strip():
+            raise ValueError("stage transition actor is required")
+        if not self.reason or not self.reason.strip():
+            raise ValueError("stage transition reason is required")
+        if not self.correlation_id or not self.correlation_id.strip():
+            raise ValueError("stage transition correlation id is required")
+
+
 @dataclass(frozen=True)
 class AssetVersionRef:
     """An exact, pinned asset version. Gate approval pins these, not bare asset names."""

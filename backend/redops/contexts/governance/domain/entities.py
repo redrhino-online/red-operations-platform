@@ -9,11 +9,14 @@ from redops.contexts.governance.domain.errors import (
     ApprovalAuthorityError,
     ApprovalExpiredError,
     SelfApprovalError,
+    StageGateNotAcceptedError,
 )
 from redops.contexts.governance.domain.value_objects import (
     ApprovalOutcome,
     AssetVersionRef,
     GateState,
+    StageStatus,
+    StageTransition,
     Waiver,
 )
 
@@ -42,6 +45,185 @@ class StageGate:
 
     def authorizes_downstream(self) -> bool:
         return self.state is GateState.APPROVED and not self.missing_assets()
+
+
+@dataclass
+class StageRun:
+    """One execution of a production stage (0-10) for an engagement.
+
+    A StageRun is complete only when its gate is accepted for downstream use;
+    recording activity starts or keeps a stage Working but never completes it
+    (SPEC.md sections 3 and 4). Every status change is recorded with actor,
+    reason, timestamp, old and new status, and a correlation ID; illegal
+    transitions are rejected rather than silently coerced.
+    """
+
+    engagement: str
+    stage_number: int
+    template_version: str
+    assigned_owner: str
+    status: StageStatus = StageStatus.NOT_STARTED
+    entered_at: date | None = None
+    exited_at: date | None = None
+    accepted_gate: StageGate | None = None
+    _transitions: list[StageTransition] = field(
+        default_factory=list, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        if not self.engagement or not self.engagement.strip():
+            raise ValueError("stage run engagement is required")
+        if self.stage_number < 0:
+            raise ValueError("stage number must be >= 0")
+        if not self.template_version or not self.template_version.strip():
+            raise ValueError("stage run template version is required")
+        if not self.assigned_owner or not self.assigned_owner.strip():
+            raise ValueError("stage run assigned owner is required")
+
+    @property
+    def is_complete(self) -> bool:
+        return self.status is StageStatus.COMPLETE
+
+    @property
+    def transitions(self) -> tuple[StageTransition, ...]:
+        return tuple(self._transitions)
+
+    def record_activity(
+        self, *, actor: str, reason: str, on: date, correlation_id: str
+    ) -> StageTransition | None:
+        """Note that work happened. Activity starts a stage but never completes it."""
+        if self.status is StageStatus.NOT_STARTED:
+            return self.start(
+                actor=actor, reason=reason, on=on, correlation_id=correlation_id
+            )
+        return None
+
+    def start(
+        self, *, actor: str, reason: str, on: date, correlation_id: str
+    ) -> StageTransition:
+        transition = self._transition(
+            StageStatus.WORKING,
+            actor=actor,
+            reason=reason,
+            on=on,
+            correlation_id=correlation_id,
+        )
+        if self.entered_at is None:
+            self.entered_at = on
+        return transition
+
+    def submit_for_review(
+        self, *, actor: str, reason: str, on: date, correlation_id: str
+    ) -> StageTransition:
+        return self._transition(
+            StageStatus.IN_REVIEW,
+            actor=actor,
+            reason=reason,
+            on=on,
+            correlation_id=correlation_id,
+        )
+
+    def send_back(
+        self, *, actor: str, reason: str, on: date, correlation_id: str
+    ) -> StageTransition:
+        return self._transition(
+            StageStatus.CHANGES_REQUIRED,
+            actor=actor,
+            reason=reason,
+            on=on,
+            correlation_id=correlation_id,
+        )
+
+    def block(
+        self, *, actor: str, reason: str, on: date, correlation_id: str
+    ) -> StageTransition:
+        return self._transition(
+            StageStatus.BLOCKED,
+            actor=actor,
+            reason=reason,
+            on=on,
+            correlation_id=correlation_id,
+        )
+
+    def unblock(
+        self, *, actor: str, reason: str, on: date, correlation_id: str
+    ) -> StageTransition:
+        return self._transition(
+            StageStatus.WORKING,
+            actor=actor,
+            reason=reason,
+            on=on,
+            correlation_id=correlation_id,
+        )
+
+    def supersede(
+        self, *, actor: str, reason: str, on: date, correlation_id: str
+    ) -> StageTransition:
+        return self._transition(
+            StageStatus.SUPERSEDED,
+            actor=actor,
+            reason=reason,
+            on=on,
+            correlation_id=correlation_id,
+        )
+
+    def complete(
+        self,
+        *,
+        gate: StageGate,
+        actor: str,
+        reason: str,
+        on: date,
+        correlation_id: str,
+    ) -> StageTransition:
+        """Complete the stage only with an accepted gate for this exact stage.
+
+        The gate must belong to this stage and authorize downstream use (all
+        required asset versions approved). Activity alone never reaches here.
+        """
+        if gate.stage_number != self.stage_number:
+            raise StageGateNotAcceptedError(
+                f"gate is for stage {gate.stage_number}, not stage {self.stage_number}"
+            )
+        if not gate.authorizes_downstream():
+            raise StageGateNotAcceptedError(
+                "gate is not approved or still has missing required assets"
+            )
+        transition = self._transition(
+            StageStatus.COMPLETE,
+            actor=actor,
+            reason=reason,
+            on=on,
+            correlation_id=correlation_id,
+        )
+        self.exited_at = on
+        self.accepted_gate = gate
+        return transition
+
+    def _transition(
+        self,
+        target: StageStatus,
+        *,
+        actor: str,
+        reason: str,
+        on: date,
+        correlation_id: str,
+    ) -> StageTransition:
+        from redops.contexts.governance.domain.policies import StageTransitionPolicy
+
+        previous = self.status
+        StageTransitionPolicy().require(previous, target)
+        self.status = target
+        transition = StageTransition(
+            actor=actor,
+            reason=reason,
+            occurred_at=on,
+            old_status=previous,
+            new_status=target,
+            correlation_id=correlation_id,
+        )
+        self._transitions.append(transition)
+        return transition
 
 
 @dataclass(frozen=True)

@@ -17,3 +17,11 @@ class ApprovalAuthorityError(GovernanceError):
 
 class ApprovalExpiredError(GovernanceError):
     """An approval was acted on after its expiry date."""
+
+
+class IllegalStageTransitionError(GovernanceError):
+    """A StageRun was asked to move between statuses its state machine forbids."""
+
+
+class StageGateNotAcceptedError(GovernanceError):
+    """A StageRun was asked to complete without an accepted gate for that stage."""
