@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from redops.contexts.commercial.domain.errors import InvalidOfferError
+from redops.contexts.commercial.domain.errors import (
+    InvalidDeliverySpecificationError,
+    InvalidOfferError,
+)
+from redops.contexts.method.domain.entities import SignatureSolution
 from redops.contexts.method.domain.value_objects import (
     ImpactAssessment,
     SemanticVersion,
@@ -73,3 +77,138 @@ class OfferImpactAssessment:
     @property
     def review_required_offer_ids(self) -> tuple[str, ...]:
         return tuple(offer.offer_id for offer in self.offers)
+
+
+@dataclass(frozen=True)
+class StepDelivery:
+    """One stage 5 delivery row for a named method step.
+
+    SPEC.md section 4, stage 5 "Productize" and its "Offer Locked" checkpoint:
+    every method step has an action, actor, deliverable, timing and measure. The
+    value object is frozen and reject-only, so a method step without a stated
+    actor, deliverable, timing or measure cannot be represented as delivered.
+    """
+
+    step_id: str
+    tenant_id: str
+    action: str
+    actor: str
+    deliverable: str
+    timing: str
+    measure: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("step delivery step id", self.step_id),
+            ("step delivery tenant id", self.tenant_id),
+            ("step delivery action", self.action),
+            ("step delivery actor", self.actor),
+            ("step delivery deliverable", self.deliverable),
+            ("step delivery timing", self.timing),
+            ("step delivery measure", self.measure),
+        ):
+            if not value or not value.strip():
+                raise InvalidDeliverySpecificationError(f"{label} is required")
+
+
+@dataclass(frozen=True)
+class DeliverySpecification:
+    """The stage 5 delivery specification, locked at "Offer Locked".
+
+    SPEC.md section 4, stage 5 "Productize": the required asset package is the
+    delivery model, duration, modules, responsibilities, support cadence, stage
+    deliverables, outcome measures, pricing and payments, scope, guarantee
+    decision, eligibility and offer stack, and the checkpoint requires that
+    "every method step has an action, actor, deliverable, timing and measure".
+
+    The specification is grounded on the exact locked stage 4 `SignatureSolution`
+    so it cannot declare deliveries for steps the method does not have, or leave
+    a method step undelivered. It is frozen and reject-only: an approval pins an
+    exact asset version rather than mutating it (SPEC.md section 3).
+    """
+
+    delivery_id: str
+    tenant_id: str
+    signature_solution: SignatureSolution
+    delivery_model: str
+    duration: str
+    modules: tuple[str, ...]
+    responsibilities: tuple[str, ...]
+    support_cadence: str
+    step_deliveries: tuple[StepDelivery, ...]
+    outcome_measures: tuple[str, ...]
+    pricing_payments: str
+    scope: str
+    guarantee_decision: str
+    eligibility: str
+    offer_stack: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("delivery specification id", self.delivery_id),
+            ("delivery specification tenant id", self.tenant_id),
+            ("delivery model", self.delivery_model),
+            ("delivery duration", self.duration),
+            ("support cadence", self.support_cadence),
+            ("pricing and payments", self.pricing_payments),
+            ("delivery scope", self.scope),
+            ("guarantee decision", self.guarantee_decision),
+            ("delivery eligibility", self.eligibility),
+        ):
+            if not value or not value.strip():
+                raise InvalidDeliverySpecificationError(f"{label} is required")
+        for label, entries in (
+            ("modules", self.modules),
+            ("responsibilities", self.responsibilities),
+            ("outcome measures", self.outcome_measures),
+            ("offer stack", self.offer_stack),
+        ):
+            if not entries:
+                raise InvalidDeliverySpecificationError(
+                    f"a delivery specification requires at least one {label} entry"
+                )
+            for entry in entries:
+                if not entry or not entry.strip():
+                    raise InvalidDeliverySpecificationError(
+                        f"{label} entries must not be blank"
+                    )
+        if self.signature_solution.tenant_id != self.tenant_id:
+            raise InvalidDeliverySpecificationError(
+                "a delivery specification cannot cover another tenant's method"
+            )
+        if not self.step_deliveries:
+            raise InvalidDeliverySpecificationError(
+                "a delivery specification requires a delivery for every method step"
+            )
+        method_steps = {step.step_id for step in self.signature_solution.steps}
+        delivered: set[str] = set()
+        for row in self.step_deliveries:
+            if row.tenant_id != self.tenant_id:
+                raise InvalidDeliverySpecificationError(
+                    "a delivery specification cannot mix deliveries from another "
+                    "tenant"
+                )
+            if row.step_id in delivered:
+                raise InvalidDeliverySpecificationError(
+                    f"method step {row.step_id!r} has more than one delivery"
+                )
+            if row.step_id not in method_steps:
+                raise InvalidDeliverySpecificationError(
+                    f"delivery step {row.step_id!r} is not a method step"
+                )
+            delivered.add(row.step_id)
+        missing = method_steps - delivered
+        if missing:
+            raise InvalidDeliverySpecificationError(
+                "every method step requires a delivery, missing "
+                f"{sorted(missing)}"
+            )
+
+    def delivery_for(self, step_id: str) -> StepDelivery:
+        """Return the single delivery row for a named method step."""
+        for row in self.step_deliveries:
+            if row.step_id == step_id:
+                return row
+        raise InvalidDeliverySpecificationError(
+            f"method step {step_id!r} has no delivery"
+        )

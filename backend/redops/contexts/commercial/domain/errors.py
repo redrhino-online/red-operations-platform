@@ -17,3 +17,16 @@ class OfferReadinessError(CommercialError):
     SPEC.md section 3: production requires approved dependencies. An offer must
     pin an approved method version and intended use before it can proceed.
     """
+
+
+class InvalidDeliverySpecificationError(CommercialError, ValueError):
+    """A stage 5 delivery specification was not a complete offer delivery package.
+
+    SPEC.md section 4, stage 5 "Productize" and its "Offer Locked" checkpoint:
+    every method step has an action, actor, deliverable, timing and measure, and
+    the required asset package also names the delivery model, duration, modules,
+    responsibilities, support cadence, stage deliverables, outcome measures,
+    pricing and payments, scope, guarantee decision, eligibility and offer stack.
+    A missing method step or a step the method does not have cannot be represented
+    as an approvable offer.
+    """
