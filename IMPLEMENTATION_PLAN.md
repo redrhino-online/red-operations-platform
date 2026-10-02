@@ -4,67 +4,60 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T12:24:59Z (Ralph cycle 11).
-- Selected item: implement the Knowledge context `SourceRecord` and `Claim`
-  aggregates with provenance classes (`Known`/`Derived`/`Proposed`/`Unknown`),
-  checksum-and-location `SourceCitation`s, and the invariant that a `Known`
-  claim must cite a direct source. This was the plan's own prior next item. It
-  is pure domain with no storage or cluster dependency, and it is the first
-  unmet acceptance test in SPEC.md section 11 ("Known cannot be set without
-  direct source"). It outranks the stage 0-1 vertical slice (which needs an
-  application layer and the storage ADR before a diagnosis can be persisted)
-  and a repository adapter for these aggregates (blocked on the storage ADR).
+- Cycle timestamp: 2026-10-02T12:26:00Z (Ralph cycle 12).
+- Selected item: implement the Method context `MethodVersion` aggregate and
+  `MethodChangeImpactPolicy` (SPEC.md sections 3, 4 and 11). This was the
+  plan's own prior next item: it is pure domain with no storage or cluster
+  dependency, and it closes the next unmet acceptance test ("changing a method
+  version identifies dependents"). It outranks the stage 0-1 vertical slice and
+  the `OfferVersion` aggregate because both need this dependency edge first:
+  the impact assessment names dependent offers, briefs, assets, journeys and
+  claims, so `OfferVersion` can now be built to consume an approved method.
 - Outcome: completed and verified.
-- Evidence: added `backend/redops/contexts/knowledge/domain/{errors,
-  value_objects,entities}.py`. `SourceRecord` is frozen and requires locator,
-  checksum, capture time and access rule, and `cite(location)` returns a
-  checksum-pinned `SourceCitation` that opens an exact source location. `Claim`
-  requires statement, provenance and confidence note, refuses `Known` without
-  a citation with `UnsupportedClaimError`, and `reclassify` returns a new claim,
-  demands a rationale, requires a direct citation to become `Known`, and
-  records a `ClaimRevision` (actor, old/new provenance, timestamp, correlation
-  id) so Derived and Proposed cannot silently become Known. Tests:
-  `tests/unit/knowledge/test_source_record.py` (8) and `test_claim.py` (8).
-  Commands: `PYTHONPATH=backend python3 -m unittest
-  tests.unit.knowledge.test_source_record tests.unit.knowledge.test_claim -v`
-  (first run failed with `ModuleNotFoundError: ...knowledge.domain.entities`,
-  the intended TDD failure; then 16 passed) and `PYTHONPATH=backend python3 -m
-  unittest discover -s tests -p 'test_*.py'` (108 passed). AST import scan of
-  all three `domain` packages shows no framework/ORM/HTTP imports. `ruff` and
-  `mypy` remain uninstalled, so no lint/type run was possible.
-- New findings: claim provenance promotion is now an explicit, audited
-  transition rather than a field mutation, which is the domain half of the
-  method-change impact assessment; the missing half is which dependent
-  artefacts must be marked review-required. `SourceCitation` pins the ingestion
-  checksum so a retrieval adapter can verify bytes, but cross-tenant retrieval
-  isolation remains untested until an adapter exists. A claim now requires a
-  confidence note, matching the SPEC.md section 3 aggregate table, not only
-  citations.
+- Evidence: added `backend/redops/contexts/method/domain/{errors,
+  value_objects,entities,policies}.py`. `SemanticVersion` parses and orders
+  major.minor.patch and rejects malformed or negative values. `MethodVersion`
+  is frozen, requires parent method, stages, currency and a semantic version,
+  and `approve` pins an exact `MethodApproval` (version + intended use) that
+  authorizes no other version or scope; `revised` demands a strictly newer
+  version and drops approval so the prior approved version stays identifiable.
+  `MethodChangeImpactPolicy.assess` refuses a change to an unapproved method,
+  refuses a non-advancing version, refuses a cross-tenant change, and marks
+  every dependent with its human owner and due date, classifying patch changes
+  editorial and minor/major changes substantive. Tests:
+  `tests/unit/method/test_method_version.py` (14) and
+  `test_method_impact.py` (9). Commands: `PYTHONPATH=backend python3 -m unittest
+  discover -s tests -p 'test_*.py'` (131 passed, up from 108); `python3 -m
+  pyflakes` on the new files clean; AST import scan shows no framework/ORM/HTTP
+  imports in any domain package. `ruff` and `mypy` remain uninstalled.
+- New findings: method approval is now version and scope specific and a
+  revision cannot reuse it; this is the version half of the SPEC.md section 4
+  method-change impact rule. The dependent half is now expressible: the policy
+  produces an owned review queue, but the dependents are supplied by the caller,
+  so discovering dependents (an offer's method ref) still belongs to the
+  dependent contexts. `OfferVersion` is the immediate consumer: it needs an
+  approved method ref to become production ready, and when that method is
+  superseded the offer must be marked review required.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, scheduler/worker
   topology, and the client-designated approver identities. No fork or cluster
   facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or `argocd`
   present.
-- Highest priority ready next item: implement the Method context
-  `MethodVersion` aggregate and its change impact assessment (SPEC.md sections
-  3 and 4, and the invariant that "changing an approved upstream method emits an
-  impact assessment: dependent offers, briefs, assets, journeys, and claims are
-  marked review required, with human owners and due dates"). Approval must pin
-  an exact semantic version and intended use, and a change to an approved
-  method must identify its dependents rather than silently invalidating them.
-  This is the next unmet core acceptance test ("changing a method version
-  identifies dependents") and it is dependency enforcement and gate integrity,
-  which the product backbone ranks above downstream features. Prerequisites:
-  none; it is pure domain. Pipeline mapping: stage 4 IP Architecture Locked and
-  stage 5 Offer Locked; required asset = a pinned `MethodVersion` semantic
-  version; checkpoint = approval pins the exact version and intended use;
-  approver = the client-designated authority (identity still an open decision);
-  blocked downstream dependency = an offer, brief, asset or journey that would
-  otherwise be produced from a superseded method. `SourceRecord`/`Claim` and
-  `MethodVersion` persistence, and cross-tenant retrieval isolation, remain
-  blocked on the storage ADR.
-
+- Highest priority ready next item: implement the Commercial Design
+  `OfferVersion` aggregate with a method reference and the invariant that
+  production readiness requires an approved method dependency (SPEC.md section
+  3 aggregate table and Phase 3 TDD example "offer cannot become production
+  ready without approved method"). Prerequisites: none; it is pure domain and
+  can consume `MethodVersion`/`MethodApproval`. Pipeline mapping: stage 5
+  Productize / Offer Locked; required asset = an approved `OfferVersion` that
+  pins its approved method version; checkpoint = every method step has an
+  action, actor, deliverable, timing and measure; approver = the
+  client-designated authority (identity still an open decision); blocked
+  downstream dependency = stages 6-9 campaign message, production, integration
+  and launch, which cannot use an unapproved offer. Persistence of
+  `MethodVersion`, `SourceRecord`/`Claim` and `OfferVersion`, and cross-tenant
+  retrieval isolation, remain blocked on the storage ADR.
 
 ## Product priority: the gated production engagement
 
@@ -157,7 +150,7 @@ CI gate order: format and types, domain and application tests, adapter contracts
 1. Pin upstream commit and record license, environment and component inventory.
 2. Write domain glossary, context map, permission matrix and ten ADRs only as decisions arise, with no arbitrary ADR quota.
 3. Add tenant boundary and authority tests around forked storage and retrieval.
-4. Implement SourceRecord, Claim, approval, decision, BuildObject, StageRun and GateDecision aggregates. [DONE 2026-10-02: Governance `StageGate` + `GateIntegrityPolicy` — missing exact asset version, unapproved dependency, self-approval, and waiver-without-asset all block gate approval; verified by `tests/unit/governance/test_gate_integrity.py`. DONE 2026-10-02 (Ralph cycle 2): version-specific `ApprovalRequest` (exact version + scope, designated approver, expiry) and append-only `Decision` / `DecisionLog`; verified by `tests/unit/governance/test_approval_record.py`. DONE 2026-10-02 (Ralph cycle 3): `StageRun` completes only via an accepted gate for the same stage, never via activity, with `StageStatus` / `StageTransition` and a `StageTransitionPolicy` that rejects illegal transitions; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 4): `BuildObject` in the Production context requires an owner and next action while active and rejects illegal lifecycle transitions; verified by `tests/unit/production/test_build_object.py`. DONE 2026-10-02 (Ralph cycle 5): versioned stage 0–10 `StageTemplate` seeded in Governance and `GateIntegrityPolicy` rejects gates that omit a canonical prerequisite, under-declare required asset kinds, or pin a different template version; verified by `tests/unit/governance/test_stage_template.py`. DONE 2026-10-02 (Ralph cycle 6): `StageGate.from_template` derives dependencies, template version and required asset kinds from the canonical template so gate evidence is not self-declared; verified by `tests/unit/governance/test_gate_factory.py`. DONE 2026-10-02 (Ralph cycle 7): immutable `GateDecision` / `GateDisposition` records the stage, pinned required asset versions, checkpoint evidence, reviewer, scope, disposition, rationale and next action, and `GateDecision.from_gate` refuses an approval for a non-approvable gate; verified by `tests/unit/governance/test_gate_decision.py`. DONE 2026-10-02 (Ralph cycle 8): `StageRun.complete` now requires a passing, same-stage, same-template-version `GateDecision` and pins it as immutable `accepted_decision`, replacing the transient `StageGate`; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 9): `GateLedger` derives prerequisite state from durable `GateDecision`s and refuses a passing decision while a prerequisite stage lacks a passing decision, so the dependency map is no longer caller-supplied; verified by `tests/unit/governance/test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 10): `GateDecision.from_gate` now requires a `GateLedger` and reads prerequisite state and the canonical template only from the ledger, removing the caller-supplied `dependency_states` map from the decision boundary; verified by `tests/unit/governance/test_gate_decision.py` and `test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 11): Knowledge `SourceRecord` (frozen original: locator, checksum, capture time, access rule; `cite` returns a checksum-pinned citation) and `Claim` (statement, `Known`/`Derived`/`Proposed`/`Unknown`, citations, confidence note) with `reclassify` records an audited `ClaimRevision`, refuses `Known` without a direct citation, and preserves the original so Derived/Proposed never silently become Known; verified by `tests/unit/knowledge/test_source_record.py` and `test_claim.py`. Remaining: SourceRecord, Claim and MethodVersion repository adapters blocked on the storage ADR.]
+4. Implement SourceRecord, Claim, approval, decision, BuildObject, StageRun and GateDecision aggregates. [DONE 2026-10-02: Governance `StageGate` + `GateIntegrityPolicy` — missing exact asset version, unapproved dependency, self-approval, and waiver-without-asset all block gate approval; verified by `tests/unit/governance/test_gate_integrity.py`. DONE 2026-10-02 (Ralph cycle 2): version-specific `ApprovalRequest` (exact version + scope, designated approver, expiry) and append-only `Decision` / `DecisionLog`; verified by `tests/unit/governance/test_approval_record.py`. DONE 2026-10-02 (Ralph cycle 3): `StageRun` completes only via an accepted gate for the same stage, never via activity, with `StageStatus` / `StageTransition` and a `StageTransitionPolicy` that rejects illegal transitions; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 4): `BuildObject` in the Production context requires an owner and next action while active and rejects illegal lifecycle transitions; verified by `tests/unit/production/test_build_object.py`. DONE 2026-10-02 (Ralph cycle 5): versioned stage 0–10 `StageTemplate` seeded in Governance and `GateIntegrityPolicy` rejects gates that omit a canonical prerequisite, under-declare required asset kinds, or pin a different template version; verified by `tests/unit/governance/test_stage_template.py`. DONE 2026-10-02 (Ralph cycle 6): `StageGate.from_template` derives dependencies, template version and required asset kinds from the canonical template so gate evidence is not self-declared; verified by `tests/unit/governance/test_gate_factory.py`. DONE 2026-10-02 (Ralph cycle 7): immutable `GateDecision` / `GateDisposition` records the stage, pinned required asset versions, checkpoint evidence, reviewer, scope, disposition, rationale and next action, and `GateDecision.from_gate` refuses an approval for a non-approvable gate; verified by `tests/unit/governance/test_gate_decision.py`. DONE 2026-10-02 (Ralph cycle 8): `StageRun.complete` now requires a passing, same-stage, same-template-version `GateDecision` and pins it as immutable `accepted_decision`, replacing the transient `StageGate`; verified by `tests/unit/governance/test_stage_run.py`. DONE 2026-10-02 (Ralph cycle 9): `GateLedger` derives prerequisite state from durable `GateDecision`s and refuses a passing decision while a prerequisite stage lacks a passing decision, so the dependency map is no longer caller-supplied; verified by `tests/unit/governance/test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 10): `GateDecision.from_gate` now requires a `GateLedger` and reads prerequisite state and the canonical template only from the ledger, removing the caller-supplied `dependency_states` map from the decision boundary; verified by `tests/unit/governance/test_gate_decision.py` and `test_gate_ledger.py`. DONE 2026-10-02 (Ralph cycle 11): Knowledge `SourceRecord` (frozen original: locator, checksum, capture time, access rule; `cite` returns a checksum-pinned citation) and `Claim` (statement, `Known`/`Derived`/`Proposed`/`Unknown`, citations, confidence note) with `reclassify` records an audited `ClaimRevision`, refuses `Known` without a direct citation, and preserves the original so Derived/Proposed never silently become Known; verified by `tests/unit/knowledge/test_source_record.py` and `test_claim.py`. DONE 2026-10-02 (Ralph cycle 12): Method `SemanticVersion` / `MethodVersion` / `MethodApproval` pin an exact semantic version and intended use, revisions must advance the version and drop the old approval, and `MethodChangeImpactPolicy` emits an owned review queue (offer, brief, asset, journey, claim with human owner and due date) for a change to an approved method, rejecting unapproved or non-advancing or cross-tenant changes; verified by `tests/unit/method/test_method_version.py` and `test_method_impact.py`. Remaining: SourceRecord, Claim, MethodVersion and OfferVersion repository adapters blocked on the storage ADR.]
 5. Implement stages 0 and 1 from intake to approved avatar and diagnosis.
 6. Implement stages 2 and 3 from primary currency to observable Profit Pyramid.
 7. Implement stages 4 and 5 from grounded Signature Solution to offer approval.
