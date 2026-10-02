@@ -93,7 +93,7 @@ def approvable_gate(stage_number=7, **overrides):
     gate.proposed_by = "specialist-1"
     gate.approver = "client-approver-1"
     for request in approvals(
-        gate.required_assets, f"stage-{stage_number + 1}-downstream"
+        gate.required_assets, "stage-8-funnel-integration"
     ):
         gate.record_asset_approval(request)
     for name, value in overrides.items():
@@ -159,9 +159,6 @@ class GateDecisionCheckpointTests(unittest.TestCase):
             on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
-            asset_approvals=tuple(
-                approvals(gate.required_assets, "stage-8-funnel-integration")
-            ),
         )
 
         self.assertEqual("Authority Amplifier Approved", decision.checkpoint)

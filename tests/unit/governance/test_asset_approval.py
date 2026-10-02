@@ -25,7 +25,10 @@ from redops.contexts.governance.domain.entities import (
     GateLedger,
     StageGate,
 )
-from redops.contexts.governance.domain.errors import UnapprovedAssetError
+from redops.contexts.governance.domain.errors import (
+    GateDecisionError,
+    UnapprovedAssetError,
+)
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
 from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
@@ -42,9 +45,6 @@ SCRIPT_V2 = AssetVersionRef("authority-amplifier-script", 2)
 VIDEO_V1 = AssetVersionRef("authority-amplifier-video", 1)
 ASSETS = frozenset({SCRIPT_V1, VIDEO_V1})
 TEMPLATE = stage_zero_to_ten_template(VERSION)
-STAGE7_ASSETS = frozenset(
-    AssetVersionRef(kind, 1) for kind in TEMPLATE.required_asset_kinds(7)
-)
 
 
 def approved(asset, *, scope=SCOPE, on=TODAY, expires_on=None):
@@ -174,24 +174,11 @@ class PerAssetApprovalTests(unittest.TestCase):
 
 
 class FactoryAssetApprovalTests(unittest.TestCase):
-    def test_factory_requires_asset_approvals_for_a_passing_decision(self):
-        with self.assertRaises(UnapprovedAssetError):
-            GateDecision.from_gate(
-                approvable_gate(),
-                ledger=ledger_through(7),
-                reviewer="client-approver-1",
-                scope=SCOPE,
-                checkpoint_evidence="rubric passed",
-                disposition=GateDisposition.APPROVED,
-                rationale="client approved the exact script and creative",
-                on=TODAY,
-                assigned_owner="production-manager",
-                due_on=DATE_DUE,
-            )
+    def test_factory_records_the_gates_recorded_approvals(self):
+        gate = approvable_gate()
 
-    def test_factory_records_a_passing_decision_with_asset_approvals(self):
         record = GateDecision.from_gate(
-            approvable_gate(),
+            gate,
             ledger=ledger_through(7),
             reviewer="client-approver-1",
             scope=SCOPE,
@@ -201,11 +188,33 @@ class FactoryAssetApprovalTests(unittest.TestCase):
             on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
-            asset_approvals=tuple(approved(asset) for asset in STAGE7_ASSETS),
         )
 
+        self.assertEqual(gate.asset_approvals, record.asset_approvals)
         self.assertTrue(record.authorizes_downstream())
         self.assertEqual(frozenset(), record.unapproved_assets())
+
+    def test_factory_refuses_a_passing_decision_when_the_gate_has_no_approvals(self):
+        gate = StageGate.from_template(
+            TEMPLATE, 7, {kind: 1 for kind in TEMPLATE.required_asset_kinds(7)}
+        )
+        gate.state = GateState.APPROVED
+        gate.proposed_by = "specialist-1"
+        gate.approver = "client-approver-1"
+
+        with self.assertRaises(GateDecisionError):
+            GateDecision.from_gate(
+                gate,
+                ledger=ledger_through(7),
+                reviewer="client-approver-1",
+                scope=SCOPE,
+                checkpoint_evidence="rubric passed",
+                disposition=GateDisposition.APPROVED,
+                rationale="premature",
+                on=TODAY,
+                assigned_owner="production-manager",
+                due_on=DATE_DUE,
+            )
 
 
 if __name__ == "__main__":

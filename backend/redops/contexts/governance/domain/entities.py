@@ -250,7 +250,6 @@ class GateDecision:
         due_on: date,
         next_action: str = "",
         waiver: Waiver | None = None,
-        asset_approvals: tuple["ApprovalRequest", ...] = (),
     ) -> GateDecision:
         """Record a decision against a gate, refusing to coerce a bad gate.
 
@@ -261,9 +260,11 @@ class GateDecision:
         application boundary cannot inject an approved prerequisite that has no
         recorded ``GateDecision`` (SPEC.md section 4). This prevents recording an
         approval for a gate that is missing an exact asset version, has an
-        unapproved prerequisite, or lacks a designated approver. The caller also
-        supplies the durable per-asset ``ApprovalRequest``s, which the decision
-        validates so a self-declared approved asset set cannot pass a gate.
+        unapproved prerequisite, or lacks a designated approver. The decision
+        records the gate's own durable per-asset ``ApprovalRequest``s, so the
+        evidence the decision pins is exactly the evidence the gate recorded and
+        the policy evaluated; a caller cannot substitute a different approval
+        set (SPEC.md sections 3 and 4).
         """
         if disposition.is_passing:
             from redops.contexts.governance.domain.policies import (
@@ -303,7 +304,7 @@ class GateDecision:
             due_on=due_on,
             next_action=next_action,
             waiver=waiver,
-            asset_approvals=asset_approvals,
+            asset_approvals=gate.asset_approvals,
         )
 
     @property

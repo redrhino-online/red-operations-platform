@@ -271,9 +271,6 @@ class GateLedgerDerivedStateTests(unittest.TestCase):
             on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
-            asset_approvals=tuple(
-                approvals(gate.required_assets, "stage-2-downstream")
-            ),
         )
         self.ledger.record(decision)
 

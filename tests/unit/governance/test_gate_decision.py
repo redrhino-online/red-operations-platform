@@ -183,9 +183,6 @@ class GateDecisionAccountabilityTests(unittest.TestCase):
             on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
-            asset_approvals=tuple(
-                asset_approvals(gate.required_assets, "stage-8-funnel-integration")
-            ),
         )
 
         self.assertEqual("production-manager", decision.assigned_owner)
@@ -254,9 +251,6 @@ class GateDecisionFromGateTests(unittest.TestCase):
             on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
-            asset_approvals=tuple(
-                asset_approvals(gate.required_assets, "stage-8-funnel-integration")
-            ),
         )
 
         self.assertEqual(gate.required_assets, decision.required_assets)
