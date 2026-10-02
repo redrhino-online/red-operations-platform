@@ -36,19 +36,22 @@ CORRELATION = "corr-123"
 SCOPE = "stage-8-funnel-integration"
 
 
-def script_approval():
+def script_approval(expires_on=None):
     request = ApprovalRequest(
         asset=SCRIPT_V1,
         scope=SCOPE,
         requested_by="specialist-1",
         approver="client-approver-1",
+        expires_on=expires_on,
     )
     request.approve(actor="client-approver-1", on=TODAY)
     return request
 
 
 def accepted_decision(
-    stage_number: int = 7, template_version: str = "2026.1"
+    stage_number: int = 7,
+    template_version: str = "2026.1",
+    expires_on=None,
 ) -> GateDecision:
     return GateDecision(
         stage_number=stage_number,
@@ -63,7 +66,7 @@ def accepted_decision(
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
-        asset_approvals=(script_approval(),),
+        asset_approvals=(script_approval(expires_on),),
     )
 
 
@@ -231,6 +234,53 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
         self.assertIs(StageStatus.COMPLETE, run.status)
         self.assertTrue(run.is_complete)
         self.assertEqual(TODAY, run.exited_at)
+        self.assertIs(decision, run.accepted_decision)
+
+
+class StageCompletionExpiryTests(unittest.TestCase):
+    """Stage completion is evaluated at the transition instant.
+
+    SPEC.md section 4: "a failed or expired prerequisite blocks dependent
+    authorization until resolved". Completing the stage is exactly the
+    downstream authorization the accepted decision grants, so stale, expired
+    evidence can no longer be used to complete a stage on a later date.
+    """
+
+    AFTER_EXPIRY = date(2026, 10, 17)
+
+    def test_a_stage_cannot_complete_on_expired_accepted_evidence(self):
+        run = stage_run()
+        run.start(actor="specialist-1", reason="begin", on=TODAY, correlation_id=CORRELATION)
+        decision = accepted_decision(expires_on=DATE_DUE)
+
+        with self.assertRaises(StageGateNotAcceptedError):
+            run.complete(
+                decision=decision,
+                actor="client-approver-1",
+                reason="accepting after the approvals lapsed",
+                on=self.AFTER_EXPIRY,
+                correlation_id=CORRELATION,
+            )
+
+        self.assertIs(StageStatus.WORKING, run.status)
+        self.assertFalse(run.is_complete)
+        self.assertIsNone(run.exited_at)
+        self.assertIsNone(run.accepted_decision)
+
+    def test_a_stage_can_complete_while_accepted_evidence_is_effective(self):
+        run = stage_run()
+        run.start(actor="specialist-1", reason="begin", on=TODAY, correlation_id=CORRELATION)
+        decision = accepted_decision(expires_on=DATE_DUE)
+
+        run.complete(
+            decision=decision,
+            actor="client-approver-1",
+            reason="gate approved within the evidence window",
+            on=DATE_DUE,
+            correlation_id=CORRELATION,
+        )
+
+        self.assertIs(StageStatus.COMPLETE, run.status)
         self.assertIs(decision, run.accepted_decision)
 
 

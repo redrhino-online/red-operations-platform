@@ -639,7 +639,12 @@ class StageRun:
         Completion must be backed by the durable GateDecision, not a transient
         gate object, so the stage pins the exact evidence the reviewer accepted.
         The decision must be for this stage and template version and must
-        authorize downstream use. Activity alone never reaches here.
+        authorize downstream use at the transition instant. An accepted
+        decision whose pinned per-asset approvals have since expired no longer
+        authorizes the completion, so a stage cannot be marked complete on
+        stale evidence (SPEC.md section 4: "a failed or expired prerequisite
+        blocks dependent authorization until resolved"). Activity alone never
+        reaches here.
         """
         if decision.stage_number != self.stage_number:
             raise StageGateNotAcceptedError(
@@ -651,9 +656,10 @@ class StageRun:
                 f"decision template version {decision.template_version!r} does "
                 f"not match stage template version {self.template_version!r}"
             )
-        if not decision.authorizes_downstream():
+        if not decision.authorizes_downstream_at(on):
             raise StageGateNotAcceptedError(
-                "decision is not passing or has no intended downstream scope"
+                "decision is not passing, has no intended downstream scope, "
+                "or its pinned approvals have expired at the transition instant"
             )
         transition = self._transition(
             StageStatus.COMPLETE,

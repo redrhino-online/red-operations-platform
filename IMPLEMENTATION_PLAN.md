@@ -4,72 +4,71 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T13:35:37Z (Ralph cycle 39).
-- Selected item: gate integrity — make prerequisite authorization time-aware:
-  `GateLedger` and the `GateIntegrityPolicy` evaluation it feeds must treat a
-  prerequisite's passing `GateDecision` as blocking once the exact asset
-  approvals that decision pinned have expired at the evaluation instant (SPEC.md
-  section 4: "a failed or expired prerequisite blocks dependent authorization
-  until resolved"; Phase 5 "stale gate approval produces one owned
-  intervention"). It outranked the Operations command-center intervention
-  ranking (a downstream view, SPEC.md section 7) and the stage 2-10
-  `GateDecision` wiring (blocked on the unresolved asset-version
-  representation): it closes the last dependency-graph integrity gap named by
-  cycle 38, needs no unresolved decision, and is independently verifiable.
+- Cycle timestamp: 2026-10-02T13:37:19Z (Ralph cycle 40).
+- Selected item: gate integrity — make stage completion time-aware:
+  `StageRun.complete` must re-check the accepted `GateDecision` at the
+  transition instant (`on`) through `GateDecision.authorizes_downstream_at(on)`
+  rather than the no-argument decision-instant check, so a stage cannot be
+  marked complete on stale, expired evidence (SPEC.md section 4: "a failed or
+  expired prerequisite blocks dependent authorization until resolved"). This
+  was the highest priority ready next item named by cycle 39; it outranked the
+  Operations command-center intervention ranking (a downstream view, SPEC.md
+  section 7) and the stage 2-10 `GateDecision` wiring (blocked on the
+  asset-version representation), needs no unresolved decision, and is
+  independently verifiable.
 - Outcome: completed and verified.
-- Evidence: new tests in
-  `tests/unit/governance/test_gate_prerequisite_expiry.py`
-  (`GateLedgerPrerequisiteExpiryTests`,
-  `GateDecisionPrerequisiteExpiryTests`, `GateDecisionEffectivenessTests`).
-  Before the change `GateLedger.has_passing_decision` and `dependency_states()`
-  read only the prerequisite's latest disposition, so a prerequisite whose
-  approval had lapsed still appeared `APPROVED` and authorized a dependent
-  passing decision and a dependent `GateDecision.from_gate`. `GateDecision` now
-  exposes `unapproved_assets_at(on)` / `authorizes_downstream_at(on)` and the
-  no-argument `authorizes_downstream()` delegates to the decision instant;
-  `GateLedger.has_passing_decision` / `dependency_states` require a keyword-only
-  `on` instant, map a passing decision whose approvals have expired to
-  `GateState.BLOCKED`, and `GateLedger.record` / `GateDecision.from_gate` pass
-  the evaluation instant; `PipelineProgress.from_ledger` now requires `on` so
-  verified progress no longer counts an expired gate. Running
+- Evidence: two new behavioral tests in
+  `tests/unit/governance/test_stage_run.py`
+  (`StageCompletionExpiryTests`): a stage run cannot complete on a later date
+  once the accepted decision's pinned asset approvals have expired (the stage
+  stays `WORKING`, `exited_at` and `accepted_decision` stay unset), and a stage
+  can still complete exactly on the approval expiry boundary. Before the change
+  `StageRun.complete` accepted the expired decision because it called
+  `GateDecision.authorizes_downstream()`, which evaluated at `decided_on`;
+  `StageRun.complete` now calls
+  `GateDecision.authorizes_downstream_at(on)` with the transition instant and
+  raises `StageGateNotAcceptedError` otherwise. Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 377 passed, up from 369 (eight new tests). `python3 -m pyflakes` on
-  the two touched domain modules and the seven touched governance test modules
-  is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the ledger, integrity policy and durable `GateDecision` now
-  agree on the version, intended scope, expiry and evaluation instant of a
-  prerequisite's evidence, so an expired prerequisite is visible as blocking
-  across the dependency graph. One adjacent stage-boundary rule is still
-  evaluated only at the decision instant, not at the transition instant:
-  `StageRun.complete` calls `GateDecision.authorizes_downstream()` (which now
-  evaluates at the decision's `decided_on`), so a stage could be completed on a
-  later date after the accepted decision's pinned approvals expired, even though
-  a dependent gate would now be blocked.
+  reports 379 passed, up from 377. `python3 -m pyflakes` on the touched
+  governance entity module and stage-run test module is clean. `ruff` and
+  `mypy` remain uninstalled.
+- New findings: the dependency graph still evaluates prerequisite validity only
+  one level deep. `GateLedger.has_passing_decision(stage, on=...)` checks only
+  the stage's own latest `GateDecision`; it does not re-check that stage's own
+  prerequisites at `on`. So if stage 7's approvals expire, stage 8's earlier
+  passing decision (made while stage 7 was valid) still reports passing, and
+  `GateLedger.record` would accept a stage 9 passing decision that rests on the
+  expired stage 7 evidence. `dependency_states()` reports the immediate
+  prerequisite as `BLOCKED` but the transitive chain is not revoked:
+  "a failed or expired prerequisite blocks dependent authorization until
+  resolved" is not yet closed transitively, and `PipelineProgress.from_ledger`
+  can over-count approved gates behind an expired upstream stage.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, scheduler/worker
   topology, the client-designated approver identities, and pilot metric targets.
   The asset-version representation (integer versus semantic) remains unresolved
-  and continues to block stage 2-10 `GateDecision` wiring. No fork or cluster
-  facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or `argocd`
-  present.
-- Highest priority ready next item: make stage completion time-aware —
-  `StageRun.complete` must re-check the accepted `GateDecision` against its
-  transition instant (`on`) through `GateDecision.authorizes_downstream_at(on)`
-  rather than the no-argument decision-instant check, so a stage cannot be
-  marked complete on stale, expired evidence and "a failed or expired
-  prerequisite blocks dependent authorization until resolved" holds at the stage
-  boundary as well as the dependency edge (SPEC.md section 4). It outranks the
-  Operations command-center intervention ranking (a downstream view) and the
-  stage 2-10 wiring (blocked on the asset-version representation), because it
-  closes the adjacent verified stage-boundary gap and needs no unresolved
-  decision. Prerequisite: none; likely threads the existing `StageRun`
-  transition instant into the completion authorization check. Pipeline mapping:
-  no single stage; it hardens the gate contract for every stage 0-10 completion.
-  Blocked downstream dependency: persistence and the production manager view,
-  blocked on the storage ADR. Deferred cross-context items: the stage
-  2/3/4/5/6/7/8/9/10 `GateDecision` wiring, blocked on the asset-version
-  representation decision, and all persistence, blocked on the storage ADR.
+  in the plan and continues to block stage 2-10 `GateDecision` wiring, although
+  every gate type in code is integer-valued today (`AssetVersionRef.version:
+  int`). No fork or cluster facts invented; no `docs/`, fork checkout,
+  `kubectl`, `helm`, or `argocd` present.
+- Highest priority ready next item: make prerequisite authorization
+  transitively time-aware — `GateLedger.has_passing_decision(stage, on=...)`
+  must treat a stage as not passing when the stage itself or any of its
+  transitive prerequisite stages lacks an authorization still effective at
+  `on` (memoized over the acyclic template), so an expired upstream approval
+  revokes every downstream passing decision at the evaluation instant. Then
+  `GateLedger.record`, `dependency_states`, `GateDecision.from_gate` and
+  `PipelineProgress.from_ledger` inherit the fix. It outranks the Operations
+  command-center intervention ranking (a downstream view) and the stage 2-10
+  wiring (blocked on the asset-version representation), because it closes the
+  remaining verified dependency-enforcement gap and needs no unresolved
+  decision. Prerequisite: none. Pipeline mapping: no single stage; it hardens
+  gate integrity for every stage 0-10 dependency edge. Blocked downstream
+  dependency: persistence and the production manager view, blocked on the
+  storage ADR. Deferred cross-context items: the stage 2/3/4/5/6/7/8/9/10
+  `GateDecision` wiring, blocked on the asset-version representation decision,
+  and all persistence, blocked on the storage ADR.
 
 ## Product priority: the gated production engagement
 
