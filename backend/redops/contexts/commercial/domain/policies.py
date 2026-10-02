@@ -20,10 +20,13 @@ from redops.contexts.commercial.domain.errors import (
     AvatarLockedError,
     CampaignMessageAlignmentError,
     OfferReadinessError,
+    UnsourcedDiagnosisEvidenceError,
 )
 from redops.contexts.commercial.domain.value_objects import (
     AvatarProfile,
+    BusinessSnapshot,
     MethodReference,
+    OfferFunnelAudit,
     OfferImpactAssessment,
 )
 from redops.contexts.knowledge.domain.entities import Claim
@@ -239,6 +242,23 @@ class CampaignMessageAlignmentPolicy:
         return None
 
 
+def sourced_claim_ids(tenant_id: str, claims: Iterable[Claim]) -> frozenset[str]:
+    """Return the claim ids that are known, directly sourced and same-tenant.
+
+    SPEC.md sections 1 and 4: every output has a source, and derived or proposed
+    material must never silently become known. A claim is usable as evidence only
+    when it is a ``KNOWN`` claim with a direct source and belongs to the same
+    client.
+    """
+    return frozenset(
+        claim.claim_id
+        for claim in claims
+        if claim.tenant_id == tenant_id
+        and claim.provenance is ProvenanceClass.KNOWN
+        and claim.is_directly_sourced
+    )
+
+
 class AvatarLockedPolicy:
     """Refuses the stage 1 "Avatar Locked" checkpoint on an unsourced avatar.
 
@@ -254,17 +274,62 @@ class AvatarLockedPolicy:
     def require_locked(
         self, profile: AvatarProfile, claims: Iterable[Claim]
     ) -> None:
-        sourced = {
-            claim.claim_id
-            for claim in claims
-            if claim.tenant_id == profile.tenant_id
-            and claim.provenance is ProvenanceClass.KNOWN
-            and claim.is_directly_sourced
-        }
+        sourced = sourced_claim_ids(profile.tenant_id, claims)
         for claim_id in profile.customer_evidence_claim_ids:
             if claim_id not in sourced:
                 raise AvatarLockedError(
                     f"avatar {profile.avatar_id!r} cannot lock: customer "
                     f"evidence {claim_id!r} is not a known, directly sourced "
                     "claim for this tenant"
+                )
+
+
+class DiagnosisEvidencePolicy:
+    """Refuses a stage 1 diagnosis asset evidenced by unsourced material.
+
+    SPEC.md section 4, stage 1 "Diagnose" and SPEC.md section 1: the business
+    snapshot and the offer and funnel audit are required diagnosis assets, and
+    every output has a source. Each asset's evidence must be a known, directly
+    sourced Knowledge claim of the same client, so an unsourced, derived,
+    proposed or foreign claim cannot be represented as stage 1 diagnosis
+    evidence (SPEC.md sections 1, 4 and 11).
+    """
+
+    def require_business_snapshot_sourced(
+        self, snapshot: BusinessSnapshot, claims: Iterable[Claim]
+    ) -> None:
+        self._require(
+            "business snapshot",
+            snapshot.snapshot_id,
+            snapshot.tenant_id,
+            snapshot.evidence_claim_ids,
+            claims,
+        )
+
+    def require_offer_funnel_audit_sourced(
+        self, audit: OfferFunnelAudit, claims: Iterable[Claim]
+    ) -> None:
+        self._require(
+            "offer and funnel audit",
+            audit.audit_id,
+            audit.tenant_id,
+            audit.evidence_claim_ids,
+            claims,
+        )
+
+    @staticmethod
+    def _require(
+        label: str,
+        asset_id: str,
+        tenant_id: str,
+        evidence_claim_ids: tuple[str, ...],
+        claims: Iterable[Claim],
+    ) -> None:
+        sourced = sourced_claim_ids(tenant_id, claims)
+        for claim_id in evidence_claim_ids:
+            if claim_id not in sourced:
+                raise UnsourcedDiagnosisEvidenceError(
+                    f"{label} {asset_id!r} cannot be evidenced: claim "
+                    f"{claim_id!r} is not a known, directly sourced claim for "
+                    "this tenant"
                 )

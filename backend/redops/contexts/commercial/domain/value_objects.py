@@ -8,8 +8,10 @@ from typing import TYPE_CHECKING
 
 from redops.contexts.commercial.domain.errors import (
     InvalidAvatarProfileError,
+    InvalidBusinessSnapshotError,
     InvalidDeliverySpecificationError,
     InvalidOfferError,
+    InvalidOfferFunnelAuditError,
 )
 from redops.contexts.method.domain.entities import SignatureSolution
 from redops.contexts.method.domain.value_objects import (
@@ -295,3 +297,92 @@ class AvatarProfile:
                     raise InvalidAvatarProfileError(
                         f"{label} entries must not be blank"
                     )
+
+
+def _require_entries(
+    entries: tuple[str, ...], label: str, error: type[ValueError]
+) -> None:
+    if not entries:
+        raise error(f"requires at least one {label} entry")
+    for entry in entries:
+        if not entry or not entry.strip():
+            raise error(f"{label} entries must not be blank")
+
+
+@dataclass(frozen=True)
+class BusinessSnapshot:
+    """The stage 1 business snapshot, an input to the "Avatar Locked" checkpoint.
+
+    SPEC.md section 4, stage 1 "Diagnose": the required asset package names the
+    business snapshot alongside the offer and funnel audit and the avatar. It
+    records the current business state the diagnosis is grounded on: the business
+    model, the offers currently sold, how demand currently arrives, the constraints
+    on the business, and a narrative. It is frozen and reject-only, and it carries
+    the Knowledge claim ids that evidence it because SPEC.md section 1 requires
+    every output to have a source.
+    """
+
+    snapshot_id: str
+    tenant_id: str
+    business_model: str
+    current_offers: tuple[str, ...]
+    lead_sources: tuple[str, ...]
+    constraints: tuple[str, ...]
+    narrative: str
+    evidence_claim_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("business snapshot id", self.snapshot_id),
+            ("business snapshot tenant id", self.tenant_id),
+            ("business model", self.business_model),
+            ("business snapshot narrative", self.narrative),
+        ):
+            if not value or not value.strip():
+                raise InvalidBusinessSnapshotError(f"{label} is required")
+        for label, entries in (
+            ("current offers", self.current_offers),
+            ("lead sources", self.lead_sources),
+            ("constraints", self.constraints),
+            ("evidence", self.evidence_claim_ids),
+        ):
+            _require_entries(entries, label, InvalidBusinessSnapshotError)
+
+
+@dataclass(frozen=True)
+class OfferFunnelAudit:
+    """The stage 1 offer and funnel audit, an input to the "Avatar Locked" checkpoint.
+
+    SPEC.md section 4, stage 1 "Diagnose": the required asset package names the
+    offer and funnel audit. It records what the diagnosis found about the current
+    offer and customer path: the offer findings, the funnel steps, the conversion
+    evidence, the identified gaps, and a narrative. It is frozen and reject-only,
+    and it carries the Knowledge claim ids that evidence it because SPEC.md section
+    1 requires every output to have a source.
+    """
+
+    audit_id: str
+    tenant_id: str
+    offer_findings: tuple[str, ...]
+    funnel_steps: tuple[str, ...]
+    conversion_evidence: tuple[str, ...]
+    gaps: tuple[str, ...]
+    narrative: str
+    evidence_claim_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("offer and funnel audit id", self.audit_id),
+            ("offer and funnel audit tenant id", self.tenant_id),
+            ("offer and funnel audit narrative", self.narrative),
+        ):
+            if not value or not value.strip():
+                raise InvalidOfferFunnelAuditError(f"{label} is required")
+        for label, entries in (
+            ("offer findings", self.offer_findings),
+            ("funnel steps", self.funnel_steps),
+            ("conversion evidence", self.conversion_evidence),
+            ("gaps", self.gaps),
+            ("evidence", self.evidence_claim_ids),
+        ):
+            _require_entries(entries, label, InvalidOfferFunnelAuditError)

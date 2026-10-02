@@ -90,3 +90,36 @@ class AvatarLockedError(CommercialError):
     a known, directly sourced claim of the same client cannot support the lock.
     """
 
+
+class InvalidBusinessSnapshotError(CommercialError, ValueError):
+    """A stage 1 business snapshot was built without a current-state dimension.
+
+    SPEC.md section 4, stage 1 "Diagnose": the required asset package names the
+    business snapshot. A snapshot that leaves the current business model, offers,
+    lead sources, constraints or narrative unspecified cannot be represented as a
+    diagnosable asset. SPEC.md section 1 also requires every output to have a
+    source, so the snapshot records the claim ids that evidence it.
+    """
+
+
+class InvalidOfferFunnelAuditError(CommercialError, ValueError):
+    """A stage 1 offer and funnel audit was built without an audit dimension.
+
+    SPEC.md section 4, stage 1 "Diagnose": the required asset package names the
+    offer and funnel audit. An audit that leaves the offer findings, funnel steps,
+    conversion evidence, gaps or narrative unspecified cannot be represented as a
+    diagnosable asset. SPEC.md section 1 also requires every output to have a
+    source, so the audit records the claim ids that evidence it.
+    """
+
+
+class UnsourcedDiagnosisEvidenceError(CommercialError):
+    """A stage 1 diagnosis asset was asked to use unsourced or foreign evidence.
+
+    SPEC.md sections 1 and 4: every output has a source, so the business snapshot
+    and the offer and funnel audit must be evidenced by known, directly sourced
+    Knowledge claims of the same client. Evidence that is unsourced, merely
+    derived or proposed, or belongs to another client cannot support a stage 1
+    diagnosis asset. A missing claim cannot be represented as evidence.
+    """
+
