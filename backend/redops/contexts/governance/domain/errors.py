@@ -39,6 +39,26 @@ class AssetPackageMismatchError(GovernanceError, ValueError):
     """A supplied asset package does not match the stage's required asset kinds."""
 
 
+class VersionlessAssetError(GovernanceError, ValueError):
+    """A real stage asset was offered for pinning without an exact positive version.
+
+    A passing gate pins exact asset versions, and approval is version specific
+    (SPEC.md sections 3, 4 and 11). An asset that names no positive version
+    cannot be pinned as exact evidence, so it is refused rather than treated as
+    an unversioned asset.
+    """
+
+
+class CrossTenantAssetError(GovernanceError, ValueError):
+    """A real stage asset from another tenant was offered as gate evidence.
+
+    SPEC.md section 3 requires every tenant resource to belong to exactly one
+    client and every query to be tenant scoped. A gate may pin only assets owned
+    by the workspace tenant, so an asset from another client is refused rather
+    than silently pinned.
+    """
+
+
 class AmbiguousAssetPackageError(AssetPackageMismatchError):
     """A package pins more than one version of the same asset kind.
 

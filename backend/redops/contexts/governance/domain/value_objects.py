@@ -7,7 +7,11 @@ from datetime import date
 from enum import Enum
 from typing import TYPE_CHECKING, Iterable
 
-from redops.contexts.governance.domain.errors import InvalidStageTemplateError
+from redops.contexts.governance.domain.errors import (
+    CrossTenantAssetError,
+    InvalidStageTemplateError,
+    VersionlessAssetError,
+)
 
 if TYPE_CHECKING:
     from redops.contexts.governance.domain.entities import GateLedger
@@ -114,6 +118,60 @@ class AssetVersionRef:
 
     def __str__(self) -> str:
         return f"{self.asset_id}@{self.version}"
+
+
+@dataclass(frozen=True)
+class StageAssetVersion:
+    """An exact version of one real stage asset, scoped to one tenant.
+
+    A stage asset produced by a bounded context (an intake asset, an avatar, a
+    signature solution) has a unique id, one owning tenant, the canonical
+    template asset kind and a positive version. The governance gate pins an
+    ``AssetVersionRef`` keyed by the asset *kind*, so the owning tenant must be
+    checked against the workspace before the asset can become gate evidence
+    (SPEC.md sections 3 and 4: every tenant resource belongs to exactly one
+    client; a passing gate pins the exact evidence and intended downstream use).
+
+    The value object is frozen and reject-only: an asset with no positive
+    version cannot be represented as an exact version, and ``pin`` refuses an
+    asset whose tenant is not the workspace tenant rather than silently pinning
+    another client's asset.
+    """
+
+    asset_id: str
+    tenant_id: str
+    kind: str
+    version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("stage asset id", self.asset_id),
+            ("stage asset tenant id", self.tenant_id),
+            ("stage asset kind", self.kind),
+        ):
+            if not value or not value.strip():
+                raise VersionlessAssetError(
+                    f"{label} is required to pin an exact asset version"
+                )
+        if not isinstance(self.version, int) or self.version < 1:
+            raise VersionlessAssetError(
+                "a real stage asset requires a positive integer version to be "
+                "pinned; a versionless asset is not exact evidence"
+            )
+
+    def pin(self, *, tenant_id: str) -> AssetVersionRef:
+        """Return the exact ``AssetVersionRef`` this asset pins for one workspace.
+
+        The workspace tenant is supplied by the caller because governance never
+        invents the owning client (SPEC.md section 11). A mismatched tenant is
+        refused so a cross-client asset cannot be pinned as gate evidence.
+        """
+        if self.tenant_id != tenant_id:
+            raise CrossTenantAssetError(
+                f"stage asset {self.asset_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, not workspace tenant {tenant_id!r}"
+            )
+        return AssetVersionRef(self.kind, self.version)
 
 
 def duplicate_asset_kinds(
