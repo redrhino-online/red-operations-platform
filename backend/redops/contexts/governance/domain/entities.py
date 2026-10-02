@@ -442,47 +442,40 @@ class GateLedger:
                 f"stage {decision.stage_number} is not defined in template "
                 f"{self._template.version!r}"
             )
-        if decision.is_passing:
-            ambiguous = duplicate_asset_kinds(decision.required_assets)
-            if ambiguous:
-                names = ", ".join(sorted(ambiguous))
-                raise AmbiguousAssetPackageError(
-                    "a passing decision must pin exactly one exact version per "
-                    f"asset kind; multiple versions declared for: {names}"
-                )
-            canonical_kinds = self._template.required_asset_kinds(
-                decision.stage_number
+        ambiguous = duplicate_asset_kinds(decision.required_assets)
+        if ambiguous:
+            names = ", ".join(sorted(ambiguous))
+            raise AmbiguousAssetPackageError(
+                "a decision must pin exactly one exact version per asset kind; "
+                f"multiple versions declared for: {names}"
             )
-            declared_kinds = {
-                asset.asset_id for asset in decision.required_assets
-            }
-            if declared_kinds != canonical_kinds:
-                missing = sorted(canonical_kinds - declared_kinds)
-                extra = sorted(declared_kinds - canonical_kinds)
-                detail: list[str] = []
-                if missing:
-                    detail.append(
-                        f"missing asset kinds: {', '.join(missing)}"
-                    )
-                if extra:
-                    detail.append(
-                        f"unexpected asset kinds: {', '.join(extra)}"
-                    )
-                raise AssetPackageMismatchError(
-                    f"stage {decision.stage_number} passing decision does not "
-                    f"match template {self._template.version!r} required asset "
-                    f"package: {'; '.join(detail)}"
-                )
-            canonical_checkpoint = self._template.definition_for(
-                decision.stage_number
-            ).checkpoint
-            if decision.checkpoint != canonical_checkpoint:
-                raise CheckpointMismatchError(
-                    f"stage {decision.stage_number} passing decision names "
-                    f"checkpoint {decision.checkpoint!r} but template "
-                    f"{self._template.version!r} requires "
-                    f"{canonical_checkpoint!r}"
-                )
+        canonical_kinds = self._template.required_asset_kinds(
+            decision.stage_number
+        )
+        declared_kinds = {asset.asset_id for asset in decision.required_assets}
+        if declared_kinds != canonical_kinds:
+            missing = sorted(canonical_kinds - declared_kinds)
+            extra = sorted(declared_kinds - canonical_kinds)
+            detail: list[str] = []
+            if missing:
+                detail.append(f"missing asset kinds: {', '.join(missing)}")
+            if extra:
+                detail.append(f"unexpected asset kinds: {', '.join(extra)}")
+            raise AssetPackageMismatchError(
+                f"stage {decision.stage_number} decision does not match "
+                f"template {self._template.version!r} required asset package: "
+                f"{'; '.join(detail)}"
+            )
+        canonical_checkpoint = self._template.definition_for(
+            decision.stage_number
+        ).checkpoint
+        if decision.checkpoint != canonical_checkpoint:
+            raise CheckpointMismatchError(
+                f"stage {decision.stage_number} decision names checkpoint "
+                f"{decision.checkpoint!r} but template "
+                f"{self._template.version!r} requires {canonical_checkpoint!r}"
+            )
+        if decision.is_passing:
             unsatisfied = sorted(
                 stage
                 for stage in self._template.dependencies_of(decision.stage_number)

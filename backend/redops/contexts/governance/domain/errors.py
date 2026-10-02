@@ -40,10 +40,10 @@ class AssetPackageMismatchError(GovernanceError, ValueError):
 
 
 class AmbiguousAssetPackageError(AssetPackageMismatchError):
-    """A passing package pins more than one version of the same asset kind.
+    """A package pins more than one version of the same asset kind.
 
-    A gate approves an exact version per required asset kind. Two versions of one
-    kind leave the approved version ambiguous, so the package is refused instead
+    A gate records an exact version per required asset kind. Two versions of one
+    kind leave the version at issue ambiguous, so the package is refused instead
     of being treated as an exact pin (SPEC.md sections 3 and 4).
     """
 
@@ -57,7 +57,7 @@ class UnsatisfiedPrerequisiteError(GateLedgerError):
 
 
 class CheckpointMismatchError(GateLedgerError):
-    """A passing decision named a checkpoint rubric other than the stage's canonical one."""
+    """A decision named a checkpoint rubric other than the stage's canonical one."""
 
 
 class GateDecisionError(GovernanceError, ValueError):
