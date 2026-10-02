@@ -13,6 +13,7 @@ import unittest
 from datetime import date
 
 from redops.contexts.governance.domain.entities import (
+    ApprovalRequest,
     GateDecision,
     GateLedger,
     StageGate,
@@ -35,6 +36,18 @@ DATE_DUE = date(2026, 10, 16)
 TEMPLATE = stage_zero_to_ten_template(VERSION)
 
 
+def approvals(assets, scope):
+    for asset in assets:
+        request = ApprovalRequest(
+            asset=asset,
+            scope=scope,
+            requested_by="specialist-1",
+            approver="client-approver-1",
+        )
+        request.approve(actor="client-approver-1", on=TODAY)
+        yield request
+
+
 def versions_for(stage_number, version=1):
     return {
         kind: version for kind in TEMPLATE.required_asset_kinds(stage_number)
@@ -45,22 +58,25 @@ def canonical_passing(stage_number, version=VERSION, checkpoint=None):
     template = stage_zero_to_ten_template(version)
     if checkpoint is None:
         checkpoint = template.definition_for(stage_number).checkpoint
+    assets = frozenset(
+        AssetVersionRef(kind, 1)
+        for kind in template.required_asset_kinds(stage_number)
+    )
+    scope = f"stage-{stage_number + 1}-downstream"
     return GateDecision(
         stage_number=stage_number,
         template_version=version,
-        required_assets=frozenset(
-            AssetVersionRef(kind, 1)
-            for kind in template.required_asset_kinds(stage_number)
-        ),
+        required_assets=assets,
         checkpoint=checkpoint,
         checkpoint_evidence=f"stage {stage_number} rubric passed",
         reviewer="client-approver-1",
-        scope=f"stage-{stage_number + 1}-downstream",
+        scope=scope,
         disposition=GateDisposition.APPROVED,
         rationale="reviewed against the canonical checkpoint",
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        asset_approvals=tuple(approvals(assets, scope)),
     )
 
 
@@ -140,6 +156,9 @@ class GateDecisionCheckpointTests(unittest.TestCase):
             on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
+            asset_approvals=tuple(
+                approvals(gate.required_assets, "stage-8-funnel-integration")
+            ),
         )
 
         self.assertEqual("Authority Amplifier Approved", decision.checkpoint)

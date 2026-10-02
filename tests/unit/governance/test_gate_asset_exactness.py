@@ -14,6 +14,7 @@ import unittest
 from datetime import date
 
 from redops.contexts.governance.domain.entities import (
+    ApprovalRequest,
     GateDecision,
     GateLedger,
     StageGate,
@@ -33,6 +34,18 @@ DATE_DUE = date(2026, 10, 16)
 TEMPLATE = stage_zero_to_ten_template(VERSION)
 
 
+def approvals(assets, scope):
+    for asset in assets:
+        request = ApprovalRequest(
+            asset=asset,
+            scope=scope,
+            requested_by="specialist-1",
+            approver="client-approver-1",
+        )
+        request.approve(actor="client-approver-1", on=TODAY)
+        yield request
+
+
 def canonical_assets(stage_number: int) -> frozenset[AssetVersionRef]:
     return frozenset(
         AssetVersionRef(kind, 1)
@@ -42,6 +55,7 @@ def canonical_assets(stage_number: int) -> frozenset[AssetVersionRef]:
 
 def passing_decision(stage_number: int, assets) -> GateDecision:
     definition = TEMPLATE.definition_for(stage_number)
+    scope = f"stage-{stage_number + 1}-downstream"
     return GateDecision(
         stage_number=stage_number,
         template_version=VERSION,
@@ -49,12 +63,13 @@ def passing_decision(stage_number: int, assets) -> GateDecision:
         checkpoint=definition.checkpoint,
         checkpoint_evidence=f"stage {stage_number} rubric passed",
         reviewer="client-approver-1",
-        scope=f"stage-{stage_number + 1}-downstream",
+        scope=scope,
         disposition=GateDisposition.APPROVED,
         rationale="reviewed against the checkpoint",
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        asset_approvals=tuple(approvals(assets, scope)),
     )
 
 

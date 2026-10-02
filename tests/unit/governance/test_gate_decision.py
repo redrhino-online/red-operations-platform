@@ -17,6 +17,7 @@ from dataclasses import FrozenInstanceError
 from datetime import date
 
 from redops.contexts.governance.domain.entities import (
+    ApprovalRequest,
     GateDecision,
     GateLedger,
     StageGate,
@@ -37,6 +38,18 @@ VIDEO_V1 = AssetVersionRef("authority-amplifier-video", 1)
 TEMPLATE = stage_zero_to_ten_template("2026.1")
 
 
+def asset_approvals(assets, scope):
+    for asset in assets:
+        request = ApprovalRequest(
+            asset=asset,
+            scope=scope,
+            requested_by="specialist-1",
+            approver="client-approver-1",
+        )
+        request.approve(actor="client-approver-1", on=TODAY)
+        yield request
+
+
 def approvable_gate(**overrides) -> StageGate:
     versions = {kind: 1 for kind in TEMPLATE.required_asset_kinds(7)}
     gate = StageGate.from_template(TEMPLATE, 7, versions)
@@ -54,6 +67,7 @@ def passing_decision_for(stage_number: int) -> GateDecision:
         AssetVersionRef(kind, 1)
         for kind in TEMPLATE.required_asset_kinds(stage_number)
     )
+    scope = f"stage-{stage_number + 1}-downstream"
     return GateDecision(
         stage_number=stage_number,
         template_version=TEMPLATE.version,
@@ -61,12 +75,13 @@ def passing_decision_for(stage_number: int) -> GateDecision:
         checkpoint=TEMPLATE.definition_for(stage_number).checkpoint,
         checkpoint_evidence=f"stage {stage_number} rubric passed",
         reviewer="client-approver-1",
-        scope=f"stage-{stage_number + 1}-downstream",
+        scope=scope,
         disposition=GateDisposition.APPROVED,
         rationale="reviewed against the checkpoint",
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        asset_approvals=tuple(asset_approvals(assets, scope)),
     )
 
 
@@ -95,6 +110,12 @@ def passing_decision(**overrides) -> GateDecision:
         "next_action": "release stage 8 work",
     }
     values.update(overrides)
+    values.setdefault(
+        "asset_approvals",
+        tuple(asset_approvals(values["required_assets"], values["scope"]))
+        if values["scope"] and values["required_assets"]
+        else (),
+    )
     return GateDecision(**values)
 
 
@@ -160,6 +181,9 @@ class GateDecisionAccountabilityTests(unittest.TestCase):
             on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
+            asset_approvals=tuple(
+                asset_approvals(gate.required_assets, "stage-8-funnel-integration")
+            ),
         )
 
         self.assertEqual("production-manager", decision.assigned_owner)
@@ -228,6 +252,9 @@ class GateDecisionFromGateTests(unittest.TestCase):
             on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
+            asset_approvals=tuple(
+                asset_approvals(gate.required_assets, "stage-8-funnel-integration")
+            ),
         )
 
         self.assertEqual(gate.required_assets, decision.required_assets)

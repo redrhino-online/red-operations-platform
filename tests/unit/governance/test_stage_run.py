@@ -13,7 +13,11 @@ Rules under test come from SPEC.md sections 3 and 4:
 import unittest
 from datetime import date
 
-from redops.contexts.governance.domain.entities import GateDecision, StageRun
+from redops.contexts.governance.domain.entities import (
+    ApprovalRequest,
+    GateDecision,
+    StageRun,
+)
 from redops.contexts.governance.domain.errors import (
     IllegalStageTransitionError,
     StageGateNotAcceptedError,
@@ -29,6 +33,18 @@ SCRIPT_V1 = AssetVersionRef("authority-amplifier-script", 1)
 TODAY = date(2026, 10, 2)
 DATE_DUE = date(2026, 10, 16)
 CORRELATION = "corr-123"
+SCOPE = "stage-8-funnel-integration"
+
+
+def script_approval():
+    request = ApprovalRequest(
+        asset=SCRIPT_V1,
+        scope=SCOPE,
+        requested_by="specialist-1",
+        approver="client-approver-1",
+    )
+    request.approve(actor="client-approver-1", on=TODAY)
+    return request
 
 
 def accepted_decision(
@@ -41,12 +57,13 @@ def accepted_decision(
         checkpoint="Authority Amplifier Approved",
         checkpoint_evidence="authority-amplifier-approved-rubric passed",
         reviewer="client-approver-1",
-        scope="stage-8-funnel-integration",
+        scope=SCOPE,
         disposition=GateDisposition.APPROVED,
         rationale="script and supported claims reviewed with the client",
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        asset_approvals=(script_approval(),),
     )
 
 

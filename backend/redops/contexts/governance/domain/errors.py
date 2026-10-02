@@ -67,3 +67,12 @@ class GateDecisionError(GovernanceError, ValueError):
     intended scope, when a waiver has no risk owner, or when an approval is
     recorded for a gate that is not approvable.
     """
+
+
+class UnapprovedAssetError(GateDecisionError):
+    """A passing gate decision pinned an asset version with no covering approval.
+
+    Passing a gate requires a recorded, version-specific, in-scope, unexpired
+    approval for every pinned asset. A self-declared approved set is not
+    evidence of approval (SPEC.md sections 3, 4 and 11).
+    """

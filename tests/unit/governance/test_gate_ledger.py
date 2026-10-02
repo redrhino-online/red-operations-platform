@@ -14,6 +14,7 @@ import unittest
 from datetime import date
 
 from redops.contexts.governance.domain.entities import (
+    ApprovalRequest,
     GateDecision,
     GateLedger,
     StageGate,
@@ -37,6 +38,18 @@ TODAY = date(2026, 10, 2)
 DATE_DUE = date(2026, 10, 16)
 
 
+def approvals(assets, scope):
+    for asset in assets:
+        request = ApprovalRequest(
+            asset=asset,
+            scope=scope,
+            requested_by="specialist-1",
+            approver="client-approver-1",
+        )
+        request.approve(actor="client-approver-1", on=TODAY)
+        yield request
+
+
 def canonical_assets(stage_number: int, version: str = VERSION) -> frozenset[AssetVersionRef]:
     template = stage_zero_to_ten_template(version)
     kinds = template.required_asset_kinds(stage_number)
@@ -47,19 +60,22 @@ def canonical_assets(stage_number: int, version: str = VERSION) -> frozenset[Ass
 
 def passing(stage_number: int, version: str = VERSION) -> GateDecision:
     definition = stage_zero_to_ten_template(version).definition_for(stage_number)
+    assets = canonical_assets(stage_number, version)
+    scope = f"stage-{stage_number + 1}-downstream"
     return GateDecision(
         stage_number=stage_number,
         template_version=version,
-        required_assets=canonical_assets(stage_number, version),
+        required_assets=assets,
         checkpoint=definition.checkpoint if definition else "unknown-stage",
         checkpoint_evidence=f"stage {stage_number} rubric passed",
         reviewer="client-approver-1",
-        scope=f"stage-{stage_number + 1}-downstream",
+        scope=scope,
         disposition=GateDisposition.APPROVED,
         rationale="reviewed against the checkpoint",
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        asset_approvals=tuple(approvals(assets, scope)),
     )
 
 
@@ -154,6 +170,12 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
             decided_on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
+            asset_approvals=tuple(
+                approvals(
+                    frozenset({AssetVersionRef("client-record", 1)}),
+                    "stage-1-downstream",
+                )
+            ),
         )
 
         with self.assertRaises(AssetPackageMismatchError):
@@ -162,11 +184,13 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
         self.assertFalse(self.ledger.has_passing_decision(0))
 
     def test_refuses_a_passing_decision_with_a_non_canonical_asset_kind(self):
+        substituted_assets = canonical_assets(0) | frozenset(
+            {AssetVersionRef("made-up-asset", 1)}
+        )
         substituted = GateDecision(
             stage_number=0,
             template_version=VERSION,
-            required_assets=canonical_assets(0)
-            | frozenset({AssetVersionRef("made-up-asset", 1)}),
+            required_assets=substituted_assets,
             checkpoint="Production Ready",
             checkpoint_evidence="substituted package",
             reviewer="client-approver-1",
@@ -176,6 +200,9 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
             decided_on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
+            asset_approvals=tuple(
+                approvals(substituted_assets, "stage-1-downstream")
+            ),
         )
 
         with self.assertRaises(AssetPackageMismatchError):
@@ -243,6 +270,9 @@ class GateLedgerDerivedStateTests(unittest.TestCase):
             on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
+            asset_approvals=tuple(
+                approvals(gate.required_assets, "stage-2-downstream")
+            ),
         )
         self.ledger.record(decision)
 

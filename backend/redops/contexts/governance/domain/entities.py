@@ -16,6 +16,7 @@ from redops.contexts.governance.domain.errors import (
     GateLedgerError,
     SelfApprovalError,
     StageGateNotAcceptedError,
+    UnapprovedAssetError,
     UnknownStageError,
     UnsatisfiedPrerequisiteError,
 )
@@ -137,6 +138,7 @@ class GateDecision:
     due_on: date
     next_action: str = ""
     waiver: Waiver | None = None
+    asset_approvals: tuple["ApprovalRequest", ...] = ()
 
     def __post_init__(self) -> None:
         if self.stage_number < 0:
@@ -184,6 +186,14 @@ class GateDecision:
                 raise GateDecisionError(
                     "a passing gate decision cannot be recorded as a waiver"
                 )
+            unapproved = self.unapproved_assets()
+            if unapproved:
+                names = ", ".join(sorted(str(asset) for asset in unapproved))
+                raise UnapprovedAssetError(
+                    "a passing gate decision requires a recorded per-asset "
+                    "approval for each pinned asset version and scope; "
+                    f"unapproved: {names}"
+                )
 
         if self.disposition is GateDisposition.WAIVED and self.waiver is None:
             raise GateDecisionError(
@@ -206,6 +216,7 @@ class GateDecision:
         due_on: date,
         next_action: str = "",
         waiver: Waiver | None = None,
+        asset_approvals: tuple["ApprovalRequest", ...] = (),
     ) -> GateDecision:
         """Record a decision against a gate, refusing to coerce a bad gate.
 
@@ -216,7 +227,9 @@ class GateDecision:
         application boundary cannot inject an approved prerequisite that has no
         recorded ``GateDecision`` (SPEC.md section 4). This prevents recording an
         approval for a gate that is missing an exact asset version, has an
-        unapproved prerequisite, or lacks a designated approver.
+        unapproved prerequisite, or lacks a designated approver. The caller also
+        supplies the durable per-asset ``ApprovalRequest``s, which the decision
+        validates so a self-declared approved asset set cannot pass a gate.
         """
         if disposition.is_passing:
             from redops.contexts.governance.domain.policies import (
@@ -256,11 +269,29 @@ class GateDecision:
             due_on=due_on,
             next_action=next_action,
             waiver=waiver,
+            asset_approvals=asset_approvals,
         )
 
     @property
     def is_passing(self) -> bool:
         return self.disposition.is_passing
+
+    def unapproved_assets(self) -> frozenset[AssetVersionRef]:
+        """Pinned assets with no covering approved, in-scope, unexpired request.
+
+        Each asset must be approved for its exact version and the decision's
+        intended downstream scope. A pending, rejected, superseded or expired
+        request, a request for another version, or a request for another scope
+        does not cover the pinned asset (SPEC.md sections 3, 4 and 11).
+        """
+        return frozenset(
+            asset
+            for asset in self.required_assets
+            if not any(
+                approval.authorizes(asset, self.scope, self.decided_on)
+                for approval in self.asset_approvals
+            )
+        )
 
     def authorizes_downstream(self) -> bool:
         return (

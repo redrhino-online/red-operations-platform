@@ -16,7 +16,11 @@ import unittest
 from dataclasses import FrozenInstanceError
 from datetime import date
 
-from redops.contexts.governance.domain.entities import GateDecision, GateLedger
+from redops.contexts.governance.domain.entities import (
+    ApprovalRequest,
+    GateDecision,
+    GateLedger,
+)
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
 from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
@@ -34,21 +38,36 @@ def canonical_assets(stage_number: int) -> frozenset[AssetVersionRef]:
     return frozenset(AssetVersionRef(kind, 1) for kind in kinds)
 
 
+def approvals(assets, scope):
+    for asset in assets:
+        request = ApprovalRequest(
+            asset=asset,
+            scope=scope,
+            requested_by="specialist-1",
+            approver="client-approver-1",
+        )
+        request.approve(actor="client-approver-1", on=TODAY)
+        yield request
+
+
 def decision(stage_number: int, disposition: GateDisposition) -> GateDecision:
     definition = stage_zero_to_ten_template(VERSION).definition_for(stage_number)
+    assets = canonical_assets(stage_number)
+    scope = f"stage-{stage_number + 1}-downstream"
     return GateDecision(
         stage_number=stage_number,
         template_version=VERSION,
-        required_assets=canonical_assets(stage_number),
+        required_assets=assets,
         checkpoint=definition.checkpoint if definition else "unknown",
         checkpoint_evidence="rubric result",
         reviewer="client-approver-1",
-        scope=f"stage-{stage_number + 1}-downstream",
+        scope=scope,
         disposition=disposition,
         rationale="recorded for progress reporting",
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        asset_approvals=tuple(approvals(assets, scope)),
     )
 
 
