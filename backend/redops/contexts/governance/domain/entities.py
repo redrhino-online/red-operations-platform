@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Mapping
+from typing import Iterable, Mapping
 
 from redops.contexts.governance.domain.errors import (
     AmbiguousAssetPackageError,
@@ -26,6 +26,7 @@ from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
     GateDisposition,
     GateState,
+    StageAssetVersion,
     StageStatus,
     StageTemplate,
     StageTransition,
@@ -102,6 +103,36 @@ class StageGate:
             checkpoint=definition.checkpoint,
             dependencies=definition.dependencies,
         )
+
+    @classmethod
+    def from_assets(
+        cls,
+        template: StageTemplate,
+        stage_number: int,
+        *,
+        tenant_id: str,
+        assets: Iterable[StageAssetVersion],
+    ) -> StageGate:
+        """Build a stage gate from the real assets owned by one workspace.
+
+        Each real ``StageAssetVersion`` is pinned for the workspace tenant, so a
+        cross-tenant asset is refused rather than silently pinned as evidence
+        (SPEC.md sections 3 and 11: every child resource belongs to exactly one
+        client). The template still owns the required asset kinds, so a missing
+        kind and an unexpected kind are refused by ``from_template``; an asset
+        that leaves the exact version at issue ambiguous is refused here so one
+        kind never silently overwrites another (SPEC.md sections 3 and 4).
+        """
+        versions: dict[str, int] = {}
+        for asset in assets:
+            pinned = asset.pin(tenant_id=tenant_id)
+            if pinned.asset_id in versions:
+                raise AmbiguousAssetPackageError(
+                    f"stage {stage_number} package declares more than one exact "
+                    f"version for asset kind {pinned.asset_id!r}"
+                )
+            versions[pinned.asset_id] = pinned.version
+        return cls.from_template(template, stage_number, versions)
 
     def missing_assets(self, on: date, scope: str) -> frozenset[AssetVersionRef]:
         return frozenset(
