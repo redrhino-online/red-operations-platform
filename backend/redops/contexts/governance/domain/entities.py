@@ -221,6 +221,7 @@ class GateDecision:
     next_action: str = ""
     waiver: Waiver | None = None
     asset_approvals: tuple["ApprovalRequest", ...] = ()
+    blockers: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         if self.stage_number < 0:
@@ -266,6 +267,12 @@ class GateDecision:
                 "a gate decision must pin exactly one exact version per asset "
                 f"kind; multiple versions declared for: {names}"
             )
+
+        for blocker in self.blockers:
+            if not blocker or not blocker.strip():
+                raise GateDecisionError(
+                    "gate decision blockers must be non-empty identifiers"
+                )
 
         if self.disposition.is_passing:
             if not self.checkpoint_evidence or not self.checkpoint_evidence.strip():
@@ -330,6 +337,7 @@ class GateDecision:
         due_on: date,
         next_action: str = "",
         waiver: Waiver | None = None,
+        blockers: frozenset[str] | None = None,
     ) -> GateDecision:
         """Record a decision against a gate, refusing to coerce a bad gate.
 
@@ -395,6 +403,24 @@ class GateDecision:
                     "a human authority decision"
                 )
 
+        resolved_blockers = blockers
+        if resolved_blockers is None:
+            if disposition is GateDisposition.BLOCKED:
+                from redops.contexts.governance.domain.policies import (
+                    GateIntegrityPolicy,
+                )
+
+                evaluation = GateIntegrityPolicy().evaluate(
+                    gate,
+                    ledger.dependency_states(on=on),
+                    ledger.template,
+                    on=on,
+                    scope=scope,
+                )
+                resolved_blockers = frozenset(evaluation.reasons)
+            else:
+                resolved_blockers = frozenset()
+
         return cls(
             stage_number=gate.stage_number,
             template_version=gate.template_version,
@@ -412,6 +438,7 @@ class GateDecision:
             next_action=next_action,
             waiver=waiver,
             asset_approvals=gate.asset_approvals,
+            blockers=frozenset(resolved_blockers),
         )
 
     @property

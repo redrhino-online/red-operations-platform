@@ -4,47 +4,47 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T14:16:20Z (Ralph cycle 66).
-- Selected item: retain the durable waiver-bearing `GateDecision` on the
-  `StageRun` mirror. `waive()` now sets a `waiver_decision` field after every
-  durability check passes, mirroring how `complete()` pins `accepted_decision`.
-  This was a listed deferred cross-context item ("retaining the waiver-bearing
-  `GateDecision` on the stage mirror"). It outranked the stage 1 nine-kind/
-  three-asset representation mismatch (blocked on a RED methodology owner) and
-  the fallback Engagement persistence port because it is a concrete
-  traceability defect, not an abstraction: `complete()` retained its accepted
-  decision but `waive()` discarded the decision, so a waived stage could show
-  the reason but not the scoped risk owner, expiry or review trigger, downstream
-  effects, reviewer, or next action that SPEC.md section 4's production view
-  requires, and the stage status could not be traced to the durable decision
-  that produced it. The port is speculative while no infrastructure exists to
-  exercise it.
+- Cycle timestamp: 2026-10-02T14:17:22Z (Ralph cycle 67).
+- Selected item: persist the concrete blockers on the durable `GateDecision` and
+  derive them for a blocked gate, closing SPEC.md section 4's gate-record field
+  list ("... dependencies, blockers ...") so the production manager view can
+  answer "which dependency blocks work". `GateDecision` now carries a
+  `blockers: frozenset[str]`, refuses a blank blocker, and
+  `GateDecision.from_gate` derives the gate's evidence-backed
+  `GateIntegrityPolicy` reasons for a `BLOCKED` disposition (or keeps
+  caller-supplied blockers). This outranked the stage 1 nine-kind/three-asset
+  representation mismatch (blocked on a RED methodology owner), the stage 1-10
+  gate wiring (blocked on the same representation decision) and the Engagement
+  persistence port (speculative while no infrastructure exists): it is a
+  concrete, spec-named gap in the durable gate record, stays within the pure
+  Governance domain, and directly serves the "which dependency blocks work"
+  production view.
 - Outcome: completed and verified (single item; no second item started).
 - Evidence: 5 new behavioral tests in
-  `tests/unit/governance/test_stage_run.py`
-  (`StageWaiverDecisionRetentionTests`): a fresh run retains no waiver decision;
-  `waive()` retains the exact durable decision while leaving `accepted_decision`
-  and `exited_at` unset; the retained decision carries the scoped waiver's risk
-  owner, review trigger, downstream effects and reviewer; a refused waiver
-  (decision not current in the ledger) retains nothing and stays Working; and
-  `complete()` retains `accepted_decision` but never a `waiver_decision`.
-  Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
-  'test_*.py'` reports 571 passed, up from 566. `python3 -m pyflakes` on the
-  changed module and test file is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the waiver decision is retained only after `_transition`
-  succeeds, so an illegal or refused waiver mutates nothing. `accepted_decision`
-  and `waiver_decision` are disjoint because the transition graph forbids
-  `WAIVED -> COMPLETE` and `COMPLETE -> WAIVED`. Governance remains pure domain;
-  no new cross-context import was added, preserving SPEC.md section 6.
+  `tests/unit/governance/test_gate_decision.py` (`GateDecisionBlockerTests`): a
+  decision persists named blockers; a blank/whitespace blocker is refused; a
+  passing decision records no blockers; `from_gate` derives the concrete
+  prerequisite blocker for a `BLOCKED` gate; and `from_gate` keeps
+  caller-supplied blockers. Running `PYTHONPATH=backend python3 -m unittest
+  discover -s tests -p 'test_*.py'` reports 576 passed, up from 571.
+  `python3 -m pyflakes` on the changed module and test file is clean. `ruff` and
+  `mypy` remain uninstalled.
+- New findings: `blockers` is an appended field with a default, so existing
+  positional and keyword `GateDecision` construction is unaffected and every
+  prior test still passes. The derivation reuses `GateIntegrityPolicy` against
+  the ledger's time-aware `dependency_states`, so a blocked decision names the
+  same reasons the policy would refuse an approval for, not free text.
+  Governance remains pure domain; no new cross-context import was added,
+  preserving SPEC.md section 6.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
   graph assumed in cycle 56, scheduler/worker topology, the client-designated
   approver identities, and pilot metric targets. Still named: the stage 1
   nine-kind/three-asset representation decision needs a RED methodology owner.
-  Durable persistence of any `GateDecision`, `StageRun` or retained waiver
-  decision still depends on the storage ADR; no real client approver identity may
-  be invented. No fork or cluster facts invented; no `docs/`, fork checkout,
+  Durable persistence of any `GateDecision`, `StageRun`, retained waiver decision
+  or blocker still depends on the storage ADR; no real client approver identity
+  may be invented. No fork or cluster facts invented; no `docs/`, fork checkout,
   `kubectl`, `helm`, or `argocd` present.
 - Highest priority ready next item: resolve the stage 1 nine-kind/three-asset
   representation mismatch. The canonical stage 1 template requires nine asset
@@ -56,25 +56,26 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   map onto the three (or more) real stage 1 assets before a stage 1 asset package
   and `GateDecision` can be built. This is the top named-owner blocker and gates
   stages 1 through 10 wiring. If that decision is not available, the best ready
-  fallback is to add an application `ports.py` in Engagement with a
-  `GateLedger`/stage-run persistence port plus an in-memory adapter, so the atomic
-  stage 0 use case is exercised through a port instead of a directly passed
-  `GateLedger`, still within SPEC.md section 6 and verifiable with a fake.
-  Pipeline mapping: stage 1, checkpoints "Avatar Locked"/"Diagnostic Model
-  Approved", reviewers named workspace authorities; or the stage 0 persistence
-  boundary, approver the client-designated authority.
+  fallback remains an application `ports.py` in Engagement with a
+  `GateLedger`/stage-run persistence port plus an in-memory adapter, which is
+  still speculative while no infrastructure exists to exercise it. Pipeline
+  mapping: stage 1, checkpoints "Avatar Locked"/"Diagnostic Model Approved",
+  reviewers named workspace authorities; or the stage 0 persistence boundary,
+  approver the client-designated authority.
 - Deferred cross-context items: resolve the stage 1 nine-kind/three-asset
   mismatch; wiring `AvatarProfile`, `BusinessSnapshot` and `OfferFunnelAudit` into
   the stage 1 `GateDecision` (the stage 0 `IntakePackage` is now wired through the
   recorder and application use case, and its stage run now closes atomically);
   per-kind stage 0 asset content schemas; the stage 1 through 10 `GateDecision`
   wiring; and all persistence, blocked on the storage ADR. [DONE 2026-10-02
-  (Ralph cycle 66): retaining the waiver-bearing `GateDecision` on the stage
-  mirror — `StageRun.waive()` now sets `waiver_decision` to the exact durable
-  decision; verified by `tests/unit/governance/test_stage_run.py`.]
-
-
-
+  (Ralph cycle 67): persisting the concrete blockers on the durable
+  `GateDecision` and deriving them for a `BLOCKED` gate from the
+  `GateIntegrityPolicy` reasons; verified by
+  `tests/unit/governance/test_gate_decision.py` (`GateDecisionBlockerTests`).]
+  [DONE 2026-10-02 (Ralph cycle 66): retaining the waiver-bearing `GateDecision`
+  on the stage mirror — `StageRun.waive()` now sets `waiver_decision` to the
+  exact durable decision; verified by
+  `tests/unit/governance/test_stage_run.py`.]
 
 
 ## Product priority: the gated production engagement

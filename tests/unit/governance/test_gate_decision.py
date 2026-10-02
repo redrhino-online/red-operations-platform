@@ -599,5 +599,69 @@ class GateDecisionFromGateTests(unittest.TestCase):
         self.assertFalse(decision.authorizes_downstream())
 
 
+class GateDecisionBlockerTests(unittest.TestCase):
+    """SPEC.md section 4 ("Gate record and production manager view") requires a
+    stage's gate record to persist "dependencies, blockers" and the production
+    view to answer "which dependency blocks work". A blocked decision that names
+    no blocker leaves the manager view unable to say why work is held, so a
+    blocked gate records the gate's concrete, evidence-backed blockers, and a
+    blank blocker is refused rather than stored."""
+
+    def test_decision_persists_named_blockers(self):
+        decision = passing_decision(
+            disposition=GateDisposition.BLOCKED,
+            blockers=frozenset({"prerequisite stage 6 not approved"}),
+        )
+
+        self.assertEqual(
+            frozenset({"prerequisite stage 6 not approved"}), decision.blockers
+        )
+
+    def test_a_blank_blocker_is_refused(self):
+        for blocker in ("", "   "):
+            with self.subTest(blocker=blocker):
+                with self.assertRaises(GateDecisionError):
+                    passing_decision(blockers=frozenset({blocker}))
+
+    def test_passing_decision_records_no_blockers(self):
+        self.assertEqual(frozenset(), passing_decision().blockers)
+
+    def test_factory_derives_concrete_blockers_for_a_blocked_gate(self):
+        decision = GateDecision.from_gate(
+            approvable_gate(state=GateState.BLOCKED),
+            ledger=GateLedger(TEMPLATE),
+            reviewer="governance-manager",
+            scope="stage-8-funnel-integration",
+            checkpoint_evidence="dependency failed",
+            disposition=GateDisposition.BLOCKED,
+            rationale="upstream prerequisite not complete",
+            on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
+        )
+
+        self.assertTrue(decision.blockers)
+        self.assertTrue(
+            any("prerequisite" in blocker for blocker in decision.blockers)
+        )
+
+    def test_factory_keeps_caller_supplied_blockers(self):
+        decision = GateDecision.from_gate(
+            approvable_gate(state=GateState.BLOCKED),
+            ledger=GateLedger(TEMPLATE),
+            reviewer="governance-manager",
+            scope="stage-8-funnel-integration",
+            checkpoint_evidence="vendor hold",
+            disposition=GateDisposition.BLOCKED,
+            rationale="vendor security review is outstanding",
+            on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
+            blockers=frozenset({"vendor security review"}),
+        )
+
+        self.assertEqual(frozenset({"vendor security review"}), decision.blockers)
+
+
 if __name__ == "__main__":
     unittest.main()
