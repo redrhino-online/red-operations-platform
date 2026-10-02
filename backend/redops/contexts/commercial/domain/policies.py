@@ -12,8 +12,14 @@ from __future__ import annotations
 from datetime import date
 from typing import Iterable
 
-from redops.contexts.commercial.domain.entities import OfferVersion
-from redops.contexts.commercial.domain.errors import OfferReadinessError
+from redops.contexts.commercial.domain.entities import (
+    CampaignMessage,
+    OfferVersion,
+)
+from redops.contexts.commercial.domain.errors import (
+    CampaignMessageAlignmentError,
+    OfferReadinessError,
+)
 from redops.contexts.commercial.domain.value_objects import (
     MethodReference,
     OfferImpactAssessment,
@@ -130,3 +136,100 @@ class OfferChangeImpactPolicy:
             and reference.intended_use == intended_use
             for reference in offer.method_refs
         )
+
+
+class CampaignMessageAlignmentPolicy:
+    """Refuses approval when a stage 6 message conflicts with its locked offer.
+
+    SPEC.md section 4, stage 6 "Message" and its "Campaign Message Approved"
+    checkpoint: the avatar, currency, problem, promise, method, product and CTA
+    must agree. The avatar, promise and product are compared to the approved
+    stage 5 offer; the method must be one the offer pins and is authorized by an
+    approved method version; the currency and problem are compared to that
+    approved method's locked stage 2 primary currency and stage 3 diagnostic
+    model. A message that conflicts with any of these, or that is grounded on an
+    offer that is not production ready, cannot be approved (Phase 4 TDD example:
+    "campaign message conflicting with the offer blocks approval").
+    """
+
+    def require(
+        self,
+        message: CampaignMessage,
+        approved_methods: Iterable[MethodVersion],
+    ) -> None:
+        if message.state.is_terminal:
+            raise CampaignMessageAlignmentError(
+                f"terminal campaign message {message.message_id!r} cannot be "
+                "approved"
+            )
+        offer = message.offer
+        if offer.tenant_id != message.tenant_id:
+            raise CampaignMessageAlignmentError(
+                "a campaign message cannot be grounded on another tenant's offer"
+            )
+        if not offer.is_production_ready:
+            raise CampaignMessageAlignmentError(
+                f"campaign message {message.message_id!r} cannot be approved: "
+                "it is grounded on a stage 5 offer that is not production ready"
+            )
+        if message.avatar != offer.audience:
+            raise CampaignMessageAlignmentError(
+                f"campaign message {message.message_id!r} avatar does not agree "
+                "with the approved offer audience"
+            )
+        if message.promise != offer.promise:
+            raise CampaignMessageAlignmentError(
+                f"campaign message {message.message_id!r} promise does not agree "
+                "with the approved offer promise"
+            )
+        if message.product_offer_id != offer.offer_id:
+            raise CampaignMessageAlignmentError(
+                f"campaign message {message.message_id!r} product does not agree "
+                "with the approved offer"
+            )
+        if message.method_reference not in offer.method_refs:
+            raise CampaignMessageAlignmentError(
+                f"campaign message {message.message_id!r} method does not agree "
+                "with any method pinned by the approved offer"
+            )
+        method = self._authorizing(message, tuple(approved_methods))
+        if method is None:
+            raise CampaignMessageAlignmentError(
+                f"campaign message {message.message_id!r} cannot be approved: its "
+                "method is not an approved dependency for this tenant"
+            )
+        currency = method.primary_currency
+        if currency is None or message.currency != currency.currency:
+            raise CampaignMessageAlignmentError(
+                f"campaign message {message.message_id!r} currency does not agree "
+                "with the approved method's locked primary currency"
+            )
+        model = method.diagnostic_model
+        problems = (
+            frozenset(
+                problem
+                for level in model.levels
+                for problem in level.problems
+            )
+            if model is not None
+            else frozenset()
+        )
+        if message.problem not in problems:
+            raise CampaignMessageAlignmentError(
+                f"campaign message {message.message_id!r} problem does not agree "
+                "with the approved method's diagnostic model"
+            )
+
+    @staticmethod
+    def _authorizing(
+        message: CampaignMessage, methods: tuple[MethodVersion, ...]
+    ) -> MethodVersion | None:
+        reference = message.method_reference
+        for method in methods:
+            if (
+                method.method_id == reference.method_id
+                and method.tenant_id == message.tenant_id
+                and method.authorizes(reference.version, reference.intended_use)
+            ):
+                return method
+        return None

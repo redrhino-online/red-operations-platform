@@ -39,3 +39,35 @@ class InvalidDeliverySpecificationError(CommercialError, ValueError):
     A missing method step or a step the method does not have cannot be represented
     as an approvable offer.
     """
+
+
+class InvalidCampaignMessageError(CommercialError, ValueError):
+    """A stage 6 campaign message was built without its required identity or content.
+
+    SPEC.md section 4, stage 6 "Message": the required asset package is the
+    promise, problem hierarchy, desired outcome, proof and objections, story,
+    method explanation, CTA, lead magnet, hook, angles, landing message and
+    Authority Amplifier outline. A message that leaves any of these unspecified
+    cannot be represented as an approvable campaign message.
+    """
+
+
+class CampaignMessageDependencyError(CommercialError):
+    """A campaign message pinned an upstream asset from another tenant.
+
+    SPEC.md section 3: every tenant resource belongs to exactly one client. A
+    stage 6 message is grounded on the tenant's approved stage 5 offer, so it
+    cannot be built on another client's offer.
+    """
+
+
+class CampaignMessageAlignmentError(CommercialError):
+    """A stage 6 campaign message did not agree with its approved stage 5 offer.
+
+    SPEC.md section 4, stage 6 and its "Campaign Message Approved" checkpoint:
+    the avatar, currency, problem, promise, method, product and CTA must agree,
+    and the message is grounded on the approved stage 5 offer. A message that
+    conflicts with the locked offer or the approved method it references cannot
+    be approved.
+    """
+

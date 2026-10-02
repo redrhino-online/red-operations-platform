@@ -11,11 +11,14 @@ from dataclasses import dataclass, field, replace
 from typing import Iterable
 
 from redops.contexts.commercial.domain.errors import (
+    CampaignMessageDependencyError,
+    InvalidCampaignMessageError,
     InvalidOfferError,
     OfferDependencyError,
     OfferReadinessError,
 )
 from redops.contexts.commercial.domain.value_objects import (
+    CampaignMessageState,
     DeliverySpecification,
     MethodReference,
     OfferState,
@@ -152,3 +155,131 @@ class OfferVersion:
         if self.state.is_terminal:
             raise InvalidOfferError("a terminal offer cannot be marked review required")
         return replace(self, state=OfferState.REVIEW_REQUIRED, review_reason=reason)
+
+
+def _require_message_text(value: str, label: str) -> str:
+    if not value or not value.strip():
+        raise InvalidCampaignMessageError(f"{label} is required")
+    return value
+
+
+def _require_message_entries(entries: tuple[str, ...], label: str) -> None:
+    if not entries:
+        raise InvalidCampaignMessageError(
+            f"a campaign message requires at least one {label} entry"
+        )
+    for entry in entries:
+        if not entry or not entry.strip():
+            raise InvalidCampaignMessageError(
+                f"{label} entries must not be blank"
+            )
+
+
+@dataclass(frozen=True)
+class CampaignMessage:
+    """The stage 6 campaign message, approved at "Campaign Message Approved".
+
+    SPEC.md section 4, stage 6 "Message": the required asset package is the
+    promise, problem hierarchy, desired outcome, proof and objections, story,
+    method explanation, CTA, lead magnet, hook, angles, landing message and
+    Authority Amplifier outline. The checkpoint requires that "avatar, currency,
+    problem, promise, method, product and CTA agree", and the message is grounded
+    on the approved stage 5 offer, so production requires an approved dependency
+    (SPEC.md section 3). It is frozen: approval pins an exact asset rather than
+    mutating it, and an upstream change returns it to review required.
+    """
+
+    message_id: str
+    tenant_id: str
+    offer: OfferVersion
+    owner: str
+    avatar: str
+    currency: str
+    problem: str
+    promise: str
+    cta: str
+    method_reference: MethodReference
+    product_offer_id: str
+    problem_hierarchy: tuple[str, ...]
+    desired_outcome: str
+    proof_objections: tuple[str, ...]
+    story: str
+    method_explanation: str
+    lead_magnet: str
+    hook: str
+    angles: tuple[str, ...]
+    landing_message: str
+    authority_amplifier_outline: str
+    state: CampaignMessageState = CampaignMessageState.DRAFT
+    review_reason: str | None = field(default=None)
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("campaign message id", self.message_id),
+            ("campaign message tenant id", self.tenant_id),
+            ("campaign message owner", self.owner),
+            ("campaign message avatar", self.avatar),
+            ("campaign message currency", self.currency),
+            ("campaign message problem", self.problem),
+            ("campaign message promise", self.promise),
+            ("campaign message CTA", self.cta),
+            ("campaign message product offer id", self.product_offer_id),
+            ("campaign message desired outcome", self.desired_outcome),
+            ("campaign message story", self.story),
+            ("campaign message method explanation", self.method_explanation),
+            ("campaign message lead magnet", self.lead_magnet),
+            ("campaign message hook", self.hook),
+            ("campaign message landing message", self.landing_message),
+            (
+                "campaign message Authority Amplifier outline",
+                self.authority_amplifier_outline,
+            ),
+        ):
+            _require_message_text(value, label)
+        _require_message_entries(self.problem_hierarchy, "problem hierarchy")
+        _require_message_entries(self.proof_objections, "proof and objections")
+        _require_message_entries(self.angles, "angles")
+        if self.offer.tenant_id != self.tenant_id:
+            raise CampaignMessageDependencyError(
+                "a campaign message cannot be grounded on another tenant's offer"
+            )
+
+    @property
+    def is_approved(self) -> bool:
+        return self.state is CampaignMessageState.APPROVED
+
+    def approve(
+        self, approved_methods: Iterable[MethodVersion]
+    ) -> "CampaignMessage":
+        """Return an approved message once it agrees with its locked offer.
+
+        SPEC.md section 4, stage 6: the "Campaign Message Approved" checkpoint
+        requires the avatar, currency, problem, promise, method, product and CTA
+        to agree and the message to be grounded on the approved stage 5 offer.
+        A conflicting or under-grounded message stays in its current state rather
+        than being represented as approved.
+        """
+        from redops.contexts.commercial.domain.policies import (
+            CampaignMessageAlignmentPolicy,
+        )
+
+        CampaignMessageAlignmentPolicy().require(self, approved_methods)
+        return replace(
+            self, state=CampaignMessageState.APPROVED, review_reason=None
+        )
+
+    def mark_review_required(self, *, reason: str) -> "CampaignMessage":
+        """Return this message marked review required after a change upstream.
+
+        SPEC.md section 4: changing an approved upstream method or offer marks
+        dependent assets review required. An approved message loses that approval
+        until reviewed again, and a terminal message stays terminal.
+        """
+        _require_message_text(reason, "campaign message review reason")
+        if self.state.is_terminal:
+            raise InvalidCampaignMessageError(
+                "a terminal campaign message cannot be marked review required"
+            )
+        return replace(
+            self, state=CampaignMessageState.REVIEW_REQUIRED, review_reason=reason
+        )

@@ -42,6 +42,32 @@ class OfferState(Enum):
 _TERMINAL_OFFER_STATES = frozenset({OfferState.SUPERSEDED, OfferState.ARCHIVED})
 
 
+class CampaignMessageState(Enum):
+    """The readiness state of a CampaignMessage (SPEC.md sections 3 and 4).
+
+    A draft message can be approved only when its avatar, currency, problem,
+    promise, method, product and CTA agree with the approved stage 5 offer it is
+    grounded on. An upstream change moves an approved message back to review
+    required, and a terminal message cannot be revived.
+    """
+
+    DRAFT = "draft"
+    APPROVED = "approved"
+    REVIEW_REQUIRED = "review_required"
+    SUPERSEDED = "superseded"
+    ARCHIVED = "archived"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in _TERMINAL_MESSAGE_STATES
+
+
+_TERMINAL_MESSAGE_STATES = frozenset(
+    {CampaignMessageState.SUPERSEDED, CampaignMessageState.ARCHIVED}
+)
+
+
+
 @dataclass(frozen=True)
 class MethodReference:
     """An exact dependency on one approved method version and intended use.
