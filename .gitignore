@@ -1,0 +1,8 @@
+.ralph/
+.env
+.env.*
+!.env.example
+project_sources/
+__pycache__/
+*.py[cod]
+.DS_Store
