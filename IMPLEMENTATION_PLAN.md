@@ -4,66 +4,79 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-02T13:19:52Z (Ralph cycle 30).
-- Selected item: stage 9 "QA" — a pure Execution domain `LaunchQA` whose
-  "Launch Approved" checkpoint requires all critical path checks to pass,
-  exceptions to have owners, and the designated human authority to authorize
-  traffic, keeping "Ready for Traffic" distinct from live traffic. This was cycle
-  29's explicit next item, the next gate after stage 8, and unblocked pure
-  domain. It outranked the deferred `GateDecision` wiring (blocked on the
-  unresolved asset-version representation decision) and stage 10, because stage
-  10 depends on the stage 9 launch-readiness aggregate and the Phase 4 TDD
-  example "failed message, technical or commercial QA prevents Launch Approved"
-  is ready now.
+- Cycle timestamp: 2026-10-02T13:21:18Z (Ralph cycle 31).
+- Selected item: stage 10 "Launch" — a pure Execution domain
+  `PerformanceBaseline` whose "Performance Baseline Established" checkpoint
+  requires the stage 9 launch QA to have authorized traffic and first qualified
+  traffic to be observed, keeps traffic, lead, appointment and sale as distinct
+  milestones recorded as observed or pending, and separates an observation from a
+  causal conclusion (a causal claim needs an established baseline and an adequate
+  sample). This was cycle 30's explicit next item, the next gate after stage 9,
+  and unblocked pure domain. It outranked the deferred `GateDecision` wiring
+  (blocked on the unresolved asset-version representation decision), the stage 9
+  template asset-kind reconciliation (worthless until that decision lands), and
+  command-center/downstream operations, because the Phase 5 TDD examples "launch
+  alone cannot complete the engagement", "traffic, lead, qualified appointment
+  and sale are distinct observed milestones", "missing baseline blocks a before
+  and after claim" and "low sample size keeps causal claim as interpretation" are
+  ready now.
 - Outcome: completed and verified.
-- Evidence: new `tests/unit/execution/test_launch_qa.py` (20 tests) and added
-  fixtures in `tests/unit/execution/fixtures.py`. `LaunchQA` is frozen, requires
-  an owner, a designated human authority distinct from the owner, the full stage
-  9 check set (recorded message; technical and commercial tests on desktop and
-  mobile; forms, CRM, email, automation, booking, tracking, payment, sales
-  handoff, client approval, budget, creative, dashboard and launch decision),
-  and is grounded on the completed stage 8 `FunnelIntegration`, rejecting a
-  cross-tenant funnel at construction. `LaunchApprovedPolicy` refuses
-  "Launch Approved" unless the stage 8 funnel is complete, every canonical check
-  is present, every critical-path check passed (payment and dashboard may be
-  explicitly excepted with a named owner), and the authorizer is the designated
-  authority. `QACheck` refuses an exception without a named owner;
-  `TrafficAuthorization` records the designated human, intended use and date and
-  asserts readiness, not live traffic. The first test run failed to import the
-  missing errors; after implementation all 20 pass. Command:
+- Evidence: new `tests/unit/execution/test_performance_baseline.py` (25 tests)
+  and added fixtures in `tests/unit/execution/fixtures.py`. `PerformanceBaseline`
+  is frozen, requires an owner, the full stage 10 asset package (live campaign,
+  spend and lead records, conversion and engagement measures, applications,
+  bookings, shows, closes, acquisition cost, attribution, issue log), is grounded
+  on the stage 9 `LaunchQA`, and rejects a cross-tenant QA or milestone at
+  construction. `MilestoneObservation` requires a date and source when observed
+  and forbids a date or source when pending, so a missing observation is shown as
+  pending and cannot be fabricated. `PerformanceBaselinePolicy` refuses
+  "Performance Baseline Established" unless the launch QA is `READY_FOR_TRAFFIC`,
+  every canonical milestone is recorded, and first qualified traffic is observed;
+  later milestones may remain pending. `PerformanceClaim` + `PerformanceClaimPolicy`
+  keep observations distinct from causal conclusions: a causal conclusion needs an
+  established, same-tenant baseline and a caller-supplied minimum sample, and
+  `as_interpretation()` records a low-sample movement without claiming causation.
+  The first test run failed to import the missing errors; after implementation all
+  25 pass. Command:
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  (306 passed, up from 286); `python3 -m pyflakes` on the six touched modules
+  (331 passed, up from 306); `python3 -m pyflakes` on the six touched modules
   clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the Execution context now carries its second aggregate and the
-  stage 9 gate is traceable to the exact prospect-path evidence pinned by the
-  stage 8 funnel. Readiness is explicitly decoupled from live traffic, so stage
-  10 must record live observations as a distinct milestone. The stage 9 gate
-  still has no governance `GateDecision` linking it to the stage 8 approved asset
-  version; that wiring remains blocked on the asset-version decision. No
-  application, ports, infrastructure, or entry point exist for Execution;
-  persistence remains blocked on the storage ADR.
+- New findings: the 0-10 pipeline now has a pure-domain aggregate for the final
+  stage, and the "launch means results" risk is closed at the domain level by
+  requiring an observed first-qualified-traffic milestone, not just activation.
+  The spec's `Measurement` bounded context (section 3 `MeasurementRecord`:
+  metric definition, window, baseline, observation, source) is still unimplemented;
+  the stage 10 aggregate was placed in Execution to match the existing stage 8/9
+  pipeline convention, so moving or splitting metric registry and observation
+  records into a Measurement context remains an open design question. The causal
+  minimum sample is a policy parameter, not a constant, because pilot metric
+  targets are an unresolved named-owner decision; no operational threshold was
+  invented. Stage 10 still has no governance `GateDecision` wiring, no
+  application/ports/infrastructure, and no command-center ranking.
 - Blockers: unchanged named-owner decisions — where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, scheduler/worker
-  topology, and the client-designated approver identities. No fork or cluster
-  facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or `argocd`
-  present.
-- Highest priority ready next item: stage 10 "Launch" — a pure Execution domain
-  performance baseline aggregate whose "Performance Baseline Established"
-  checkpoint treats first qualified traffic, lead, appointment and sale as
-  distinct observed milestones, with missing observations shown as pending and
-  no causal conclusion from a missing or low sample (SPEC.md section 4, stage 10;
-  Phase 5 TDD examples). It is the next gate after stage 9 and unblocked pure
-  domain. Prerequisites: the stage 9 `LaunchQA` now exists and reports
-  `READY_FOR_TRAFFIC`. Pipeline mapping: stage 10 "Launch"; required asset =
-  live campaign, spend and lead records, conversion and engagement measures,
-  application, booking, show, close, acquisition cost, attribution and issue
-  log; checkpoint = "Performance Baseline Established"; approver = none for
-  observation (human approval gates apply to material changes, not observed
-  facts); blocked downstream dependency = stage 11 optimization / engagement
-  completion. Deferred cross-context items: the stage 2/3/4/5/6/7/8/9
-  `GateDecision` wiring, blocked on the integer-versus-semantic asset-version
-  decision, and all persistence, blocked on the storage ADR.
+  topology, the client-designated approver identities, and pilot metric targets.
+  No fork or cluster facts invented; no `docs/`, fork checkout, `kubectl`,
+  `helm`, or `argocd` present.
+- Highest priority ready next item: Operations command-center intervention
+  ranking — a pure Operations domain value/policy that turns a stale or blocked
+  gate into an intervention with client, severity, reason, evidence, owner, next
+  action, due time, state and affected builds, ranks blocked critical path,
+  overdue approvals and failed live journeys ahead of the rest, and records a
+  dismissal with a rationale (SPEC.md section 7; Phase 5 TDD examples "stale gate
+  approval produces one owned intervention" and "dismissal records reason").
+  Prerequisites: the governance `GateLedger`/`GateDecision`, `StageRun` and the
+  Execution stage 8-10 aggregates that supply blocked/overdue/failed signals now
+  exist; no unresolved decision is required for the pure ranking policy. It
+  outranks wiring stages 2-10 into `GateDecision` (blocked on the integer-versus-
+  semantic asset-version decision) and the measurement metric registry (which
+  depends on the storage ADR). Pipeline mapping: no single stage; it consumes
+  gate and journey state across stages 0-10. Blocked downstream dependency:
+  notification/reminder delivery and persistence, blocked on the storage and
+  worker-topology ADRs. Deferred cross-context items: the stage 2/3/4/5/6/7/8/9/10
+  `GateDecision` wiring, blocked on the asset-version representation decision, and
+  all persistence, blocked on the storage ADR.
 
 
 
@@ -164,7 +177,7 @@ CI gate order: format and types, domain and application tests, adapter contracts
 7. Implement stages 4 and 5 from grounded Signature Solution to offer approval. [DONE 2026-10-02 (Ralph cycle 14): commercial `OfferVersion` requires an accountable owner and `OfferChangeImpactPolicy` discovers dependent offers from an approved method change and marks them review required, so the SPEC.md section 11 "changing a method version identifies dependents" acceptance test is met by a real aggregate; verified by `tests/unit/commercial/test_offer_change_impact.py`. DONE 2026-10-02 (Ralph cycle 22): Method `SignatureStep`, `TransformationPhase` and frozen `SignatureSolution` require exactly three phases and nine steps, a process inventory, transformation map, narrative and visual, one continuous chain of named stages, and declared starting/final states that are the ends of that chain, so the stage 4 "IP Architecture Locked" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_signature_solution.py`. DONE 2026-10-02 (Ralph cycle 23): `MethodVersion` pins the exact tenant-checked stage 4 `SignatureSolution`, refuses approval without it, rejects a cross-tenant pin, and drops the pin on `revised`, so an approved method must carry its locked stage 4 structure; verified by `tests/unit/method/test_method_dependencies.py`. DONE 2026-10-02 (Ralph cycle 24): commercial `StepDelivery` and `DeliverySpecification` require every locked stage 4 method step to carry an action, actor, deliverable, timing and measure, record the full stage 5 asset package, and reject a missing or extra method step, a duplicate delivery, a foreign-tenant method or step delivery, and any missing package field, so the stage 5 "Offer Locked" checkpoint rule is met by a real value; verified by `tests/unit/commercial/test_delivery_specification.py`. DONE 2026-10-02 (Ralph cycle 25): `OfferVersion` pins the tenant-checked stage 5 `DeliverySpecification`, refuses production readiness without it, and `revised` drops the delivery specification and readiness (including when the method reference changes) so an approved offer must carry a complete stage 5 delivery package; verified by `tests/unit/commercial/test_offer_version.py` with a shared fixture in `tests/unit/commercial/fixtures.py`. DONE 2026-10-02 (Ralph cycle 26): `OfferReadinessPolicy` refuses production readiness when the stage 5 `DeliverySpecification.signature_solution` is not equal to the `SignatureSolution` pinned by an approved method reference, so a stage 5 package cannot describe a different transformation than the approved stage 4 method; verified by `tests/unit/commercial/test_offer_version.py`. Wiring the stage 4 structure and the stage 2/3/4 currency, Profit Pyramid and delivery assets into their `GateDecision`s (blocked on the integer-versus-semantic asset-version decision) remain.]
 8. Implement stages 6 and 7 with message congruence and script approval before creative production. [DONE 2026-10-02 (Ralph cycle 27): commercial `CampaignMessage` records the stage 6 asset package, requires each message field, and rejects a cross-tenant offer at construction; `CampaignMessageAlignmentPolicy` refuses the "Campaign Message Approved" checkpoint unless the message is grounded on a production ready stage 5 offer and its avatar, promise, product, method, currency and problem agree with the offer and the approved method's locked stage 2 primary currency and stage 3 diagnostic model, so Phase 4's "campaign message conflicting with the offer blocks approval" example is met by a real aggregate; verified by `tests/unit/commercial/test_campaign_message.py`. DONE 2026-10-02 (Ralph cycle 28): Production `AuthorityAmplifier` records the canonical Promise, Proof, Problems, Steps, Context, Action script and the full stage 7 visual/video package, requires at least one proof claim, and rejects a cross-tenant stage 6 message at construction; `AuthorityAmplifierPolicy` refuses script approval unless the message is approved and the method is an approved dependency, and flags proof claims not backed by a known, directly sourced Knowledge claim; visual production and creative acceptance both refuse before script approval and creative acceptance also requires the complete visual package, so Phase 4's "visual Authority Amplifier production cannot be authorized by an unapproved script" and "unsupported proof is flagged" examples are met by a real aggregate; verified by `tests/unit/production/test_authority_amplifier.py`. Stage 7 wiring into a governance `GateDecision` remains, blocked on the asset-version representation decision.]
 9. Implement stages 8 and 9 with complete prospect path and three part QA. [DONE 2026-10-02 (Ralph cycle 29): Execution `FunnelIntegration` records the complete stage 8 asset package, is grounded on the approved stage 7 `AuthorityAmplifier`, and rejects a cross-tenant amplifier at construction; `FunnelCompletionPolicy` refuses "Funnel Complete" unless the amplifier has creative acceptance and a same-tenant `ProspectPathDryRun` routed every capture, engagement and conversion handoff exactly once with a reliable record and named owner, so Phase 4's "failed prospect routing prevents Funnel Complete" example is met by a real aggregate; verified by `tests/unit/execution/test_funnel_integration.py`. DONE 2026-10-02 (Ralph cycle 30): Execution `LaunchQA` records the full stage 9 check set, requires an owner and a designated human authority distinct from the owner, is grounded on the completed stage 8 `FunnelIntegration`, and rejects a cross-tenant funnel at construction; `LaunchApprovedPolicy` refuses "Launch Approved" unless the funnel is complete, every canonical check is present, every critical-path check passed (payment and dashboard may be excepted with a named owner), and the designated authority authorizes traffic, and `TrafficAuthorization` reports readiness rather than live traffic, so Phase 4's "failed message, technical or commercial QA prevents Launch Approved" example is met by a real aggregate; verified by `tests/unit/execution/test_launch_qa.py`. Stage 8 and 9 wiring into a governance `GateDecision` remain, blocked on the asset-version representation decision.]
-10. Implement stage 10 baseline, command center and improvement loop.
+10. Implement stage 10 baseline, command center and improvement loop. [DONE 2026-10-02 (Ralph cycle 31): Execution `PerformanceBaseline` records the full stage 10 asset package and the distinct first-qualified-traffic, lead, appointment and sale milestones as observed or pending, is grounded on the stage 9 `LaunchQA`, and rejects a cross-tenant QA or milestone at construction; `PerformanceBaselinePolicy` refuses "Performance Baseline Established" unless the launch QA is `READY_FOR_TRAFFIC`, every canonical milestone is recorded, and first qualified traffic is observed, so Phase 5's "launch alone cannot complete the engagement" example is met by a real aggregate; `MilestoneObservation` forbids fabricating a pending observation, and `PerformanceClaim` / `PerformanceClaimPolicy` keep observations distinct from causal conclusions (causal needs an established same-tenant baseline and an adequate caller-supplied sample, and a low-sample movement can be recorded as an interpretation), so Phase 5's milestone-distinctness, missing-baseline and low-sample examples are met; verified by `tests/unit/execution/test_performance_baseline.py`. Command center intervention ranking and the improvement loop remain.]
 11. Complete operational security, backup, GitOps and acceptance drills.
 
 ## Risks and decisions

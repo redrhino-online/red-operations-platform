@@ -37,3 +37,31 @@ class LaunchQAIncompleteError(LaunchQAError):
 
 class LaunchQAAuthorityError(LaunchQAError):
     """Traffic was not authorized by the designated human authority."""
+
+
+class PerformanceBaselineError(ExecutionError):
+    """Base class for stage 10 performance baseline rule violations."""
+
+
+class InvalidPerformanceBaselineError(PerformanceBaselineError, ValueError):
+    """A PerformanceBaseline or its value objects violate an invariant."""
+
+
+class PerformanceBaselineDependencyError(PerformanceBaselineError):
+    """A baseline is not grounded on a ready-for-traffic stage 9 launch QA."""
+
+
+class PerformanceBaselineIncompleteError(PerformanceBaselineError):
+    """Observations do not satisfy "Performance Baseline Established"."""
+
+
+class PerformanceClaimError(PerformanceBaselineError):
+    """Base class for observation-versus-causal claim rule violations."""
+
+
+class InvalidPerformanceClaimError(PerformanceClaimError, ValueError):
+    """A PerformanceClaim value object violates an invariant."""
+
+
+class PerformanceClaimSupportError(PerformanceClaimError):
+    """A causal claim lacks an established baseline or an adequate sample."""

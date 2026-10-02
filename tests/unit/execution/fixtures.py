@@ -12,14 +12,22 @@ from __future__ import annotations
 from redops.contexts.execution.domain.entities import (
     FunnelIntegration,
     LaunchQA,
+    PerformanceBaseline,
 )
 from redops.contexts.execution.domain.value_objects import (
     HANDOFF_ORDER,
+    MILESTONE_ORDER,
     QA_CHECK_ORDER,
+    ClaimKind,
     FunnelAssetPackage,
     HandoffKind,
     HandoffOutcome,
     HandoffRecord,
+    LaunchAssetPackage,
+    MilestoneKind,
+    MilestoneObservation,
+    ObservationStatus,
+    PerformanceClaim,
     ProspectPathDryRun,
     QACheck,
     QACheckKind,
@@ -178,4 +186,104 @@ def launch_qa(funnel=None, checks=None, **overrides) -> LaunchQA:
 def ready_for_traffic(**overrides) -> LaunchQA:
     return launch_qa(**overrides).authorize_traffic(
         authorization=authorization()
+    )
+
+
+def launch_assets(**overrides) -> LaunchAssetPackage:
+    values = {
+        "live_campaign": "asset://launch/campaign",
+        "spend_records": "asset://launch/spend",
+        "lead_records": "asset://launch/leads",
+        "conversion_measures": "asset://launch/conversions",
+        "engagement_measures": "asset://launch/engagement",
+        "applications": "asset://launch/applications",
+        "bookings": "asset://launch/bookings",
+        "shows": "asset://launch/shows",
+        "closes": "asset://launch/closes",
+        "acquisition_cost": "asset://launch/acquisition-cost",
+        "attribution": "asset://launch/attribution",
+        "issue_log": "asset://launch/issues",
+    }
+    values.update(overrides)
+    return LaunchAssetPackage(**values)
+
+
+def milestone(
+    kind: MilestoneKind,
+    *,
+    status: ObservationStatus = ObservationStatus.OBSERVED,
+    tenant_id: str = TENANT,
+    observed_on=TODAY,
+    source: str = "analytics://observation",
+    detail: str = "",
+) -> MilestoneObservation:
+    return MilestoneObservation(
+        kind=kind,
+        status=status,
+        tenant_id=tenant_id,
+        observed_on=observed_on if status is ObservationStatus.OBSERVED else None,
+        source=source if status is ObservationStatus.OBSERVED else "",
+        detail=detail,
+    )
+
+
+def milestone_observations(outcomes=None) -> tuple[MilestoneObservation, ...]:
+    outcomes = outcomes or {}
+    return tuple(
+        milestone(
+            kind,
+            status=outcomes.get(
+                kind,
+                (
+                    ObservationStatus.OBSERVED
+                    if kind is MilestoneKind.FIRST_QUALIFIED_TRAFFIC
+                    else ObservationStatus.PENDING
+                ),
+            ),
+        )
+        for kind in MILESTONE_ORDER
+    )
+
+
+def performance_baseline(
+    launch_qa=None, milestones=None, **overrides
+) -> PerformanceBaseline:
+    values = {
+        "baseline_id": "baseline-3f",
+        "tenant_id": TENANT,
+        "launch_qa": ready_for_traffic() if launch_qa is None else launch_qa,
+        "owner": "performance-owner",
+        "assets": launch_assets(),
+        "milestones": (
+            milestone_observations() if milestones is None else milestones
+        ),
+    }
+    values.update(overrides)
+    return PerformanceBaseline(**values)
+
+
+def established_baseline(**overrides) -> PerformanceBaseline:
+    return performance_baseline(**overrides).establish(on=TODAY)
+
+
+def performance_claim(
+    *,
+    claim_id: str = "claim-3f",
+    tenant_id: str = TENANT,
+    subject: str = "first campaign",
+    statement: str = "leads rose after the campaign launched",
+    kind: ClaimKind = ClaimKind.OBSERVATION,
+    sample_size: int = 40,
+    source: str = "analytics://observation",
+    baseline_id: str | None = "baseline-3f",
+) -> PerformanceClaim:
+    return PerformanceClaim(
+        claim_id=claim_id,
+        tenant_id=tenant_id,
+        subject=subject,
+        statement=statement,
+        kind=kind,
+        sample_size=sample_size,
+        source=source,
+        baseline_id=baseline_id,
     )

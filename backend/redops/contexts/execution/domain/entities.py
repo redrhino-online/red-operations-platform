@@ -10,18 +10,25 @@ handoffs with reliable records and ownership.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from datetime import date
 
 from redops.contexts.execution.domain.errors import (
     FunnelDependencyError,
     InvalidFunnelError,
     InvalidLaunchQAError,
+    InvalidPerformanceBaselineError,
     LaunchQAAuthorityError,
     LaunchQADependencyError,
+    PerformanceBaselineDependencyError,
 )
 from redops.contexts.execution.domain.value_objects import (
     FunnelAssetPackage,
     FunnelState,
+    MILESTONE_ORDER,
+    LaunchAssetPackage,
     LaunchQAState,
+    MilestoneObservation,
+    PerformanceBaselineState,
     ProspectPathDryRun,
     QACheck,
     TrafficAuthorization,
@@ -219,4 +226,134 @@ class LaunchQA:
             )
         return replace(
             self, state=LaunchQAState.REVIEW_REQUIRED, review_reason=reason
+        )
+
+
+@dataclass(frozen=True)
+class PerformanceBaseline:
+    """The stage 10 performance baseline (SPEC.md section 4).
+
+    SPEC.md section 4, stage 10 "Launch": the required asset package is the live
+    campaign, spend and lead records, conversion and engagement measures,
+    applications, bookings, shows, closes, acquisition cost, attribution and
+    issue log. The "Performance Baseline Established" checkpoint treats first
+    qualified traffic and the subsequent lead, appointment and sale as distinct
+    observed milestones, with missing observations shown as pending.
+
+    The baseline is grounded on the stage 9 `LaunchQA` that authorizes traffic
+    (SPEC.md section 3: production requires approved dependencies). Campaign
+    activation alone therefore does not establish a baseline: the stage 9
+    authorization must exist and first qualified traffic must be observed before
+    the checkpoint passes (Phase 5 TDD example: "launch alone cannot complete the
+    engagement"). It is frozen, so an established baseline pins the exact
+    observations and an upstream change returns it to review required.
+    """
+
+    baseline_id: str
+    tenant_id: str
+    launch_qa: LaunchQA
+    owner: str
+    assets: LaunchAssetPackage
+    milestones: tuple[MilestoneObservation, ...]
+    state: PerformanceBaselineState = PerformanceBaselineState.DRAFT
+    established_on: date | None = field(default=None)
+    review_reason: str | None = field(default=None)
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("performance baseline id", self.baseline_id),
+            ("performance baseline tenant id", self.tenant_id),
+            ("performance baseline owner", self.owner),
+        ):
+            if not value or not value.strip():
+                raise InvalidPerformanceBaselineError(f"{label} is required")
+        if self.launch_qa.tenant_id != self.tenant_id:
+            raise PerformanceBaselineDependencyError(
+                "a performance baseline cannot be grounded on another tenant's "
+                "launch QA"
+            )
+        for observation in self.milestones:
+            if observation.tenant_id != self.tenant_id:
+                raise PerformanceBaselineDependencyError(
+                    "a performance baseline cannot record another tenant's "
+                    "milestone observation"
+                )
+        kinds = [observation.kind for observation in self.milestones]
+        if len(kinds) != len(set(kinds)):
+            raise InvalidPerformanceBaselineError(
+                "a performance baseline records each milestone at most once"
+            )
+
+    @property
+    def observed_kinds(self) -> frozenset:
+        return frozenset(
+            observation.kind
+            for observation in self.milestones
+            if observation.is_observed
+        )
+
+    @property
+    def pending_kinds(self) -> frozenset:
+        return frozenset(
+            observation.kind
+            for observation in self.milestones
+            if not observation.is_observed
+        )
+
+    @property
+    def missing_kinds(self) -> frozenset:
+        present = frozenset(observation.kind for observation in self.milestones)
+        return frozenset(MILESTONE_ORDER) - present
+
+    @property
+    def is_established(self) -> bool:
+        return self.state is PerformanceBaselineState.ESTABLISHED
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.state.is_terminal
+
+    def establish(self, *, on: date) -> "PerformanceBaseline":
+        """Return an established baseline once the stage 10 checkpoint passes.
+
+        SPEC.md section 4, stage 10: the "Performance Baseline Established"
+        checkpoint requires the stage 9 authorization and an observed first
+        qualified traffic milestone. Later milestones may be pending. An absent
+        milestone is refused rather than omitted, so missing observations remain
+        visible as pending (Phase 5 TDD example: "launch alone cannot complete the
+        engagement"). The observations are pinned so the baseline is traceable to
+        what was actually observed.
+        """
+        from redops.contexts.execution.domain.policies import (
+            PerformanceBaselinePolicy,
+        )
+
+        PerformanceBaselinePolicy().require(self, on)
+        return replace(
+            self,
+            state=PerformanceBaselineState.ESTABLISHED,
+            established_on=on,
+            review_reason=None,
+        )
+
+    def mark_review_required(self, *, reason: str) -> "PerformanceBaseline":
+        """Return this baseline marked review required after a change upstream.
+
+        SPEC.md section 4: changing an approved upstream asset marks dependent
+        assets review required. An established baseline loses that establishment
+        until the dependency is reviewed again, and a terminal baseline stays
+        terminal.
+        """
+        if not reason or not reason.strip():
+            raise InvalidPerformanceBaselineError(
+                "performance baseline review reason is required"
+            )
+        if self.state.is_terminal:
+            raise InvalidPerformanceBaselineError(
+                "a terminal performance baseline cannot be marked review required"
+            )
+        return replace(
+            self,
+            state=PerformanceBaselineState.REVIEW_REQUIRED,
+            review_reason=reason,
         )

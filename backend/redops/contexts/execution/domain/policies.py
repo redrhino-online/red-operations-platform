@@ -10,9 +10,12 @@ Complete".
 
 from __future__ import annotations
 
+from datetime import date
+
 from redops.contexts.execution.domain.entities import (
     FunnelIntegration,
     LaunchQA,
+    PerformanceBaseline,
 )
 from redops.contexts.execution.domain.errors import (
     FunnelDependencyError,
@@ -20,10 +23,17 @@ from redops.contexts.execution.domain.errors import (
     LaunchQAAuthorityError,
     LaunchQADependencyError,
     LaunchQAIncompleteError,
+    PerformanceBaselineDependencyError,
+    PerformanceBaselineIncompleteError,
+    PerformanceClaimSupportError,
 )
 from redops.contexts.execution.domain.value_objects import (
     HANDOFF_ORDER,
+    MILESTONE_ORDER,
     QA_CHECK_ORDER,
+    ClaimKind,
+    MilestoneKind,
+    PerformanceClaim,
     ProspectPathDryRun,
     TrafficAuthorization,
 )
@@ -138,4 +148,101 @@ class LaunchApprovedPolicy:
             raise LaunchQAAuthorityError(
                 f"traffic for launch QA {qa.qa_id!r} was not authorized by the "
                 f"designated authority {qa.designated_authority!r}"
+            )
+
+
+class PerformanceBaselinePolicy:
+    """Refuses "Performance Baseline Established" on an ungrounded or incomplete
+    stage 10 baseline.
+
+    SPEC.md section 4, stage 10: the checkpoint requires the stage 9 launch QA to
+    have authorized traffic and first qualified traffic to be observed, with the
+    later lead, appointment and sale milestones recorded as distinct milestones
+    (pending is allowed). A baseline that omits a milestone, or that claims
+    establishment from campaign activation alone, is refused (Phase 5 TDD example:
+    "launch alone cannot complete the engagement").
+    """
+
+    def require(self, baseline: PerformanceBaseline, on: date) -> None:
+        if baseline.state.is_terminal:
+            raise PerformanceBaselineDependencyError(
+                f"terminal performance baseline {baseline.baseline_id!r} cannot "
+                "be established"
+            )
+        qa = baseline.launch_qa
+        if qa.tenant_id != baseline.tenant_id:
+            raise PerformanceBaselineDependencyError(
+                "a performance baseline cannot be grounded on another tenant's "
+                "launch QA"
+            )
+        if not qa.is_ready_for_traffic:
+            raise PerformanceBaselineDependencyError(
+                f"performance baseline {baseline.baseline_id!r} cannot be "
+                "established: the stage 9 launch QA has not authorized traffic"
+            )
+        if baseline.missing_kinds:
+            names = ", ".join(
+                kind.value
+                for kind in MILESTONE_ORDER
+                if kind in baseline.missing_kinds
+            )
+            raise PerformanceBaselineIncompleteError(
+                f"performance baseline {baseline.baseline_id!r} cannot be "
+                f"established: missing observations must be recorded as pending: "
+                f"{names}"
+            )
+        if MilestoneKind.FIRST_QUALIFIED_TRAFFIC not in baseline.observed_kinds:
+            raise PerformanceBaselineIncompleteError(
+                f"performance baseline {baseline.baseline_id!r} cannot be "
+                "established: first qualified traffic has not been observed"
+            )
+
+
+class PerformanceClaimPolicy:
+    """Refuses a causal claim without an established baseline or adequate sample.
+
+    SPEC.md section 3, Measurement invariant: observations are distinct from
+    causal conclusions. A before-and-after causal claim requires an established
+    performance baseline, and a low sample size cannot support a causal
+    conclusion at all; the same movement may be recorded as an interpretation
+    (Phase 5 TDD examples: "missing baseline blocks a before and after claim" and
+    "low sample size keeps causal claim as interpretation").
+    """
+
+    def require(
+        self,
+        claim: PerformanceClaim,
+        baseline: PerformanceBaseline | None,
+        *,
+        minimum_sample: int,
+    ) -> None:
+        if minimum_sample < 1:
+            raise PerformanceClaimSupportError(
+                "a causal minimum sample must be at least one"
+            )
+        if baseline is not None:
+            if baseline.tenant_id != claim.tenant_id:
+                raise PerformanceClaimSupportError(
+                    "a performance claim cannot cite another tenant's baseline"
+                )
+            if (
+                claim.baseline_id is not None
+                and claim.baseline_id != baseline.baseline_id
+            ):
+                raise PerformanceClaimSupportError(
+                    "a performance claim cites a different baseline than the one "
+                    "supplied"
+                )
+        if claim.kind is not ClaimKind.CAUSAL_CONCLUSION:
+            return
+        if baseline is None or not baseline.is_established:
+            raise PerformanceClaimSupportError(
+                "a before-and-after causal claim requires an established "
+                "performance baseline"
+            )
+        if claim.sample_size < minimum_sample:
+            raise PerformanceClaimSupportError(
+                f"sample size {claim.sample_size} is below the minimum "
+                f"{minimum_sample}; a low sample cannot support a causal "
+                "conclusion, record the movement as an interpretation"
             )

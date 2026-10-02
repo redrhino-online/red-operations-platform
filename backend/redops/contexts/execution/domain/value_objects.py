@@ -9,13 +9,15 @@ conversion handoffs with reliable records and ownership.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from enum import Enum
 
 from redops.contexts.execution.domain.errors import (
     InvalidFunnelError,
     InvalidLaunchQAError,
+    InvalidPerformanceBaselineError,
+    InvalidPerformanceClaimError,
 )
 
 
@@ -338,3 +340,225 @@ class TrafficAuthorization:
             raise InvalidLaunchQAError(
                 "traffic authorization intended use is required"
             )
+
+
+class MilestoneKind(Enum):
+    """The distinct stage 10 post-launch milestones (SPEC.md section 4).
+
+    SPEC.md section 4, stage 10 "Launch": the "Performance Baseline Established"
+    checkpoint treats first qualified traffic and the subsequent lead, appointment
+    and sale as distinct observed milestones. They are distinct because campaign
+    activation, a raw lead, a qualified appointment and a sale are different
+    facts; conflating them would let a launch alone look like a measured result
+    (Phase 5 TDD example: "traffic, lead, qualified appointment and sale are
+    distinct observed milestones").
+    """
+
+    FIRST_QUALIFIED_TRAFFIC = "first_qualified_traffic"
+    LEAD = "lead"
+    APPOINTMENT = "appointment"
+    SALE = "sale"
+
+
+MILESTONE_ORDER: tuple[MilestoneKind, ...] = (
+    MilestoneKind.FIRST_QUALIFIED_TRAFFIC,
+    MilestoneKind.LEAD,
+    MilestoneKind.APPOINTMENT,
+    MilestoneKind.SALE,
+)
+
+
+class ObservationStatus(Enum):
+    """Whether a stage 10 milestone has been observed or is still pending.
+
+    SPEC.md section 4, stage 10: missing observations are shown as pending, never
+    omitted or filled with a guess. A pending milestone is a visible gap, not an
+    observation.
+    """
+
+    OBSERVED = "observed"
+    PENDING = "pending"
+
+
+@dataclass(frozen=True)
+class MilestoneObservation:
+    """One recorded stage 10 milestone observation (SPEC.md sections 3 and 4).
+
+    An observed milestone pins the date and the source it was observed from, so
+    an observation is traceable and distinct from a causal conclusion (SPEC.md
+    section 3: "Observations are distinct from causal conclusions"). A pending
+    milestone carries neither a date nor a source, so an unobserved milestone
+    cannot be represented as an observation.
+    """
+
+    kind: MilestoneKind
+    status: ObservationStatus
+    tenant_id: str
+    observed_on: date | None = None
+    source: str = ""
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.tenant_id or not self.tenant_id.strip():
+            raise InvalidPerformanceBaselineError(
+                "milestone observation tenant id is required"
+            )
+        if self.status is ObservationStatus.OBSERVED:
+            if not isinstance(self.observed_on, date):
+                raise InvalidPerformanceBaselineError(
+                    f"observed milestone {self.kind.value!r} requires a date"
+                )
+            if not self.source or not self.source.strip():
+                raise InvalidPerformanceBaselineError(
+                    f"observed milestone {self.kind.value!r} requires a source"
+                )
+        else:
+            if self.observed_on is not None or (
+                self.source and self.source.strip()
+            ):
+                raise InvalidPerformanceBaselineError(
+                    f"pending milestone {self.kind.value!r} cannot carry an "
+                    "observation"
+                )
+
+    @property
+    def is_observed(self) -> bool:
+        return self.status is ObservationStatus.OBSERVED
+
+
+@dataclass(frozen=True)
+class LaunchAssetPackage:
+    """The stage 10 required asset package (SPEC.md section 4, stage 10).
+
+    SPEC.md section 4, stage 10 "Launch": the required asset package is the live
+    campaign, spend and lead records, conversion and engagement measures,
+    applications, bookings, shows, closes, acquisition cost, attribution and
+    issue log. The package is frozen and reject-only, so a missing artifact
+    cannot be represented as a completed stage 10 deliverable.
+    """
+
+    live_campaign: str
+    spend_records: str
+    lead_records: str
+    conversion_measures: str
+    engagement_measures: str
+    applications: str
+    bookings: str
+    shows: str
+    closes: str
+    acquisition_cost: str
+    attribution: str
+    issue_log: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("live campaign", self.live_campaign),
+            ("spend records", self.spend_records),
+            ("lead records", self.lead_records),
+            ("conversion measures", self.conversion_measures),
+            ("engagement measures", self.engagement_measures),
+            ("applications", self.applications),
+            ("bookings", self.bookings),
+            ("shows", self.shows),
+            ("closes", self.closes),
+            ("acquisition cost", self.acquisition_cost),
+            ("attribution", self.attribution),
+            ("issue log", self.issue_log),
+        ):
+            if not value or not value.strip():
+                raise InvalidPerformanceBaselineError(
+                    f"stage 10 asset package {label} is required"
+                )
+
+
+class PerformanceBaselineState(Enum):
+    """Readiness of the stage 10 performance baseline (SPEC.md section 4).
+
+    A DRAFT baseline becomes ESTABLISHED only when the "Performance Baseline
+    Established" checkpoint passes: the stage 9 launch QA authorizes traffic and
+    first qualified traffic is observed. Later milestones may remain pending.
+    An upstream change returns it to REVIEW_REQUIRED; Superseded and Archived are
+    terminal.
+    """
+
+    DRAFT = "draft"
+    ESTABLISHED = "established"
+    REVIEW_REQUIRED = "review_required"
+    SUPERSEDED = "superseded"
+    ARCHIVED = "archived"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in _TERMINAL_BASELINE_STATES
+
+
+_TERMINAL_BASELINE_STATES = frozenset(
+    {
+        PerformanceBaselineState.SUPERSEDED,
+        PerformanceBaselineState.ARCHIVED,
+    }
+)
+
+
+class ClaimKind(Enum):
+    """Whether a performance statement is an observation, interpretation or cause.
+
+    SPEC.md section 3, Measurement invariant: observations are distinct from
+    causal conclusions. A causal conclusion asserts that an observed movement was
+    caused by the campaign; an interpretation reports the same movement without
+    claiming causation.
+    """
+
+    OBSERVATION = "observation"
+    INTERPRETATION = "interpretation"
+    CAUSAL_CONCLUSION = "causal_conclusion"
+
+
+@dataclass(frozen=True)
+class PerformanceClaim:
+    """A stage 10 performance statement about the campaign (SPEC.md section 3).
+
+    The claim names the subject, the statement, its kind, the sample size and the
+    source. A causal conclusion can only be recorded against an established
+    baseline with an adequate sample; otherwise it must be an interpretation
+    (Phase 5 TDD examples: "missing baseline blocks a before and after claim",
+    "low sample size keeps causal claim as interpretation").
+    """
+
+    claim_id: str
+    tenant_id: str
+    subject: str
+    statement: str
+    kind: ClaimKind
+    sample_size: int
+    source: str
+    baseline_id: str | None = None
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("claim id", self.claim_id),
+            ("claim tenant id", self.tenant_id),
+            ("claim subject", self.subject),
+            ("claim statement", self.statement),
+            ("claim source", self.source),
+        ):
+            if not value or not value.strip():
+                raise InvalidPerformanceClaimError(f"{label} is required")
+        if self.sample_size < 0:
+            raise InvalidPerformanceClaimError(
+                "claim sample size cannot be negative"
+            )
+
+    def as_interpretation(self) -> "PerformanceClaim":
+        """Return a causal claim downgraded to an interpretation.
+
+        A low sample size cannot support a causal conclusion, but the same
+        observed movement can still be recorded as an interpretation rather than
+        discarded (Phase 5 TDD example: "low sample size keeps causal claim as
+        interpretation").
+        """
+        if self.kind is not ClaimKind.CAUSAL_CONCLUSION:
+            raise InvalidPerformanceClaimError(
+                "only a causal conclusion can be downgraded to an interpretation"
+            )
+        return replace(self, kind=ClaimKind.INTERPRETATION)
