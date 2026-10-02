@@ -14,6 +14,7 @@ from redops.contexts.governance.domain.errors import (
     CheckpointMismatchError,
     GateDecisionError,
     GateLedgerError,
+    PrerequisiteMismatchError,
     SelfApprovalError,
     StageGateNotAcceptedError,
     UnapprovedAssetError,
@@ -157,10 +158,13 @@ class GateDecision:
     """The durable, immutable record of a stage gate decision (SPEC.md section 3).
 
     It persists the stage, the pinned required asset versions, the checkpoint
-    evidence, the reviewer, the intended downstream scope, the disposition, the
-    rationale and the next action. It also persists the assigned work owner and
-    due date so the production view can answer who is accountable for the stage
-    and when the next approval is due (SPEC.md section 4). Every disposition must
+    evidence, the canonical prerequisite stages, the reviewer, the intended
+    downstream scope, the disposition, the rationale and the next action. It also
+    persists the assigned work owner and due date so the production view can
+    answer who is accountable for the stage and when the next approval is due
+    (SPEC.md section 4). Persisting the prerequisite stages means a durable
+    decision read in isolation can answer "which dependency blocks work" without
+    consulting the in-memory ledger. Every disposition must
     pin the stage's required asset package, exactly one exact version per kind, so
     the durable record always says which versions the decision concerns, even
     when it blocks, requests changes, waives or supersedes. A passing decision
@@ -182,6 +186,7 @@ class GateDecision:
     decided_on: date
     assigned_owner: str
     due_on: date
+    dependencies: frozenset[int]
     next_action: str = ""
     waiver: Waiver | None = None
     asset_approvals: tuple["ApprovalRequest", ...] = ()
@@ -206,6 +211,16 @@ class GateDecision:
         if not self.checkpoint or not self.checkpoint.strip():
             raise GateDecisionError(
                 "a gate decision must pin the checkpoint rubric for its stage"
+            )
+
+        for dependency in self.dependencies:
+            if dependency < 0:
+                raise GateDecisionError(
+                    "gate decision prerequisite stage numbers must be >= 0"
+                )
+        if self.stage_number in self.dependencies:
+            raise GateDecisionError(
+                "a gate decision cannot list its own stage as a prerequisite"
             )
 
         if not self.required_assets:
@@ -356,6 +371,7 @@ class GateDecision:
             decided_on=on,
             assigned_owner=assigned_owner,
             due_on=due_on,
+            dependencies=gate.dependencies,
             next_action=next_action,
             waiver=waiver,
             asset_approvals=gate.asset_approvals,
@@ -474,6 +490,16 @@ class GateLedger:
                 f"stage {decision.stage_number} decision names checkpoint "
                 f"{decision.checkpoint!r} but template "
                 f"{self._template.version!r} requires {canonical_checkpoint!r}"
+            )
+        canonical_dependencies = self._template.dependencies_of(
+            decision.stage_number
+        )
+        if decision.dependencies != canonical_dependencies:
+            raise PrerequisiteMismatchError(
+                f"stage {decision.stage_number} decision names prerequisites "
+                f"{sorted(decision.dependencies)} but template "
+                f"{self._template.version!r} requires "
+                f"{sorted(canonical_dependencies)}"
             )
         if decision.is_passing:
             unsatisfied = sorted(

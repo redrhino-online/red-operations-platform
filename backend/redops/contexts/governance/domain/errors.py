@@ -60,6 +60,17 @@ class CheckpointMismatchError(GateLedgerError):
     """A decision named a checkpoint rubric other than the stage's canonical one."""
 
 
+class PrerequisiteMismatchError(GateLedgerError):
+    """A decision named prerequisite stages other than the stage's canonical ones.
+
+    SPEC.md section 4 requires the gate record to persist the stage's
+    dependencies for every disposition. The canonical prerequisite graph lives on
+    the template, so a decision that omits, adds or substitutes a prerequisite
+    would leave the durable record unable to answer "which dependency blocks
+    work" (SPEC.md section 4).
+    """
+
+
 class GateDecisionError(GovernanceError, ValueError):
     """A gate decision was recorded in a way its invariant forbids.
 

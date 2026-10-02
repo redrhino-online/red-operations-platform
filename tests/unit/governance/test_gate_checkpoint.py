@@ -76,6 +76,7 @@ def canonical_passing(stage_number, version=VERSION, checkpoint=None):
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        dependencies=template.dependencies_of(stage_number),
         asset_approvals=tuple(approvals(assets, scope)),
     )
 

@@ -85,6 +85,7 @@ def passing(
         decided_on=decided_on,
         assigned_owner="production-manager",
         due_on=DUE,
+        dependencies=definition.dependencies,
         asset_approvals=tuple(
             approvals(
                 assets,

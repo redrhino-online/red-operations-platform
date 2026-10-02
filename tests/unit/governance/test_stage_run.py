@@ -77,6 +77,7 @@ def canonical_decision(
         decided_on=decided_on,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        dependencies=TEMPLATE.dependencies_of(stage_number),
         asset_approvals=tuple(approvals),
     )
 
@@ -132,6 +133,7 @@ def accepted_decision(
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        dependencies=TEMPLATE.dependencies_of(stage_number),
         asset_approvals=tuple(
             script_approval(expires_on, asset=asset) for asset in assets
         ),
@@ -207,6 +209,7 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
             decided_on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
+            dependencies=TEMPLATE.dependencies_of(7),
         )
 
         with self.assertRaises(StageGateNotAcceptedError):
@@ -239,6 +242,7 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
             decided_on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
+            dependencies=TEMPLATE.dependencies_of(7),
             waiver=Waiver(
                 reason="video delayed by vendor",
                 risk_owner="production-manager",
@@ -574,6 +578,7 @@ class StageCompletionDurabilityTests(unittest.TestCase):
                 decided_on=TODAY,
                 assigned_owner="production-manager",
                 due_on=DATE_DUE,
+                dependencies=TEMPLATE.dependencies_of(7),
             )
         )
         run = stage_run(stage_number=7)

@@ -77,6 +77,7 @@ def passing_decision(stage_number: int, assets) -> GateDecision:
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        dependencies=TEMPLATE.dependencies_of(stage_number),
         asset_approvals=tuple(approvals(assets, scope)),
     )
 
@@ -201,6 +202,7 @@ class GateDecisionAssetPackageRequiredTests(unittest.TestCase):
             "decided_on": TODAY,
             "assigned_owner": "production-manager",
             "due_on": DATE_DUE,
+            "dependencies": TEMPLATE.dependencies_of(7),
         }
         if disposition is GateDisposition.WAIVED:
             values["waiver"] = Waiver(

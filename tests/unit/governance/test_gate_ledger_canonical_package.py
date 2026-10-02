@@ -79,6 +79,7 @@ def canonical_decision(stage_number: int = STAGE) -> GateDecision:
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        dependencies=TEMPLATE.dependencies_of(stage_number),
         asset_approvals=tuple(requests),
     )
 
@@ -103,6 +104,7 @@ def non_passing_decision(
         "decided_on": TODAY,
         "assigned_owner": "production-manager",
         "due_on": DATE_DUE,
+        "dependencies": TEMPLATE.dependencies_of(STAGE),
     }
     if disposition is GateDisposition.WAIVED:
         values["waiver"] = Waiver(

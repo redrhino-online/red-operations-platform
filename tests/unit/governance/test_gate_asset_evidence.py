@@ -82,6 +82,7 @@ def passing_decision_for(stage_number):
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DUE,
+        dependencies=TEMPLATE.dependencies_of(stage_number),
         asset_approvals=tuple(
             approval_for(AssetVersionRef(kind, 1), scope) for kind in kinds
         ),

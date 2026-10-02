@@ -67,6 +67,7 @@ def decision(stage_number: int, disposition: GateDisposition) -> GateDecision:
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        dependencies=definition.dependencies,
         asset_approvals=tuple(approvals(assets, scope)),
     )
 

@@ -83,6 +83,7 @@ def passing_decision_for(stage_number: int) -> GateDecision:
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        dependencies=TEMPLATE.dependencies_of(stage_number),
         asset_approvals=tuple(asset_approvals(assets, scope)),
     )
 
@@ -109,6 +110,7 @@ def passing_decision(**overrides) -> GateDecision:
         "decided_on": TODAY,
         "assigned_owner": "production-manager",
         "due_on": DATE_DUE,
+        "dependencies": frozenset({6}),
         "next_action": "release stage 8 work",
     }
     values.update(overrides)

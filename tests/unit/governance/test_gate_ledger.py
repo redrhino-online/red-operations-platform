@@ -75,6 +75,9 @@ def passing(stage_number: int, version: str = VERSION) -> GateDecision:
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        dependencies=stage_zero_to_ten_template(version).dependencies_of(
+            stage_number
+        ),
         asset_approvals=tuple(approvals(assets, scope)),
     )
 
@@ -95,6 +98,9 @@ def blocked(stage_number: int, version: str = VERSION) -> GateDecision:
         decided_on=TODAY,
         assigned_owner="production-manager",
         due_on=DATE_DUE,
+        dependencies=stage_zero_to_ten_template(version).dependencies_of(
+            stage_number
+        ),
     )
 
 
@@ -171,6 +177,7 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
             decided_on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
+            dependencies=frozenset(),
             asset_approvals=tuple(
                 approvals(
                     frozenset({AssetVersionRef("client-record", 1)}),
@@ -201,6 +208,7 @@ class GateLedgerPrerequisiteTests(unittest.TestCase):
             decided_on=TODAY,
             assigned_owner="production-manager",
             due_on=DATE_DUE,
+            dependencies=frozenset(),
             asset_approvals=tuple(
                 approvals(substituted_assets, "stage-1-downstream")
             ),

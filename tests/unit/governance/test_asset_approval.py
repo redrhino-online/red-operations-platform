@@ -73,6 +73,7 @@ def decision(asset_approvals=(), **overrides):
         "decided_on": TODAY,
         "assigned_owner": "production-manager",
         "due_on": DATE_DUE,
+        "dependencies": TEMPLATE.dependencies_of(7),
         "asset_approvals": tuple(asset_approvals),
     }
     values.update(overrides)
@@ -101,6 +102,7 @@ def ledger_through(stage_number):
                 decided_on=TODAY,
                 assigned_owner="production-manager",
                 due_on=DATE_DUE,
+                dependencies=TEMPLATE.dependencies_of(stage),
                 asset_approvals=tuple(
                     approved(asset, scope=scope) for asset in stage_assets
                 ),
