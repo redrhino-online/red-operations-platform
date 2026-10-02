@@ -33,6 +33,7 @@ from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
     GateDisposition,
     GateState,
+    PipelineProgress,
 )
 
 VERSION = "2026.1"
@@ -147,6 +148,72 @@ class GateLedgerPrerequisiteExpiryTests(unittest.TestCase):
         self.ledger.record(passing(1, decided_on=LATER))
 
         self.assertTrue(self.ledger.has_passing_decision(1, on=LATER))
+
+
+class GateLedgerTransitivePrerequisiteExpiryTests(unittest.TestCase):
+    """An expired upstream stage revokes every stage that depends on it.
+
+    SPEC.md section 4 makes the 0-10 pipeline a dependency graph and says "a
+    failed or expired prerequisite blocks dependent authorization until
+    resolved". The revocation must be transitive: a stage whose own approvals
+    are still current does not authorize downstream work while a stage further
+    up the chain has lapsed. Before this change the ledger checked only the
+    immediate prerequisite's own decision, so a passing decision resting on an
+    expired upstream stage still reported success and could be used to record
+    further dependent approvals.
+    """
+
+    def setUp(self):
+        self.ledger = GateLedger(TEMPLATE)
+
+    def _record_chain(self, expiries) -> None:
+        for stage_number, expires_on in enumerate(expiries):
+            self.ledger.record(
+                passing(
+                    stage_number,
+                    decided_on=DECIDED,
+                    expires_on=expires_on,
+                )
+            )
+
+    def test_intact_chain_still_authorizes_transitively_later(self):
+        self._record_chain([date(2026, 12, 31)] * 3)
+
+        self.assertTrue(self.ledger.has_passing_decision(2, on=LATER))
+
+    def test_expired_upstream_revokes_a_directly_dependent_stage(self):
+        self._record_chain([date(2026, 10, 15), date(2026, 12, 31)])
+
+        self.assertTrue(self.ledger.has_passing_decision(1, on=DECIDED))
+        self.assertFalse(self.ledger.has_passing_decision(1, on=LATER))
+
+    def test_expired_upstream_revokes_a_transitively_dependent_stage(self):
+        self._record_chain(
+            [date(2026, 10, 15), date(2026, 12, 31), date(2026, 12, 31)]
+        )
+
+        self.assertTrue(self.ledger.has_passing_decision(2, on=DECIDED))
+        self.assertFalse(self.ledger.has_passing_decision(2, on=LATER))
+
+    def test_dependency_states_block_every_stage_behind_the_expired_chain(self):
+        self._record_chain(
+            [date(2026, 10, 15), date(2026, 12, 31), date(2026, 12, 31)]
+        )
+
+        states = self.ledger.dependency_states(on=LATER)
+
+        self.assertIs(GateState.BLOCKED, states[0])
+        self.assertIs(GateState.BLOCKED, states[1])
+        self.assertIs(GateState.BLOCKED, states[2])
+
+    def test_pipeline_progress_does_not_count_gates_behind_an_expired_chain(self):
+        self._record_chain(
+            [date(2026, 10, 15), date(2026, 12, 31), date(2026, 12, 31)]
+        )
+
+        progress = PipelineProgress.from_ledger(self.ledger, on=LATER)
+
+        self.assertEqual(0, progress.approved_gates)
 
 
 class GateDecisionPrerequisiteExpiryTests(unittest.TestCase):

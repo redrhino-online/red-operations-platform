@@ -465,30 +465,44 @@ class GateLedger:
         return entries[-1] if entries else None
 
     def has_passing_decision(self, stage_number: int, *, on: date) -> bool:
-        """Whether the stage's latest decision still authorizes at ``on``.
+        """Whether the stage and its whole prerequisite chain authorize at ``on``.
 
-        A passing decision whose exact pinned approvals have since expired no
-        longer counts, so an expired prerequisite blocks dependent
-        authorization until it is resolved (SPEC.md section 4).
+        A stage authorizes dependent work only when its latest decision is
+        passing, its exact pinned approvals are still effective, and every
+        transitive prerequisite stage also authorizes at the same instant. The
+        template is acyclic and every dependency points to an earlier stage, so
+        the recursion terminates. This closes the dependency graph at the
+        evaluation instant: an expired approval anywhere upstream revokes every
+        dependent stage until it is resolved (SPEC.md section 4: "a failed or
+        expired prerequisite blocks dependent authorization until resolved").
         """
         latest = self.decision_for(stage_number)
-        return latest is not None and latest.authorizes_downstream_at(on)
+        if latest is None or not latest.authorizes_downstream_at(on):
+            return False
+        return all(
+            self.has_passing_decision(dependency, on=on)
+            for dependency in self._template.dependencies_of(stage_number)
+        )
 
     def dependency_states(self, *, on: date) -> Mapping[int, GateState]:
         """Prerequisite gate states, time-aware at the evaluation instant.
 
-        A latest passing decision whose pinned approvals have expired at ``on``
-        is reported as ``BLOCKED`` rather than ``APPROVED``: the prerequisite
-        no longer authorizes dependent work even though no newer decision has
-        been recorded. There is no separate expired gate state in SPEC.md
-        section 4, and an expired prerequisite is exactly a blocked dependency.
+        A latest passing decision that no longer authorizes at ``on`` — because
+        its own pinned approvals have expired or because a transitive
+        prerequisite has lapsed — is reported as ``BLOCKED`` rather than
+        ``APPROVED``: the stage no longer authorizes dependent work even though
+        no newer decision has been recorded. There is no separate expired gate
+        state in SPEC.md section 4, and an expired prerequisite is exactly a
+        blocked dependency.
         """
         states: dict[int, GateState] = {}
         for stage in self._template.stages:
             latest = self.decision_for(stage.stage_number)
             if latest is None:
                 states[stage.stage_number] = GateState.NOT_STARTED
-            elif latest.is_passing and not latest.authorizes_downstream_at(on):
+            elif latest.is_passing and not self.has_passing_decision(
+                stage.stage_number, on=on
+            ):
                 states[stage.stage_number] = GateState.BLOCKED
             else:
                 states[stage.stage_number] = self._gate_state(latest.disposition)
