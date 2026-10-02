@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
+from typing import Iterable
 
 from redops.contexts.governance.domain.errors import InvalidStageTemplateError
 
@@ -110,6 +111,21 @@ class AssetVersionRef:
 
     def __str__(self) -> str:
         return f"{self.asset_id}@{self.version}"
+
+
+def duplicate_asset_kinds(
+    assets: Iterable[AssetVersionRef],
+) -> frozenset[str]:
+    """Return asset kinds for which more than one exact version is pinned.
+
+    A gate must pin exactly one version per required asset kind; a kind that
+    appears at two versions leaves the approved version ambiguous (SPEC.md
+    sections 3 and 4).
+    """
+    counts: dict[str, int] = {}
+    for asset in assets:
+        counts[asset.asset_id] = counts.get(asset.asset_id, 0) + 1
+    return frozenset(kind for kind, count in counts.items() if count > 1)
 
 
 @dataclass(frozen=True)

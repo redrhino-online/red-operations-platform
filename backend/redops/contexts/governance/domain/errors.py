@@ -39,6 +39,15 @@ class AssetPackageMismatchError(GovernanceError, ValueError):
     """A supplied asset package does not match the stage's required asset kinds."""
 
 
+class AmbiguousAssetPackageError(AssetPackageMismatchError):
+    """A passing package pins more than one version of the same asset kind.
+
+    A gate approves an exact version per required asset kind. Two versions of one
+    kind leave the approved version ambiguous, so the package is refused instead
+    of being treated as an exact pin (SPEC.md sections 3 and 4).
+    """
+
+
 class GateLedgerError(GovernanceError, ValueError):
     """A gate ledger was asked to record a decision its invariants forbid."""
 

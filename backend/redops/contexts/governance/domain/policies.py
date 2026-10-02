@@ -16,6 +16,7 @@ from redops.contexts.governance.domain.value_objects import (
     GateState,
     StageStatus,
     StageTemplate,
+    duplicate_asset_kinds,
 )
 
 
@@ -45,6 +46,14 @@ class GateIntegrityPolicy:
         if missing:
             names = ", ".join(sorted(str(asset) for asset in missing))
             reasons.append(f"required asset versions not approved: {names}")
+
+        duplicates = duplicate_asset_kinds(gate.required_assets)
+        if duplicates:
+            names = ", ".join(sorted(duplicates))
+            reasons.append(
+                "a gate must pin exactly one exact version per required asset "
+                f"kind; multiple versions declared for: {names}"
+            )
 
         unapproved = sorted(
             stage

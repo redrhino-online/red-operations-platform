@@ -7,6 +7,7 @@ from datetime import date
 from typing import Mapping
 
 from redops.contexts.governance.domain.errors import (
+    AmbiguousAssetPackageError,
     ApprovalAuthorityError,
     ApprovalExpiredError,
     AssetPackageMismatchError,
@@ -27,6 +28,7 @@ from redops.contexts.governance.domain.value_objects import (
     StageTemplate,
     StageTransition,
     Waiver,
+    duplicate_asset_kinds,
 )
 
 
@@ -163,6 +165,13 @@ class GateDecision:
                 raise GateDecisionError(
                     "a passing gate decision must pin the required asset versions"
                 )
+            duplicates = duplicate_asset_kinds(self.required_assets)
+            if duplicates:
+                names = ", ".join(sorted(duplicates))
+                raise AmbiguousAssetPackageError(
+                    "a passing gate decision must pin exactly one exact version "
+                    f"per asset kind; multiple versions declared for: {names}"
+                )
             if not self.checkpoint_evidence or not self.checkpoint_evidence.strip():
                 raise GateDecisionError(
                     "a passing gate decision must record checkpoint evidence"
@@ -293,6 +302,13 @@ class GateLedger:
                 f"{self._template.version!r}"
             )
         if decision.is_passing:
+            ambiguous = duplicate_asset_kinds(decision.required_assets)
+            if ambiguous:
+                names = ", ".join(sorted(ambiguous))
+                raise AmbiguousAssetPackageError(
+                    "a passing decision must pin exactly one exact version per "
+                    f"asset kind; multiple versions declared for: {names}"
+                )
             canonical_kinds = self._template.required_asset_kinds(
                 decision.stage_number
             )
