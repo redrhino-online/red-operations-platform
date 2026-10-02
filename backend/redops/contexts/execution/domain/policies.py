@@ -10,14 +10,22 @@ Complete".
 
 from __future__ import annotations
 
-from redops.contexts.execution.domain.entities import FunnelIntegration
+from redops.contexts.execution.domain.entities import (
+    FunnelIntegration,
+    LaunchQA,
+)
 from redops.contexts.execution.domain.errors import (
     FunnelDependencyError,
     FunnelIncompleteError,
+    LaunchQAAuthorityError,
+    LaunchQADependencyError,
+    LaunchQAIncompleteError,
 )
 from redops.contexts.execution.domain.value_objects import (
     HANDOFF_ORDER,
+    QA_CHECK_ORDER,
     ProspectPathDryRun,
+    TrafficAuthorization,
 )
 
 
@@ -70,3 +78,64 @@ def _describe(dry_run: ProspectPathDryRun) -> str:
         elif kind in dry_run.missing_kinds:
             parts.append(f"{kind.value} missing")
     return ", ".join(parts) if parts else "no routed handoffs"
+
+
+class LaunchApprovedPolicy:
+    """Refuses "Launch Approved" on an under-grounded or failing stage 9 QA.
+
+    SPEC.md section 4, stage 9: all critical path checks must pass, exceptions
+    must have owners, and the designated human authority must authorize traffic,
+    grounded on the completed stage 8 funnel. A failed or excepted critical path
+    check, a missing check, an incomplete funnel, or a non-designated authorizer
+    leaves the QA not ready for traffic (Phase 4 TDD example: "failed message,
+    technical or commercial QA prevents Launch Approved"). An exception never
+    makes an absent critical path check appear present.
+    """
+
+    def require(
+        self, qa: LaunchQA, authorization: TrafficAuthorization
+    ) -> None:
+        if qa.state.is_terminal:
+            raise LaunchQADependencyError(
+                f"terminal launch QA {qa.qa_id!r} cannot authorize traffic"
+            )
+        funnel = qa.funnel
+        if funnel.tenant_id != qa.tenant_id:
+            raise LaunchQADependencyError(
+                "a launch QA cannot be grounded on another tenant's funnel"
+            )
+        if not funnel.is_complete:
+            raise LaunchQADependencyError(
+                f"launch QA {qa.qa_id!r} cannot authorize traffic: it is "
+                "grounded on a stage 8 funnel that has not passed Funnel Complete"
+            )
+
+        present = {check.kind for check in qa.checks}
+        missing = [kind for kind in QA_CHECK_ORDER if kind not in present]
+        if missing:
+            names = ", ".join(kind.value for kind in missing)
+            raise LaunchQAIncompleteError(
+                f"launch QA {qa.qa_id!r} cannot authorize traffic: missing "
+                f"checks: {names}"
+            )
+
+        for check in qa.checks:
+            if check.is_passing:
+                continue
+            if check.kind.is_critical_path:
+                raise LaunchQAIncompleteError(
+                    f"launch QA {qa.qa_id!r} cannot authorize traffic: critical "
+                    f"path check {check.kind.value!r} "
+                    f"{check.outcome.value} and cannot be excepted"
+                )
+            if not check.owner or not check.owner.strip():
+                raise LaunchQAIncompleteError(
+                    f"launch QA {qa.qa_id!r} cannot authorize traffic: check "
+                    f"{check.kind.value!r} {check.outcome.value} has no owner"
+                )
+
+        if authorization.authorized_by != qa.designated_authority:
+            raise LaunchQAAuthorityError(
+                f"traffic for launch QA {qa.qa_id!r} was not authorized by the "
+                f"designated authority {qa.designated_authority!r}"
+            )

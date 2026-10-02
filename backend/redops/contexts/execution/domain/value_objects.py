@@ -10,9 +10,13 @@ conversion handoffs with reliable records and ownership.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from enum import Enum
 
-from redops.contexts.execution.domain.errors import InvalidFunnelError
+from redops.contexts.execution.domain.errors import (
+    InvalidFunnelError,
+    InvalidLaunchQAError,
+)
 
 
 class FunnelState(Enum):
@@ -193,3 +197,144 @@ class ProspectPathDryRun:
     @property
     def is_complete(self) -> bool:
         return self.completed_kinds == frozenset(HANDOFF_ORDER)
+
+
+class LaunchQAState(Enum):
+    """Readiness of the stage 9 launch QA (SPEC.md section 4).
+
+    A DRAFT QA only becomes READY_FOR_TRAFFIC when the "Launch Approved"
+    checkpoint passes. READY_FOR_TRAFFIC is an authorization to begin traffic,
+    explicitly not evidence that traffic is live: live observation is a stage 10
+    milestone (SPEC.md section 4, stage 9 "shows Ready for Traffic, not live or
+    completed"). An upstream change returns it to REVIEW_REQUIRED; Superseded and
+    Archived are terminal.
+    """
+
+    DRAFT = "draft"
+    READY_FOR_TRAFFIC = "ready_for_traffic"
+    REVIEW_REQUIRED = "review_required"
+    SUPERSEDED = "superseded"
+    ARCHIVED = "archived"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in _TERMINAL_LAUNCH_STATES
+
+
+_TERMINAL_LAUNCH_STATES = frozenset(
+    {LaunchQAState.SUPERSEDED, LaunchQAState.ARCHIVED}
+)
+
+
+class QACheckKind(Enum):
+    """The stage 9 launch QA checks (SPEC.md section 4, stage 9).
+
+    SPEC.md section 4, stage 9 "QA": the recorded message; technical and
+    commercial tests on desktop and mobile; forms, CRM, email, automation,
+    booking, tracking, payment when relevant, handoff, client approval, budget,
+    creative, dashboard and the launch decision. Payment is only relevant to some
+    offers and the dashboard is a reporting view, so those are not on the
+    critical path and may be explicitly excepted with an owner.
+    """
+
+    RECORDED_MESSAGE = "recorded_message"
+    TECHNICAL_DESKTOP = "technical_desktop"
+    TECHNICAL_MOBILE = "technical_mobile"
+    COMMERCIAL_DESKTOP = "commercial_desktop"
+    COMMERCIAL_MOBILE = "commercial_mobile"
+    FORMS = "forms"
+    CRM = "crm"
+    EMAIL = "email"
+    AUTOMATION = "automation"
+    BOOKING = "booking"
+    TRACKING = "tracking"
+    PAYMENT = "payment"
+    SALES_HANDOFF = "sales_handoff"
+    CLIENT_APPROVAL = "client_approval"
+    BUDGET = "budget"
+    CREATIVE = "creative"
+    DASHBOARD = "dashboard"
+    LAUNCH_DECISION = "launch_decision"
+
+    @property
+    def is_critical_path(self) -> bool:
+        return self not in _NON_CRITICAL_QA_CHECKS
+
+
+QA_CHECK_ORDER: tuple[QACheckKind, ...] = tuple(QACheckKind)
+
+_NON_CRITICAL_QA_CHECKS = frozenset(
+    {QACheckKind.PAYMENT, QACheckKind.DASHBOARD}
+)
+
+
+class QACheckOutcome(Enum):
+    """Whether a stage 9 check passed, failed, or was explicitly excepted.
+
+    An exception does not make an absent check appear present: it names a human
+    risk owner and is only allowed off the critical path (SPEC.md sections 4 and
+    5).
+    """
+
+    PASSED = "passed"
+    FAILED = "failed"
+    EXCEPTED = "excepted"
+
+
+@dataclass(frozen=True)
+class QACheck:
+    """One recorded stage 9 launch QA check.
+
+    Every check carries the evidence that supports its outcome so the gate is
+    traceable. An excepted check requires a named owner, so an exception is a
+    scoped human decision rather than a silent omission (SPEC.md sections 4 and
+    5). A failed check is recorded with its owner and can never authorize traffic.
+    """
+
+    kind: QACheckKind
+    outcome: QACheckOutcome
+    evidence: str
+    owner: str = ""
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.evidence or not self.evidence.strip():
+            raise InvalidLaunchQAError(
+                f"stage 9 QA check {self.kind.value!r} evidence is required"
+            )
+        if self.outcome is QACheckOutcome.EXCEPTED and (
+            not self.owner or not self.owner.strip()
+        ):
+            raise InvalidLaunchQAError(
+                f"stage 9 QA check {self.kind.value!r} exception requires a "
+                "named owner"
+            )
+
+    @property
+    def is_passing(self) -> bool:
+        return self.outcome is QACheckOutcome.PASSED
+
+
+@dataclass(frozen=True)
+class TrafficAuthorization:
+    """A designated human's authorization to begin traffic (SPEC.md section 4).
+
+    The "Launch Approved" checkpoint requires "the designated human authorizes
+    traffic". The record names the human authority, the intended use and the date.
+    It authorizes the operator to begin; it is not evidence that traffic is live,
+    which is a separate stage 10 observation.
+    """
+
+    authorized_by: str
+    intended_use: str
+    authorized_on: date
+
+    def __post_init__(self) -> None:
+        if not self.authorized_by or not self.authorized_by.strip():
+            raise InvalidLaunchQAError(
+                "traffic authorization requires a designated human authority"
+            )
+        if not self.intended_use or not self.intended_use.strip():
+            raise InvalidLaunchQAError(
+                "traffic authorization intended use is required"
+            )

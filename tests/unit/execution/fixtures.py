@@ -9,14 +9,22 @@ every file. They are test data only and carry no behavior.
 
 from __future__ import annotations
 
-from redops.contexts.execution.domain.entities import FunnelIntegration
+from redops.contexts.execution.domain.entities import (
+    FunnelIntegration,
+    LaunchQA,
+)
 from redops.contexts.execution.domain.value_objects import (
     HANDOFF_ORDER,
+    QA_CHECK_ORDER,
     FunnelAssetPackage,
     HandoffKind,
     HandoffOutcome,
     HandoffRecord,
     ProspectPathDryRun,
+    QACheck,
+    QACheckKind,
+    QACheckOutcome,
+    TrafficAuthorization,
 )
 
 from ..production.fixtures import (
@@ -106,3 +114,68 @@ def funnel_integration(amplifier=None, **overrides) -> FunnelIntegration:
 
 def complete_funnel(**overrides) -> FunnelIntegration:
     return funnel_integration(**overrides).mark_funnel_complete(dry_run())
+
+
+def launch_check(
+    kind: QACheckKind,
+    *,
+    outcome: QACheckOutcome = QACheckOutcome.PASSED,
+    evidence: str = "evidence://qa",
+    owner: str = "",
+    detail: str = "",
+) -> QACheck:
+    return QACheck(
+        kind=kind,
+        outcome=outcome,
+        evidence=evidence,
+        owner=owner,
+        detail=detail,
+    )
+
+
+def launch_checks(outcomes=None) -> tuple[QACheck, ...]:
+    outcomes = outcomes or {}
+    return tuple(
+        launch_check(
+            kind,
+            outcome=outcomes.get(kind, QACheckOutcome.PASSED),
+            owner=(
+                "risk-owner"
+                if outcomes.get(kind) is QACheckOutcome.EXCEPTED
+                else ""
+            ),
+        )
+        for kind in QA_CHECK_ORDER
+    )
+
+
+def authorization(
+    *,
+    authorized_by: str = "client-authority",
+    intended_use: str = USE,
+    authorized_on=TODAY,
+) -> TrafficAuthorization:
+    return TrafficAuthorization(
+        authorized_by=authorized_by,
+        intended_use=intended_use,
+        authorized_on=authorized_on,
+    )
+
+
+def launch_qa(funnel=None, checks=None, **overrides) -> LaunchQA:
+    values = {
+        "qa_id": "qa-3f",
+        "tenant_id": TENANT,
+        "funnel": complete_funnel() if funnel is None else funnel,
+        "owner": "qa-owner",
+        "designated_authority": "client-authority",
+        "checks": launch_checks() if checks is None else checks,
+    }
+    values.update(overrides)
+    return LaunchQA(**values)
+
+
+def ready_for_traffic(**overrides) -> LaunchQA:
+    return launch_qa(**overrides).authorize_traffic(
+        authorization=authorization()
+    )
