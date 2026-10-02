@@ -12,11 +12,12 @@ required asset kinds, or pins a different template version.
 """
 
 import unittest
+from datetime import date
 
+from redops.contexts.governance.domain.entities import ApprovalRequest, StageGate
 from redops.contexts.governance.domain.errors import InvalidStageTemplateError
 from redops.contexts.governance.domain.policies import GateIntegrityPolicy
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
-from redops.contexts.governance.domain.entities import StageGate
 from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
     GateState,
@@ -25,6 +26,19 @@ from redops.contexts.governance.domain.value_objects import (
 )
 
 VERSION = "2026.1"
+TODAY = date(2026, 10, 2)
+
+
+def approve(gate: StageGate) -> None:
+    for asset in gate.required_assets:
+        request = ApprovalRequest(
+            asset=asset,
+            scope="stage-downstream",
+            requested_by="specialist-1",
+            approver="client-approver-1",
+        )
+        request.approve(actor="client-approver-1", on=TODAY)
+        gate.record_asset_approval(request)
 
 
 def definition(**overrides) -> StageDefinition:
@@ -131,9 +145,6 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
             "required_assets": frozenset(
                 AssetVersionRef(kind, 1) for kind in kinds
             ),
-            "approved_assets": frozenset(
-                AssetVersionRef(kind, 1) for kind in kinds
-            ),
             "dependencies": self.template.dependencies_of(stage_number),
             "checkpoint": definition.checkpoint if definition else "",
             "state": GateState.APPROVED,
@@ -141,7 +152,9 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
             "approver": "client-approver-1",
         }
         values.update(overrides)
-        return StageGate(**values)
+        gate = StageGate(**values)
+        approve(gate)
+        return gate
 
     def test_canonical_gate_is_approvable(self):
         gate = self.canonical_gate(7)
@@ -166,7 +179,7 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
     def test_gate_under_declaring_required_asset_kinds_is_rejected(self):
         gate = self.canonical_gate(7)
         gate.required_assets = frozenset({AssetVersionRef("aa-storyboard", 1)})
-        gate.approved_assets = gate.required_assets
+        approve(gate)
 
         result = self.policy.evaluate(
             gate, {6: GateState.APPROVED}, template=self.template
@@ -180,7 +193,7 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
         gate.required_assets = gate.required_assets | frozenset(
             {AssetVersionRef("made-up-asset", 1)}
         )
-        gate.approved_assets = gate.required_assets
+        approve(gate)
 
         result = self.policy.evaluate(
             gate, {6: GateState.APPROVED}, template=self.template

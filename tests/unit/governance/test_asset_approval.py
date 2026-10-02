@@ -113,9 +113,10 @@ def approvable_gate():
     versions = {kind: 1 for kind in TEMPLATE.required_asset_kinds(7)}
     gate = StageGate.from_template(TEMPLATE, 7, versions)
     gate.state = GateState.APPROVED
-    gate.approved_assets = gate.required_assets
     gate.proposed_by = "specialist-1"
     gate.approver = "client-approver-1"
+    for asset in gate.required_assets:
+        gate.record_asset_approval(approved(asset))
     return gate
 
 

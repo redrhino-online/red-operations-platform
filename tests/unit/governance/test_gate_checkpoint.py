@@ -90,9 +90,12 @@ def ledger_through(stage_number):
 def approvable_gate(stage_number=7, **overrides):
     gate = StageGate.from_template(TEMPLATE, stage_number, versions_for(stage_number))
     gate.state = GateState.APPROVED
-    gate.approved_assets = gate.required_assets
     gate.proposed_by = "specialist-1"
     gate.approver = "client-approver-1"
+    for request in approvals(
+        gate.required_assets, f"stage-{stage_number + 1}-downstream"
+    ):
+        gate.record_asset_approval(request)
     for name, value in overrides.items():
         setattr(gate, name, value)
     return gate

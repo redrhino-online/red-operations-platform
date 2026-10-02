@@ -11,7 +11,7 @@ Rules under test come from SPEC.md sections 3 and 4:
 import unittest
 from datetime import date
 
-from redops.contexts.governance.domain.entities import StageGate
+from redops.contexts.governance.domain.entities import ApprovalRequest, StageGate
 from redops.contexts.governance.domain.policies import GateIntegrityPolicy
 from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
@@ -19,27 +19,41 @@ from redops.contexts.governance.domain.value_objects import (
     Waiver,
 )
 
+TODAY = date(2026, 10, 2)
 SCRIPT_V1 = AssetVersionRef("authority-amplifier-script", 1)
 VIDEO_V1 = AssetVersionRef("authority-amplifier-video", 1)
+
+
+def approval_for(asset):
+    request = ApprovalRequest(
+        asset=asset,
+        scope="stage-8-funnel-integration",
+        requested_by="specialist-1",
+        approver="client-approver-1",
+    )
+    request.approve(actor="client-approver-1", on=TODAY)
+    return request
 
 
 class GateIntegrityPolicyTests(unittest.TestCase):
     def setUp(self):
         self.policy = GateIntegrityPolicy()
 
-    def gate(self, **overrides):
+    def gate(self, approved_assets=None, **overrides):
         values = {
             "stage_number": 7,
             "template_version": "2026.1",
             "required_assets": frozenset({SCRIPT_V1, VIDEO_V1}),
             "dependencies": frozenset({6}),
-            "approved_assets": frozenset({SCRIPT_V1, VIDEO_V1}),
             "state": GateState.IN_REVIEW,
             "proposed_by": "specialist-1",
             "approver": "client-approver-1",
         }
         values.update(overrides)
-        return StageGate(**values)
+        gate = StageGate(**values)
+        for asset in approved_assets if approved_assets is not None else gate.required_assets:
+            gate.record_asset_approval(approval_for(asset))
+        return gate
 
     def test_activity_without_exact_asset_version_cannot_be_approved(self):
         gate = self.gate(

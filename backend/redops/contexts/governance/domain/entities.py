@@ -47,7 +47,7 @@ class StageGate:
     required_assets: frozenset[AssetVersionRef]
     checkpoint: str = ""
     dependencies: frozenset[int] = field(default_factory=frozenset)
-    approved_assets: frozenset[AssetVersionRef] = field(default_factory=frozenset)
+    asset_approvals: tuple["ApprovalRequest", ...] = ()
     state: GateState = GateState.NOT_STARTED
     proposed_by: str | None = None
     approver: str | None = None
@@ -104,6 +104,40 @@ class StageGate:
 
     def missing_assets(self) -> frozenset[AssetVersionRef]:
         return frozenset(self.required_assets - self.approved_assets)
+
+    @property
+    def approved_assets(self) -> frozenset[AssetVersionRef]:
+        """Required asset versions evidenced by a recorded approval.
+
+        The set is derived from the gate's durable ``ApprovalRequest``s, not
+        self-declared, so the assets the policy evaluates are the evidence a
+        passing ``GateDecision`` pins. An approval for another version, or a
+        request that is not approved, does not evidence a pinned asset. Scope and
+        expiry exactness are enforced when the decision is recorded (SPEC.md
+        sections 3 and 4).
+        """
+        return frozenset(
+            asset
+            for asset in self.required_assets
+            if any(
+                approval.asset == asset
+                and approval.outcome is ApprovalOutcome.APPROVED
+                for approval in self.asset_approvals
+            )
+        )
+
+    def record_asset_approval(self, request: "ApprovalRequest") -> None:
+        """Record a version-specific approval for a required asset of this gate.
+
+        Recording an approval for an asset outside the gate's required package
+        is refused so the gate cannot accrue approvals for unrelated assets.
+        """
+        if request.asset not in self.required_assets:
+            raise AssetPackageMismatchError(
+                f"approval is for {request.asset}, which is not in the gate's "
+                "required asset package"
+            )
+        self.asset_approvals = (*self.asset_approvals, request)
 
     def authorizes_downstream(self) -> bool:
         return self.state is GateState.APPROVED and not self.missing_assets()

@@ -50,13 +50,15 @@ def asset_approvals(assets, scope):
         yield request
 
 
-def approvable_gate(**overrides) -> StageGate:
+def approvable_gate(evidenced: bool = True, **overrides) -> StageGate:
     versions = {kind: 1 for kind in TEMPLATE.required_asset_kinds(7)}
     gate = StageGate.from_template(TEMPLATE, 7, versions)
     gate.state = GateState.APPROVED
-    gate.approved_assets = gate.required_assets
     gate.proposed_by = "specialist-1"
     gate.approver = "client-approver-1"
+    if evidenced:
+        for request in asset_approvals(gate.required_assets, "stage-8-funnel-integration"):
+            gate.record_asset_approval(request)
     for name, value in overrides.items():
         setattr(gate, name, value)
     return gate
@@ -263,7 +265,7 @@ class GateDecisionFromGateTests(unittest.TestCase):
 
     def test_cannot_record_approval_for_a_gate_with_missing_assets(self):
         gate = approvable_gate(
-            approved_assets=frozenset(),
+            evidenced=False,
             state=GateState.IN_REVIEW,
         )
 

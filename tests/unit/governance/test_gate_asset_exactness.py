@@ -46,6 +46,10 @@ def approvals(assets, scope):
         yield request
 
 
+def approval_for(asset):
+    return next(approvals([asset], "stage-8-funnel-integration"))
+
+
 def canonical_assets(stage_number: int) -> frozenset[AssetVersionRef]:
     return frozenset(
         AssetVersionRef(kind, 1)
@@ -107,13 +111,12 @@ class GateDecisionExactnessTests(unittest.TestCase):
 
 
 class GateIntegrityExactnessTests(unittest.TestCase):
-    def gate(self, **overrides) -> StageGate:
+    def gate(self, approved_assets=None, **overrides) -> StageGate:
         assets = canonical_assets(7)
         values = {
             "stage_number": 7,
             "template_version": VERSION,
             "required_assets": assets,
-            "approved_assets": assets,
             "dependencies": frozenset({6}),
             "checkpoint": TEMPLATE.definition_for(7).checkpoint,
             "state": GateState.APPROVED,
@@ -121,7 +124,13 @@ class GateIntegrityExactnessTests(unittest.TestCase):
             "approver": "client-approver-1",
         }
         values.update(overrides)
-        return StageGate(**values)
+        gate = StageGate(**values)
+        evidenced = (
+            approved_assets if approved_assets is not None else gate.required_assets
+        )
+        for asset in evidenced:
+            gate.record_asset_approval(approval_for(asset))
+        return gate
 
     def test_policy_rejects_a_gate_pinning_two_versions_of_one_kind(self):
         ambiguous = canonical_assets(7) | frozenset(

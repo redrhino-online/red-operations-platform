@@ -10,8 +10,9 @@ caller (SPEC.md sections 3 and 4).
 """
 
 import unittest
+from datetime import date
 
-from redops.contexts.governance.domain.entities import StageGate
+from redops.contexts.governance.domain.entities import ApprovalRequest, StageGate
 from redops.contexts.governance.domain.errors import (
     AssetPackageMismatchError,
     UnknownStageError,
@@ -24,6 +25,19 @@ from redops.contexts.governance.domain.value_objects import (
 )
 
 VERSION = "2026.1"
+TODAY = date(2026, 10, 2)
+
+
+def approve(gate: StageGate) -> None:
+    for asset in gate.required_assets:
+        request = ApprovalRequest(
+            asset=asset,
+            scope="stage-downstream",
+            requested_by="specialist-1",
+            approver="client-approver-1",
+        )
+        request.approve(actor="client-approver-1", on=TODAY)
+        gate.record_asset_approval(request)
 
 
 class StageGateFromTemplateTests(unittest.TestCase):
@@ -75,9 +89,9 @@ class StageGateFromTemplateTests(unittest.TestCase):
     def test_factory_gate_passes_canonical_gate_integrity(self):
         gate = StageGate.from_template(self.template, 7, self.versions_for(7))
         gate.state = GateState.APPROVED
-        gate.approved_assets = gate.required_assets
         gate.proposed_by = "specialist-1"
         gate.approver = "client-approver-1"
+        approve(gate)
 
         result = GateIntegrityPolicy().evaluate(
             gate, {6: GateState.APPROVED}, template=self.template
