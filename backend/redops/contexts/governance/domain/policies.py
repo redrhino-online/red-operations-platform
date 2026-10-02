@@ -12,7 +12,11 @@ from typing import Mapping
 
 from redops.contexts.governance.domain.entities import StageGate
 from redops.contexts.governance.domain.errors import IllegalStageTransitionError
-from redops.contexts.governance.domain.value_objects import GateState, StageStatus
+from redops.contexts.governance.domain.value_objects import (
+    GateState,
+    StageStatus,
+    StageTemplate,
+)
 
 
 @dataclass(frozen=True)
@@ -30,6 +34,7 @@ class GateIntegrityPolicy:
         self,
         gate: StageGate,
         dependency_states: Mapping[int, GateState],
+        template: StageTemplate | None = None,
     ) -> GateEvaluation:
         reasons: list[str] = []
 
@@ -60,7 +65,47 @@ class GateIntegrityPolicy:
         ):
             reasons.append("approver cannot approve own proposal")
 
+        if template is not None:
+            reasons.extend(self._template_reasons(gate, template))
+
         return GateEvaluation(approvable=not reasons, reasons=tuple(reasons))
+
+    def _template_reasons(
+        self, gate: StageGate, template: StageTemplate
+    ) -> list[str]:
+        """Reject a gate that diverges from the canonical pipeline template.
+
+        A self-declared gate must not omit a canonical prerequisite or
+        under-declare the required asset package, and it must pin the same
+        template version it is evaluated against (SPEC.md section 4).
+        """
+        reasons: list[str] = []
+        if gate.template_version != template.version:
+            reasons.append(
+                f"gate template version {gate.template_version!r} does not match "
+                f"template version {template.version!r}"
+            )
+
+        definition = template.definition_for(gate.stage_number)
+        if definition is None:
+            reasons.append(
+                f"stage {gate.stage_number} is not defined in template "
+                f"{template.version!r}"
+            )
+            return reasons
+
+        omitted = sorted(definition.dependencies - gate.dependencies)
+        if omitted:
+            names = ", ".join(str(stage) for stage in omitted)
+            reasons.append(f"gate omits prerequisite stages: {names}")
+
+        declared_kinds = {asset.asset_id for asset in gate.required_assets}
+        unstated = sorted(definition.required_asset_kinds - declared_kinds)
+        if unstated:
+            names = ", ".join(unstated)
+            reasons.append(f"gate omits required asset kinds: {names}")
+
+        return reasons
 
 
 class StageTransitionPolicy:

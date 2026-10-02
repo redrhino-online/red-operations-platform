@@ -25,3 +25,7 @@ class IllegalStageTransitionError(GovernanceError):
 
 class StageGateNotAcceptedError(GovernanceError):
     """A StageRun was asked to complete without an accepted gate for that stage."""
+
+
+class InvalidStageTemplateError(GovernanceError, ValueError):
+    """A stage 0-10 template was constructed in a way its invariant forbids."""

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 
+from redops.contexts.governance.domain.errors import InvalidStageTemplateError
+
 
 class GateState(Enum):
     """Gate states from SPEC.md section 4."""
@@ -106,3 +108,104 @@ class Waiver:
             raise ValueError("waiver risk owner is required")
         if (not self.review_trigger or not self.review_trigger.strip()) and self.expires_on is None:
             raise ValueError("waiver requires an expiry or review trigger")
+
+
+@dataclass(frozen=True)
+class StageDefinition:
+    """One stage of the versioned 0-10 production template (SPEC.md section 4).
+
+    Names the required asset package (as asset kinds, versioned at gate time),
+    the checkpoint rubric, the accountable role and the approver role, and the
+    prerequisite stages. A stage depends only on earlier stages, so the template
+    is acyclic.
+    """
+
+    stage_number: int
+    name: str
+    required_asset_kinds: frozenset[str]
+    checkpoint: str
+    accountable_role: str
+    approver_role: str
+    dependencies: frozenset[int] = frozenset()
+
+    def __post_init__(self) -> None:
+        if self.stage_number < 0:
+            raise InvalidStageTemplateError("stage number must be >= 0")
+        for label, value in (
+            ("name", self.name),
+            ("checkpoint", self.checkpoint),
+            ("accountable role", self.accountable_role),
+            ("approver role", self.approver_role),
+        ):
+            if not value or not value.strip():
+                raise InvalidStageTemplateError(
+                    f"stage {self.stage_number} {label} is required"
+                )
+        if not self.required_asset_kinds:
+            raise InvalidStageTemplateError(
+                f"stage {self.stage_number} requires at least one asset kind"
+            )
+        for kind in self.required_asset_kinds:
+            if not kind or not kind.strip():
+                raise InvalidStageTemplateError(
+                    f"stage {self.stage_number} has a blank asset kind"
+                )
+        if self.stage_number in self.dependencies:
+            raise InvalidStageTemplateError(
+                f"stage {self.stage_number} cannot depend on itself"
+            )
+
+
+@dataclass(frozen=True)
+class StageTemplate:
+    """A versioned 0-10 production pipeline (SPEC.md section 4).
+
+    The template is the canonical source of the stage dependency graph, the
+    required asset package per stage, the checkpoint, and the accountable and
+    approver roles. Stages are numbered contiguously from zero, and every
+    dependency points to an earlier stage, so the graph cannot contain a cycle.
+    """
+
+    version: str
+    stages: tuple[StageDefinition, ...]
+
+    def __post_init__(self) -> None:
+        if not self.version or not self.version.strip():
+            raise InvalidStageTemplateError("template version is required")
+        if not self.stages:
+            raise InvalidStageTemplateError("template requires at least one stage")
+        numbers = [stage.stage_number for stage in self.stages]
+        if len(set(numbers)) != len(numbers):
+            raise InvalidStageTemplateError("stage numbers must be unique")
+        if sorted(numbers) != list(range(len(numbers))):
+            raise InvalidStageTemplateError(
+                "stage numbers must be contiguous from zero"
+            )
+        for stage in self.stages:
+            forward = sorted(
+                dependency
+                for dependency in stage.dependencies
+                if dependency >= stage.stage_number
+            )
+            if forward:
+                raise InvalidStageTemplateError(
+                    f"stage {stage.stage_number} has a forward dependency: {forward}"
+                )
+
+    def definition_for(self, stage_number: int) -> StageDefinition | None:
+        for stage in self.stages:
+            if stage.stage_number == stage_number:
+                return stage
+        return None
+
+    def dependencies_of(self, stage_number: int) -> frozenset[int]:
+        definition = self.definition_for(stage_number)
+        return definition.dependencies if definition is not None else frozenset()
+
+    def required_asset_kinds(self, stage_number: int) -> frozenset[str]:
+        definition = self.definition_for(stage_number)
+        return (
+            definition.required_asset_kinds
+            if definition is not None
+            else frozenset()
+        )
