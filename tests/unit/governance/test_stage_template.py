@@ -160,17 +160,19 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
         gate = self.canonical_gate(7)
 
         result = self.policy.evaluate(
-            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY
+            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY,
+            scope="stage-downstream",
         )
 
         self.assertTrue(result.approvable, result.reasons)
-        self.assertTrue(gate.authorizes_downstream(TODAY))
+        self.assertTrue(gate.authorizes_downstream(TODAY, "stage-downstream"))
 
     def test_gate_omitting_a_canonical_prerequisite_is_rejected(self):
         gate = self.canonical_gate(7, dependencies=frozenset())
 
         result = self.policy.evaluate(
-            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY
+            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY,
+            scope="stage-downstream",
         )
 
         self.assertFalse(result.approvable)
@@ -182,7 +184,8 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
         approve(gate)
 
         result = self.policy.evaluate(
-            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY
+            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY,
+            scope="stage-downstream",
         )
 
         self.assertFalse(result.approvable)
@@ -196,7 +199,8 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
         approve(gate)
 
         result = self.policy.evaluate(
-            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY
+            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY,
+            scope="stage-downstream",
         )
 
         self.assertFalse(result.approvable)
@@ -206,7 +210,8 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
         gate = self.canonical_gate(7, template_version="2025.9")
 
         result = self.policy.evaluate(
-            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY
+            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY,
+            scope="stage-downstream",
         )
 
         self.assertFalse(result.approvable)
@@ -215,7 +220,7 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
     def test_gate_for_a_stage_absent_from_the_template_is_rejected(self):
         gate = self.canonical_gate(11)
 
-        result = self.policy.evaluate(gate, {}, template=self.template, on=TODAY)
+        result = self.policy.evaluate(gate, {}, template=self.template, on=TODAY, scope="stage-downstream")
 
         self.assertFalse(result.approvable)
         self.assertIn("11", " ".join(result.reasons))
@@ -224,7 +229,7 @@ class GateIntegrityAgainstTemplateTests(unittest.TestCase):
         gate = self.canonical_gate(7)
 
         result = self.policy.evaluate(
-            gate, {6: GateState.APPROVED}, on=TODAY
+            gate, {6: GateState.APPROVED}, on=TODAY, scope="stage-downstream"
         )
 
         self.assertTrue(result.approvable, result.reasons)

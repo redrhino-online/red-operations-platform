@@ -139,7 +139,8 @@ class GateIntegrityExactnessTests(unittest.TestCase):
         gate = self.gate(required_assets=ambiguous, approved_assets=ambiguous)
 
         result = GateIntegrityPolicy().evaluate(
-            gate, {6: GateState.APPROVED}, template=TEMPLATE, on=TODAY
+            gate, {6: GateState.APPROVED}, template=TEMPLATE, on=TODAY,
+            scope="stage-8-funnel-integration",
         )
 
         self.assertFalse(result.approvable)
@@ -147,7 +148,8 @@ class GateIntegrityExactnessTests(unittest.TestCase):
 
     def test_policy_accepts_a_gate_with_one_version_per_kind(self):
         result = GateIntegrityPolicy().evaluate(
-            self.gate(), {6: GateState.APPROVED}, template=TEMPLATE, on=TODAY
+            self.gate(), {6: GateState.APPROVED}, template=TEMPLATE, on=TODAY,
+            scope="stage-8-funnel-integration",
         )
 
         self.assertTrue(result.approvable, result.reasons)

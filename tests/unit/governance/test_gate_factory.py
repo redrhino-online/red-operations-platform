@@ -94,11 +94,12 @@ class StageGateFromTemplateTests(unittest.TestCase):
         approve(gate)
 
         result = GateIntegrityPolicy().evaluate(
-            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY
+            gate, {6: GateState.APPROVED}, template=self.template, on=TODAY,
+            scope="stage-downstream",
         )
 
         self.assertTrue(result.approvable, result.reasons)
-        self.assertTrue(gate.authorizes_downstream(TODAY))
+        self.assertTrue(gate.authorizes_downstream(TODAY, "stage-downstream"))
 
 
 if __name__ == "__main__":

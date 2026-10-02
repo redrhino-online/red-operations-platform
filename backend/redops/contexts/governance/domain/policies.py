@@ -39,13 +39,14 @@ class GateIntegrityPolicy:
         template: StageTemplate | None = None,
         *,
         on: date,
+        scope: str,
     ) -> GateEvaluation:
         reasons: list[str] = []
 
         if gate.state is GateState.SUPERSEDED:
             reasons.append("gate is superseded")
 
-        missing = gate.missing_assets(on)
+        missing = gate.missing_assets(on, scope)
         if missing:
             names = ", ".join(sorted(str(asset) for asset in missing))
             reasons.append(f"required asset versions not approved: {names}")

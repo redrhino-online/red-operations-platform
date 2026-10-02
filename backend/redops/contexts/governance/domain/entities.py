@@ -102,28 +102,33 @@ class StageGate:
             dependencies=definition.dependencies,
         )
 
-    def missing_assets(self, on: date) -> frozenset[AssetVersionRef]:
-        return frozenset(self.required_assets - self.approved_assets(on))
+    def missing_assets(self, on: date, scope: str) -> frozenset[AssetVersionRef]:
+        return frozenset(
+            self.required_assets - self.approved_assets(on, scope)
+        )
 
-    def approved_assets(self, on: date) -> frozenset[AssetVersionRef]:
-        """Required asset versions evidenced by a recorded approval.
+    def approved_assets(
+        self, on: date, scope: str
+    ) -> frozenset[AssetVersionRef]:
+        """Required asset versions evidenced by an approved, in-scope request.
 
         The set is derived from the gate's durable ``ApprovalRequest``s, not
         self-declared, so the assets the policy evaluates are the evidence a
-        passing ``GateDecision`` pins. An approval for another version, a request
-        that is not approved, and an approval already expired at the evaluation
-        instant ``on`` do not evidence a pinned asset. Scope exactness is
-        enforced when the decision is recorded (SPEC.md sections 3, 4 and 11:
-        "a failed or expired prerequisite blocks dependent authorization until
-        resolved").
+        passing ``GateDecision`` pins. An approval for another version, a
+        request that is not approved, an approval already expired at the
+        evaluation instant ``on``, and an approval for another intended
+        downstream scope do not evidence a pinned asset. This reuses
+        ``ApprovalRequest.authorizes`` so the gate and the durable
+        ``GateDecision`` apply the same version, scope and expiry rule (SPEC.md
+        sections 3, 4 and 11: a passing gate pins "the exact evidence and
+        intended downstream use"; "a failed or expired prerequisite blocks
+        dependent authorization until resolved").
         """
         return frozenset(
             asset
             for asset in self.required_assets
             if any(
-                approval.asset == asset
-                and approval.outcome is ApprovalOutcome.APPROVED
-                and not approval.is_expired(on)
+                approval.authorizes(asset, scope, on)
                 for approval in self.asset_approvals
             )
         )
@@ -141,8 +146,10 @@ class StageGate:
             )
         self.asset_approvals = (*self.asset_approvals, request)
 
-    def authorizes_downstream(self, on: date) -> bool:
-        return self.state is GateState.APPROVED and not self.missing_assets(on)
+    def authorizes_downstream(self, on: date, scope: str) -> bool:
+        return self.state is GateState.APPROVED and not self.missing_assets(
+            on, scope
+        )
 
 
 @dataclass(frozen=True)
@@ -278,6 +285,7 @@ class GateDecision:
                 ledger.dependency_states(),
                 ledger.template,
                 on=on,
+                scope=scope,
             )
             if not evaluation.approvable:
                 raise GateDecisionError(
@@ -289,7 +297,7 @@ class GateDecision:
                     f"reviewer {reviewer!r} is not the gate's designated "
                     f"approver {gate.approver!r}"
                 )
-            if not gate.authorizes_downstream(on):
+            if not gate.authorizes_downstream(on, scope):
                 raise GateDecisionError(
                     "gate does not authorize downstream use for this decision"
                 )
