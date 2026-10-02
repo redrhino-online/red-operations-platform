@@ -87,6 +87,7 @@ class GateIntegrityPolicyTests(unittest.TestCase):
             reason="video delayed by vendor",
             risk_owner="production-manager",
             review_trigger="vendor delivery",
+            downstream_effects=frozenset({"stage-8-funnel-integration"}),
         )
         gate = self.gate(
             approved_assets=frozenset({SCRIPT_V1}),
@@ -141,7 +142,12 @@ class GateIntegrityPolicyTests(unittest.TestCase):
 
     def test_waiver_requires_a_named_risk_owner(self):
         with self.assertRaises(ValueError):
-            Waiver(reason="delay", risk_owner="", review_trigger="review")
+            Waiver(
+                reason="delay",
+                risk_owner="",
+                review_trigger="review",
+                downstream_effects=frozenset({"stage-8-funnel-integration"}),
+            )
 
 
 if __name__ == "__main__":

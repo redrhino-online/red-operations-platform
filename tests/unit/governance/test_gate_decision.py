@@ -225,6 +225,7 @@ class GateDecisionInvariantTests(unittest.TestCase):
             reason="video delayed by vendor",
             risk_owner="production-manager",
             review_trigger="vendor delivery",
+            downstream_effects=frozenset({"stage-8-funnel-integration"}),
         )
         decision = passing_decision(
             disposition=GateDisposition.WAIVED,
@@ -234,6 +235,54 @@ class GateDecisionInvariantTests(unittest.TestCase):
 
         self.assertFalse(decision.is_passing)
         self.assertFalse(decision.authorizes_downstream())
+
+
+class WaiverScopeTests(unittest.TestCase):
+    """SPEC.md section 4: a waiver is a scoped human decision with a reason, risk
+    owner, expiry or review trigger, and downstream effects. A waiver without a
+    recorded impact surface is a blanket bypass and must be refused, so a waiver
+    cannot silently release unrelated dependent work."""
+
+    def scoped_waiver(self, **overrides) -> Waiver:
+        values = {
+            "reason": "video delayed by vendor",
+            "risk_owner": "production-manager",
+            "review_trigger": "vendor delivery",
+            "downstream_effects": frozenset({"stage-8-funnel-integration"}),
+        }
+        values.update(overrides)
+        return Waiver(**values)
+
+    def test_waiver_records_the_downstream_effects_it_is_scoped_to(self):
+        waiver = self.scoped_waiver()
+
+        self.assertEqual(
+            frozenset({"stage-8-funnel-integration"}),
+            waiver.downstream_effects,
+        )
+
+    def test_waiver_requires_at_least_one_downstream_effect(self):
+        with self.assertRaises(ValueError):
+            self.scoped_waiver(downstream_effects=frozenset())
+
+    def test_waiver_rejects_a_blank_downstream_effect(self):
+        with self.assertRaises(ValueError):
+            self.scoped_waiver(downstream_effects=frozenset({"   "}))
+
+    def test_waived_decision_preserves_the_scoped_effects(self):
+        waiver = self.scoped_waiver()
+
+        decision = passing_decision(
+            disposition=GateDisposition.WAIVED,
+            scope="stage-8-funnel-integration",
+            waiver=waiver,
+        )
+
+        self.assertIs(waiver, decision.waiver)
+        self.assertEqual(
+            frozenset({"stage-8-funnel-integration"}),
+            decision.waiver.downstream_effects,
+        )
 
 
 class GateDecisionFromGateTests(unittest.TestCase):

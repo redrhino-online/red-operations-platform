@@ -243,6 +243,7 @@ class StageCompletionRequiresGateTests(unittest.TestCase):
                 reason="video delayed by vendor",
                 risk_owner="production-manager",
                 review_trigger="vendor delivery",
+                downstream_effects=frozenset({"stage-8-funnel-integration"}),
             ),
         )
 

@@ -133,10 +133,18 @@ def duplicate_asset_kinds(
 
 @dataclass(frozen=True)
 class Waiver:
-    """A scoped human decision. It never creates or substitutes for an asset."""
+    """A scoped human decision. It never creates or substitutes for an asset.
+
+    SPEC.md section 4 requires a waiver to name its reason, risk owner, expiry or
+    review trigger, and downstream effects. Recording the concrete downstream
+    stages, assets or journeys the waiver affects keeps it scoped: a waiver
+    without an impact surface would be a blanket bypass that can silently release
+    unrelated dependent work.
+    """
 
     reason: str
     risk_owner: str
+    downstream_effects: frozenset[str]
     review_trigger: str = ""
     expires_on: date | None = None
 
@@ -147,6 +155,15 @@ class Waiver:
             raise ValueError("waiver risk owner is required")
         if (not self.review_trigger or not self.review_trigger.strip()) and self.expires_on is None:
             raise ValueError("waiver requires an expiry or review trigger")
+        if not self.downstream_effects:
+            raise ValueError(
+                "waiver must record the downstream effects it is scoped to"
+            )
+        for effect in self.downstream_effects:
+            if not effect or not effect.strip():
+                raise ValueError(
+                    "waiver downstream effects must be non-empty identifiers"
+                )
 
 
 @dataclass(frozen=True)
