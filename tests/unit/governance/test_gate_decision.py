@@ -424,6 +424,84 @@ class WaiverAuthorityTests(unittest.TestCase):
             self.record_waiver(gate, "client-approver-1")
 
 
+class WaiverExpiryDecisionTests(unittest.TestCase):
+    """SPEC.md section 4: a waiver carries an expiry or review trigger, and a
+    failed or expired prerequisite blocks dependent authorization until resolved.
+    Recording a durable ``WAIVED`` decision whose scoped waiver has already
+    lapsed at the decision instant is internally inconsistent: the risk
+    acceptance was no longer live when the human recorded it, so the production
+    view would read an expired waiver as a current disposition. The decision is
+    refused rather than stored. A waiver remains valid through its expiry date,
+    mirroring ``ApprovalRequest``, and a review-triggered waiver never lapses by
+    date."""
+
+    scope = "stage-8-funnel-integration"
+
+    def waiver(self, **overrides) -> Waiver:
+        values = {
+            "reason": "video delayed by vendor",
+            "risk_owner": "production-manager",
+            "review_trigger": "vendor delivery",
+            "downstream_effects": frozenset({self.scope}),
+        }
+        values.update(overrides)
+        return Waiver(**values)
+
+    def waivable_gate(self) -> StageGate:
+        versions = {kind: 1 for kind in TEMPLATE.required_asset_kinds(7)}
+        gate = StageGate.from_template(TEMPLATE, 7, versions)
+        gate.state = GateState.IN_REVIEW
+        gate.proposed_by = "specialist-1"
+        gate.approver = "client-approver-1"
+        return gate
+
+    def record_waiver(self, waiver: Waiver) -> GateDecision:
+        return GateDecision.from_gate(
+            self.waivable_gate(),
+            ledger=GateLedger(TEMPLATE),
+            reviewer="client-approver-1",
+            scope=self.scope,
+            checkpoint_evidence="waived pending vendor delivery",
+            disposition=GateDisposition.WAIVED,
+            rationale="vendor delay is a scoped risk, not an absent approval",
+            on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
+            waiver=waiver,
+        )
+
+    def test_already_expired_waiver_is_refused_when_recording_a_decision(self):
+        waiver = self.waiver(expires_on=date(2026, 10, 1))
+
+        with self.assertRaises(GateDecisionError):
+            passing_decision(
+                disposition=GateDisposition.WAIVED,
+                scope=self.scope,
+                waiver=waiver,
+            )
+
+    def test_factory_refuses_an_already_expired_waiver(self):
+        waiver = self.waiver(expires_on=date(2026, 10, 1))
+
+        with self.assertRaises(GateDecisionError):
+            self.record_waiver(waiver)
+
+    def test_waiver_expiring_on_the_decision_date_is_accepted(self):
+        waiver = self.waiver(expires_on=TODAY)
+
+        decision = self.record_waiver(waiver)
+
+        self.assertIs(GateDisposition.WAIVED, decision.disposition)
+        self.assertIs(waiver, decision.waiver)
+
+    def test_review_triggered_waiver_without_expiry_is_accepted(self):
+        waiver = self.waiver()
+
+        decision = self.record_waiver(waiver)
+
+        self.assertIs(GateDisposition.WAIVED, decision.disposition)
+
+
 class GateDecisionFromGateTests(unittest.TestCase):
     def test_factory_pins_the_gates_exact_required_assets(self):
         gate = approvable_gate()

@@ -276,6 +276,12 @@ class GateDecision:
                     "a waiver cannot claim downstream effects broader than the "
                     f"gate decision scope {self.scope!r}: {names}"
                 )
+            if self.waiver.is_expired(self.decided_on):
+                raise GateDecisionError(
+                    "a waived gate decision cannot record a scoped waiver that "
+                    "has already expired at the decision instant; an expired "
+                    "waiver is not a live risk acceptance (SPEC.md section 4)"
+                )
 
     @classmethod
     def from_gate(
