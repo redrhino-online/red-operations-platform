@@ -288,6 +288,11 @@ class GateDecision:
         evidence the decision pins is exactly the evidence the gate recorded and
         the policy evaluated; a caller cannot substitute a different approval
         set (SPEC.md sections 3 and 4).
+
+        A waived disposition is also a human authority decision: it must name the
+        gate's designated approver as its reviewer and cannot be recorded by the
+        gate's author, so a stage cannot be self-waived to bypass a missing asset
+        (SPEC.md sections 4 and 5).
         """
         if disposition.is_passing:
             from redops.contexts.governance.domain.policies import (
@@ -314,6 +319,23 @@ class GateDecision:
             if not gate.authorizes_downstream(on, scope):
                 raise GateDecisionError(
                     "gate does not authorize downstream use for this decision"
+                )
+
+        if disposition is GateDisposition.WAIVED:
+            if not gate.approver or not gate.approver.strip():
+                raise GateDecisionError(
+                    "a waived gate decision requires the gate's designated "
+                    "approver"
+                )
+            if reviewer != gate.approver:
+                raise GateDecisionError(
+                    f"reviewer {reviewer!r} is not the gate's designated "
+                    f"approver {gate.approver!r}"
+                )
+            if gate.proposed_by and reviewer == gate.proposed_by:
+                raise GateDecisionError(
+                    "the gate's author cannot waive their own gate; a waiver is "
+                    "a human authority decision"
                 )
 
         return cls(

@@ -351,6 +351,74 @@ class WaiverDecisionScopeTests(unittest.TestCase):
             )
 
 
+class WaiverAuthorityTests(unittest.TestCase):
+    """SPEC.md section 4: a waiver is a *scoped human* decision, and section 5
+    says an agent cannot confer human approval upon itself. A waived gate
+    decision must therefore be recorded by the gate's designated approver and
+    never by the gate's author, otherwise a stage can be self-waived without any
+    human authority approving the bypass of a missing asset."""
+
+    scope = "stage-8-funnel-integration"
+
+    def waivable_gate(self, **overrides) -> StageGate:
+        versions = {kind: 1 for kind in TEMPLATE.required_asset_kinds(7)}
+        gate = StageGate.from_template(TEMPLATE, 7, versions)
+        gate.state = GateState.IN_REVIEW
+        gate.proposed_by = "specialist-1"
+        gate.approver = "client-approver-1"
+        for name, value in overrides.items():
+            setattr(gate, name, value)
+        return gate
+
+    def waiver(self) -> Waiver:
+        return Waiver(
+            reason="video delayed by vendor",
+            risk_owner="production-manager",
+            review_trigger="vendor delivery",
+            downstream_effects=frozenset({self.scope}),
+        )
+
+    def record_waiver(self, gate: StageGate, reviewer: str) -> GateDecision:
+        return GateDecision.from_gate(
+            gate,
+            ledger=GateLedger(TEMPLATE),
+            reviewer=reviewer,
+            scope=self.scope,
+            checkpoint_evidence="waived pending vendor delivery",
+            disposition=GateDisposition.WAIVED,
+            rationale="vendor delay is a scoped risk, not an absent approval",
+            on=TODAY,
+            assigned_owner="production-manager",
+            due_on=DATE_DUE,
+            waiver=self.waiver(),
+        )
+
+    def test_waiver_recorded_by_the_designated_approver_is_accepted(self):
+        decision = self.record_waiver(self.waivable_gate(), "client-approver-1")
+
+        self.assertIs(GateDisposition.WAIVED, decision.disposition)
+        self.assertEqual("client-approver-1", decision.reviewer)
+        self.assertFalse(decision.authorizes_downstream())
+
+    def test_waiver_by_an_actor_without_the_designated_authority_is_refused(self):
+        gate = self.waivable_gate()
+
+        with self.assertRaises(GateDecisionError):
+            self.record_waiver(gate, "specialist-1")
+
+    def test_gate_author_cannot_waive_their_own_gate(self):
+        gate = self.waivable_gate(approver="specialist-1")
+
+        with self.assertRaises(GateDecisionError):
+            self.record_waiver(gate, "specialist-1")
+
+    def test_waiver_requires_a_designated_approver(self):
+        gate = self.waivable_gate(approver=None)
+
+        with self.assertRaises(GateDecisionError):
+            self.record_waiver(gate, "client-approver-1")
+
+
 class GateDecisionFromGateTests(unittest.TestCase):
     def test_factory_pins_the_gates_exact_required_assets(self):
         gate = approvable_gate()
