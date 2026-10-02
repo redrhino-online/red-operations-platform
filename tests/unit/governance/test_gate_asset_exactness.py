@@ -19,13 +19,17 @@ from redops.contexts.governance.domain.entities import (
     GateLedger,
     StageGate,
 )
-from redops.contexts.governance.domain.errors import AmbiguousAssetPackageError
+from redops.contexts.governance.domain.errors import (
+    AmbiguousAssetPackageError,
+    GateDecisionError,
+)
 from redops.contexts.governance.domain.policies import GateIntegrityPolicy
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
 from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
     GateDisposition,
     GateState,
+    Waiver,
 )
 
 VERSION = "2026.1"
@@ -167,6 +171,87 @@ class GateLedgerExactnessTests(unittest.TestCase):
             passing_decision(7, ambiguous)
 
         self.assertFalse(ledger.has_passing_decision(7, on=TODAY))
+
+
+class GateDecisionAssetPackageRequiredTests(unittest.TestCase):
+    """SPEC.md section 4 requires the gate record to persist "required assets and
+    their exact versions" for *every* stage, and the production view to show what
+    should exist and what is missing. That record is a durable ``GateDecision``,
+    so the exact asset package is a property of the decision, not only of a
+    passing disposition: a BLOCKED, CHANGES_REQUIRED, WAIVED or SUPERSEDED
+    decision that omits the package or pins two versions of one kind hides the
+    exact versions at issue behind the disposition, so the reviewer, the next
+    owner and an audit cannot tell which assets the decision concerns."""
+
+    scope = "stage-8-funnel-integration"
+
+    def non_passing_decision(
+        self, disposition: GateDisposition, assets, **overrides
+    ) -> GateDecision:
+        values = {
+            "stage_number": 7,
+            "template_version": VERSION,
+            "required_assets": assets,
+            "checkpoint": TEMPLATE.definition_for(7).checkpoint,
+            "checkpoint_evidence": "reviewed the stage package",
+            "reviewer": "client-approver-1",
+            "scope": self.scope,
+            "disposition": disposition,
+            "rationale": "disposition recorded against the exact stage package",
+            "decided_on": TODAY,
+            "assigned_owner": "production-manager",
+            "due_on": DATE_DUE,
+        }
+        if disposition is GateDisposition.WAIVED:
+            values["waiver"] = Waiver(
+                reason="video delayed by vendor",
+                risk_owner="production-manager",
+                review_trigger="vendor delivery",
+                downstream_effects=frozenset({self.scope}),
+            )
+        values.update(overrides)
+        return GateDecision(**values)
+
+    def test_every_disposition_requires_the_required_asset_package(self):
+        for disposition in (
+            GateDisposition.BLOCKED,
+            GateDisposition.CHANGES_REQUIRED,
+            GateDisposition.WAIVED,
+            GateDisposition.SUPERSEDED,
+        ):
+            with self.subTest(disposition=disposition):
+                with self.assertRaises(GateDecisionError):
+                    self.non_passing_decision(
+                        disposition, frozenset()
+                    )
+
+    def test_every_disposition_refuses_two_versions_of_one_asset_kind(self):
+        ambiguous = canonical_assets(7) | frozenset(
+            {AssetVersionRef("authority-amplifier-script", 2)}
+        )
+        for disposition in (
+            GateDisposition.BLOCKED,
+            GateDisposition.CHANGES_REQUIRED,
+            GateDisposition.WAIVED,
+            GateDisposition.SUPERSEDED,
+        ):
+            with self.subTest(disposition=disposition):
+                with self.assertRaises(AmbiguousAssetPackageError):
+                    self.non_passing_decision(disposition, ambiguous)
+
+    def test_non_passing_decision_accepts_one_version_per_kind(self):
+        for disposition in (
+            GateDisposition.BLOCKED,
+            GateDisposition.CHANGES_REQUIRED,
+            GateDisposition.SUPERSEDED,
+        ):
+            with self.subTest(disposition=disposition):
+                decision = self.non_passing_decision(
+                    disposition, canonical_assets(7)
+                )
+
+                self.assertEqual(canonical_assets(7), decision.required_assets)
+                self.assertFalse(decision.authorizes_downstream())
 
 
 if __name__ == "__main__":

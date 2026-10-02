@@ -160,7 +160,10 @@ class GateDecision:
     evidence, the reviewer, the intended downstream scope, the disposition, the
     rationale and the next action. It also persists the assigned work owner and
     due date so the production view can answer who is accountable for the stage
-    and when the next approval is due (SPEC.md section 4). A passing decision
+    and when the next approval is due (SPEC.md section 4). Every disposition must
+    pin the stage's required asset package, exactly one exact version per kind, so
+    the durable record always says which versions the decision concerns, even
+    when it blocks, requests changes, waives or supersedes. A passing decision
     pins the exact evidence and intended downstream use; a non-passing
     disposition, including a waiver, never authorizes downstream work. History
     is append-only: a later decision supersedes an earlier one by being recorded
@@ -205,18 +208,20 @@ class GateDecision:
                 "a gate decision must pin the checkpoint rubric for its stage"
             )
 
+        if not self.required_assets:
+            raise GateDecisionError(
+                "a gate decision must pin the required asset versions for its "
+                "stage, whatever the disposition"
+            )
+        duplicates = duplicate_asset_kinds(self.required_assets)
+        if duplicates:
+            names = ", ".join(sorted(duplicates))
+            raise AmbiguousAssetPackageError(
+                "a gate decision must pin exactly one exact version per asset "
+                f"kind; multiple versions declared for: {names}"
+            )
+
         if self.disposition.is_passing:
-            if not self.required_assets:
-                raise GateDecisionError(
-                    "a passing gate decision must pin the required asset versions"
-                )
-            duplicates = duplicate_asset_kinds(self.required_assets)
-            if duplicates:
-                names = ", ".join(sorted(duplicates))
-                raise AmbiguousAssetPackageError(
-                    "a passing gate decision must pin exactly one exact version "
-                    f"per asset kind; multiple versions declared for: {names}"
-                )
             if not self.checkpoint_evidence or not self.checkpoint_evidence.strip():
                 raise GateDecisionError(
                     "a passing gate decision must record checkpoint evidence"

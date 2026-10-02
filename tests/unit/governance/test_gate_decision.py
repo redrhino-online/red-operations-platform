@@ -112,12 +112,16 @@ def passing_decision(**overrides) -> GateDecision:
         "next_action": "release stage 8 work",
     }
     values.update(overrides)
-    values.setdefault(
-        "asset_approvals",
-        tuple(asset_approvals(values["required_assets"], values["scope"]))
-        if values["scope"] and values["required_assets"]
-        else (),
-    )
+    if (
+        values["scope"]
+        and values["scope"].strip()
+        and values["required_assets"]
+    ):
+        values.setdefault(
+            "asset_approvals",
+            tuple(asset_approvals(values["required_assets"], values["scope"])),
+        )
+    values.setdefault("asset_approvals", ())
     return GateDecision(**values)
 
 
@@ -310,7 +314,6 @@ class WaiverDecisionScopeTests(unittest.TestCase):
                     passing_decision(
                         disposition=GateDisposition.WAIVED,
                         scope=scope,
-                        required_assets=frozenset(),
                         waiver=waiver,
                     )
 

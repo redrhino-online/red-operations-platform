@@ -561,7 +561,10 @@ class StageCompletionDurabilityTests(unittest.TestCase):
             GateDecision(
                 stage_number=7,
                 template_version="2026.1",
-                required_assets=frozenset(),
+                required_assets=frozenset(
+                    AssetVersionRef(kind, 1)
+                    for kind in TEMPLATE.required_asset_kinds(7)
+                ),
                 checkpoint=TEMPLATE.definition_for(7).checkpoint,
                 checkpoint_evidence="",
                 reviewer="client-approver-1",
