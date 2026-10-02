@@ -7,6 +7,7 @@ from datetime import date
 from enum import Enum
 
 from redops.contexts.method.domain.errors import (
+    InvalidCurrencyError,
     InvalidMethodError,
     InvalidMethodVersionError,
     MethodApprovalError,
@@ -114,6 +115,43 @@ class MethodApproval:
 
     def authorizes(self, version: SemanticVersion, intended_use: str) -> bool:
         return self.version == version and self.intended_use == intended_use
+
+
+@dataclass(frozen=True)
+class PrimaryCurrency:
+    """The one measurable outcome a client sells, locked at stage 2.
+
+    SPEC.md section 4, stage 2 "Position" and its "Currency Locked" checkpoint:
+    one primary outcome connects a specific person, a measurable movement and a
+    distinct mechanism. The value object is frozen and reject-only, so an
+    unspecified audience, a missing mechanism or an outcome without a measurable
+    movement cannot be represented as a lockable currency (Phase 3 TDD example:
+    "currency gate rejects an unspecified audience or unmeasured outcome").
+    """
+
+    tenant_id: str
+    currency: str
+    audience: str
+    current_measure: str
+    desired_measure: str
+    mechanism: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("currency tenant id", self.tenant_id),
+            ("primary currency", self.currency),
+            ("currency audience", self.audience),
+            ("currency current measure", self.current_measure),
+            ("currency desired measure", self.desired_measure),
+            ("currency mechanism", self.mechanism),
+        ):
+            if not value or not value.strip():
+                raise InvalidCurrencyError(f"{label} is required")
+        if self.current_measure.strip() == self.desired_measure.strip():
+            raise InvalidCurrencyError(
+                "a locked currency requires a measurable movement between the "
+                "current and desired measures"
+            )
 
 
 @dataclass(frozen=True)
