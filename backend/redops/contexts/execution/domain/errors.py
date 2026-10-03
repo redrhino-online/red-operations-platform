@@ -19,6 +19,31 @@ class FunnelIncompleteError(ExecutionError):
     """The prospect path does not satisfy the "Funnel Complete" checkpoint."""
 
 
+class InvalidFunnelIntegrationPackageError(ExecutionError, ValueError):
+    """A stage 8 reviewed asset package was built without identity, version or completion.
+
+    SPEC.md sections 3 and 4: a passing stage 8 gate pins the exact evidence and
+    intended downstream use, so the reviewed stage 8 ``FunnelIntegration`` is
+    projected onto the thirteen canonical asset kinds with a positive integer
+    version. A package that leaves its identity or the funnel version unspecified
+    cannot be represented as exact gate evidence. The same error is raised when
+    the funnel has not passed "Funnel Complete", because its thirteen kinds would
+    then be pinned without a completed funnel to own them (a missing asset
+    prevents gate completion and a waiver never makes an absent asset appear
+    present).
+    """
+
+
+class FunnelIntegrationPackageTenantBoundaryError(ExecutionError):
+    """A stage 8 reviewed asset package mixed in a funnel from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client, so the
+    ``FunnelIntegration`` projected onto a workspace's stage 8 gate package must
+    belong to that workspace's tenant. A cross-tenant stage 8 funnel cannot be
+    pinned as this client's gate evidence.
+    """
+
+
 class LaunchQAError(ExecutionError):
     """Base class for stage 9 launch QA rule violations."""
 

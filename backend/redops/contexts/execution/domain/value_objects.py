@@ -12,13 +12,20 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import date
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from redops.contexts.execution.domain.errors import (
+    FunnelIntegrationPackageTenantBoundaryError,
     InvalidFunnelError,
+    InvalidFunnelIntegrationPackageError,
     InvalidLaunchQAError,
     InvalidPerformanceBaselineError,
     InvalidPerformanceClaimError,
 )
+from redops.contexts.governance.domain.value_objects import StageAssetVersion
+
+if TYPE_CHECKING:
+    from redops.contexts.execution.domain.entities import FunnelIntegration
 
 
 class FunnelState(Enum):
@@ -116,6 +123,123 @@ class FunnelAssetPackage:
                 raise InvalidFunnelError(
                     f"funnel asset package {label} is required"
                 )
+
+
+CANONICAL_FUNNEL_KINDS: tuple[str, ...] = (
+    "campaign-architecture",
+    "pages",
+    "forms",
+    "qualification",
+    "booking",
+    "sequences",
+    "crm",
+    "tags",
+    "automation",
+    "analytics",
+    "tracking",
+    "sales-handoff",
+    "sops",
+)
+
+
+@dataclass(frozen=True)
+class FunnelIntegrationPackage:
+    """The reviewed stage 8 funnel, projected to the thirteen canonical gate kinds.
+
+    SPEC.md section 4, stage 8 "Integrate" and its "Funnel Complete" checkpoint:
+    a stage is complete only when its required assets exist, pass the checkpoint
+    and receive approval for downstream use, and a passing gate pins the exact
+    evidence. The required asset package is the campaign architecture, pages,
+    forms, qualification, booking, sequences, CRM, tags, automation, analytics,
+    tracking, sales handoff and SOPs. The Execution context reviews that as one
+    rich ``FunnelIntegration`` (the thirteen assets belong to the same funnel,
+    grounded on the approved stage 7 amplifier and a same-tenant prospect path dry
+    run); this package is the bridge to the governance gate, which pins one exact
+    ``StageAssetVersion`` per canonical kind.
+
+    The canon (SPEC.md section 12.3: stage 8 uses canon files 13, 14, 21 and 22)
+    describes a minimum-viable CAC funnel of opt-in, amplifier, scheduling and
+    confirmation pages wired to a CRM and scheduling tool, with PAG
+    (pixel/audience/goal) tracking installed on every page. ``FunnelIntegration``
+    already enforces the same-tenant approved amplifier and dry run at
+    construction and completion, so each canonical kind is projected from the
+    single reviewed funnel at one positive integer version.
+
+    A ``FunnelIntegration`` only owns its completed evidence once
+    ``mark_funnel_complete`` passes the checkpoint, so this package refuses a
+    funnel that has not reached ``FunnelState.COMPLETE``: thirteen kinds cannot be
+    pinned as this client's evidence without a funnel whose capture, engagement
+    and conversion handoffs actually routed (SPEC.md section 4). It also refuses a
+    blank identity, a versionless funnel or a cross-tenant funnel rather than
+    silently pinning inexact or foreign evidence (SPEC.md sections 3 and 4).
+    """
+
+    package_id: str
+    tenant_id: str
+    funnel: "FunnelIntegration"
+    funnel_version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("funnel integration package id", self.package_id),
+            ("funnel integration package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidFunnelIntegrationPackageError(
+                    f"{label} is required"
+                )
+        if self.funnel.tenant_id != self.tenant_id:
+            raise FunnelIntegrationPackageTenantBoundaryError(
+                f"stage 8 funnel {self.funnel.integration_id!r} belongs to "
+                f"tenant {self.funnel.tenant_id!r}, not package tenant "
+                f"{self.tenant_id!r}"
+            )
+        if not isinstance(self.funnel_version, int) or self.funnel_version < 1:
+            raise InvalidFunnelIntegrationPackageError(
+                "the funnel integration version must be a positive integer so "
+                "the stage 8 gate can pin the reviewed asset at an exact version"
+            )
+        if not self.funnel.is_complete:
+            raise InvalidFunnelIntegrationPackageError(
+                f"stage 8 funnel {self.funnel.integration_id!r} has not passed "
+                "Funnel Complete, so its thirteen asset kinds cannot be pinned "
+                "as exact evidence"
+            )
+
+    @property
+    def kinds(self) -> frozenset[str]:
+        """The canonical kinds the reviewed stage 8 funnel projects onto."""
+        return frozenset(CANONICAL_FUNNEL_KINDS)
+
+    def missing_kinds(self) -> tuple[str, ...]:
+        """Canonical stage 8 kinds not covered by the projected funnel."""
+        covered = {asset.kind for asset in self.stage_asset_versions()}
+        return tuple(
+            kind for kind in CANONICAL_FUNNEL_KINDS if kind not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_kinds()
+
+    def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
+        """Project the reviewed stage 8 funnel onto exact governance evidence.
+
+        Every canonical kind belongs to the same reviewed ``FunnelIntegration``,
+        so each is pinned to that funnel's identity at its exact version.
+        Governance still pins each projection for the workspace tenant, so a
+        cross-client funnel is refused rather than silently authorized (SPEC.md
+        sections 3, 4 and 11).
+        """
+        return tuple(
+            StageAssetVersion(
+                asset_id=self.funnel.integration_id,
+                tenant_id=self.tenant_id,
+                kind=kind,
+                version=self.funnel_version,
+            )
+            for kind in CANONICAL_FUNNEL_KINDS
+        )
 
 
 @dataclass(frozen=True)
