@@ -9,12 +9,15 @@ from __future__ import annotations
 
 from redops.contexts.engagement.application.commands import (
     RecordStageOneGateCommand,
+    RecordStageThreeGateCommand,
     RecordStageTwoGateCommand,
     RecordStageZeroGateCommand,
 )
 from redops.contexts.engagement.domain.assemblies import (
     StageOneGateAssembler,
     StageOneGateRecorder,
+    StageThreeGateAssembler,
+    StageThreeGateRecorder,
     StageTwoGateAssembler,
     StageTwoGateRecorder,
     StageZeroGateAssembler,
@@ -23,6 +26,7 @@ from redops.contexts.engagement.domain.assemblies import (
 from redops.contexts.engagement.domain.errors import (
     StageRunNotCompletableError,
     StageRunNotStageOneError,
+    StageRunNotStageThreeError,
     StageRunNotStageTwoError,
     StageRunNotStageZeroError,
 )
@@ -40,6 +44,7 @@ from redops.contexts.governance.domain.value_objects import (
 STAGE_ZERO = 0
 STAGE_ONE = 1
 STAGE_TWO = 2
+STAGE_THREE = 3
 
 
 class RecordStageZeroGateHandler:
@@ -314,5 +319,97 @@ class RecordStageTwoGateHandler:
         ):
             raise StageRunNotCompletableError(
                 f"the stage 2 run is {stage_run.status.value!r} and cannot "
+                "complete; only an active Working or In Review run may close"
+            )
+
+
+class RecordStageThreeGateHandler:
+    """Assemble, record and close the stage 3 "Diagnostic Model Approved" gate.
+
+    SPEC.md section 4: a stage is complete only when its required assets exist,
+    pass a defined checkpoint, and receive approval for downstream use, and a
+    failed or expired prerequisite blocks dependent authorization until resolved.
+    The Engagement domain already owns both halves -- ``StageThreeGateAssembler``
+    validates the real ``DiagnosticPackage`` against the workspace tenant and
+    binds the approver, and ``StageThreeGateRecorder`` issues the exact-version
+    approvals and writes the durable ``GateDecision`` -- but they are separate
+    services a caller must remember to chain. This use case chains them so the
+    canonical assembly cannot be bypassed by handing a hand-built gate to the
+    recorder, and it closes the stage 3 ``StageRun`` from the durable decision in
+    the same operation (SPEC.md sections 4 and 6).
+
+    The stage run is validated before the decision is written, because completing
+    a run whose state forbids COMPLETE would otherwise leave the ledger with a
+    passing decision for a stage that never closed. Stage 3 depends on stage 2, so
+    the handler is given a ``GateLedger`` that must already hold a passing stage 2
+    decision; governance refuses the stage 3 decision otherwise. The use case
+    mutates only the gate, the stage run and the ledger; it never invents a
+    concrete human identity.
+    """
+
+    def __init__(
+        self,
+        *,
+        assembler: StageThreeGateAssembler | None = None,
+        recorder: StageThreeGateRecorder | None = None,
+    ) -> None:
+        self._assembler = assembler or StageThreeGateAssembler()
+        self._recorder = recorder or StageThreeGateRecorder()
+
+    def handle(
+        self,
+        command: RecordStageThreeGateCommand,
+        *,
+        ledger: GateLedger,
+    ) -> GateDecision:
+        self._require_stage_three_run(command.stage_run, command.template)
+        gate = self._assembler.assemble(
+            template=command.template,
+            workspace=command.workspace,
+            package=command.package,
+            approver=command.approver,
+            proposed_by=command.proposed_by,
+        )
+        decision = self._recorder.record(
+            gate=gate,
+            workspace=command.workspace,
+            ledger=ledger,
+            scope=command.scope,
+            checkpoint_evidence=command.checkpoint_evidence,
+            rationale=command.rationale,
+            assigned_owner=command.assigned_owner,
+            due_on=command.due_on,
+            on=command.on,
+            next_action=command.next_action,
+        )
+        command.stage_run.complete(
+            decision=decision,
+            ledger=ledger,
+            actor=command.approver,
+            reason=f"stage 3 {decision.checkpoint} accepted",
+            on=command.on,
+            correlation_id=command.correlation_id,
+        )
+        return decision
+
+    @staticmethod
+    def _require_stage_three_run(
+        stage_run: StageRun, template: StageTemplate
+    ) -> None:
+        if stage_run.stage_number != STAGE_THREE:
+            raise StageRunNotStageThreeError(
+                f"the stage 3 closure cannot close a run for stage "
+                f"{stage_run.stage_number}"
+            )
+        if stage_run.template_version != template.version:
+            raise StageRunNotStageThreeError(
+                f"the stage 3 run is pinned to template version "
+                f"{stage_run.template_version!r}, not {template.version!r}"
+            )
+        if not StageTransitionPolicy().can_transition(
+            stage_run.status, StageStatus.COMPLETE
+        ):
+            raise StageRunNotCompletableError(
+                f"the stage 3 run is {stage_run.status.value!r} and cannot "
                 "complete; only an active Working or In Review run may close"
             )

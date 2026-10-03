@@ -194,6 +194,28 @@ class StageRunNotStageTwoError(EngagementError):
     """
 
 
+class NotStageThreeGateError(EngagementError):
+    """A stage 3 recording path was handed a gate for another stage.
+
+    SPEC.md section 4 makes stage 3 "Model" the "Diagnostic Model Approved"
+    checkpoint after the stage 2 "Currency Locked" gate. The stage 3 recording
+    path pins and approves only the canonical stage 3 diagnostic gate; a gate for
+    another stage must be recorded by that stage's own path so the wrong asset
+    package is never approved under the stage 3 rubric.
+    """
+
+
+class StageRunNotStageThreeError(EngagementError):
+    """A stage 3 closure was handed a StageRun for another stage or template.
+
+    SPEC.md sections 3 and 4 make a StageRun track one stage of one versioned
+    template. Completing a stage 3 gate must close the matching stage 3 run for
+    the same template version, so a run for another stage or version cannot be
+    closed by the stage 3 path and left showing verified progress the run does
+    not represent.
+    """
+
+
 class StageRunNotCompletableError(EngagementError):
     """A stage 0 closure was handed a StageRun whose state cannot complete.
 

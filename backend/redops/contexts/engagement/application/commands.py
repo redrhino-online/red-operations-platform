@@ -14,6 +14,7 @@ from datetime import date
 from redops.contexts.commercial.domain.value_objects import (
     CurrencyPackage,
     DiagnosisPackage,
+    DiagnosticPackage,
 )
 from redops.contexts.engagement.domain.entities import ClientWorkspace
 from redops.contexts.engagement.domain.value_objects import IntakePackage
@@ -118,6 +119,44 @@ class RecordStageTwoGateCommand:
     template: StageTemplate
     workspace: ClientWorkspace
     package: CurrencyPackage
+    stage_run: StageRun
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
+@dataclass(frozen=True)
+class RecordStageThreeGateCommand:
+    """Request to assemble and record the stage 3 "Diagnostic Model Approved" gate.
+
+    The command carries the reviewed ``DiagnosticPackage`` (the bridge that
+    projects the single stage 3 ``DiagnosticModel`` onto the ten canonical kinds),
+    the workspace authority registry and the exact decision metadata; it
+    deliberately carries no ``StageGate``. The use case builds the canonical gate
+    itself from the package, so a caller cannot substitute a hand-built gate and
+    skip the tenant-boundary, approver-authority and owner-authority checks
+    (SPEC.md sections 3, 4 and 6). Unlike the stage 1 command it carries no
+    claims, because the "Diagnostic Model Approved" checkpoint turns on
+    adjacent-level observable distinguishability, which ``DiagnosticModel``
+    already enforces, rather than on external customer evidence.
+
+    It also carries the stage 3 ``StageRun`` to close. Recording a passing gate
+    and completing the stage are one application operation, so the durable
+    ``GateDecision`` and the stage status cannot drift apart. Stage 3 depends on
+    stage 2, so the passing stage 2 decision must already be present in the
+    ``GateLedger`` the use case is given (SPEC.md section 4).
+    """
+
+    template: StageTemplate
+    workspace: ClientWorkspace
+    package: DiagnosticPackage
     stage_run: StageRun
     approver: str
     scope: str
