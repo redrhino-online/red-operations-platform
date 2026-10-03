@@ -212,15 +212,17 @@ class TargetMarketMatchmakerInput(BaseModel):
 class RecordStageOneGateRequest(BaseModel):
     """The stage 1 "Avatar Locked" gate request (SPEC.md section 4).
 
-    The caller supplies the reviewed diagnosis values, the workspace authority
-    registry, the supporting claims and the decision metadata. The route builds
-    the canonical gate from these through the use case; it deliberately accepts no
-    pre-built gate, so approver authority and sourced evidence cannot be bypassed.
-    Stage 1 depends on a passing stage 0 decision already in the ledger.
+    The caller supplies the registered workspace id, the reviewed diagnosis
+    values, the supporting claims and the decision metadata. The route resolves
+    the workspace and its authority registry from the durable store, so the
+    request carries no authorities and cannot substitute a caller supplied
+    registry for the persisted one (SPEC.md sections 3, 4 and 11). It deliberately
+    accepts no pre-built gate, so approver authority and sourced evidence cannot
+    be bypassed. Stage 1 depends on a passing stage 0 decision already in the
+    ledger.
     """
 
     workspace_id: str
-    authorities: list[ClientAuthorityInput]
     diagnosis_package_id: str
     avatar: AvatarProfileInput
     business_snapshot: BusinessSnapshotInput

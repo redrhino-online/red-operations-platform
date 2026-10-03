@@ -202,7 +202,6 @@ class StageSixGateRouteTests(unittest.TestCase):
     def stage_one_payload(self):
         return {
             "workspace_id": "ws-3f",
-            "authorities": self._authorities(),
             "diagnosis_package_id": "diagnosis-3f",
             "avatar": {
                 "avatar_id": "avatar-3f",

@@ -113,6 +113,10 @@ class CrossTenantIsolationTests(unittest.TestCase):
 
         # The other client has no passing stage 0, so its stage 1 gate is
         # refused even though the first client's whole pipeline is approved.
+        # Register its workspace first: the gate resolves the authority registry
+        # from the durable store, so an unregistered workspace would be a 404
+        # rather than the prerequisite refusal this test asserts.
+        self.driver.register_workspace(OTHER_TENANT)
         six = self.driver._nine._eight._seven._six
         response = self.client.post(
             f"/red/clients/{OTHER_TENANT}/stages/1/gate",

@@ -4,6 +4,67 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T190852Z (Ralph cycle, this run): selected item was Q18,
+  extend the Q17 persisted-workspace/authority hardening to the stage 1
+  "Avatar Locked" gate (prerequisite Q17 met). It outranked the alternatives for
+  these reasons. Q17 closed the caller-supplied-authority defect on stage 0, but
+  the stage 1 route still rebuilt `ClientWorkspace` from `body.authorities`, so a
+  caller could name itself the client designated approver and the gate that
+  depends on stage 0 would approve against a transient registry rather than the
+  persisted tenant root (SPEC.md sections 3, 4 and 11). Stage 1 is the first
+  dependent gate, so closing it before the wider REST and UI work keeps gate
+  integrity ahead of API surface. Q19 (stage 2 route) and Q10-Q14 rank below. The
+  `frontend/` shell Q32 was again rejected: the DoD [5/6] script passes on
+  `frontend/` merely existing with no `OpenExecutive` string, so landing a
+  screens-less shell would falsely turn `make done` green while condition 6 (Q45)
+  is far off. Q28 stays blocked on the named methodology-owner placement
+  decision.
+- Outcome: `RecordStageOneGateRequest` drops `authorities`.
+  `record_stage_one_gate` now depends on `get_client_workspace_store`, resolves
+  the workspace by `(tenant_id, body.workspace_id)` through the
+  `ClientWorkspaceStore` port, and approves against the persisted registry; an
+  unregistered workspace is a named 404 `ClientWorkspaceNotFoundError`, not a
+  gate built from caller-supplied authorities. `tests/unit/test_stage_one_gate_route.py`
+  drops its `authorities` payload and `_authorities` helper; the reused stage 1
+  payload in `tests/unit/test_stage_six_gate_route.py` (which the e2e chains
+  back through) also drops the field. The cross-tenant security suite now
+  registers the other client's workspace in
+  `test_stage_gate_prerequisite_is_scoped_to_the_client` so its assertion stays a
+  prerequisite `GateDecisionError` rather than a missing-workspace 404.
+- Evidence: `make check` -> 2032 passed, 2 skipped, 684 subtests; pyflakes
+  clean. Two new stage 1 route tests: an unregistered workspace is a 404 with no
+  write, and the same request is a 422 `GateApproverNotAuthorizedError` when the
+  persisted registry omits the client authority (stage 0 seeded first, then the
+  store rebuilt without an approver). `make done` still fails only [5/6]
+  (`frontend/` missing, Q32); [1/6]-[4/6] pass.
+- New findings: with Q17 and Q18 done, stages 0 and 1 resolve their tenant root
+  and authority registry from durable stores, but stages 2-10 gate routes still
+  build `ClientWorkspace` from `body.authorities` (for example
+  `record_stage_two_gate` at `backend/redops/api/routes.py`), so the
+  caller-supplied-authority defect remains on eight routes. The fix is the
+  identical pattern and each stage should get it alongside its asset assembly.
+  Pydantic ignores the now-unused `authorities` key in the stage 2-10 route test
+  payloads, so those tests pass unchanged, but the field is dead and should be
+  removed as each route is hardened.
+- Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
+  land shell-only; Q28 stage 8-10 required kinds blocked on the named
+  methodology-owner placement decision; Q16 idempotency keys blocked on a
+  workflow write route; Q3 agent registration blocked on the ADR 0006 /
+  vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: Q19, extend the Q17/Q18 hardening to the
+  stage 2 "Currency Locked" gate (resolve the persisted `ClientWorkspace` and its
+  authority registry, 404 when unregistered, drop `authorities` from
+  `RecordStageTwoGateRequest` and the stage 2 route test payload) and assemble
+  the stage 2 currency gate from the built assets. Prerequisite: Q18 (done this
+  cycle). Required asset: the stage 2 `CurrencyPackage`; checkpoint: Currency
+  Locked; designated approver: the client designated authority in the persisted
+  registry. Blocked downstream dependency: the stage 3 "Diagnostic Model
+  Approved" gate. Then Q20-Q27 hardening for the remaining stages and Q10-Q14
+  (remaining REST resources) and the `frontend/` screens Q32-Q45.
+
+### Prior cycle (2026-10-03T190410Z)
+
 - Cycle 2026-10-03T190410Z (Ralph cycle, this run): selected item was Q17, the
   stage 0 intake route hardened plus the workspace and authority registry
   (dependency Q9 met). It outranked the alternatives for these reasons. The stage
@@ -2568,8 +2629,8 @@ stalls:
 | Q15 | REST `/workflows/{id}` with SSE or stable id polling (done 2026-10-03T185701Z; `GET /red/clients/{tenant_id}/workflows/{run_id}`; tenant-scoped polling read returning a stable append-only `event_id` and the transition log; 404 for a missing/foreign run. Tenant is the path authority, matching the stage routes, not the bare `/workflows/{id}`) | api | Q5 | route tests `tests/unit/workflows/test_workflow_run_route.py` (4) |
 | Q16 | Idempotency keys and optimistic version conflicts on mutations | api | Q15 | duplicate delivery one effect; stale update 409 |
 | Q17 | Stage 0 intake route hardened plus workspace and authority (API surface) (done 2026-10-03T190410Z; `RecordStageZeroGateRequest` no longer carries `authorities`; `record_stage_zero_gate` resolves the persisted `ClientWorkspace` and its authority registry through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_zero_gate_route.py` (7) and helper `tests/unit/workspace_fixture.py`) | pipeline | Q9 | stage 0 gate e2e |
-| Q18 | Stage 1 diagnosis gate assembly from the built assets (extend the Q17 persisted-workspace/authority hardening to stage 1) | pipeline | Q17 | Avatar Locked decision |
-| Q19 | Stage 2 currency gate API surface | pipeline | Q8, Q18 | Currency Locked decision |
+| Q18 | Stage 1 diagnosis gate assembly from the built assets (done 2026-10-03T190852Z; `RecordStageOneGateRequest` no longer carries `authorities`; `record_stage_one_gate` resolves the persisted `ClientWorkspace` through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_one_gate_route.py` (7) and the reused stage 1 payload in `tests/unit/test_stage_six_gate_route.py` drop the field) | pipeline | Q17 | Avatar Locked decision |
+| Q19 | Stage 2 currency gate assembly plus extension of the Q17/Q18 persisted-workspace/authority hardening (drop `authorities` from `RecordStageTwoGateRequest`; resolve the persisted `ClientWorkspace`, 404 when unregistered) | pipeline | Q8, Q18 | Currency Locked decision |
 | Q20 | Stage 3 model gate API surface (done 2026-10-03T171835Z; `POST /red/clients/{tenant_id}/stages/3/gate`) | pipeline | Q19 | Diagnostic Model Approved |
 | Q21 | Stage 4 IP package gate plus ThirteenTransformations wiring (done 2026-10-03T182806Z; `POST /red/clients/{tenant_id}/stages/4/gate`; stage 4 template now requires the `thirteen-transformations` kind, pinned from the typed `ThirteenTransformations`) | pipeline | Q20 | IP Architecture Locked |
 | Q22 | Stage 5 productize gate API surface (done 2026-10-03T172133Z; `POST /red/clients/{tenant_id}/stages/5/gate`); ProductProgram wiring remains | pipeline | Q21 | Offer Locked |
