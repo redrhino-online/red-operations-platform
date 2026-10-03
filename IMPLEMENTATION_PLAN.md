@@ -4,7 +4,62 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T173449Z (Ralph cycle, this run): selected item was the
+- Cycle 2026-10-03T173628Z (Ralph cycle, this run): selected item was the
+  `tests/security` cross-tenant isolation suite, the next `make done` failure
+  (step [3/6]) and SPEC.md section 13 condition 3. It outranked the
+  `ClientProcess` canon gap (a methodology-owner decision) and a durable
+  `MethodVersion`/offer store (a larger integrity item) because it is the
+  machine-checkable next `make done` gate and it locks the tenancy boundary the
+  spec makes non-negotiable (SPEC.md section 9; the canon has no authority over
+  tenancy).
+- Outcome: new `tests/security/` package with
+  `tests/security/test_cross_tenant_isolation.py` (6 tests) driving the real
+  FastAPI app over HTTP. It proves: (1) a client with the full 0-10 pipeline
+  approved is invisible to another client's production-view read (0 approved
+  gates, 0 approved assets, a non-null current stage); (2) a stage gate
+  prerequisite is scoped per client, so one client's approvals never satisfy
+  another's gate (a stage 1 gate is refused with `GateDecisionError` when the
+  other tenant has no passing stage 0); (3) no gate decision leaks through
+  another client's ledger; (4) no stage run leaks through another client's run
+  store; (5) the repositories refuse a blank-tenant (unscoped) read with
+  `CrossTenantGateError` / `CrossTenantStageRunError`; and (6) an unauthorized
+  approver is rejected over the API with `GateApproverNotAuthorizedError` and no
+  write (SPEC.md section 11, "unauthorized approval is rejected").
+- Coverage finding and open gap: condition 3 names the API, retrieval,
+  background worker and artifact URL layers, but only the API layer exists in the
+  running platform (no retrieval port, worker entry point or artifact-serving
+  route). The suite therefore covers the API layer and the plan records
+  retrieval, worker and artifact URL as an open condition-3 gap to be covered
+  when those seams are built (queue items Q5, Q15 and the artifact routes); the
+  suite does not fake coverage it cannot exercise.
+- Evidence: `uv run pytest tests/security -q` -> 6 passed. `make check` green:
+  1730 passed, 1 skipped, 632 subtests; `pyflakes` clean. `make done` now clears
+  steps [1/6]-[4/6] and fails at [5/6] (`frontend/` missing); the prior
+  `make done` failed at [3/6].
+- New findings: the chain of route tests reused as a fixture (established by the
+  e2e cycle) also supplies the stage 0 and stage 1 payloads the security suite
+  needs, so no new shared payload module was required. The vendored OpenExecutive
+  tree is clean at step [4/6]. The API-boundary gate integrity limitation is
+  unchanged: the caller still supplies upstream approval metadata because no
+  durable read model is exposed.
+- Blockers: Tier 2 facts unchanged; the missing `frontend/` (DoD 5, condition 6)
+  is now the next `make done` failure, followed by the migration deployment and
+  Atlas health (DoD 9); the condition 3 retrieval, worker and artifact-URL layers
+  remain unbuilt; request idempotency, RLS WHERE-clause-only (ADR 0004) and no
+  durable `MethodVersion`/offer/funnel/QA store remain.
+- Highest priority ready next item: the Next.js `frontend/` shell plus RED theme
+  plus API client (queue Q32; SPEC.md sections 8 and 13 condition 5), the next
+  `make done` failure. Prerequisites: the section 8 screens need the read API,
+  and the stage 0-10 route surface plus the production-view route are both done.
+  Alternative: the `ClientProcess` design artifact from the canon gap register,
+  if a methodology-owner decision is preferred; or a durable
+  `MethodVersion`/offer store so the gates stop re-stating upstream approvals; or
+  building the retrieval, worker and artifact-URL seams so condition 3 can be
+  fully covered.
+
+### Prior cycle (2026-10-03T173449Z)
+
+- Cycle 2026-10-03T173449Z (Ralph cycle): selected item was the
   `tests/e2e` stage 0-10 suite that drives one client from intake to
   "Performance Baseline Established" through the REST API -- SPEC.md section 13
   definition-of-done condition 1 and the next highest priority ready item named
@@ -867,7 +922,7 @@ stalls:
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
-| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | suite green (DoD 3) |
+| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams |
 | Q9 | REST `/clients` and `/clients/{id}/sources` | api | Q7 | route tests, tenant scoping, pagination |
 | Q10 | REST `/claims`, `/methods` | api | Q9 | route tests |
 | Q11 | REST `/offers`, `/builds` | api | Q10 | route tests |
