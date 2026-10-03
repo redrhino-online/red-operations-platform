@@ -144,3 +144,61 @@ class DiagnosisTenantBoundaryError(CommercialError):
     A cross-tenant diagnosis value cannot be pinned as this client's gate evidence.
     """
 
+
+class InvalidCurrencyInventoryError(CommercialError, ValueError):
+    """A stage 2 currency inventory was built without a category or currencies.
+
+    SPEC.md section 4, stage 2 "Position": the required asset package names the
+    category, the currency inventory and the primary currency. The reference model
+    canon (SPEC.md section 12.3: stage 2 uses canon files 04, 05 and 06) has the
+    currency calculator leave the general category behind and list every currency
+    the offer can increase or decrease. An inventory that names no category or no
+    currency on either side cannot record that reach, so it cannot be a reviewed
+    stage 2 asset.
+    """
+
+
+class InvalidPositioningDecisionError(CommercialError, ValueError):
+    """A stage 2 positioning decision was built without a required dimension.
+
+    SPEC.md section 4, stage 2 "Position": the required asset package names the
+    horizon, qualifications, transformation statement and core problem. The canon
+    (files 05 and 06) frames this as the four step problem, prescription and
+    prognosis with a stated acceptance and rejection line. A decision that leaves
+    the problem, the transformation, the horizon or the acceptance line
+    unspecified cannot be represented as a reviewed stage 2 asset.
+    """
+
+
+class InvalidMillionDollarMessageError(CommercialError, ValueError):
+    """A stage 2 million dollar message was built without a formula component.
+
+    SPEC.md section 4, stage 2: the required asset package ends with the Million
+    Dollar Message. The canon (file 06) states the formula as a single avatar
+    times one currency with a metric and a timeline minus the pain removed. A
+    message that leaves the avatar, currency, metric, timeline or pain
+    unspecified cannot be represented as a complete stage 2 asset.
+    """
+
+
+class InvalidCurrencyPackageError(CommercialError, ValueError):
+    """A stage 2 reviewed asset package was built without identity or version.
+
+    SPEC.md sections 3 and 4: a passing stage 2 gate pins the exact evidence and
+    intended downstream use, so the reviewed stage 2 assets are projected onto
+    the ten canonical asset kinds with a positive integer version each. A package
+    that leaves its identity or an asset version unspecified cannot be
+    represented as exact gate evidence.
+    """
+
+
+class CurrencyTenantBoundaryError(CommercialError):
+    """A stage 2 reviewed asset package mixed in a value from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client, so the
+    currency inventory, positioning decision, primary currency and million dollar
+    message projected onto a workspace's stage 2 gate package must all belong to
+    that workspace's tenant. A cross-tenant stage 2 value cannot be pinned as this
+    client's gate evidence.
+    """
+

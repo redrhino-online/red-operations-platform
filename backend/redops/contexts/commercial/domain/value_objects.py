@@ -7,18 +7,24 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from redops.contexts.commercial.domain.errors import (
+    CurrencyTenantBoundaryError,
     DiagnosisTenantBoundaryError,
     InvalidAvatarProfileError,
     InvalidBusinessSnapshotError,
+    InvalidCurrencyInventoryError,
+    InvalidCurrencyPackageError,
     InvalidDeliverySpecificationError,
     InvalidDiagnosisPackageError,
+    InvalidMillionDollarMessageError,
     InvalidOfferError,
     InvalidOfferFunnelAuditError,
+    InvalidPositioningDecisionError,
 )
 from redops.contexts.governance.domain.value_objects import StageAssetVersion
 from redops.contexts.method.domain.entities import SignatureSolution
 from redops.contexts.method.domain.value_objects import (
     ImpactAssessment,
+    PrimaryCurrency,
     SemanticVersion,
 )
 
@@ -520,5 +526,294 @@ class DiagnosisPackage:
                 tenant_id=self.tenant_id,
                 kind="offer-funnel-audit",
                 version=self.offer_funnel_audit_version,
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class CurrencyInventory:
+    """The stage 2 currency inventory: the reach the offer could claim.
+
+    SPEC.md section 4, stage 2 "Position": the required asset package names the
+    category, the currency inventory and the primary currency. The reference
+    model canon (SPEC.md section 12.3: stage 2 uses canon files 04, 05 and 06)
+    has the currency calculator leave the general category behind and list every
+    currency the offer can increase or decrease before the one currency is
+    chosen. The value object is frozen and reject-only, so an inventory that
+    names no category or no currency on either side cannot be represented as a
+    reviewed stage 2 asset.
+    """
+
+    inventory_id: str
+    tenant_id: str
+    category: str
+    currencies_to_increase: tuple[str, ...]
+    currencies_to_decrease: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("currency inventory id", self.inventory_id),
+            ("currency inventory tenant id", self.tenant_id),
+            ("currency category", self.category),
+        ):
+            if not value or not value.strip():
+                raise InvalidCurrencyInventoryError(f"{label} is required")
+        _require_entries(
+            self.currencies_to_increase,
+            "currencies to increase",
+            InvalidCurrencyInventoryError,
+        )
+        _require_entries(
+            self.currencies_to_decrease,
+            "currencies to decrease",
+            InvalidCurrencyInventoryError,
+        )
+
+
+@dataclass(frozen=True)
+class PositioningDecision:
+    """The stage 2 positioning decision: the problem, prognosis and acceptance line.
+
+    SPEC.md section 4, stage 2 "Position": the required asset package names the
+    horizon, qualifications, transformation statement and core problem. The canon
+    (files 05 and 06) frames this as the four step problem, prescription and
+    prognosis with a stated acceptance and rejection line. The value object is
+    frozen and reject-only, so a decision that leaves the problem, the
+    transformation, the horizon or either side of the acceptance line
+    unspecified cannot be represented as a reviewed stage 2 asset.
+    """
+
+    decision_id: str
+    tenant_id: str
+    core_problem: str
+    transformation_statement: str
+    horizon: str
+    qualifications: tuple[str, ...]
+    disqualifications: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("positioning decision id", self.decision_id),
+            ("positioning decision tenant id", self.tenant_id),
+            ("positioning core problem", self.core_problem),
+            ("positioning transformation statement", self.transformation_statement),
+            ("positioning horizon", self.horizon),
+        ):
+            if not value or not value.strip():
+                raise InvalidPositioningDecisionError(f"{label} is required")
+        _require_entries(
+            self.qualifications,
+            "qualifications",
+            InvalidPositioningDecisionError,
+        )
+        _require_entries(
+            self.disqualifications,
+            "disqualifications",
+            InvalidPositioningDecisionError,
+        )
+
+
+@dataclass(frozen=True)
+class MillionDollarMessage:
+    """The stage 2 million dollar message and its formula components.
+
+    SPEC.md section 4, stage 2 "Position": the required asset package ends with
+    the Million Dollar Message. The canon (file 06) states the formula as a
+    single avatar times one currency with a metric and a timeline minus the pain
+    removed. The value object is frozen and reject-only, so a message that leaves
+    the avatar, currency, metric, timeline or pain unspecified cannot be
+    represented as a complete stage 2 asset.
+    """
+
+    message_id: str
+    tenant_id: str
+    avatar: str
+    currency: str
+    metric: str
+    timeline: str
+    pain: str
+    message: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("million dollar message id", self.message_id),
+            ("million dollar message tenant id", self.tenant_id),
+            ("million dollar message avatar", self.avatar),
+            ("million dollar message currency", self.currency),
+            ("million dollar message metric", self.metric),
+            ("million dollar message timeline", self.timeline),
+            ("million dollar message pain", self.pain),
+            ("million dollar message text", self.message),
+        ):
+            if not value or not value.strip():
+                raise InvalidMillionDollarMessageError(f"{label} is required")
+
+
+CANONICAL_CURRENCY_KINDS: tuple[str, ...] = (
+    "category",
+    "currency-inventory",
+    "primary-currency",
+    "current-measures",
+    "desired-measures",
+    "horizon",
+    "qualifications",
+    "transformation-statement",
+    "core-problem",
+    "million-dollar-message",
+)
+
+
+@dataclass(frozen=True)
+class CurrencyPackage:
+    """The reviewed stage 2 assets, projected to the ten canonical gate kinds.
+
+    SPEC.md section 4, stage 2 "Position" and its "Currency Locked" checkpoint: a
+    stage is complete only when its required assets exist, pass the checkpoint and
+    receive approval for downstream use, and a passing gate pins the exact
+    evidence. The Commercial context reviews the stage 2 package as four rich
+    value objects; this package is the bridge to the governance gate, which pins
+    one exact ``StageAssetVersion`` per canonical kind. The currency inventory
+    satisfies the category and inventory kinds, the ``PrimaryCurrency`` satisfies
+    the primary currency and its two measures, the positioning decision satisfies
+    the horizon, qualifications, transformation statement and core problem, and
+    the million dollar message satisfies its own kind.
+
+    The canon (SPEC.md section 12.3: stage 2 uses canon files 04, 05 and 06) also
+    frames the message as the avatar times the currency minus the pain; the SPEC
+    stage 2 package enumerates those as separate required items, so they are
+    projected as separate kinds while the message carries the composed text.
+    Each reviewed asset is projected with a positive integer version, and a blank
+    version, blank identity or cross-tenant value is refused rather than silently
+    pinned (SPEC.md sections 3 and 4).
+    """
+
+    package_id: str
+    tenant_id: str
+    inventory: CurrencyInventory
+    inventory_version: int
+    positioning: PositioningDecision
+    positioning_version: int
+    primary_currency: PrimaryCurrency
+    primary_currency_version: int
+    million_dollar_message: MillionDollarMessage
+    million_dollar_message_version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("currency package id", self.package_id),
+            ("currency package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidCurrencyPackageError(f"{label} is required")
+        for label, value in (
+            ("currency inventory", self.inventory),
+            ("positioning decision", self.positioning),
+            ("primary currency", self.primary_currency),
+            ("million dollar message", self.million_dollar_message),
+        ):
+            if value.tenant_id != self.tenant_id:
+                raise CurrencyTenantBoundaryError(
+                    f"stage 2 {label} belongs to tenant {value.tenant_id!r}, "
+                    f"not package tenant {self.tenant_id!r}"
+                )
+        for label, value in (
+            ("currency inventory version", self.inventory_version),
+            ("positioning decision version", self.positioning_version),
+            ("primary currency version", self.primary_currency_version),
+            ("million dollar message version", self.million_dollar_message_version),
+        ):
+            if not isinstance(value, int) or value < 1:
+                raise InvalidCurrencyPackageError(
+                    f"{label} must be a positive integer so the stage 2 gate can "
+                    "pin the reviewed asset at an exact version"
+                )
+
+    @property
+    def kinds(self) -> frozenset[str]:
+        """The canonical kinds the reviewed stage 2 assets project onto."""
+        return frozenset(CANONICAL_CURRENCY_KINDS)
+
+    def missing_kinds(self) -> tuple[str, ...]:
+        """Canonical stage 2 kinds not covered by the projected assets."""
+        covered = {asset.kind for asset in self.stage_asset_versions()}
+        return tuple(
+            kind for kind in CANONICAL_CURRENCY_KINDS if kind not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_kinds()
+
+    def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
+        """Project the reviewed stage 2 assets onto exact governance evidence.
+
+        Governance pins each projection for the workspace tenant, so a
+        cross-client value is refused rather than silently authorized (SPEC.md
+        sections 3, 4 and 11).
+        """
+        inventory_version = self.inventory_version
+        positioning_version = self.positioning_version
+        currency_version = self.primary_currency_version
+        message_version = self.million_dollar_message_version
+        return (
+            StageAssetVersion(
+                asset_id=self.inventory.inventory_id,
+                tenant_id=self.tenant_id,
+                kind="category",
+                version=inventory_version,
+            ),
+            StageAssetVersion(
+                asset_id=self.inventory.inventory_id,
+                tenant_id=self.tenant_id,
+                kind="currency-inventory",
+                version=inventory_version,
+            ),
+            StageAssetVersion(
+                asset_id=self.primary_currency.currency,
+                tenant_id=self.tenant_id,
+                kind="primary-currency",
+                version=currency_version,
+            ),
+            StageAssetVersion(
+                asset_id=self.primary_currency.currency,
+                tenant_id=self.tenant_id,
+                kind="current-measures",
+                version=currency_version,
+            ),
+            StageAssetVersion(
+                asset_id=self.primary_currency.currency,
+                tenant_id=self.tenant_id,
+                kind="desired-measures",
+                version=currency_version,
+            ),
+            StageAssetVersion(
+                asset_id=self.positioning.decision_id,
+                tenant_id=self.tenant_id,
+                kind="horizon",
+                version=positioning_version,
+            ),
+            StageAssetVersion(
+                asset_id=self.positioning.decision_id,
+                tenant_id=self.tenant_id,
+                kind="qualifications",
+                version=positioning_version,
+            ),
+            StageAssetVersion(
+                asset_id=self.positioning.decision_id,
+                tenant_id=self.tenant_id,
+                kind="transformation-statement",
+                version=positioning_version,
+            ),
+            StageAssetVersion(
+                asset_id=self.positioning.decision_id,
+                tenant_id=self.tenant_id,
+                kind="core-problem",
+                version=positioning_version,
+            ),
+            StageAssetVersion(
+                asset_id=self.million_dollar_message.message_id,
+                tenant_id=self.tenant_id,
+                kind="million-dollar-message",
+                version=message_version,
             ),
         )
