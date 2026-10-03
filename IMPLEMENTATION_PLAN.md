@@ -4,85 +4,94 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:01:44Z (Ralph cycle 90).
-- Selected item: build the Operations command center intervention query and
-  ranking (`Intervention`, `InterventionReason`, `InterventionSeverity`,
-  `InterventionState`, `JourneyFailure`, `Commitment` and
-  `InterventionRankingPolicy`) that surfaces, per client, the blocked critical
-  path, overdue approvals, failed live journeys and nearing commitments, carrying
-  client, severity, reason, evidence, owner, next action, due time, state and
-  affected builds, showing why each card is surfaced, allowing dismissal with
-  rationale, and deduplicating (SPEC.md section 7, "Command center intervention
-  fields"). Cycle 89 built the production view, so this read over it was the
-  plan's named highest priority ready next item. This outranks the per-kind stage
+- Cycle timestamp: 2026-10-03T05:04:06Z (Ralph cycle 91).
+- Selected item: build the Operations notification delivery policy
+  (`QuietHours`, `Notification`, `NotificationState`,
+  `NotificationDeliveryPolicy` and `delivered_intervention_keys`) that turns the
+  command center intervention cards into deduplicated, owner-routed
+  notifications, suppresses a delivery inside an owner's quiet hours as a
+  recorded suppression rather than a silent drop, and does not deliver a card
+  twice across query evaluations (SPEC.md section 7, "Notifications are
+  deduplicated and respect owner and quiet hours"). Cycle 90 built the
+  intervention cards with their stable dedup key and owner, so this next
+  Operations read was the plan's named highest priority ready next item. This
+  outranks the improvement loop (still a larger Phase 5 item), the per-kind stage
   9 through 10 content schemas (a methodology-owner decision) and the
   stage-parameterized gate refactor (quality only, no new capability).
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: 18 new behavioral tests in
-  `tests/unit/operations/test_intervention_ranking.py`: an untouched pipeline
-  surfaces no card; a blocked stage surfaces one blocked-critical-path card
-  (critical severity, owner, blocker evidence, transitive affected builds) and
-  only one even though ten stages depend on it; a stage past its due date
-  surfaces an overdue-approval card while a future due date does not; a failed
-  live journey surfaces with its evidence and owner; a journey failure or
-  commitment for another client is not surfaced; a commitment inside the 14-day
-  window is nearing and one beyond it is not; the ranking orders blocked,
-  overdue, failed journey, nearing; identical signals are deduplicated on
-  (client, reason, subject); a non-positive window is refused; a card can be
-  dismissed with a rationale, a blank rationale is refused, and an
-  already-dismissed card cannot be dismissed again; a card requires client,
-  subject, owner, explanation and evidence, is immutable, and exposes its dedup
-  key. Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
-  'test_*.py'` reports 966 passed, up from 948. `python3 -m pyflakes` on the new
-  modules and test file is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the intervention query belongs to the Operations bounded context
-  named in SPEC.md section 3 ("Operations (queues, reminders, intervention)"), not
-  Governance as the cycle 89 note guessed; it reads the Governance production view
-  as a pure domain type, the same cross-context domain pattern already used by
-  Commercial -> Method/Knowledge/Governance, and this plan corrects the
-  placement. Two of the four ranked reasons depend on caller-supplied context:
-  failed live journeys are owned by Execution/Measurement and nearing commitments
-  by Engagement/Commercial, so the query refuses to invent them and filters every
-  signal by client so a foreign client's signal never surfaces (SPEC.md section
-  9). A blocked stage always carries an assigned owner because the durable
-  `GateDecision` requires one; the query falls back to the accountable role only
-  if a view ever reports otherwise. Deduplication is by (client, reason, subject)
-  within one query evaluation; cross-run notification deduplication, owner
-  routing and quiet hours remain separate Operations work (SPEC.md section 7).
-  Re-checked the method-change impact assessment while reassessing: it already
-  covers every `DependentArtifact` kind, so no gate-integrity gap was found there.
+- Evidence: 22 new behavioral tests in
+  `tests/unit/operations/test_notification_policy.py`: an open card outside quiet
+  hours is delivered; a card inside quiet hours is suppressed with a recorded
+  reason; quiet hours crossing midnight suppress on both sides; the window is
+  half open at its start and end; an owner without a preference is delivered; a
+  preference for another owner does not suppress; each open card notifies once;
+  a previously delivered key is not notified again across evaluations; duplicate
+  cards in one batch produce one notification; the same subject under a different
+  reason is not deduplicated; a suppressed card is not treated as delivered and
+  re-delivers later; a dismissed card and a resolved card are not notified; quiet
+  hours require an owner, real time bounds and a non-zero window; duplicate
+  preferences for one owner are refused; a delivered notification cannot carry a
+  suppression reason; a suppressed notification must carry one; the
+  identification fields are required; a notification is immutable and its key
+  matches the intervention key. Running `PYTHONPATH=backend python3 -m unittest
+  discover -s tests -p 'test_*.py'` reports 988 passed, up from 966.
+  `python3 -m pyflakes` on the changed modules and the new test file is clean.
+  `ruff` and `mypy` remain uninstalled.
+- New findings: notification delivery is platform operations behavior, not a
+  canon method artifact, and the supplied canon contains no notification or
+  alerting material, so no canonical shape is required and no new canon gap is
+  recorded (SPEC.md section 12.4 shapes method artifacts, not queues or
+  reminders). Deduplication and quiet-hour suppression are deliberately distinct:
+  a delivered card is remembered so it is never sent twice, while a suppressed
+  card is not remembered as delivered so it becomes deliverable once the owner is
+  out of quiet hours. Quiet-hour preferences remain caller-supplied because
+  Operations owns reminders and queues (SPEC.md section 3) and no real operator
+  schedule may be invented; the same owner appearing twice is refused instead of
+  picking one window. The policy reads only open cards, so a dismissed or
+  resolved intervention never notifies.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
   graph assumed in cycle 56, scheduler/worker topology, the client-designated
-  approver identities, and pilot metric targets. The full stage 0-10 gate path,
-  its production view and the command center intervention query now exist in pure
-  domain code, but durable persistence of any `GateDecision`, `StageRun`, retained
-  waiver decision, blocker or intervention still depends on the storage ADR; no
-  real client approver identity may be invented. Per-kind stage 9 through 10 asset
-  content schemas remain prose and shapes rather than typed value objects. No fork
+  approver identities, and pilot metric targets. The intervention cards and the
+  notification policy now exist in pure domain code, but the Operations delivery
+  adapter, the durable notification log and the command center screen all still
+  depend on the storage ADR; the notification policy's `already_delivered` set is
+  caller-supplied precisely so it can be persisted by any adapter later. No fork
   or cluster facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or
   `argocd` present.
-- Highest priority ready next item: build the Operations notification policy
-  (`Notification`, an owner quiet-hours preference and a delivery-decision
-  policy) that deduplicates notifications across query evaluations and delivers
-  each intervention to its owner only outside that owner's quiet hours, recording
-  a suppression instead of silently dropping it (SPEC.md section 7,
-  "Notifications are deduplicated and respect owner and quiet hours"). The
-  intervention cards now exist and carry a stable dedup key, owner and due time,
-  so the notification policy can be derived without new storage; quiet-hour
-  preferences are caller-supplied because Operations owns reminders and queues
-  (SPEC.md section 3) and no real operator schedule may be invented. Pipeline
-  mapping: cross-cutting read over stages 0 to 10; required asset none; checkpoint
-  n/a; approver n/a; downstream dependency the Operations delivery adapter and the
-  command center screen. This outranks the per-kind stage 9 through 10 content
-  schemas (a methodology-owner decision) and the stage-parameterized gate refactor
-  (quality only, no new capability).
-- Deferred cross-context items: the Operations notification/quiet-hours policy
-  (now the ready next item) and the improvement loop; per-kind stage 9 through 10
-  asset content schemas; a stage-parameterized gate recorder/handler refactor now
-  that eleven identical shapes are proven; and all persistence, blocked on the
-  storage ADR.
+- Highest priority ready next item: build the Measurement improvement loop
+  (`ImprovementProposal`, `ImprovementOutcome` and an approval-gated improvement
+  policy) so that a stage 10 optimization stays a proposal until a named human
+  owner approves it, then records a measured before-and-after grounded on an
+  established same-tenant baseline, keeping an observed movement distinct from a
+  causal conclusion (SPEC.md section 4, Phase 5 exit "one improvement is approved
+  and measured" and section 11, "performance recommendations require evidence and
+  owner approval before material changes"). The `PerformanceBaseline`,
+  `MilestoneObservation` and `PerformanceClaim` values already exist and no
+  storage is required, so this is the readiest pure-domain item and it advances
+  the stage 10 objective that "campaign activation alone does not complete an
+  engagement" (SPEC.md section 4). Pipeline mapping: stage 10 Optimization;
+  required asset the measured before/after evidence; checkpoint the owner
+  approval of the improvement; approver the named human owner; downstream
+  dependency the future command center improvement view. This outranks the
+  per-kind stage 9 through 10 content schemas (a methodology-owner decision) and
+  the stage-parameterized gate refactor (quality only, no new capability).
+- Deferred cross-context items: the Measurement improvement loop (now the ready
+  next item) and the Operations delivery adapter plus durable notification log
+  (blocked on the storage ADR); per-kind stage 9 through 10 asset content schemas;
+  a stage-parameterized gate recorder/handler refactor now that eleven identical
+  shapes are proven; and all persistence, blocked on the storage ADR.
+  [DONE 2026-10-03 (Ralph cycle 91): built the Operations notification delivery
+  policy (`QuietHours`, `Notification`, `NotificationState`,
+  `NotificationDeliveryPolicy`, `delivered_intervention_keys`) that delivers each
+  open intervention card to its owner once, suppresses a delivery inside the
+  owner's quiet hours as a recorded suppression, and deduplicates across query
+  evaluations with a caller-supplied delivered-key set (SPEC.md section 7,
+  "Notifications are deduplicated and respect owner and quiet hours"); verified by
+  `tests/unit/operations/test_notification_policy.py` (22 tests), so the command
+  center can now route owned, deduplicated, quiet-hour-respecting notifications
+  without inventing an operator schedule.]
   [DONE 2026-10-03 (Ralph cycle 90): built the Operations command center
   intervention query and ranking (`Intervention`, `InterventionReason`,
   `InterventionSeverity`, `InterventionState`, `JourneyFailure`, `Commitment`,

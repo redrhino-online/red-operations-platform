@@ -13,7 +13,7 @@ query never invents them (SPEC.md sections 7, 12.1 and 12.2).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Iterable
 
 from redops.contexts.governance.domain.value_objects import (
@@ -23,12 +23,17 @@ from redops.contexts.governance.domain.value_objects import (
 )
 from redops.contexts.operations.domain.errors import (
     InvalidInterventionQueryError,
+    InvalidQuietHoursError,
 )
 from redops.contexts.operations.domain.value_objects import (
     Commitment,
     Intervention,
     InterventionReason,
+    InterventionState,
     JourneyFailure,
+    Notification,
+    NotificationState,
+    QuietHours,
 )
 
 DEFAULT_NEARING_COMMITMENT_WINDOW_DAYS = 14
@@ -250,3 +255,97 @@ class InterventionRankingPolicy:
             card.due_on or date.max,
             card.key,
         )
+
+
+def delivered_intervention_keys(
+    notifications: Iterable[Notification],
+) -> frozenset[tuple[str, str, str]]:
+    """The keys of notifications that were actually delivered.
+
+    A suppressed notification never reached its owner, so it must not count as
+    delivered when deduplicating a later query evaluation: the card should be
+    delivered once the owner is out of quiet hours (SPEC.md section 7).
+    """
+    return frozenset(
+        notification.key
+        for notification in notifications
+        if notification.state is NotificationState.DELIVERED
+    )
+
+
+@dataclass(frozen=True)
+class NotificationDeliveryPolicy:
+    """Decide which intervention cards become notifications (SPEC.md section 7).
+
+    SPEC.md section 7 requires notifications to be deduplicated and to respect
+    owner and quiet hours. Given the open cards from one query evaluation, the
+    caller-supplied quiet-hour preferences, the keys already delivered on prior
+    evaluations, and the local delivery moment, this policy returns one
+    notification per open card that has not already been delivered. A card whose
+    owner is inside quiet hours is returned as a recorded suppression, never
+    dropped, and re-evaluates as deliverable later. It is a pure domain object:
+    it reads the cards and preferences, mutates nothing, and never invents an
+    operator schedule.
+    """
+
+    def deliver(
+        self,
+        cards: Iterable[Intervention],
+        *,
+        at: datetime,
+        quiet_hours: Iterable[QuietHours] = (),
+        already_delivered: Iterable[tuple[str, str, str]] = (),
+    ) -> tuple[Notification, ...]:
+        """Return the notifications for one local delivery moment."""
+        schedule = self._schedule(quiet_hours)
+        notified = set(already_delivered)
+        notifications: list[Notification] = []
+        for card in cards:
+            if card.state is not InterventionState.OPEN:
+                continue
+            if card.key in notified:
+                continue
+            notified.add(card.key)
+            preference = schedule.get(card.owner)
+            if preference is not None and preference.covers(at.time()):
+                notifications.append(
+                    Notification(
+                        client=card.client,
+                        reason=card.reason,
+                        subject=card.subject,
+                        owner=card.owner,
+                        at=at,
+                        state=NotificationState.SUPPRESSED,
+                        suppression_reason=(
+                            f"{card.owner} is inside quiet hours "
+                            f"{preference.starts_at.strftime('%H:%M')}-"
+                            f"{preference.ends_at.strftime('%H:%M')}"
+                        ),
+                    )
+                )
+                continue
+            notifications.append(
+                Notification(
+                    client=card.client,
+                    reason=card.reason,
+                    subject=card.subject,
+                    owner=card.owner,
+                    at=at,
+                    state=NotificationState.DELIVERED,
+                )
+            )
+        return tuple(notifications)
+
+    @staticmethod
+    def _schedule(
+        quiet_hours: Iterable[QuietHours],
+    ) -> dict[str, QuietHours]:
+        schedule: dict[str, QuietHours] = {}
+        for preference in quiet_hours:
+            if preference.owner in schedule:
+                raise InvalidQuietHoursError(
+                    f"owner {preference.owner!r} has more than one quiet-hours "
+                    "preference"
+                )
+            schedule[preference.owner] = preference
+        return schedule

@@ -13,12 +13,14 @@ not an ORM or framework dependency.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import date, datetime, time
 from enum import Enum
 
 from redops.contexts.operations.domain.errors import (
     InterventionDismissalError,
     InvalidInterventionError,
+    InvalidNotificationError,
+    InvalidQuietHoursError,
 )
 
 
@@ -226,3 +228,91 @@ class Intervention:
             state=InterventionState.DISMISSED,
             resolution_note=rationale,
         )
+
+
+class NotificationState(Enum):
+    """What happened to an intervention notification (SPEC.md section 7)."""
+
+    DELIVERED = "delivered"
+    SUPPRESSED = "suppressed"
+
+
+@dataclass(frozen=True)
+class QuietHours:
+    """An owner's local quiet-hours window (SPEC.md section 7).
+
+    The window is half open: a moment exactly at ``starts_at`` is inside the
+    window and a moment exactly at ``ends_at`` is outside it. ``starts_at`` after
+    ``ends_at`` means the window crosses midnight. Operations never invents an
+    operator schedule; the preference is caller-supplied and an owner without one
+    has no quiet hours (SPEC.md sections 3 and 9).
+    """
+
+    owner: str
+    starts_at: time
+    ends_at: time
+
+    def __post_init__(self) -> None:
+        if not self.owner or not self.owner.strip():
+            raise InvalidQuietHoursError("quiet hours require an owner")
+        for label, value in (("start", self.starts_at), ("end", self.ends_at)):
+            if not isinstance(value, time):
+                raise InvalidQuietHoursError(
+                    f"quiet hours {label} must be a time of day"
+                )
+        if self.starts_at == self.ends_at:
+            raise InvalidQuietHoursError(
+                "quiet hours cannot start and end at the same time"
+            )
+
+    def covers(self, moment: time) -> bool:
+        """Return whether ``moment`` falls inside this owner's quiet hours."""
+        if self.starts_at < self.ends_at:
+            return self.starts_at <= moment < self.ends_at
+        return moment >= self.starts_at or moment < self.ends_at
+
+
+@dataclass(frozen=True)
+class Notification:
+    """One delivery decision for an intervention card (SPEC.md section 7).
+
+    Carries the intervention key (client, reason, subject) so a notification can
+    be deduplicated against prior evaluations, plus the owner and delivery moment.
+    A ``DELIVERED`` notification is the record that the owner was told; a
+    ``SUPPRESSED`` one records that quiet hours withheld it, with the reason, so a
+    suppression is never a silent drop.
+    """
+
+    client: str
+    reason: InterventionReason
+    subject: str
+    owner: str
+    at: datetime
+    state: NotificationState
+    suppression_reason: str = ""
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("notification client", self.client),
+            ("notification subject", self.subject),
+            ("notification owner", self.owner),
+        ):
+            if not value or not value.strip():
+                raise InvalidNotificationError(f"{label} is required")
+        if not isinstance(self.at, datetime):
+            raise InvalidNotificationError("notification moment is required")
+        if self.state is NotificationState.SUPPRESSED and not (
+            self.suppression_reason and self.suppression_reason.strip()
+        ):
+            raise InvalidNotificationError(
+                "a suppressed notification requires the reason it was withheld"
+            )
+        if self.state is NotificationState.DELIVERED and self.suppression_reason:
+            raise InvalidNotificationError(
+                "a delivered notification cannot carry a suppression reason"
+            )
+
+    @property
+    def key(self) -> tuple[str, str, str]:
+        """The deduplication key, matching the intervention's key."""
+        return (self.client, self.reason.value, self.subject)

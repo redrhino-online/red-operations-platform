@@ -33,3 +33,24 @@ class InvalidInterventionQueryError(OperationsError, ValueError):
     The nearing-commitment window must be a positive number of days; a zero or
     negative window would make "nearing" meaningless.
     """
+
+
+class InvalidQuietHoursError(OperationsError, ValueError):
+    """An owner's quiet-hours preference is missing or ambiguous.
+
+    SPEC.md section 7 requires notifications to respect owner quiet hours. A
+    preference with no owner cannot be routed, a non-time boundary cannot define
+    a window, and one owner with two conflicting preferences cannot have an
+    unambiguous schedule. Every case is refused rather than guessed.
+    """
+
+
+class InvalidNotificationError(OperationsError, ValueError):
+    """A notification record is missing a required field or is self-contradictory.
+
+    A notification must identify the intervention it carries (client, reason,
+    subject) and its owner, and it must be exactly one of delivered or
+    suppressed: a delivered notification cannot claim a suppression reason, and a
+    suppressed notification must record why it was withheld rather than dropped
+    silently (SPEC.md section 7).
+    """
