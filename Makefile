@@ -31,6 +31,15 @@ run:
 loop:
 	@[[ "$(COUNT)" =~ ^[1-9][0-9]*$$ ]] || { printf 'Use: make loop n=5, where n is a positive whole number\n' >&2; exit 2; }
 	@for ((cycle = 1; cycle <= $(COUNT); cycle++)); do \
+	  if [[ -e "$(REPO)/.ralph/STOP" ]]; then \
+	    printf 'Stop requested: %s exists; halting before cycle %s\n' "$(REPO)/.ralph/STOP" "$$cycle"; \
+	    break; \
+	  fi; \
 	  printf '\nRalph cycle %s of %s\n' "$$cycle" "$(COUNT)"; \
-	  "$(RALPH)" "$(REPO)" || exit $$?; \
+	  status=0; "$(RALPH)" "$(REPO)" || status=$$?; \
+	  if (( status == 3 )); then \
+	    printf 'Stop requested: %s exists; halting loop\n' "$(REPO)/.ralph/STOP"; \
+	    break; \
+	  fi; \
+	  if (( status != 0 )); then exit $$status; fi; \
 	done

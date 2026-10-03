@@ -112,3 +112,23 @@ contract. To publish manually, push the branch, then tag a release:
 git push atlas main && git push origin main
 git tag -a v0.1.0 -m "red-operations-platform v0.1.0" && git push atlas v0.1.0
 ```
+
+## 8. Stopping a loop
+
+While `make loop` is running, create a stop file in the target repository:
+
+```bash
+touch .ralph/STOP
+```
+
+Before each cycle the harness checks for `.ralph/STOP`. If present it skips the
+cycle and the loop halts cleanly (exit status 3, not an error). The file is not
+removed, so the loop stays stopped until you delete it:
+
+```bash
+rm .ralph/STOP
+```
+
+When running against another target with `REPO=...`, the file is
+`$REPO/.ralph/STOP`. A single `make run` also honours the stop file.
+

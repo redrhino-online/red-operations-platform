@@ -44,6 +44,14 @@ push_to_remotes() { # $1=repo $2=branch $3=space-separated remote names
 [[ -f "$PLAN_FILE" && -r "$PLAN_FILE" && -w "$PLAN_FILE" ]] || die "plan must be readable and writable: $PLAN_FILE"
 command -v "$OPENCODE_BIN" >/dev/null 2>&1 || die "OpenCode CLI is unavailable: $OPENCODE_BIN"
 
+# Cooperative stop: `touch .ralph/STOP` in the target repository halts a loop
+# before this cycle starts. Exit status 3 means "stopped cleanly", so the loop
+# driver breaks instead of treating it as a failure. The file is not removed.
+if [[ -e "$RUN_DIR/STOP" ]]; then
+  printf 'ralph: STOP present at %s; not starting a cycle\n' "$RUN_DIR/STOP" >&2
+  exit 3
+fi
+
 # A repository is required so the agent can inspect changes and the operator can review them.
 git -C "$REPO_DIR" rev-parse --show-toplevel >/dev/null 2>&1 || die "target must be a git repository"
 mkdir -p "$RUN_DIR"
