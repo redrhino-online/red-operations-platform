@@ -4,7 +4,61 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T171835Z (Ralph cycle, this run): selected item was the HTTP
+- Cycle 2026-10-03T172003Z (Ralph cycle, this run): selected item was the HTTP
+  route that exposes the stage 4 "IP Architecture Locked" gate. The prior cycle
+  named it the highest priority ready next item: the `StageFourGateAssembler`
+  /`StageFourGateRecorder`, the `RecordStageFourGateCommand`
+  /`RecordStageFourGateHandler` and the durable ledger/run ports all exist, but
+  only stages 0, 1, 2 and 3 had write routes, so the canonical 0-10 API surface
+  stopped at stage 3 and DoD condition 1 stayed unreachable. It outranked the
+  stage 5 route (which depends on it) and the `ClientProcess` canon gap (a
+  methodology-owner decision), because gate visibility through the real use case
+  is the pipeline backbone.
+- Outcome: new `POST /red/clients/{tenant_id}/stages/4/gate` in
+  `backend/redops/api/routes.py`, mapping the typed request to the Commercial
+  `SignaturePackage` (`SignatureSolution` and its `TransformationPhase`
+  /`SignatureStep` structure) and running `RecordStageFourGateHandler` through
+  `get_gate_ledger_repository` and `get_stage_run_repository`, mirroring the
+  stage 3 route. New request schemas in `backend/redops/api/schemas.py`:
+  `SignatureStepInput`, `TransformationPhaseInput`, `SignatureSolutionInput`,
+  `RecordStageFourGateRequest`. The route computes no rule: canonical kinds, exact
+  versions, approver authority, the three phase/nine step shape, the continuity of
+  the named stages from the declared starting to final state, the model tenant
+  boundary and the stage 3 prerequisite stay enforced by the domain. Stage 4
+  errors map to a named 422, including the Commercial and Method error families.
+  Stage 4 carries no claims, because the "IP Architecture Locked" checkpoint
+  turns on the reviewed transformation's coherence and continuity rather than
+  external customer evidence.
+- Evidence: `tests/unit/test_stage_four_gate_route.py` (5) pass: stages 0, 1, 2
+  and 3 are seeded through their own routes, then a passing stage 4 decision pins
+  the twelve canonical signature kinds at version 1, the stage 4 run persists
+  COMPLETE with its owner, a stage 4 gate with no passing stage 3 is refused, an
+  unauthorized approver is refused without a write, and the decision is invisible
+  to another tenant. `make check` green: 1685 passed, 1 skipped, 632 subtests;
+  pyflakes clean.
+- New findings: unchanged from the prior cycle for the prerequisite refusal shape
+  (`GateDecisionError` from `GateIntegrityPolicy` via `GateDecision.from_gate`,
+  not `UnsatisfiedPrerequisiteError`). The persisted
+  `GateDecision.required_assets` carry the canonical kind as `asset_id`.
+  `make done` still fails at step 2 (`tests/e2e` absent), so DoD 1 is not met.
+- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate
+  routes and a repeated gate POST after COMPLETE returns 422; RLS remains
+  WHERE-clause only (ADR 0004); the stage 0-10 e2e suite (DoD 1, Q30) and the
+  migration deployment step (separate GitOps chart) are absent from this repo.
+- Highest priority ready next item: expose the stage 5 "Offer Locked" gate by
+  `POST /red/clients/{tenant_id}/stages/5/gate`, mapping a typed request to the
+  Commercial `OfferPackage` and running `RecordStageFiveGateHandler` through the
+  ledger and stage run ports, mirroring the stage 4 route. Prerequisites: the
+  `StageFiveGateAssembler`/`StageFiveGateRecorder`, `RecordStageFiveGateCommand`
+  /`RecordStageFiveGateHandler` and `OfferPackage` (all present), the stage 4
+  route (done), and a passing stage 4 decision in the ledger (enforced by
+  governance). This advances the stage 0-10 API surface toward DoD 1.
+  Alternative: the `ClientProcess` design artifact from the canon gap register,
+  if a methodology-owner decision is preferred.
+
+### Prior cycle (2026-10-03T171835Z)
+
+- Cycle 2026-10-03T171835Z (Ralph cycle): selected item was the HTTP
   route that exposes the stage 3 "Diagnostic Model Approved" gate. The prior
   cycle named it the highest priority ready next item: the
   `StageThreeGateAssembler`/`StageThreeGateRecorder`, the

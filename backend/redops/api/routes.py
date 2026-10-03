@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from redops.api.schemas import (
     EngagementProductionViewResponse,
+    RecordStageFourGateRequest,
     RecordStageOneGateRequest,
     RecordStageThreeGateRequest,
     RecordStageTwoGateRequest,
@@ -35,14 +36,17 @@ from redops.contexts.commercial.domain.value_objects import (
     MillionDollarMessage,
     OfferFunnelAudit,
     PositioningDecision,
+    SignaturePackage,
 )
 from redops.contexts.engagement.application.commands import (
+    RecordStageFourGateCommand,
     RecordStageOneGateCommand,
     RecordStageThreeGateCommand,
     RecordStageTwoGateCommand,
     RecordStageZeroGateCommand,
 )
 from redops.contexts.engagement.application.handlers import (
+    RecordStageFourGateHandler,
     RecordStageOneGateHandler,
     RecordStageThreeGateHandler,
     RecordStageTwoGateHandler,
@@ -82,11 +86,16 @@ from redops.contexts.knowledge.domain.value_objects import (
     ProvenanceClass,
     SourceCitation,
 )
-from redops.contexts.method.domain.entities import DiagnosticModel
+from redops.contexts.method.domain.entities import (
+    DiagnosticModel,
+    SignatureSolution,
+)
 from redops.contexts.method.domain.errors import MethodError
 from redops.contexts.method.domain.value_objects import (
     PrimaryCurrency,
     ProfitPyramidLevel,
+    SignatureStep,
+    TransformationPhase,
 )
 
 router = APIRouter(prefix="/red", tags=["red"])
@@ -804,6 +813,148 @@ def record_stage_three_gate(
         )
         ledger = repository.load(template, tenant_id)
         decision = RecordStageThreeGateHandler().handle(command, ledger=ledger)
+        repository.append(decision)
+        run_repository.save(stage_run)
+    except (
+        CommercialError,
+        EngagementError,
+        GovernanceError,
+        MethodError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return {
+        "stage_number": decision.stage_number,
+        "template_version": decision.template_version,
+        "checkpoint": decision.checkpoint,
+        "disposition": decision.disposition.value,
+        "reviewer": decision.reviewer,
+        "scope": decision.scope,
+        "tenant_id": decision.tenant_id,
+        "decided_on": decision.decided_on.isoformat(),
+        "next_action": decision.next_action,
+        "required_assets": [
+            {
+                "asset_id": asset.asset_id,
+                "version": asset.version,
+            }
+            for asset in decision.required_assets
+        ],
+    }
+
+
+@router.post("/clients/{tenant_id}/stages/4/gate", status_code=201)
+def record_stage_four_gate(
+    tenant_id: str,
+    body: RecordStageFourGateRequest,
+    repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
+    run_repository: StageRunRepository = Depends(get_stage_run_repository),
+) -> dict[str, Any]:
+    """Record the stage 4 "IP Architecture Locked" gate through the use case.
+
+    SPEC.md section 6: the API calls the use case and never mutates persistence
+    directly. This route maps the typed request to the Engagement
+    ``RecordStageFourGateCommand``, loads the tenant's ledger through the
+    ``GateLedgerRepository`` port, runs ``RecordStageFourGateHandler`` and
+    appends the resulting ``GateDecision``. Stage 4 depends on stage 3, so
+    governance refuses the decision unless the ledger already holds a passing
+    stage 3 decision (SPEC.md section 4). The stage 4 ``StageRun`` is
+    loaded-or-created and upserted through the ``StageRunRepository`` port in the
+    same operation, so its assigned owner, status and timestamps stay durable
+    alongside the decision. Every integrity rule -- canonical kinds, exact
+    versions, owner/approver authority, the three phase/nine step shape, the
+    continuity of the named stages from the declared starting to final state and
+    the tenant boundary -- is enforced by the domain; a rejection is a named 422
+    and never a partial write. The path tenant, not the body, is the authoritative
+    client scope. Stage 4 carries no claims: the checkpoint turns on the coherence
+    and continuity of the reviewed transformation, not external customer evidence.
+    """
+
+    template = stage_zero_to_ten_template()
+    try:
+        workspace = ClientWorkspace(
+            workspace_id=body.workspace_id,
+            tenant_id=tenant_id,
+            authorities=tuple(
+                ClientAuthority(actor=entry.actor, authority=entry.authority)
+                for entry in body.authorities
+            ),
+        )
+        package = SignaturePackage(
+            package_id=body.signature_package_id,
+            tenant_id=tenant_id,
+            solution=SignatureSolution(
+                solution_id=body.solution.solution_id,
+                tenant_id=tenant_id,
+                transformation_map=body.solution.transformation_map,
+                process_inventory=tuple(body.solution.process_inventory),
+                phases=tuple(
+                    TransformationPhase(
+                        phase_id=phase.phase_id,
+                        tenant_id=tenant_id,
+                        name=phase.name,
+                        steps=tuple(
+                            SignatureStep(
+                                step_id=step.step_id,
+                                tenant_id=tenant_id,
+                                name=step.name,
+                                starting_state=step.starting_state,
+                                final_state=step.final_state,
+                                inputs=tuple(step.inputs),
+                                actions=tuple(step.actions),
+                                outputs=tuple(step.outputs),
+                            )
+                            for step in phase.steps
+                        ),
+                    )
+                    for phase in body.solution.phases
+                ),
+                starting_state=body.solution.starting_state,
+                final_state=body.solution.final_state,
+                narrative=body.solution.narrative,
+                visual=body.solution.visual,
+            ),
+            solution_version=body.solution.version,
+        )
+        stage_run = run_repository.load(
+            template.version, workspace.workspace_id, 4, tenant_id
+        )
+        if stage_run is None:
+            stage_run = StageRun(
+                engagement=workspace.workspace_id,
+                stage_number=4,
+                template_version=template.version,
+                assigned_owner=body.stage_owner,
+                tenant_id=tenant_id,
+            )
+        stage_run.record_activity(
+            actor=body.stage_owner,
+            reason="stage 4 IP packaging work began",
+            on=body.on,
+            correlation_id=body.correlation_id,
+        )
+        command = RecordStageFourGateCommand(
+            template=template,
+            workspace=workspace,
+            package=package,
+            stage_run=stage_run,
+            approver=body.approver,
+            scope=body.scope,
+            checkpoint_evidence=body.checkpoint_evidence,
+            rationale=body.rationale,
+            assigned_owner=body.assigned_owner,
+            due_on=body.due_on,
+            on=body.on,
+            correlation_id=body.correlation_id,
+            proposed_by=body.proposed_by,
+            next_action=body.next_action,
+        )
+        ledger = repository.load(template, tenant_id)
+        decision = RecordStageFourGateHandler().handle(command, ledger=ledger)
         repository.append(decision)
         run_repository.save(stage_run)
     except (

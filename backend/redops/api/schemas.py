@@ -295,6 +295,86 @@ class RecordStageThreeGateRequest(BaseModel):
     next_action: str = ""
 
 
+class SignatureStepInput(BaseModel):
+    """One reviewed stage 4 named stage (SPEC.md section 4, stage 4).
+
+    Every named stage carries its own starting and final state and its inputs,
+    actions and outputs, so the domain can enforce that the stages form one
+    continuous chain from the declared starting state to the declared final
+    state. The domain rejects a stage that leaves any dimension unspecified or
+    that does not move the client between two distinct states.
+    """
+
+    step_id: str
+    name: str
+    starting_state: str
+    final_state: str
+    inputs: list[str]
+    actions: list[str]
+    outputs: list[str]
+
+
+class TransformationPhaseInput(BaseModel):
+    """One of the three stage 4 phases grouping the named stages.
+
+    The domain requires exactly three phases and nine steps across them, so a
+    phase that groups no step is refused rather than silently pinned.
+    """
+
+    phase_id: str
+    name: str
+    steps: list[SignatureStepInput]
+
+
+class SignatureSolutionInput(BaseModel):
+    """The reviewed stage 4 transformation and its exact version.
+
+    The solution records the transformation map, process inventory, three
+    phases, named stages, starting and final states, narrative and visual. The
+    version is positive so the gate can pin the reviewed solution exactly.
+    """
+
+    solution_id: str
+    version: int
+    transformation_map: str
+    process_inventory: list[str]
+    phases: list[TransformationPhaseInput]
+    starting_state: str
+    final_state: str
+    narrative: str
+    visual: str
+
+
+class RecordStageFourGateRequest(BaseModel):
+    """The stage 4 "IP Architecture Locked" gate request (SPEC.md section 4).
+
+    The caller supplies the reviewed transformation values, the workspace
+    authority registry and the decision metadata. The route builds the canonical
+    gate from these through the use case; it deliberately accepts no pre-built
+    gate, so approver authority and exact-version evidence cannot be bypassed.
+    Stage 4 depends on a passing stage 3 decision already in the ledger. The
+    solution carries no claims: the "IP Architecture Locked" checkpoint turns on
+    the coherence and continuity of the reviewed transformation, which the domain
+    enforces at construction, rather than external customer evidence.
+    """
+
+    workspace_id: str
+    authorities: list[ClientAuthorityInput]
+    signature_package_id: str
+    solution: SignatureSolutionInput
+    stage_owner: str
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
 class AssetVersionResponse(BaseModel):
     """One exact asset version pinned or approved for a stage."""
 
