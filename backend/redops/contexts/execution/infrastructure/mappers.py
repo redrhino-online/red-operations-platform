@@ -26,6 +26,10 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Mapping
 
+from redops.contexts.execution.domain.connector import (
+    ConnectorEffect,
+    ExternalOperation,
+)
 from redops.contexts.execution.domain.entities import (
     FunnelIntegration,
     LaunchQA,
@@ -404,4 +408,46 @@ def journey_release_from_payload(payload: Mapping[str, Any]) -> JourneyRelease:
         routing=str(payload["routing"]),
         configuration_digest=str(payload["configuration_digest"]),
         rollback_ref=str(payload["rollback_ref"]),
+    )
+
+
+def external_operation_to_payload(operation: ExternalOperation) -> dict[str, Any]:
+    """Serialise a recorded external operation for durable storage.
+
+    SPEC.md section 6 keeps mapping in the infrastructure layer, and SPEC.md
+    section 11 makes the operation append-only per ``(tenant_id,
+    idempotency_key)``. Every identity-bearing field of the effect and the
+    operation is written, so a reload re-validates the value objects rather than
+    trusting storage (SPEC.md sections 3 and 4).
+    """
+
+    effect = operation.effect
+    return {
+        "tenant_id": effect.tenant_id,
+        "idempotency_key": effect.idempotency_key,
+        "connector": effect.connector,
+        "target": effect.target,
+        "payload_digest": effect.payload_digest,
+        "requested_on": effect.requested_on.isoformat(),
+        "external_ref": operation.external_ref,
+        "delivered_on": operation.delivered_on.isoformat(),
+    }
+
+
+def external_operation_from_payload(
+    payload: Mapping[str, Any],
+) -> ExternalOperation:
+    """Rebuild a recorded external operation from a stored payload."""
+
+    return ExternalOperation(
+        effect=ConnectorEffect(
+            tenant_id=str(payload["tenant_id"]),
+            idempotency_key=str(payload["idempotency_key"]),
+            connector=str(payload["connector"]),
+            target=str(payload["target"]),
+            payload_digest=str(payload["payload_digest"]),
+            requested_on=date.fromisoformat(str(payload["requested_on"])),
+        ),
+        external_ref=str(payload["external_ref"]),
+        delivered_on=date.fromisoformat(str(payload["delivered_on"])),
     )

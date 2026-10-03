@@ -4,6 +4,84 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T205006Z (Ralph cycle, this run): selected item was the
+  durable PostgreSQL `ExternalOperationStore` adapter and migration
+  `0018_external_operations` (Q16 completion; SPEC.md sections 6, 7, 9 and 11;
+  DoD conditions 2 and 4). It is the highest priority ready item: it is the only
+  remaining cleanly-ready increment whose prerequisites are all met, it completes
+  the connector seam's durability so "duplicate delivery creates one external
+  operation" holds across a process restart (SPEC.md section 11), and it follows
+  the established durable-adapter pattern (Q6/Q9/Q11) with a committed migration.
+  It outranks alternatives: condition 2's two remaining acceptance scenarios are
+  deploy-gated (gitops-revert-restores needs the GitOps recovery drill;
+  backup-restores-approval-trail needs a chosen backup target, a Tier 2 owner
+  decision); condition 3's worker and artifact-URL layers need a worker entry
+  point and an artifact-serving route, neither of which exists (the artifact
+  store provisioner is an open section 11 decision); condition 5's
+  deterministic-e2e part is coupled to Q3 agent registration, blocked on the ADR
+  0006 / zero-vendor-edit tension; Q28 stage 8-10 required kinds remain blocked
+  on the named methodology-owner placement decision; Q3/Q4 need the ADR 0006
+  resolution and a live key; Q47-Q50 need the Atlas cluster. The canon gap
+  register has no ready pipeline item: its remaining entries are implemented or
+  are candidate pipeline additions awaiting a named-owner decision.
+- Outcome: new `PostgresExternalOperationStore` and
+  `external_operation_store_from_env` in
+  `.../contexts/execution/infrastructure/connectors.py`, plus the named
+  `ConnectorConfigurationError`; new `external_operation_to_payload` /
+  `external_operation_from_payload` in `.../infrastructure/mappers.py`; and
+  migration `0018_external_operations` (unique `(tenant_id, idempotency_key)`,
+  indexed `(tenant_id, connector)`, NOT NULL tenant and key). The store is
+  append-only per `(tenant_id, idempotency_key)`: a same-body replay is
+  idempotent, a reused key with different content is refused, the same key for a
+  different tenant is independent, and a blank tenant is refused on read and
+  write. No route, gate rule, approval authority, pipeline stage or vendored
+  file changed; the in-memory reference adapter and the `IdempotentConnector`
+  wrapper are unchanged.
+- Evidence: `tests/unit/execution/test_external_operation_postgres.py` (6 tests)
+  exercises the real schema created by `0018_external_operations` and proves a
+  recorded operation survives a reload, a duplicate record creates one row, a
+  reused key with changed content raises `ConnectorIdempotencyConflictError` and
+  does not overwrite, the same key for another tenant is independent, and a blank
+  tenant is refused. `tests/unit/shared/test_migrate.py` now asserts head
+  `0018_external_operations` and the `external_operations` table. `make check` ->
+  2294 passed, 2 skipped, 706 subtests passed (was 2288; +6). `uv run pyflakes
+  backend tests` -> clean. `check_acceptance_coverage.sh`,
+  `check_provider_path_coverage.sh` and `check_security_coverage.sh` are
+  unchanged (the durable store flips no DoD gate; `make done` still stops at
+  `[2/6]` condition 2).
+- New findings: the connector seam's duplicate-delivery guarantee was
+  process-local until now; with migration `0018_external_operations` the recorded
+  operation is durable, so a restarted process resolves a retry to the same
+  operation instead of sending a second effect. The store still has no
+  composition consumer (`WorkflowStepExecutor` has no adapter), so it is
+  exercised by adapter tests like every other durable store; a
+  `ConnectorStepExecutor` remains blocked on a step-to-effect mapping the
+  workflow step type does not yet carry. Newly surfaced and now tracked:
+  condition 5's `deterministic-e2e` provider-path part is a real blocker coupled
+  to Q3, and the artifact-URL layer is blocked on the object-store provisioner
+  decision (SPEC.md section 11).
+- Blockers (unchanged head): condition 2 is the `make done` head blocker and its
+  remaining two scenarios need the Atlas cluster and a chosen backup target
+  (Q49). Condition 3 needs the worker and artifact-URL layers. Condition 5 needs
+  the deterministic agent e2e (Q3, ADR 0006 tension) and a live key. Q28 stage
+  8-10 required kinds blocked on the named methodology-owner placement decision;
+  Q3 agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q47-Q50
+  need the Atlas cluster.
+- Highest priority ready next item: the condition 3 worker isolation layer
+  (SPEC.md sections 6, 9 and 13 condition 3). Required asset: a background worker
+  entry point over the tenant-scoped `WorkflowRunStore` that resumes in-flight
+  runs, plus `tests/security/test_worker_isolation.py` and the `worker` layer
+  declared in `tests/security/covered-layers.txt`, so a worker for one client
+  never reads or advances another client's run. Checkpoint: none (seam, not a
+  gate); approver: none. Blocked downstream dependency: condition 3 (then
+  condition 2's worker-restart integrity). Prerequisite: the workflow engine and
+  ADR 0005 (done). Alternative ready item: the artifact-URL isolation layer,
+  which needs an artifact-serving route and is blocked on the open object-store
+  provisioner decision (SPEC.md section 11).
+
+### Prior cycle (2026-10-03T204037Z)
+
 - Cycle 2026-10-03T204037Z (Ralph cycle, this run): selected item was the
   idempotency-keyed Execution connector seam (Q16 connector half, SPEC.md
   sections 6, 7, 9 and 11; DoD condition 2). It is the highest priority ready
@@ -4718,7 +4796,7 @@ stalls:
 | Q13 | REST `/journeys`, `/measurements` (`/measurements` done 2026-10-03T193641Z; `GET /red/measurements` and `POST /red/measurements` over the new durable Measurement `MeasurementRegistry` (metric definitions + observations), in-memory and PostgreSQL adapters and migration `0014_measurements`; tenant required, append-only, an observation pins its exact metric version and a same-key re-statement is a 409. `/journeys` advanced 2026-10-03T194013Z: the SPEC.md section 3 `JourneyRelease` core aggregate now exists (pure domain, invariant "launch needs signed readiness and authorized release", grounded on a same-tenant ready-for-traffic `LaunchQA` whose `TrafficAuthorization` names the designated authority); `/journeys` done 2026-10-03T194326Z: new Execution `JourneyReleaseRepository` port (get/list/save/close) with in-memory and PostgreSQL adapters, migration `0015_journey_releases`, and tenant-scoped `GET`/`POST /red/journeys` grounded on the durable stage 9 launch QA by exact id; append-only, a same-id re-statement is a 409. Tests `tests/unit/execution/test_journey_release_repository.py` (7), `test_journeys_route.py` (7), `test_journey_release_postgres.py` (4)) | api | Q12 | route tests |
 | Q14 | REST `/opportunities`, `/interventions` (`/interventions` done 2026-10-03T194645Z: tenant-scoped `GET /red/interventions` ranks the command center cards for a client engagement from the Governance production view and `POST /red/interventions/dismiss` records a durable operator dismissal; new Operation `InterventionDismissal` value object and `InterventionDismissalRepository` port with in-memory and PostgreSQL adapters and migration `0016_intervention_dismissals`; the cards are derived on read, only the dismissal is stored, a same-key re-statement is a 409. Tests `tests/unit/operations/test_intervention_dismissal.py`, `test_intervention_dismissal_repository.py`, `test_intervention_dismissal_postgres.py`, `test_interventions_route.py`. `/opportunities` done 2026-10-03T195052Z: tenant-scoped `GET /red/opportunities` and `POST /red/opportunities` over the new Portfolio `Opportunity` value object and `OpportunityRepository` port with in-memory and PostgreSQL adapters and migration `0017_opportunities`; an opportunity is a proposal grounded on an exact same-tenant `StageAssetVersion`, stays `proposed` and refuses an approved state, append-only, a same-id re-statement is a 409. Tests `tests/unit/portfolio/test_opportunity.py`, `test_opportunity_repository.py`, `test_opportunities_route.py`, `test_opportunity_postgres.py`. Q14 complete) | api | Q13 | route tests |
 | Q15 | REST `/workflows/{id}` with SSE or stable id polling (done 2026-10-03T185701Z; `GET /red/clients/{tenant_id}/workflows/{run_id}`; tenant-scoped polling read returning a stable append-only `event_id` and the transition log; 404 for a missing/foreign run. Tenant is the path authority, matching the stage routes, not the bare `/workflows/{id}`) | api | Q5 | route tests `tests/unit/workflows/test_workflow_run_route.py` (4) |
-| Q16 | Idempotency keys and optimistic version conflicts on mutations | api | Q15 | duplicate delivery one effect; stale update 409. Connector half done 2026-10-03T204037Z: Execution `ConnectorPort`/`ConnectorTransport`/`ExternalOperationStore` ports, pure-domain `ConnectorEffect`/`ExternalOperation`, and the replay-safe `IdempotentConnector` adapter (`.../infrastructure/connectors.py`) with the `duplicate-delivery-one-effect` acceptance test `tests/unit/execution/test_connector_idempotency.py` (10 tests); a duplicate effect resolves to one recorded external operation and a reused key with different content is refused. Remaining: the optimistic-version-conflict half (stale update 409) has no mutation route carrying a version yet, and the operation store is process-local (durable adapter pending) |
+| Q16 | Idempotency keys and optimistic version conflicts on mutations | api | Q15 | duplicate delivery one effect; stale update 409. Connector half done 2026-10-03T204037Z: Execution `ConnectorPort`/`ConnectorTransport`/`ExternalOperationStore` ports, pure-domain `ConnectorEffect`/`ExternalOperation`, and the replay-safe `IdempotentConnector` adapter (`.../infrastructure/connectors.py`) with the `duplicate-delivery-one-effect` acceptance test `tests/unit/execution/test_connector_idempotency.py` (10 tests); a duplicate effect resolves to one recorded external operation and a reused key with different content is refused. Remaining: the optimistic-version-conflict half (stale update 409) has no mutation route carrying a version yet; the operation store is now durable (see below). Durable half done 2026-10-03T205006Z: `PostgresExternalOperationStore` plus `external_operation_store_from_env` and the `ConnectorConfigurationError` in `.../contexts/execution/infrastructure/connectors.py`, mapper `external_operation_to_payload`/`external_operation_from_payload` in `.../infrastructure/mappers.py`, and migration `0018_external_operations` (unique `(tenant_id, idempotency_key)`, indexed `(tenant_id, connector)`), verified by `tests/unit/execution/test_external_operation_postgres.py` (6 tests) and `tests/unit/shared/test_migrate.py` (head `0018_external_operations`); a recorded operation now survives a restart so a retry cannot send a second effect |
 | Q17 | Stage 0 intake route hardened plus workspace and authority (API surface) (done 2026-10-03T190410Z; `RecordStageZeroGateRequest` no longer carries `authorities`; `record_stage_zero_gate` resolves the persisted `ClientWorkspace` and its authority registry through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_zero_gate_route.py` (7) and helper `tests/unit/workspace_fixture.py`) | pipeline | Q9 | stage 0 gate e2e |
 | Q18 | Stage 1 diagnosis gate assembly from the built assets (done 2026-10-03T190852Z; `RecordStageOneGateRequest` no longer carries `authorities`; `record_stage_one_gate` resolves the persisted `ClientWorkspace` through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_one_gate_route.py` (7) and the reused stage 1 payload in `tests/unit/test_stage_six_gate_route.py` drop the field) | pipeline | Q17 | Avatar Locked decision |
 | Q19 | Stage 2 currency gate assembly plus extension of the Q17/Q18 persisted-workspace/authority hardening (done 2026-10-03T191057Z; `RecordStageTwoGateRequest` no longer carries `authorities`; `record_stage_two_gate` resolves the persisted `ClientWorkspace` through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_two_gate_route.py` (9) and the reused stage 2 payload in `tests/unit/test_stage_six_gate_route.py` drop the field) | pipeline | Q8, Q18 | Currency Locked decision |
