@@ -23,8 +23,9 @@ printf '\n[4/6] vendored OpenExecutive is unmodified (zero vendor edits)\n'
 [[ -z "$(git -C vendor/openexecutive status --porcelain --untracked-files=all)" ]] \
   || fail "vendor/openexecutive has local changes; the DoD requires zero vendor edits"
 
-printf '\n[5/6] RED product-surface branding (no OpenExecutive branding in the UI)\n'
-[[ -d frontend ]] || fail "frontend/ is missing; the DoD requires the RED branded UI and all section 8 screens"
+printf '\n[5/6] RED UI: all section 8 screens render, browser tests, no OpenExecutive branding\n'
+./scripts/check_frontend_screens.sh frontend \
+  || fail "the section 8 screens are not rendered; condition 6 is unmet"
 if command -v rg >/dev/null 2>&1; then
   if rg -q 'OpenExecutive' frontend --glob '!**/node_modules/**' --glob '!**/.next/**' 2>/dev/null; then
     fail "OpenExecutive branding found in frontend/; product surfaces must be RED branded"

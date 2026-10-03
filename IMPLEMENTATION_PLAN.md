@@ -4,6 +4,56 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T195507Z (Ralph cycle, this run): selected item was hardening
+  the prototype definition-of-done gate so a screens-less `frontend/` cannot
+  falsely pass condition 6. It outranks starting Q32: `scripts/check_definition_of_done.sh`
+  [5/6] passed on `frontend/` merely existing with no `OpenExecutive` string, so
+  the moment Q32 landed the gate would turn green and the loop would stop with
+  the command center and the other eleven section 8 screens unbuilt. Several
+  prior cycles declined Q32 for exactly this reason, so the loop was deadlocked
+  behind a dishonest stop condition. SPEC.md section 13 condition 6 is "All
+  section 8 screens render" with browser tests, not "a directory exists".
+- Outcome: new standalone `scripts/check_frontend_screens.sh` enforces the
+  condition against a data-driven contract. The frontend declares each
+  implemented screen and its route in `frontend/dod-screens.txt`
+  (`<screen-id> <route>`), every one of the twelve canonical section 8 screen
+  ids must be declared, each declared route must resolve to a page
+  (`frontend/src/app/<route>/page.*` or the pages-router equivalent), and at
+  least one browser test spec must exist; a missing screen, page or suite is a
+  named failure that lists what is absent. `[5/6]` now calls it before the
+  branding scan. The gate still fails today (no `frontend/`), so no premature
+  stop; it becomes honest as Q33-Q45 add the screens. No product authority, gate
+  decision or pipeline stage changed.
+- Evidence: `make check` -> 2229 passed, 2 skipped, 704 subtests; pyflakes clean.
+  New `tests/unit/shared/test_frontend_screens_check.py` (7 tests) covers a
+  complete frontend passing, a missing frontend, a missing manifest, an
+  undeclared screen, a declared screen without a page, a missing browser suite,
+  and a root-route page. `make done` still fails only `[5/6]`, now with
+  "the section 8 screens are not rendered; condition 6 is unmet" after
+  `[1/6]`-`[4/6]` pass.
+- New findings: the DoD's six bundled conditions hide three very different
+  states (per-cycle check, e2e, security, branding, screens, deployment); the
+  screens condition was the only approximated one. The route contract is
+  declared by the frontend, not hard-coded by the gate, so future cycles pick
+  their own routes while the twelve SPEC.md section 8 screens stay mandatory.
+- Blockers (unchanged): `frontend/` screens Q32-Q45 remain the only path to
+  `make done`; Q28 stage 8-10 required kinds blocked on the named
+  methodology-owner placement decision; Q16 idempotency keys blocked on a
+  workflow write route; Q3 agent registration blocked on the ADR 0006 /
+  vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's section 11 acceptance suite is blocked
+  in part on the deploy-only scenarios (GitOps revert, backup restore).
+- Highest priority ready next item: Q32, the Next.js shell in `frontend/` plus
+  the RED theme and API client, now safe to start because `make done` can no
+  longer pass on a screens-less shell. Q32's own scope stays a shell plus the
+  command center (Q33); the gate will keep failing until all twelve screens and
+  a browser suite exist. Required asset: the Next.js app shell that consumes the
+  complete SPEC.md section 7 REST surface; checkpoint: none (UI, not a gate);
+  approver: none. Blocked downstream dependency: Q33-Q45. The stage 0-10 e2e Q30
+  is already green.
+
+### Prior cycle (2026-10-03T195052Z)
+
 - Cycle 2026-10-03T195052Z (Ralph cycle, this run): selected item was the
   `/opportunities` half of Q14, the tenant-scoped Portfolio opportunity register
   (prerequisite Q13 met; `/interventions` landed last cycle). It outranks the
