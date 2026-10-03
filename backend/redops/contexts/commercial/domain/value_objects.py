@@ -1421,6 +1421,7 @@ class OfferPackage:
 
 CONTENT_ROADMAP_KIND = "content-roadmap"
 CONTENT_CRUSHER_KIND = "content-crusher"
+CONTENT_PLAN_KIND = "content-plan"
 
 CANONICAL_MESSAGE_KINDS: tuple[str, ...] = (
     "promise",
@@ -1437,6 +1438,7 @@ CANONICAL_MESSAGE_KINDS: tuple[str, ...] = (
     "authority-amplifier-outline",
     CONTENT_ROADMAP_KIND,
     CONTENT_CRUSHER_KIND,
+    CONTENT_PLAN_KIND,
 )
 
 
@@ -1459,16 +1461,18 @@ class CampaignMessagePackage:
     The canon (SPEC.md section 12.3: stage 6 uses canon files 06, 15, 24 and
     25-28) requires reusing the Million Dollar Message in copy, the 5P messaging
     frame, the Authority Amplifier script as the universal content framework, and
-    a Content Roadmap and Content Crusher. ``CampaignMessage`` already enforces
-    that coherent shape and its dependency on the approved stage 5 offer at
-    construction, so each message kind is projected from the single reviewed
-    message at one positive integer version. The Content Roadmap (canon files
-    25-28, owner decision 2026-10-03) and the Content Crusher (canon files 12, 16
-    and 32, owner decision 2026-10-03) are separate typed Commercial assets, so
-    their ``content-roadmap`` and ``content-crusher`` kinds are projected from
-    each asset's own identity at that asset's exact version. A blank identity, a
-    versionless message, roadmap or crusher, or a cross-tenant message, roadmap or
-    crusher is refused rather than silently pinned (SPEC.md sections 3 and 4).
+    a Content Roadmap, Content Crusher and an Extract content plan. ``CampaignMessage``
+    already enforces that coherent shape and its dependency on the approved stage
+    5 offer at construction, so each message kind is projected from the single
+    reviewed message at one positive integer version. The Content Roadmap (canon
+    files 25-28, owner decision 2026-10-03), the Content Crusher (canon files 12,
+    16 and 32, owner decision 2026-10-03) and the Content Plan (canon files 25, 27
+    and 28, owner decision 2026-10-03) are separate typed Commercial assets, so
+    their ``content-roadmap``, ``content-crusher`` and ``content-plan`` kinds are
+    projected from each asset's own identity at that asset's exact version. A
+    blank identity, a versionless message, roadmap, crusher or plan, or a
+    cross-tenant one is refused rather than silently pinned (SPEC.md sections 3
+    and 4).
     """
 
     package_id: str
@@ -1479,6 +1483,8 @@ class CampaignMessagePackage:
     roadmap_version: int
     crusher: "ContentCrusher"
     crusher_version: int
+    plan: "ContentPlan"
+    plan_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -1528,6 +1534,21 @@ class CampaignMessagePackage:
                 "the content crusher version must be a positive integer so the "
                 "stage 6 gate can pin the reviewed asset at an exact version"
             )
+        if not isinstance(self.plan, ContentPlan):
+            raise InvalidCampaignMessagePackageError(
+                "the stage 6 content plan must be a typed content plan"
+            )
+        if self.plan.tenant_id != self.tenant_id:
+            raise CampaignMessageTenantBoundaryError(
+                f"stage 6 content plan {self.plan.plan_id!r} belongs to tenant "
+                f"{self.plan.tenant_id!r}, not package tenant "
+                f"{self.tenant_id!r}"
+            )
+        if not isinstance(self.plan_version, int) or self.plan_version < 1:
+            raise InvalidCampaignMessagePackageError(
+                "the content plan version must be a positive integer so the "
+                "stage 6 gate can pin the reviewed asset at an exact version"
+            )
 
     @property
     def kinds(self) -> frozenset[str]:
@@ -1550,16 +1571,17 @@ class CampaignMessagePackage:
 
         Every message kind belongs to the same reviewed ``CampaignMessage``, so
         each is pinned to that message's identity at its exact version, while the
-        ``content-roadmap`` and ``content-crusher`` kinds are pinned to the
-        roadmap's and crusher's own identities at their exact versions.
-        Governance still pins each projection for the workspace tenant, so a
-        cross-client message, roadmap or crusher is refused rather than silently
-        authorized (SPEC.md sections 3, 4 and 11).
+        ``content-roadmap``, ``content-crusher`` and ``content-plan`` kinds are
+        pinned to the roadmap's, crusher's and plan's own identities at their
+        exact versions. Governance still pins each projection for the workspace
+        tenant, so a cross-client message, roadmap, crusher or plan is refused
+        rather than silently authorized (SPEC.md sections 3, 4 and 11).
         """
         message_kinds = tuple(
             kind
             for kind in CANONICAL_MESSAGE_KINDS
-            if kind not in (CONTENT_ROADMAP_KIND, CONTENT_CRUSHER_KIND)
+            if kind
+            not in (CONTENT_ROADMAP_KIND, CONTENT_CRUSHER_KIND, CONTENT_PLAN_KIND)
         )
         return (
             *(
@@ -1573,6 +1595,7 @@ class CampaignMessagePackage:
             ),
             self.roadmap.as_stage_asset(version=self.roadmap_version),
             self.crusher.as_stage_asset(version=self.crusher_version),
+            self.plan.as_stage_asset(version=self.plan_version),
         )
 
 
@@ -3732,4 +3755,27 @@ class ContentPlan:
         raise ContentPlanObservationError(
             f"content plan {claim_id!r} is content to plan, produce and publish, "
             "not an observed result, and cannot be recorded as an observation"
+        )
+
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the plan onto exact ``content-plan`` gate evidence.
+
+        SPEC.md sections 4 and 12.5 (owner decision 2026-10-03): a canon-informed
+        asset already implemented in a bounded context becomes a required asset
+        kind of its target stage gate, so the stage 6 "Campaign Message Approved"
+        gate pins the typed content plan (canon files 25, 27 and 28) as one exact
+        ``StageAssetVersion``. A versionless projection is refused rather than
+        silently pinned (SPEC.md sections 3 and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidContentPlanError(
+                "the content plan version must be a positive integer so the "
+                "stage 6 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.plan_id,
+            tenant_id=self.tenant_id,
+            kind=CONTENT_PLAN_KIND,
+            version=version,
         )

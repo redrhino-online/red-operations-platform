@@ -742,6 +742,54 @@ class ContentCrusherInput(BaseModel):
     action: str
 
 
+class ContentThemeInput(BaseModel):
+    """One currency-aligned theme grouping extracted stage 6 ideas.
+
+    SPEC.md sections 4 and 12.5 (canon files 25, 27 and 28): the Extract motion
+    groups the ideas it pulls from the Signature Solution around the one locked
+    currency, so a theme carries the currency measure it advances.
+    """
+
+    theme_id: str
+    name: str
+    currency_measure: str
+
+
+class ContentIdeaInput(BaseModel):
+    """One idea the Extract motion pulls from a Signature Solution step.
+
+    The idea names the step it comes from, the typed source it was extracted as,
+    the question the audience asks, the theme it groups under and the plan
+    channels it feeds.
+    """
+
+    idea_id: str
+    signature_step: str
+    source: str
+    prompt: str
+    theme_id: str
+    channels: list[str]
+
+
+class ContentPlanInput(BaseModel):
+    """The stage 6 Extract content plan the gate pins as a required asset kind.
+
+    SPEC.md sections 4 and 12.5 (owner decision 2026-10-03; canon files 25, 27 and
+    28): the canon-informed content plan is a required asset of the stage 6
+    "Campaign Message Approved" gate. The route grounds it on the locked stage 4
+    Signature Solution and the stage 2 Primary Currency carried here, so the
+    caller supplies its identity, owner, the locked currency, its themes and its
+    extracted ideas.
+    """
+
+    plan_id: str
+    version: int
+    owner: str
+    primary_currency: PrimaryCurrencyInput
+    themes: list[ContentThemeInput]
+    ideas: list[ContentIdeaInput]
+
+
 class RecordStageSixGateRequest(BaseModel):
     """The stage 6 "Campaign Message Approved" gate request (SPEC.md section 4).
 
@@ -763,6 +811,7 @@ class RecordStageSixGateRequest(BaseModel):
     message: CampaignMessageInput
     content_roadmap: ContentRoadmapInput
     content_crusher: ContentCrusherInput
+    content_plan: ContentPlanInput
     offer: OfferVersionInput
     method: MethodVersionInput
     stage_owner: str

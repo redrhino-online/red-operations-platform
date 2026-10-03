@@ -203,6 +203,7 @@ def stage_zero_to_ten_template(
                         "authority-amplifier-outline",
                         "content-roadmap",
                         "content-crusher",
+                        "content-plan",
                     }
                 ),
             ),

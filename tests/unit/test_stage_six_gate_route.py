@@ -688,6 +688,7 @@ class StageSixGateRouteTests(unittest.TestCase):
             "message": self._message(),
             "content_roadmap": self._roadmap(),
             "content_crusher": self._crusher(),
+            "content_plan": self._content_plan(),
             "offer": self._offer(),
             "method": self._method(),
             "stage_owner": OWNER,
@@ -747,6 +748,41 @@ class StageSixGateRouteTests(unittest.TestCase):
             "story": "a client who made the shift",
             "choice": "keep guessing or follow the method",
             "action": "book the next step",
+        }
+        body.update(overrides)
+        return body
+
+    def _content_plan(self, **overrides):
+        first_step = self._solution()["phases"][0]["steps"][0]["name"]
+        body = {
+            "plan_id": "plan-3f",
+            "version": 1,
+            "owner": "content-owner",
+            "primary_currency": {
+                "currency": "qualified referrals",
+                "version": 1,
+                "audience": "owner-operators of small service firms",
+                "current_measure": "4 per month",
+                "desired_measure": "12 per month",
+                "mechanism": "referral partner network",
+            },
+            "themes": [
+                {
+                    "theme_id": "theme-1",
+                    "name": "the current measure",
+                    "currency_measure": "4 per month",
+                }
+            ],
+            "ideas": [
+                {
+                    "idea_id": "idea-1",
+                    "signature_step": first_step,
+                    "source": "faq",
+                    "prompt": "what does the first step change for the client?",
+                    "theme_id": "theme-1",
+                    "channels": ["email", "social"],
+                }
+            ],
         }
         body.update(overrides)
         return body

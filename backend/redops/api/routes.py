@@ -64,8 +64,13 @@ from redops.contexts.commercial.domain.value_objects import (
     CampaignMessagePackage,
     ContentChannel,
     ContentCrusher,
+    ContentIdea,
+    ContentIdeaSource,
+    ContentPlan,
+    ContentPlanChannel,
     ContentPromise,
     ContentRoadmap,
+    ContentTheme,
     ContentTopic,
     CurrencyInventory,
     CurrencyPackage,
@@ -2133,6 +2138,44 @@ def record_stage_six_gate(
                 for topic in body.content_roadmap.topics
             ),
         )
+        currency = PrimaryCurrency(
+            tenant_id=tenant_id,
+            currency=body.content_plan.primary_currency.currency,
+            audience=body.content_plan.primary_currency.audience,
+            current_measure=body.content_plan.primary_currency.current_measure,
+            desired_measure=body.content_plan.primary_currency.desired_measure,
+            mechanism=body.content_plan.primary_currency.mechanism,
+        )
+        content_plan = ContentPlan(
+            plan_id=body.content_plan.plan_id,
+            tenant_id=tenant_id,
+            owner=body.content_plan.owner,
+            method=method.signature_solution,
+            currency=currency,
+            themes=tuple(
+                ContentTheme(
+                    theme_id=theme.theme_id,
+                    tenant_id=tenant_id,
+                    name=theme.name,
+                    currency_measure=theme.currency_measure,
+                )
+                for theme in body.content_plan.themes
+            ),
+            ideas=tuple(
+                ContentIdea(
+                    idea_id=idea.idea_id,
+                    tenant_id=tenant_id,
+                    signature_step=idea.signature_step,
+                    source=ContentIdeaSource(idea.source),
+                    prompt=idea.prompt,
+                    theme_id=idea.theme_id,
+                    channels=tuple(
+                        ContentPlanChannel(channel) for channel in idea.channels
+                    ),
+                )
+                for idea in body.content_plan.ideas
+            ),
+        )
         package = CampaignMessagePackage(
             package_id=body.campaign_message_package_id,
             tenant_id=tenant_id,
@@ -2162,6 +2205,8 @@ def record_stage_six_gate(
                 action=body.content_crusher.action,
             ),
             crusher_version=body.content_crusher.version,
+            plan=content_plan,
+            plan_version=body.content_plan.version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 6, tenant_id

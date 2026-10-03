@@ -14,8 +14,13 @@ from redops.contexts.commercial.domain.value_objects import (
     AUTHORITY_AMPLIFIER_BEATS,
     ContentChannel,
     ContentCrusher,
+    ContentIdea,
+    ContentIdeaSource,
+    ContentPlan,
+    ContentPlanChannel,
     ContentPromise,
     ContentRoadmap,
+    ContentTheme,
     ContentTopic,
     DeliverySpecification,
     MethodReference,
@@ -173,6 +178,43 @@ def content_crusher(
     }
     values.update(overrides)
     return ContentCrusher(**values)
+
+
+def content_plan(
+    solution: SignatureSolution | None = None, **overrides
+) -> ContentPlan:
+    """A valid stage 6 Extract content plan over a Signature Solution."""
+
+    solution = solution or signature_solution()
+    currency = overrides.pop("currency", None) or primary_currency(
+        solution.tenant_id
+    )
+    theme = ContentTheme(
+        theme_id="theme-1",
+        tenant_id=solution.tenant_id,
+        name="the current measure",
+        currency_measure=currency.current_measure,
+    )
+    idea = ContentIdea(
+        idea_id="idea-1",
+        tenant_id=solution.tenant_id,
+        signature_step=solution.steps[0].name,
+        source=ContentIdeaSource.FAQ,
+        prompt="what does the first step change?",
+        theme_id=theme.theme_id,
+        channels=(ContentPlanChannel.EMAIL, ContentPlanChannel.SOCIAL),
+    )
+    values = {
+        "plan_id": "plan-3f",
+        "tenant_id": solution.tenant_id,
+        "owner": "content-owner",
+        "method": solution,
+        "currency": currency,
+        "themes": (theme,),
+        "ideas": (idea,),
+    }
+    values.update(overrides)
+    return ContentPlan(**values)
 
 
 def approved_method(

@@ -4,7 +4,78 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T183447Z (Ralph cycle, this run): selected item was wiring the
+- Cycle 2026-10-03T183643Z (Ralph cycle, this run): selected item was wiring the
+  canon Extract `ContentPlan` as a required stage 6 "Campaign Message Approved"
+  kind (queue Q28; owner decision 2026-10-03; SPEC.md sections 4, 12.3 and 12.5;
+  canon files 25, 27 and 28). The typed `ContentPlan` was implemented (Ralph
+  cycle 2026-10-03T174319Z) but not a required asset kind and not carried by the
+  stage 6 `CampaignMessagePackage`, so the gate's declared package recorded the
+  fourteen kinds and never the canon plan the message's content is extracted
+  from; the "Campaign Message Approved" checkpoint could pass without a content
+  plan. It outranked the stage 7-10 canon assets because those come later in the
+  Q28 stage-ordered queue, and the stage 6 content family (roadmap, crusher) was
+  already gate-required; `ContentPlan` is the last stage 6 content candidate. It
+  grounds on the stage 4 `SignatureSolution` already resolved by the stage 6
+  route and on a `PrimaryCurrency` the request can carry, so the added
+  resolution surface is bounded to the currency input. Alternatives rejected:
+  the Next.js `frontend/` shell (DoD condition 6, blocked on Q5 via Q15), request
+  idempotency (Q16, blocked on the same) and jumping to the stage 7-10 canon
+  assets out of stage order.
+- Outcome: `ContentPlan`
+  (`backend/redops/contexts/commercial/domain/value_objects.py`) gained
+  `CONTENT_PLAN_KIND = "content-plan"` and `as_stage_asset(version=...)` that
+  refuses a versionless projection. The kind joined `CANONICAL_MESSAGE_KINDS`
+  and the stage 6 template `required_asset_kinds` in
+  `governance/domain/templates.py` (fourteen kinds to fifteen).
+  `CampaignMessagePackage` now carries `plan` + `plan_version`, type-checks and
+  tenant-checks it, refuses a versionless one, and projects `content-plan` from
+  the plan's own identity at its exact version while the twelve message kinds
+  still pin the `CampaignMessage`, `content-roadmap` pins the roadmap and
+  `content-crusher` pins the crusher. The stage 6 route accepts a nested
+  `ContentPlanInput` (`api/schemas.py`, `ContentThemeInput`, `ContentIdeaInput`)
+  carrying the locked `PrimaryCurrency`, builds the typed plan grounded on the
+  resolved approved method's own Signature Solution, and passes it to the
+  package.
+- Evidence: `make check` -> 1934 passed, 1 skipped, 675 subtests; pyflakes
+  clean. New behavioral tests:
+  `tests/unit/commercial/test_campaign_message_package.py` (fifteen kinds, the
+  `content-plan` kind pinned from `plan-3f` at its own version while the twelve
+  message kinds pin `message-3f`, cross-tenant and untyped and versionless plan
+  refusals); `tests/unit/engagement/test_record_stage_six_gate.py` (15
+  exact-version refs and 15 approvals); and
+  `tests/unit/test_stage_six_gate_route.py` (plan accepted in the stage 6
+  payload; the versionless-roadmap 422 test still holds). `make done` clears
+  [1/6]-[4/6] and still fails [5/6] (`frontend/` missing, Q32).
+- New findings: the stage 6 gate now records the canon Extract content plan at an
+  exact version, so the "Campaign Message Approved" checkpoint cannot pass on the
+  message, roadmap and crusher kinds alone. Stage 6 is now canon-complete at
+  fifteen required kinds for the roadmap, crusher and plan; the stage 7-10 canon
+  assets stay unwired.
+- Blockers: `frontend/` (DoD condition 6, Q32) is blocked on the workflow
+  engine Q5 via Q15; request idempotency (Q16) blocked on the same; RLS is a
+  WHERE clause only (ADR 0004); the condition 3 retrieval, background worker and
+  artifact-URL layers are unbuilt; the stage 8/9/10 canon gap register entries
+  need named-owner decisions.
+- Highest priority ready next item: continue Q28 at stage 8, where the canon
+  `EnrollmentPlan`, `ClientProcess` and `SwimlanesPlan` are implemented but not
+  yet required gate kinds (canon files 06, 13, 14, 21, 24, 35-49). Stage 7 is
+  already canon-covered: the `AuthorityAmplifierPackage` projects the stage 7
+  script-through-player kinds, and no gap-register entry targets stage 7. The
+  stage 8 candidates each need a named methodology-owner decision on whether
+  their home is the stage 8 "Funnel Complete" gate or a later stage 9 gate
+  (adding or placing an asset is an owner decision, and the register leaves the
+  placement open). The smallest ready slice is `SwimlanesPlan` (grounded on a
+  same-tenant stage 8 `FunnelIntegration`), which would ride the existing
+  `FunnelIntegration` package bridge like the stage 6 content family. Required
+  asset: the typed plan and its `as_stage_asset` projection; approver: the client
+  designated authority; blocked downstream dependency: the stage 9 gate.
+  Prerequisite: the completed stage 6 fifteen-kind set and the owner placement
+  decision. Canon gap register updated: the Extract entry now records the wired
+  stage 6 `content-plan` source.
+
+### Prior cycle (2026-10-03T183447Z)
+
+- Cycle 2026-10-03T183447Z (Ralph cycle, the prior cycle): selected item was wiring the
   canon content crusher as a required stage 6 "Campaign Message Approved" kind
   (queue Q28; owner decision 2026-10-03; SPEC.md sections 4, 12.3 and 12.5;
   canon files 12, 16 and 32). The typed `ContentCrusher` was implemented (Ralph
@@ -1925,12 +1996,12 @@ stalls:
 | Q20 | Stage 3 model gate API surface (done 2026-10-03T171835Z; `POST /red/clients/{tenant_id}/stages/3/gate`) | pipeline | Q19 | Diagnostic Model Approved |
 | Q21 | Stage 4 IP package gate plus ThirteenTransformations wiring (done 2026-10-03T182806Z; `POST /red/clients/{tenant_id}/stages/4/gate`; stage 4 template now requires the `thirteen-transformations` kind, pinned from the typed `ThirteenTransformations`) | pipeline | Q20 | IP Architecture Locked |
 | Q22 | Stage 5 productize gate API surface (done 2026-10-03T172133Z; `POST /red/clients/{tenant_id}/stages/5/gate`); ProductProgram wiring remains | pipeline | Q21 | Offer Locked |
-| Q23 | Stage 6 message gate plus ContentCrusher and roadmap wiring (gate API surface done 2026-10-03T172338Z; `POST /red/clients/{tenant_id}/stages/6/gate`; ContentCrusher and roadmap wiring remains) | pipeline | Q22 | Campaign Message Approved |
+| Q23 | Stage 6 message gate plus the content roadmap, crusher and plan wiring (gate API surface done 2026-10-03T172338Z; `POST /red/clients/{tenant_id}/stages/6/gate`; `content-roadmap`, `content-crusher` and `content-plan` wired through `CampaignMessagePackage`, stage 6 now fifteen kinds; content family complete 2026-10-03T183643Z) | pipeline | Q22 | Campaign Message Approved |
 | Q24 | Stage 7 Authority Amplifier dual approval (script before visual) | pipeline | Q23 | script approval then creative acceptance |
 | Q25 | Stage 8 integrate plus the enrollment and client-process asset and Funnel Complete | pipeline | Q24 | funnel dry run passes |
 | Q26 | Stage 9 QA plus compliance gate kinds | pipeline | Q25 | Launch Approved; Ready for Traffic |
 | Q27 | Stage 10 launch plus baseline plus the METRICS dimension | pipeline | Q26 | Performance Baseline Established |
-| Q28 | Apply the required-kind policy: wire each canon asset as a required kind | pipeline | Q27 | stage templates updated; gate integrity tests. Stage 1 `awareness-map` wired from the typed `MarketAwarenessMap` 2026-10-03T181228Z; `audience-reach-estimate` and `target-market-match` and stages 2-10 remain. Stage 9     `compliance-package` wired from the reviewed `CompliancePackage` 2026-10-03T182015Z; stage 5 `product-program` wired from the typed `ProductProgram` 2026-10-03T182409Z (stage 5 now thirteen kinds); stage 4 `thirteen-transformations` wired from the typed `ThirteenTransformations` 2026-10-03T182806Z (stage 4 now thirteen kinds); stage 6 `content-roadmap` wired from the typed `ContentRoadmap` 2026-10-03T183151Z (stage 6 now thirteen kinds); `ContentCrusher` and `ContentPlan` and stages 7-10 remain |
+| Q28 | Apply the required-kind policy: wire each canon asset as a required kind | pipeline | Q27 | stage templates updated; gate integrity tests. Stage 1 `awareness-map` wired from the typed `MarketAwarenessMap` 2026-10-03T181228Z; `audience-reach-estimate` and `target-market-match` and stages 2-10 remain. Stage 9     `compliance-package` wired from the reviewed `CompliancePackage` 2026-10-03T182015Z; stage 5 `product-program` wired from the typed `ProductProgram` 2026-10-03T182409Z (stage 5 now thirteen kinds); stage 4 `thirteen-transformations` wired from the typed `ThirteenTransformations` 2026-10-03T182806Z (stage 4 now thirteen kinds); stage 6 `content-roadmap` wired from the typed `ContentRoadmap` 2026-10-03T183151Z (thirteen kinds); stage 6 `content-crusher` wired from the typed `ContentCrusher` 2026-10-03T183447Z (fourteen kinds); stage 6 `content-plan` wired from the typed `ContentPlan` 2026-10-03T183643Z (fifteen kinds, stage 6 content family complete); stages 7-10 remain |
 | Q29 | Method change impact assessment emits the dependent review queue | pipeline | Q21 | a change identifies its dependents |
 | Q30 | Stage 0-10 API e2e with deterministic agents | e2e | Q27 | DoD 1: one client intake to baseline |
 | Q31 | Section 11 acceptance suite | e2e | Q30 | DoD 2 |
@@ -1976,7 +2047,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 - Audience sizing and market research (Facebook Audience Insights, LinkedIn search; "one source and audience size"; specific experts/authors/books/tools/publications/associations as interest signals) — canon 02, 03 — stage 1 — status: implemented 2026-10-03 (Ralph cycle 127) as the pure Commercial Design `AudienceReachEstimate` (`AudienceDefinition`, `InterestSignal`, `ResearchPlatform`, `InterestKind`) with the caller-invoked `MarketReachPolicy`, which records the platform, the audience location, age, gender and at least one typed specific interest signal, a positive integer estimated reach, a source note and capture date, binds a named owner, refuses blank or untyped or duplicate content, reports `is_litmus_test`/`is_plan` and is never an observation; `MarketReachPolicy.require_reachable` refuses a market below the caller's minimum viable audience and `require_multiplatform` refuses a single-network litmus or a confirmation spanning more than one client with the named `MarketReachBoundaryError` (hardened in Ralph cycle 128), so the canon's Market gate that "the market is big enough, reachable" now has a typed research input with a tenant boundary. SPEC.md section 12.5 did not seed this asset, so it is recorded here as a newly identified gap; it is an asset inside stage 1, not a new stage. Wiring it into the `TargetMarketCandidate`, the stage 1 `DiagnosisPackage` or a required stage 1 gate kind remains a bounded follow-up and a methodology-owner decision. The stage 1 `audience-reach-estimate` kind is now pinned from the typed `AudienceReachEstimate` (Ralph cycle 2026-10-03T181518Z), under the SPEC.md section 12.5 owner decision that a canon-informed implemented asset becomes a required kind of its target stage. Google keyword research is named at the end of canon file 02 but its session is absent from the supplied canon, so it is recorded as a gap.
 - Missing canon files 19 and 20; promised sales/enrollment and email/follow-up modules absent — status: unresolved, request from license owner.
 - Service and partnership lines (kickoff checklist, module production standard, session guide, client scorecard, case study template; renewal and win-back, next-offer path, referral and partner plan, community rules, reputation track) — canon internal/service-ops and internal/stations docs — after stage 10 (service delivery and portfolio expansion) — status: identified gap 2026-10-03 (Ralph cycle 130; canon stations and method map updated 2026-10-03). The canon map now has nine stations (Plan, Market, Message, Offer, Funnel, Traffic, Content, Retargeting, Enroll) whose build line is a 12-week program, and the third phase's motions are Extract, Content, Expand; Serve is the client's own delivery and Grow splits the foundation offer into smaller offers that raise customer lifetime value. The back half of the client life is still thin, so RED defines the service line (deliver one module a week, teach one day and coach another, track attendance and results, collect a case study when results land) and the partnership line (retain, grow, refer, renew, reputation). SPEC.md section 1 puts "portfolio expansion" in the product contract and section 3 names the Portfolio context (opportunity and roadmap), but no stage 0-10 asset or required gate kind represents delivery progress, the case study as sourced proof, or the renewal, referral and reputation clocks. These are candidate pipeline additions that need a named-owner decision (adding or renaming a stage is not an agent decision); the case study is also constrained by SPEC.md section 1 (no unreviewed testimonials or performance claims) and section 4 (client-approved, version-scoped claims). Any publish, send, spend or client commitment remains a human decision.
-- Extract (pull key ideas from the signature solution: FAQs, problems, process, reviews and praise; group themes around the one currency; build an email and social content plan) — n/a, our layer (feeds 25-28) — service layer ahead of stage 10 content operations, a stage 6/10 asset — status: implemented 2026-10-03 (Ralph cycle 2026-10-03T174319Z) as the pure Commercial Design `ContentPlan` (`ContentIdeaSource`, `ContentPlanChannel`, `ContentTheme`, `ContentIdea`, `ContentPlan`, `CONTENT_PLAN_CANON_REFERENCE = "25, 27, 28"`), which grounds on a same-tenant stage 4 `SignatureSolution` and stage 2 `PrimaryCurrency`, extracts ideas with a typed source (faq, problem, process, review_and_praise), maps every idea to a step the solution names and to a declared theme, requires each theme to advance either the current or the desired measure of the one locked currency, refuses a duplicate or cross-tenant theme or idea, requires the plan to build both an email and a social delivery, binds a named owner, reports the solution steps it covers and misses, is a plan and is never an observation. It is an asset inside stage 6, not a new stage; wiring it into a required stage 6 gate kind remains a methodology-owner decision, and any publish or spend stays a human decision. It is distinct from the `ContentRoadmap` (canon 26, 27); reconciling the two into one flow is a bounded follow-up.
+- Extract (pull key ideas from the signature solution: FAQs, problems, process, reviews and praise; group themes around the one currency; build an email and social content plan) — n/a, our layer (feeds 25-28) — service layer ahead of stage 10 content operations, a stage 6/10 asset — status: implemented 2026-10-03 (Ralph cycle 2026-10-03T174319Z) as the pure Commercial Design `ContentPlan` (`ContentIdeaSource`, `ContentPlanChannel`, `ContentTheme`, `ContentIdea`, `ContentPlan`, `CONTENT_PLAN_CANON_REFERENCE = "25, 27, 28"`), which grounds on a same-tenant stage 4 `SignatureSolution` and stage 2 `PrimaryCurrency`, extracts ideas with a typed source (faq, problem, process, review_and_praise), maps every idea to a step the solution names and to a declared theme, requires each theme to advance either the current or the desired measure of the one locked currency, refuses a duplicate or cross-tenant theme or idea, requires the plan to build both an email and a social delivery, binds a named owner, reports the solution steps it covers and misses, is a plan and is never an observation. It is an asset inside stage 6, not a new stage; any publish or spend stays a human decision. It is distinct from the `ContentRoadmap` (canon 26, 27); reconciling the two into one flow is a bounded follow-up. Owner decision 2026-10-03 applied (Ralph cycle 2026-10-03T183643Z): the typed `ContentPlan` is now a required stage 6 gate kind (`content-plan`), declared by the stage 6 `StageTemplate` and pinned at its exact version through the `CampaignMessagePackage` bridge against the approved method's own Signature Solution and the locked Primary Currency the request carries, so a "Campaign Message Approved" gate cannot pass without the Extract content plan the message's content is pulled from; stage 6 is now fifteen required kinds.
 - Serve and Grow (Serve is the client's own delivery of the offer; Grow splits the foundation offer into smaller offers that are new entry points and raise customer lifetime value, expanding the RED Portfolio) — canon 11, 12 — after stage 10, Portfolio context — status: identified gap 2026-10-03 (canon stations and method map updated). SPEC.md section 1 puts portfolio expansion in the product contract and section 3 names the Portfolio context, but no stage 0-10 asset represents the smaller offers as entry points or the lifetime value they raise. A candidate pipeline addition needing a named-owner decision; any client commitment stays a human decision.
 
 ## Product priority: the gated production engagement

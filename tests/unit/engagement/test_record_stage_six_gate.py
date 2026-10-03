@@ -71,6 +71,7 @@ from ..commercial.fixtures import (
     approved_method,
     campaign_message,
     content_crusher,
+    content_plan,
     content_roadmap,
     delivery_specification,
     offer_version,
@@ -117,6 +118,8 @@ def package(
         "roadmap_version": 1,
         "crusher": content_crusher(),
         "crusher_version": 1,
+        "plan": content_plan(),
+        "plan_version": 1,
     }
     values.update(overrides)
     return CampaignMessagePackage(**values)
@@ -139,6 +142,8 @@ def other_tenant_package(**overrides) -> CampaignMessagePackage:
         "roadmap_version": 1,
         "crusher": content_crusher(roadmap=content_roadmap(solution=solution)),
         "crusher_version": 1,
+        "plan": content_plan(solution=solution),
+        "plan_version": 1,
     }
     values.update(overrides)
     return CampaignMessagePackage(**values)
@@ -234,15 +239,20 @@ class StageSixGateAssemblerTests(unittest.TestCase):
             self.template.required_asset_kinds(6),
             {ref.asset_id for ref in gate.required_assets},
         )
-        self.assertEqual(14, len(gate.required_assets))
+        self.assertEqual(15, len(gate.required_assets))
 
     def test_the_gate_pins_the_exact_version_the_reviewed_message_carries(self):
         gate = self.assemble(
-            package_=package(message_version=5, roadmap_version=5, crusher_version=5)
+            package_=package(
+                message_version=5,
+                roadmap_version=5,
+                crusher_version=5,
+                plan_version=5,
+            )
         )
 
         versions = {ref.asset_id: ref.version for ref in gate.required_assets}
-        self.assertEqual(14, len(versions))
+        self.assertEqual(15, len(versions))
         for kind, version in versions.items():
             self.assertEqual(5, version, msg=kind)
 
@@ -335,7 +345,7 @@ class StageSixGateRecorderTests(unittest.TestCase):
 
         decision = self.record(self.assembled_gate(), ledger)
 
-        self.assertEqual(14, len(decision.asset_approvals))
+        self.assertEqual(15, len(decision.asset_approvals))
         for request in decision.asset_approvals:
             self.assertEqual(SCOPE_SIX, request.scope)
             self.assertEqual(APPROVER, request.approver)
