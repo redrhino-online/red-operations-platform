@@ -4,50 +4,51 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:31:18Z (Ralph cycle 106).
-- Selected item: populate the Governance production-manager view's `METRICS`
-  reporting dimension from the Measurement metric registry and the improvement
-  loop (canon files 22, 23 and 24), so each client's verified progress shows the
-  typed stage 10 metrics and their observed movement alongside the seven other
-  dimensions the view already separates. It was the named highest priority ready
-  next item after cycle 105: the last spec-named reporting dimension that was
-  deliberately empty, so a production manager could not see the typed metrics or
-  a measured movement next to the gates (SPEC.md section 4, "separate eight
-  reporting dimensions"; Phase 5 "metric registry ... observations and experiment
-  records"; canon 23 and 24 Metrics Matrix). It outranks the advertising and
-  forecast dashboard proper (the forecast equation, bid-up/bid-down rule and
-  split-test logging are a larger downstream feature), the Operations delivery
-  adapter (blocked on the storage ADR), the stage 9 compliance projection (needs a
-  named-owner decision) and the stage-parameterized gate refactor (quality only),
-  because it closes a spec-named verified-progress gap with a bounded, pure-domain
-  change.
+- Cycle timestamp: 2026-10-03T05:33:38Z (Ralph cycle 107).
+- Selected item: build the first grounded slice of the advertising and forecast
+  dashboard -- the pure Measurement `FunnelEconomics` / `FunnelForecast` value
+  objects that compute the canon's funnel value chain (a strategy session is
+  worth the annual customer value times the close rate; a lead is worth that
+  session value times the show rate and the lead-to-booking rate) and a
+  scenario's target cost per lead and return on ad spend from typed, registered,
+  versioned metric figures, keeping placeholder inputs explicitly
+  planned-not-observed and a forecast distinct from an observed result (canon
+  files 22 and 23: the Metrics Matrix solves the funnel unit economics before
+  real data exists; SPEC.md section 4 stage 10 and Phase 5). It was the named
+  highest priority ready next item after cycle 106, and it outranks the remaining
+  advertising rules (the bid-up/bid-down rule and split-test logging), the
+  Operations delivery adapter (blocked on the storage ADR) and the stage 9
+  compliance projection (needs a named-owner decision), because it closes the
+  canon gap's core forecast equation with a bounded, pure-domain change that
+  reuses the cycle 93 registry and the cycle 106 METRICS projection.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: the Governance `EngagementProductionView` now carries caller-supplied
-  typed `MetricReportingView` rows (`MetricReportingView`, `MetricMovement`,
-  `MetricReportingBasis`, and the named `MetricReportingError` /
-  `MetricReportingTenantBoundaryError`) and returns them from
-  `dimension(ReportingDimension.METRICS)`; the Measurement
-  `metric_reporting_views` projection fills them from the newest same-tenant
-  observed `MeasurementRecord` per registered `MetricDefinition` and attaches the
-  before-and-after `MetricMovement` of the newest measured `ImprovementProposal`.
-  New behavioral coverage: `MetricReportingDimensionTests` in
-  `tests/unit/governance/test_production_view.py` (placeholder and cross-tenant
-  rows and duplicate metric ids refused) and
-  `tests/unit/measurement/test_metric_reporting.py` (latest observed figure,
-  placeholder-only metric produces no row, measured movement attached only when
-  measured, another tenant's metric excluded, blank tenant refused). Running
-  `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'` reports
-  1112 passed, up from 1100. `python3 -m pyflakes backend/redops tests` is clean.
-  `ruff` and `mypy` remain uninstalled.
-- New findings: all eight production-view reporting dimensions are now sourced.
-  The METRICS dimension is deliberately a read-model projection: Governance never
-  imports the Measurement write model and never invents a metric, window, sample,
-  source or causal conclusion; the Measurement context owns the registry and the
-  improvement loop and supplies typed observed rows, and a placeholder figure or
-  another client's metric never appears as verified progress. The forecast
-  equation, metrics matrix, bid-up/bid-down rule and split-test logging from canon
-  22 and 23 are still absent, so the advertising and forecast dashboard canon gap
-  remains open beyond the observed-figure slice completed here.
+- Evidence: `FunnelMetricRole`, `FunnelFigure`, `FunnelEconomics`,
+  `FunnelForecast`, the registry-grounded `funnel_figure` helper and the named
+  `InvalidFunnelFigureError`, `FunnelMetricRoleError`,
+  `FunnelTenantBoundaryError`, `InvalidFunnelForecastError` and
+  `FunnelForecastObservationError` now live in the Measurement domain. A figure
+  carries its registered metric and basis and can be observed (newest same-tenant
+  observed `MeasurementRecord`) or an explicit placeholder; the economics refuses
+  a wrong funnel-step/unit/direction metric, a cross-tenant figure and a
+  percentage outside 0 to 100, and exposes `strategy_session_value`, `lead_value`
+  and `target_cost_per_lead(target_return_on_ad_spend=...)`; the forecast refuses
+  a non-positive spend or cost per lead, refuses to share a foreign tenant, and
+  cannot be projected to an OBSERVATION claim. New behavioral coverage: 25 tests
+  in `tests/unit/measurement/test_funnel_economics.py` (the canon value chain
+  10000/25%/100%/5% yields a 2500 session value and 125 lead value; a 10x target
+  yields a 12.50 target cost per lead; the 5000 spend at 5.00 cost per lead
+  yields 1000 leads, 50 booked, 50 shown, 12.5 customers, 125000 revenue and 25x
+  return; placeholder and cross-tenant rules). Running `PYTHONPATH=backend
+  python3 -m unittest discover -s tests -p 'test_*.py'` reports 1137 passed, up
+  from 1112. `python3 -m pyflakes backend/redops tests` is clean. `ruff` and
+  `mypy` remain uninstalled.
+- New findings: the canon forecast equation is now a typed pure-domain projection
+  that keeps the planned and observed bases explicit and can never be recorded as
+  an observation, so a forecast can be shown next to the gates without being
+  mistaken for verified progress. The Metrics Matrix's unit economics are
+  therefore covered, but the scaling rules it drives -- the bid-up/bid-down rule
+  and split-test logging from canon 22, 23 and 24 -- are still absent, so the
+  advertising and forecast dashboard canon gap remains open beyond this equation.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -55,24 +56,40 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: build the first grounded slice of the
-  advertising and forecast dashboard -- a pure Measurement `FunnelEconomics` /
-  forecast value object that computes target cost per lead and return on ad spend
-  from the typed metric registry and the newest observed records, keeping
-  placeholder inputs explicitly planned-not-observed and the forecast distinct
-  from an observed result (canon files 22 and 23: the Metrics Matrix solves the
-  funnel unit economics before real data exists; SPEC.md section 4 stage 10 and
-  Phase 5). It now has its typed input substrate from this cycle's METRICS
-  projection and the cycle 93 registry, and it outranks the Operations delivery
-  adapter (blocked on the storage ADR) and the stage 9 compliance projection
-  (needs a named-owner decision). Prerequisite: read canon files 22 and 23 to
-  shape the required fields and completion criteria before implementing.
+- Highest priority ready next item: build the canon's bid-up/bid-down scaling
+  rule as a pure Measurement policy that compares a same-tenant observed cost per
+  lead against the `FunnelEconomics.target_cost_per_lead` for a chosen target
+  return on ad spend and returns a named scale action (scale up, hold, bid down,
+  pause and revisit), refusing to act on a placeholder figure or a sample below
+  the caller's minimum and keeping the action a recommendation that an owner
+  approves before spend changes (canon files 22, 23 and 24: act only after the
+  learning phase, change one variable at a time, and never stop a campaign whose
+  return on ad spend is good because of a vanity cost per lead; SPEC.md section 4
+  stage 10 "performance recommendations require evidence and owner approval").
+  It now has its target-cost substrate from this cycle's `FunnelEconomics` and
+  outranks the Operations delivery adapter (blocked on the storage ADR) and the
+  stage 9 compliance projection (needs a named-owner decision). Prerequisite:
+  read canon file 24 to capture the scaling and split-test discipline before
+  implementing.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
-  asset content schemas; the advertising and forecast dashboard; a
+  asset content schemas; the bid-up/bid-down rule and split-test logging; a
   stage-parameterized gate recorder/handler refactor; projecting the compliance
   package onto a canonical stage 9 gate kind (methodology-owner decision); and
   all persistence.
+  [DONE 2026-10-03 (Ralph cycle 107): built the canon's stage 10 funnel forecast
+  equation as the pure Measurement `FunnelMetricRole`, `FunnelFigure`,
+  `FunnelEconomics`, `FunnelForecast` value objects and the registry-grounded
+  `funnel_figure` helper -- a figure carries its registered metric and explicit
+  observed-or-placeholder basis, the economics computes the canon value chain and
+  `target_cost_per_lead(target_return_on_ad_spend=...)`, and the forecast computes
+  leads, booked/shown sessions, customers, revenue and return on ad spend from a
+  scenario spend while refusing to be recorded as an observation, so the Metrics
+  Matrix unit economics exist before real data and placeholder inputs stay
+  planned-not-observed (SPEC.md section 4 stage 10 and Phase 5; canon files 22 and
+  23); verified by `tests/unit/measurement/test_funnel_economics.py` (25 tests,
+  full suite 1137 passed), so the advertising and forecast dashboard's remaining
+  scope is the bid-up/bid-down scaling rule and split-test logging.]
   [DONE 2026-10-03 (Ralph cycle 106): populated the Governance production-manager
   view's `METRICS` reporting dimension -- `EngagementProductionView` now carries
   caller-supplied typed `MetricReportingView` rows (with `MetricMovement` and
@@ -446,7 +463,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 
 - Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 13, 14, 21, 24 — between stages 8 and 10 — status: candidate, needs named-owner decision on a Sell/Enroll stage.
 - Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: candidate.
-- Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93   built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from, but the forecast equation, the metrics matrix, the bid-up/bid-down rule and split-test logging remain candidates. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate. Cycle 106 completed that slice: the METRICS dimension now reports each registered metric's newest observed figure and a measured movement via `metric_reporting_views`, so this candidate's remaining scope is the forecast equation and the Metrics Matrix/bid rules.
+- Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93   built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from, but the forecast equation, the metrics matrix, the bid-up/bid-down rule and split-test logging remain candidates. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate. Cycle 106 completed that slice: the METRICS dimension now reports each registered metric's newest observed figure and a measured movement via `metric_reporting_views`. Cycle 107 built the canon's forecast equation (`FunnelMetricRole`, `FunnelFigure`, `FunnelEconomics`, `FunnelForecast`, `funnel_figure`) so the metrics matrix unit economics exist before real data and a forecast stays distinct from an observed result, so this candidate's remaining scope is the bid-up/bid-down scaling rule and split-test logging.
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: candidate.
 - Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: candidate.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: implemented 2026-10-03 (Ralph cycle 94) as the Execution `CompliancePackage` (`ComplianceAssetKind`, `ComplianceAsset`, `ComplianceWaiver`) with the `ComplianceRequiredPolicy` gating `LaunchQA` traffic authorization, so "Launch Approved" needs every required asset or a live owned waiver; projecting the compliance assets onto their own canonical stage 9 gate kind remains a candidate that needs a named-owner decision.

@@ -253,3 +253,58 @@ class InvalidMetricReportingError(MeasurementError, ValueError):
     an owning tenant to scope the registry and the improvement loop, so a request
     without one cannot produce this client's verified metric rows.
     """
+
+
+class InvalidFunnelFigureError(MeasurementError, ValueError):
+    """A stage 10 forecast figure violates an invariant.
+
+    SPEC.md section 3 keys a Measurement aggregate by "metric definition, window,
+    baseline, observation, source" and Phase 5 requires a metric registry, and the
+    canon's forecast equation (canon files 22 and 23) plugs real inputs into the
+    Metrics Matrix. A forecast figure that leaves its value or source unspecified,
+    or carries a percentage outside 0 to 100 or a negative currency amount, cannot
+    be a typed input to the funnel economics.
+    """
+
+
+class FunnelMetricRoleError(MeasurementError):
+    """A forecast figure is attached to a metric of the wrong funnel role.
+
+    The canon's Metrics Matrix (canon files 22 and 23) uses a specific metric at
+    each step: the annual customer value is a currency amount at the customer
+    step, while the booking, show and close rates are percentages at their own
+    funnel steps. A figure whose registered metric has the wrong funnel step,
+    unit or direction cannot stand in for that role, which keeps the forecast
+    equation from silently mixing an unrelated metric.
+    """
+
+
+class FunnelTenantBoundaryError(MeasurementError):
+    """A forecast figure or scenario cites another tenant's metric.
+
+    SPEC.md section 3: every tenant resource carries a tenant id and a query is
+    tenant scoped, so a stage 10 forecast cannot be built from a different
+    client's registered metric.
+    """
+
+
+class InvalidFunnelForecastError(MeasurementError, ValueError):
+    """A stage 10 forecast scenario violates an invariant.
+
+    SPEC.md section 4, stage 10 reads a scenario's return on ad spend only from
+    an explicit spend and cost per lead, and a target return on ad spend must be
+    positive, so a non-positive spend, cost per lead or target return cannot
+    produce a meaningful funnel forecast.
+    """
+
+
+class FunnelForecastObservationError(MeasurementError):
+    """A funnel forecast was projected as an observed result.
+
+    SPEC.md section 3, Measurement invariant keeps observations distinct from
+    conclusions, and the canon's dashboard discipline (canon files 22 and 23)
+    treats the metrics matrix as a forecast solved before real data exists. A
+    projection computed from planned inputs and a scenario spend is therefore
+    never an observation and cannot be represented as one.
+    """
+

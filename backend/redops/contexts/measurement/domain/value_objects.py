@@ -27,8 +27,13 @@ from redops.contexts.governance.domain.value_objects import (
     MetricReportingView,
 )
 from redops.contexts.measurement.domain.errors import (
+    FunnelForecastObservationError,
+    FunnelMetricRoleError,
+    FunnelTenantBoundaryError,
     ImprovementObservationError,
     ImprovementResultWindowOpenError,
+    InvalidFunnelFigureError,
+    InvalidFunnelForecastError,
     InvalidImprovementError,
     InvalidImprovementOutcomeError,
     InvalidMeasurementRecordError,
@@ -585,3 +590,357 @@ def metric_reporting_views(
             )
         )
     return tuple(rows)
+
+
+class FunnelMetricRole(Enum):
+    """A named input slot in the canon's stage 10 forecast equation.
+
+    The canon's Metrics Matrix (canon files 22 and 23) reverse engineers the funnel
+    from four ratios: the annual customer value, the percentage of leads that book
+    a strategy session, the percentage that show up, and the percentage that
+    close. Naming the role lets a forecast refuse a metric that measures the wrong
+    funnel step or unit, so the equation cannot silently multiply an unrelated
+    figure into the projection.
+    """
+
+    ANNUAL_CUSTOMER_VALUE = "annual_customer_value"
+    LEAD_BOOKING_RATE = "lead_booking_rate"
+    SESSION_SHOW_RATE = "session_show_rate"
+    SESSION_CLOSE_RATE = "session_close_rate"
+
+
+_FUNNEL_ROLE_SHAPES = {
+    FunnelMetricRole.ANNUAL_CUSTOMER_VALUE: (
+        MetricFunnelStep.CUSTOMER,
+        MetricUnit.CURRENCY,
+        MetricDirection.HIGHER_IS_BETTER,
+    ),
+    FunnelMetricRole.LEAD_BOOKING_RATE: (
+        MetricFunnelStep.LEAD,
+        MetricUnit.PERCENT,
+        MetricDirection.HIGHER_IS_BETTER,
+    ),
+    FunnelMetricRole.SESSION_SHOW_RATE: (
+        MetricFunnelStep.APPOINTMENT,
+        MetricUnit.PERCENT,
+        MetricDirection.HIGHER_IS_BETTER,
+    ),
+    FunnelMetricRole.SESSION_CLOSE_RATE: (
+        MetricFunnelStep.APPOINTMENT,
+        MetricUnit.PERCENT,
+        MetricDirection.HIGHER_IS_BETTER,
+    ),
+}
+
+
+@dataclass(frozen=True)
+class FunnelFigure:
+    """A typed input to the stage 10 forecast (SPEC.md section 3; canon 22, 23).
+
+    The canon's forecast plugs real inputs into the Metrics Matrix (canon files 22
+    and 23), so each figure names the registered, versioned metric it is drawn
+    from and carries its own basis. A percentage figure is stored in the metric's
+    percent unit (25.0 is 25%) and exposed as a fraction for the equation, while a
+    currency figure is a non-negative amount. Because the basis travels with the
+    figure, a placeholder figure is explicitly planned-not-observed and can never
+    be mistaken for a measured metric.
+    """
+
+    role: FunnelMetricRole
+    metric: MetricDefinition
+    value: float
+    basis: MeasurementBasis
+    source: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.role, FunnelMetricRole):
+            raise InvalidFunnelFigureError(
+                "a funnel figure requires a named forecast role"
+            )
+        if not isinstance(self.metric, MetricDefinition):
+            raise InvalidFunnelFigureError(
+                "a funnel figure must draw on a registered, versioned metric "
+                "definition rather than a free-text number"
+            )
+        if not isinstance(self.value, (int, float)) or isinstance(
+            self.value, bool
+        ):
+            raise InvalidFunnelFigureError(
+                "a funnel figure value must be a real number"
+            )
+        if not isinstance(self.basis, MeasurementBasis):
+            raise InvalidFunnelFigureError(
+                "a funnel figure requires a placeholder or observed basis"
+            )
+        if not self.source or not self.source.strip():
+            raise InvalidFunnelFigureError("a funnel figure requires a source")
+        expected = _FUNNEL_ROLE_SHAPES[self.role]
+        actual = (
+            self.metric.funnel_step,
+            self.metric.unit,
+            self.metric.direction,
+        )
+        if actual != expected:
+            raise FunnelMetricRoleError(
+                f"funnel role {self.role.value!r} requires metric "
+                f"{expected[0].value!r}/{expected[1].value!r}/"
+                f"{expected[2].value!r}, but metric {self.metric.metric_id!r} is "
+                f"{actual[0].value!r}/{actual[1].value!r}/{actual[2].value!r}"
+            )
+        if self.value < 0:
+            raise InvalidFunnelFigureError(
+                "a funnel figure cannot be negative"
+            )
+        if self.metric.unit is MetricUnit.PERCENT and self.value > 100:
+            raise InvalidFunnelFigureError(
+                "a percentage funnel figure must be between 0 and 100"
+            )
+
+    @property
+    def tenant_id(self) -> str:
+        return self.metric.tenant_id
+
+    @property
+    def fraction(self) -> float:
+        """Return a percentage figure as a 0-to-1 fraction for the equation."""
+        if self.metric.unit is MetricUnit.PERCENT:
+            return float(self.value) / 100.0
+        return float(self.value)
+
+
+@dataclass(frozen=True)
+class FunnelEconomics:
+    """The canon's stage 10 funnel unit economics (SPEC.md section 4; canon 22, 23).
+
+    The canon's advertising forecast (canon files 22 and 23) solves the funnel
+    economics before real data exists: a strategy session is worth the annual
+    customer value times the close rate, and a lead is worth that session value
+    times the show rate and the lead-to-booking rate ("a lead is worth $125"). The
+    economics pins the four same-tenant figures so a scenario can compute the
+    target cost per lead for a desired return on ad spend ("to get a 10x return on
+    ad spend I would need to spend $12.50 per lead") without inventing a metric.
+    """
+
+    tenant_id: str
+    annual_customer_value: FunnelFigure
+    lead_booking_rate: FunnelFigure
+    session_show_rate: FunnelFigure
+    session_close_rate: FunnelFigure
+
+    _SLOTS = (
+        ("annual_customer_value", FunnelMetricRole.ANNUAL_CUSTOMER_VALUE),
+        ("lead_booking_rate", FunnelMetricRole.LEAD_BOOKING_RATE),
+        ("session_show_rate", FunnelMetricRole.SESSION_SHOW_RATE),
+        ("session_close_rate", FunnelMetricRole.SESSION_CLOSE_RATE),
+    )
+
+    def __post_init__(self) -> None:
+        if not self.tenant_id or not self.tenant_id.strip():
+            raise InvalidFunnelFigureError(
+                "funnel economics requires the owning tenant so the equation "
+                "stays tenant scoped"
+            )
+        for field, role in self._SLOTS:
+            figure = getattr(self, field)
+            if not isinstance(figure, FunnelFigure):
+                raise InvalidFunnelFigureError(
+                    f"funnel economics {field} must be a typed funnel figure"
+                )
+            if figure.role is not role:
+                raise FunnelMetricRoleError(
+                    f"funnel economics {field} must be the {role.value!r} role, "
+                    f"not {figure.role.value!r}"
+                )
+            if figure.tenant_id != self.tenant_id:
+                raise FunnelTenantBoundaryError(
+                    f"funnel economics belongs to tenant {self.tenant_id!r}, but "
+                    f"its {field} figure cites tenant {figure.tenant_id!r}"
+                )
+
+    @property
+    def strategy_session_value(self) -> float:
+        """The canon's value of a strategy session: customer value x close rate."""
+        return (
+            float(self.annual_customer_value.value)
+            * self.session_close_rate.fraction
+        )
+
+    @property
+    def lead_value(self) -> float:
+        """The canon's value of a lead: session value x show rate x booking rate."""
+        return (
+            self.strategy_session_value
+            * self.session_show_rate.fraction
+            * self.lead_booking_rate.fraction
+        )
+
+    @property
+    def input_basis(self) -> MeasurementBasis:
+        """The least certain basis across the four inputs."""
+        figures = tuple(getattr(self, field) for field, _ in self._SLOTS)
+        if any(
+            figure.basis is MeasurementBasis.PLACEHOLDER for figure in figures
+        ):
+            return MeasurementBasis.PLACEHOLDER
+        return MeasurementBasis.OBSERVED
+
+    def target_cost_per_lead(self, *, target_return_on_ad_spend: float) -> float:
+        """The cost per lead that would yield the target return on ad spend.
+
+        Canon file 22 turns the lead value into a bidding target ("$12.50 for a
+        lead" for a 10x return), so the target cost per lead is the lead value
+        divided by the desired return. A non-positive target return is refused
+        rather than producing an undefined bid.
+        """
+        if (
+            not isinstance(target_return_on_ad_spend, (int, float))
+            or isinstance(target_return_on_ad_spend, bool)
+            or target_return_on_ad_spend <= 0
+        ):
+            raise InvalidFunnelForecastError(
+                "a target return on ad spend must be a positive number"
+            )
+        return self.lead_value / target_return_on_ad_spend
+
+
+@dataclass(frozen=True)
+class FunnelForecast:
+    """A stage 10 funnel scenario projection (SPEC.md section 4; canon 22, 23).
+
+    SPEC.md section 4, stage 10 reads qualified traffic, leads, appointments and
+    sales, and the canon's Metrics Matrix (canon files 22 and 23) projects what a
+    spend and a target cost per lead should produce: leads, strategy sessions,
+    shown sessions, customers and a return on ad spend. The projection is computed
+    from the typed economics and a scenario spend, so it stays distinct from an
+    observed result; it can never be projected to an OBSERVATION claim, and its
+    ``input_basis`` is PLACEHOLDER whenever any input is still a planned figure.
+    """
+
+    tenant_id: str
+    economics: FunnelEconomics
+    ad_spend: float
+    cost_per_lead: float
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.economics, FunnelEconomics):
+            raise InvalidFunnelForecastError(
+                "a funnel forecast requires typed funnel economics"
+            )
+        if not self.tenant_id or not self.tenant_id.strip():
+            raise InvalidFunnelForecastError(
+                "a funnel forecast requires the owning tenant"
+            )
+        if self.economics.tenant_id != self.tenant_id:
+            raise FunnelTenantBoundaryError(
+                f"funnel forecast belongs to tenant {self.tenant_id!r}, but its "
+                f"economics belongs to tenant {self.economics.tenant_id!r}"
+            )
+        for label, value in (
+            ("ad spend", self.ad_spend),
+            ("cost per lead", self.cost_per_lead),
+        ):
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or value <= 0
+            ):
+                raise InvalidFunnelForecastError(
+                    f"a funnel forecast {label} must be a positive number"
+                )
+
+    @property
+    def leads(self) -> float:
+        return self.ad_spend / self.cost_per_lead
+
+    @property
+    def booked_sessions(self) -> float:
+        return self.leads * self.economics.lead_booking_rate.fraction
+
+    @property
+    def shown_sessions(self) -> float:
+        return self.booked_sessions * self.economics.session_show_rate.fraction
+
+    @property
+    def customers(self) -> float:
+        return self.shown_sessions * self.economics.session_close_rate.fraction
+
+    @property
+    def revenue(self) -> float:
+        return self.customers * float(
+            self.economics.annual_customer_value.value
+        )
+
+    @property
+    def return_on_ad_spend(self) -> float:
+        return self.revenue / self.ad_spend
+
+    @property
+    def input_basis(self) -> MeasurementBasis:
+        return self.economics.input_basis
+
+    @property
+    def is_forecast(self) -> bool:
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a forecast as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions, and the
+        canon's dashboard discipline (canon files 22 and 23) treats the metrics
+        matrix as a forecast solved before real data exists. A projection is not a
+        ``MeasurementRecord`` and cannot be projected to an OBSERVATION claim.
+        """
+        raise FunnelForecastObservationError(
+            f"forecast {claim_id!r} is a projection over planned or observed "
+            "inputs, not an observed measurement, and cannot be recorded as an "
+            "observation"
+        )
+
+
+def funnel_figure(
+    *,
+    role: FunnelMetricRole,
+    metric: MetricDefinition,
+    records: Iterable[MeasurementRecord],
+    placeholder_value: float,
+    placeholder_source: str,
+) -> FunnelFigure:
+    """Ground a forecast input on the registry or an explicit placeholder.
+
+    The canon's forecast discipline (canon files 22 and 23) starts from placeholder
+    numbers, then replaces them only as real metrics accumulate. This helper picks
+    the newest observed same-tenant record for the registered metric when one
+    exists, and otherwise falls back to the caller's placeholder value and source,
+    so the resulting figure is always explicitly observed or explicitly planned.
+    """
+    if not isinstance(metric, MetricDefinition):
+        raise InvalidFunnelFigureError(
+            "a funnel figure must be grounded on a registered, versioned metric "
+            "definition"
+        )
+    observed = [
+        record
+        for record in records
+        if record.metric == metric
+        and record.tenant_id == metric.tenant_id
+        and record.is_observed
+    ]
+    if observed:
+        newest = max(
+            observed, key=lambda record: (record.recorded_on, record.record_id)
+        )
+        return FunnelFigure(
+            role=role,
+            metric=metric,
+            value=float(newest.value),
+            basis=MeasurementBasis.OBSERVED,
+            source=newest.source,
+        )
+    return FunnelFigure(
+        role=role,
+        metric=metric,
+        value=placeholder_value,
+        basis=MeasurementBasis.PLACEHOLDER,
+        source=placeholder_source,
+    )
+
