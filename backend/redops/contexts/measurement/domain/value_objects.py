@@ -1684,6 +1684,15 @@ class RetargetingPlan:
                     f"retargeting plan {self.plan_id!r} cites goal "
                     f"{goal.goal_id!r} from another tenant"
                 )
+            if goal.tracking_code != self.tracking_code:
+                raise RetargetingDependencyError(
+                    f"retargeting plan {self.plan_id!r} cites goal "
+                    f"{goal.goal_id!r} recorded on tracking code "
+                    f"{goal.tracking_code.code_id!r}, not the plan's own tracking "
+                    f"code {self.tracking_code.code_id!r}; the roadmap's conversion "
+                    "goals must be set up on the same pixel as the tracking code "
+                    "(canon file 34)"
+                )
         for audience in self.audiences:
             if not isinstance(audience, RetargetingAudience):
                 raise RetargetingDependencyError(

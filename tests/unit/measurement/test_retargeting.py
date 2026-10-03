@@ -342,6 +342,23 @@ class RetargetingPlanTests(unittest.TestCase):
                 )
             )
 
+    def test_a_plan_goal_must_share_the_plan_tracking_code(self):
+        with self.assertRaises(RetargetingDependencyError):
+            retargeting_plan(
+                goals=(
+                    conversion_goal(),
+                    conversion_goal(
+                        goal_id="goal-book",
+                        name="strategy session booked",
+                        url="/booked",
+                    ),
+                    conversion_goal(
+                        goal_id="goal-other-pixel",
+                        tracking_code=tracking_code(code_id="pixel-other"),
+                    ),
+                )
+            )
+
     def test_a_plan_cannot_cross_a_tenant_boundary(self):
         with self.assertRaises(RetargetingTenantBoundaryError):
             retargeting_plan(
