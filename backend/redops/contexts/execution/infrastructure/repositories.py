@@ -17,6 +17,7 @@ from typing import Any
 
 from redops.contexts.execution.application.ports import (
     FunnelIntegrationRepository,
+    JourneyReleaseRepository,
     LaunchQARepository,
 )
 from redops.contexts.execution.domain.entities import FunnelIntegration, LaunchQA
@@ -24,13 +25,19 @@ from redops.contexts.execution.domain.errors import (
     FunnelReadinessError,
     FunnelVersionConflictError,
     FunnelVersionTenantBoundaryError,
+    JourneyReleaseReadinessError,
+    JourneyReleaseVersionConflictError,
+    JourneyReleaseVersionTenantBoundaryError,
     LaunchQAReadinessError,
     LaunchQAVersionConflictError,
     LaunchQAVersionTenantBoundaryError,
 )
+from redops.contexts.execution.domain.journey_release import JourneyRelease
 from redops.contexts.execution.infrastructure.mappers import (
     funnel_integration_from_payload,
     funnel_integration_to_payload,
+    journey_release_from_payload,
+    journey_release_to_payload,
     launch_qa_from_payload,
     launch_qa_to_payload,
 )
@@ -381,3 +388,190 @@ def launch_qa_repository_from_env(
             "the process-local authorized launch QA store"
         )
     return PostgresLaunchQARepository(psycopg.connect(database_url))
+
+
+class JourneyReleaseConfigurationError(RuntimeError):
+    """The authorized journey release store was configured without a usable driver.
+
+    A set ``DATABASE_URL`` is an explicit instruction to use the durable store
+    (ADR 0003). Silently falling back to the process-local adapter would accept an
+    authorized release that vanishes on restart, so a missing psycopg driver is a
+    configuration error rather than a degraded mode (SPEC.md sections 3, 4 and 9).
+    """
+
+
+def _require_journey_release_tenant(value: str, operation: str) -> None:
+    """Refuse an unscoped read or write of a client's authorized journey release.
+
+    SPEC.md sections 3 and 9 make a journey release a client resource that must
+    carry its tenant on every command and query; storing or resolving one without
+    a client would either leak across clients or create an orphaned record.
+    """
+
+    if not value or not value.strip():
+        raise JourneyReleaseVersionTenantBoundaryError(
+            f"a tenant-scoped journey release {operation} requires a non-blank "
+            "tenant id; an authorized release is a client resource and cannot be "
+            "stored or read unscoped"
+        )
+
+
+class InMemoryJourneyReleaseRepository(JourneyReleaseRepository):
+    """Append-only, process-local authorized journey release store."""
+
+    def __init__(self) -> None:
+        self._releases: dict[tuple[str, str], JourneyRelease] = {}
+
+    def get(self, tenant_id: str, release_id: str) -> JourneyRelease | None:
+        _require_journey_release_tenant(tenant_id, "read")
+        return self._releases.get((tenant_id, release_id))
+
+    def list(self, tenant_id: str) -> tuple[JourneyRelease, ...]:
+        _require_journey_release_tenant(tenant_id, "read")
+        return tuple(
+            release
+            for (stored_tenant, _release_id), release in self._releases.items()
+            if stored_tenant == tenant_id
+        )
+
+    def save(self, release: JourneyRelease) -> None:
+        _require_journey_release_tenant(release.tenant_id, "write")
+        if not (release.is_signed_ready and release.is_authorized):
+            raise JourneyReleaseReadinessError(
+                "an authorized journey release store only holds releases grounded "
+                "on a signed-ready, authorized stage 9 launch QA"
+            )
+        key = (release.tenant_id, release.release_id)
+        existing = self._releases.get(key)
+        if existing is not None and existing != release:
+            raise JourneyReleaseVersionConflictError(
+                f"journey release {release.release_id!r} is already stored for "
+                f"tenant {release.tenant_id!r} with different content; an "
+                "authorized release is immutable and a later release must be a "
+                "new identity"
+            )
+        self._releases[key] = release
+
+    def close(self) -> None:
+        """A process-local store owns no external resource to release."""
+
+        return None
+
+
+class PostgresJourneyReleaseRepository(JourneyReleaseRepository):
+    """Durable, append-only authorized journey release store backed by PostgreSQL.
+
+    Rows are created by migration ``0015_journey_releases`` and are scoped by a
+    NOT NULL ``tenant_id`` column (SPEC.md sections 3 and 9). ``get`` reads only
+    the requested tenant's row for the exact ``release_id`` and rebuilds the
+    aggregate through ``journey_release_from_payload``, so a stored row the
+    aggregate would reject raises on load rather than being read back as an
+    authorized release (SPEC.md section 4). ``save`` inserts a new authorized
+    release and treats a same-id replay as idempotent while refusing a same-id row
+    with different content: an authorized release is immutable and a later release
+    must be a new identity (SPEC.md sections 3 and 4). Row-level security (ADR
+    0004) is a follow-up; tenant scoping is enforced here by the WHERE clause and
+    the NOT NULL column.
+    """
+
+    def __init__(self, connection: "psycopg.Connection[Any]") -> None:
+        if psycopg is None:
+            raise RuntimeError(
+                "the PostgreSQL journey release adapter requires psycopg; install "
+                "the app dependencies (psycopg[binary]) to use it"
+            )
+        self._connection = connection
+
+    def get(self, tenant_id: str, release_id: str) -> JourneyRelease | None:
+        _require_journey_release_tenant(tenant_id, "read")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT release
+                FROM journey_releases
+                WHERE tenant_id = %s
+                  AND release_id = %s
+                """,
+                (tenant_id, release_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return journey_release_from_payload(row[0])
+
+    def list(self, tenant_id: str) -> tuple[JourneyRelease, ...]:
+        _require_journey_release_tenant(tenant_id, "read")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT release
+                FROM journey_releases
+                WHERE tenant_id = %s
+                ORDER BY release_id
+                """,
+                (tenant_id,),
+            )
+            rows = cursor.fetchall()
+        return tuple(journey_release_from_payload(row[0]) for row in rows)
+
+    def save(self, release: JourneyRelease) -> None:
+        _require_journey_release_tenant(release.tenant_id, "write")
+        if not (release.is_signed_ready and release.is_authorized):
+            raise JourneyReleaseReadinessError(
+                "an authorized journey release store only holds releases grounded "
+                "on a signed-ready, authorized stage 9 launch QA"
+            )
+        existing = self.get(release.tenant_id, release.release_id)
+        if existing is not None:
+            if existing != release:
+                raise JourneyReleaseVersionConflictError(
+                    f"journey release {release.release_id!r} is already stored "
+                    f"for tenant {release.tenant_id!r} with different content; an "
+                    "authorized release is immutable and a later release must be "
+                    "a new identity"
+                )
+            return
+        payload = journey_release_to_payload(release)
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO journey_releases (
+                    tenant_id,
+                    release_id,
+                    release
+                ) VALUES (%s, %s, %s)
+                """,
+                (release.tenant_id, release.release_id, Jsonb(payload)),
+            )
+        self._connection.commit()
+
+    def close(self) -> None:
+        """Release the connection the adapter holds for the request."""
+
+        self._connection.close()
+
+
+def journey_release_repository_from_env(
+    database_url: str | None,
+) -> JourneyReleaseRepository:
+    """Select the authorized journey release store from configuration (ADR 0003).
+
+    With a ``DATABASE_URL`` the durable PostgreSQL adapter is used so an
+    authorized release survives a restart and is shared across the API and worker
+    processes (SPEC.md sections 3 and 4); without one the process-local reference
+    adapter keeps local development and the domain-only test interpreter working.
+    A set but unusable configuration raises
+    ``JourneyReleaseConfigurationError`` so a deployment cannot mistake a
+    non-durable store for a durable one. The caller owns the returned adapter's
+    lifecycle and calls ``close`` when the request ends.
+    """
+
+    if database_url is None or not database_url.strip():
+        return InMemoryJourneyReleaseRepository()
+    if psycopg is None:
+        raise JourneyReleaseConfigurationError(
+            "DATABASE_URL is set but no PostgreSQL driver is installed; install "
+            "the app dependencies (psycopg[binary]) or unset DATABASE_URL to use "
+            "the process-local authorized journey release store"
+        )
+    return PostgresJourneyReleaseRepository(psycopg.connect(database_url))

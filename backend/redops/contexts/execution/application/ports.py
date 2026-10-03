@@ -13,6 +13,7 @@ from __future__ import annotations
 import abc
 
 from redops.contexts.execution.domain.entities import FunnelIntegration, LaunchQA
+from redops.contexts.execution.domain.journey_release import JourneyRelease
 
 
 class FunnelIntegrationRepository(abc.ABC):
@@ -58,6 +59,34 @@ class LaunchQARepository(abc.ABC):
     @abc.abstractmethod
     def save(self, qa: LaunchQA) -> None:
         """Store an authorized launch QA, refusing a different same-id body."""
+
+    def close(self) -> None:
+        """A default no-op so a process-local adapter need not implement it."""
+
+
+class JourneyReleaseRepository(abc.ABC):
+    """Seam for authorized journey releases, keyed by client and release id.
+
+    SPEC.md section 3 names ``JourneyRelease`` (assets, routing, configuration
+    digest, rollback ref) as a core aggregate whose invariant is "launch needs
+    signed readiness and authorized release", and SPEC.md section 4 keeps a
+    previous deployed release historically identifiable. The store is append-only
+    per ``(tenant_id, release_id)``: an authorized release is immutable and a
+    later launch is a new identity. ``list`` returns a client's releases for the
+    ``/journeys`` read and ``close`` releases any connection the adapter opened.
+    """
+
+    @abc.abstractmethod
+    def get(self, tenant_id: str, release_id: str) -> JourneyRelease | None:
+        """Return the exact authorized release, or ``None`` if unknown."""
+
+    @abc.abstractmethod
+    def list(self, tenant_id: str) -> tuple[JourneyRelease, ...]:
+        """Return every stored release for one client tenant."""
+
+    @abc.abstractmethod
+    def save(self, release: JourneyRelease) -> None:
+        """Store an authorized release, refusing a different same-id body."""
 
     def close(self) -> None:
         """A default no-op so a process-local adapter need not implement it."""

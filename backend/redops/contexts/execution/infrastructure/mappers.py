@@ -30,6 +30,7 @@ from redops.contexts.execution.domain.entities import (
     FunnelIntegration,
     LaunchQA,
 )
+from redops.contexts.execution.domain.journey_release import JourneyRelease
 from redops.contexts.execution.domain.value_objects import (
     ComplianceAsset,
     ComplianceAssetKind,
@@ -51,6 +52,7 @@ from redops.contexts.production.infrastructure.mappers import (
     authority_amplifier_from_payload,
     authority_amplifier_to_payload,
 )
+from redops.contexts.governance.domain.value_objects import StageAssetVersion
 
 
 def _assets_to_payload(assets: FunnelAssetPackage) -> dict[str, Any]:
@@ -337,4 +339,69 @@ def launch_qa_from_payload(payload: Mapping[str, Any]) -> LaunchQA:
         authorization=_authorization_from_payload(payload.get("authorization")),
         compliance=_compliance_from_payload(payload.get("compliance")),
         review_reason=payload.get("review_reason"),
+    )
+
+
+def _release_assets_to_payload(
+    assets: tuple[StageAssetVersion, ...],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "asset_id": asset.asset_id,
+            "tenant_id": asset.tenant_id,
+            "kind": asset.kind,
+            "version": asset.version,
+        }
+        for asset in assets
+    ]
+
+
+def _release_assets_from_payload(
+    payload: list[Mapping[str, Any]],
+) -> tuple[StageAssetVersion, ...]:
+    return tuple(
+        StageAssetVersion(
+            asset_id=str(entry["asset_id"]),
+            tenant_id=str(entry["tenant_id"]),
+            kind=str(entry["kind"]),
+            version=int(entry["version"]),
+        )
+        for entry in payload
+    )
+
+
+def journey_release_to_payload(release: JourneyRelease) -> dict[str, Any]:
+    """Serialise an authorized journey release into the JSONB payload.
+
+    The grounding stage 9 ``LaunchQA`` is emitted through ``launch_qa_to_payload``
+    so the release cannot drift from the QA shape, and the released asset
+    evidence keeps its exact ``(asset_id, tenant_id, kind, version)`` fields. A
+    reload re-validates through ``JourneyRelease`` construction, so a payload
+    storage cannot legally hold (a blank identity, a QA from another tenant, a
+    release with no assets or more than one version for a kind) raises rather
+    than being read back as an authorized release (SPEC.md sections 3 and 4).
+    """
+
+    return {
+        "release_id": release.release_id,
+        "tenant_id": release.tenant_id,
+        "qa": launch_qa_to_payload(release.qa),
+        "assets": _release_assets_to_payload(release.assets),
+        "routing": release.routing,
+        "configuration_digest": release.configuration_digest,
+        "rollback_ref": release.rollback_ref,
+    }
+
+
+def journey_release_from_payload(payload: Mapping[str, Any]) -> JourneyRelease:
+    """Rebuild a journey release from a stored payload for re-validation."""
+
+    return JourneyRelease(
+        release_id=str(payload["release_id"]),
+        tenant_id=str(payload["tenant_id"]),
+        qa=launch_qa_from_payload(payload["qa"]),
+        assets=_release_assets_from_payload(payload["assets"]),
+        routing=str(payload["routing"]),
+        configuration_digest=str(payload["configuration_digest"]),
+        rollback_ref=str(payload["rollback_ref"]),
     )

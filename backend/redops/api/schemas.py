@@ -1738,3 +1738,72 @@ class MeasurementListResponse(BaseModel):
     limit: int
     offset: int
     records: list[MeasurementRecordResponse]
+
+
+class JourneyReleaseAssetInput(BaseModel):
+    """One exact stage asset version a journey release pins (SPEC.md section 3).
+
+    SPEC.md sections 3 and 4 pin the exact approved asset versions and intended
+    use, so a release carries one exact ``(asset_id, kind, version)`` per kind
+    rather than a bare asset name. The tenant is the release tenant, not a caller
+    field, so an asset cannot be claimed for another client.
+    """
+
+    asset_id: str
+    kind: str
+    version: int
+
+
+class RecordJourneyReleaseRequest(BaseModel):
+    """Authorize one journey release grounded on a durable stage 9 launch QA.
+
+    SPEC.md section 3 names the ``JourneyRelease`` core aggregate (assets,
+    routing, configuration digest, rollback ref) and its invariant "launch needs
+    signed readiness and authorized release"; SPEC.md section 7 lists
+    ``/journeys``. The route resolves the named launch QA from the durable store
+    rather than trusting a repeated QA body, so the release is grounded on the
+    exact authorized stage 9 evidence. The route never authorizes traffic; a
+    release records the authorized package for launch.
+    """
+
+    release_id: str
+    tenant_id: str
+    qa_id: str
+    assets: list[JourneyReleaseAssetInput]
+    routing: str
+    configuration_digest: str
+    rollback_ref: str
+
+
+class JourneyReleaseAssetResponse(BaseModel):
+    """One exact asset version pinned by an authorized journey release."""
+
+    asset_id: str
+    tenant_id: str
+    kind: str
+    version: int
+
+
+class JourneyReleaseResponse(BaseModel):
+    """One authorized journey release, re-validated through the domain aggregate."""
+
+    release_id: str
+    tenant_id: str
+    qa_id: str
+    assets: list[JourneyReleaseAssetResponse]
+    routing: str
+    configuration_digest: str
+    rollback_ref: str
+    released_kinds: list[str]
+    is_signed_ready: bool
+    is_authorized: bool
+
+
+class JourneyReleaseListResponse(BaseModel):
+    """A paginated page of one client tenant's authorized journey releases."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    releases: list[JourneyReleaseResponse]

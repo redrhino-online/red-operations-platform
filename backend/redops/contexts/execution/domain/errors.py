@@ -507,3 +507,22 @@ class JourneyReleaseTenantBoundaryError(JourneyReleaseError):
     release belongs to the tenant of the launch QA and of every released asset it
     pins, so it cannot cross a tenant boundary.
     """
+
+
+class JourneyReleaseVersionConflictError(JourneyReleaseError):
+    """A same-id journey release was re-stated with different content.
+
+    SPEC.md section 4 keeps a previous deployed release historically
+    identifiable: an authorized release is immutable, so a later release must be
+    a new identity rather than overwrite the stored one with a re-stated body.
+    """
+
+
+class JourneyReleaseVersionTenantBoundaryError(JourneyReleaseError):
+    """A journey release store was used without a client scope.
+
+    SPEC.md sections 3 and 9 make a journey release a client resource that must
+    carry its tenant on every command and query, so storing or resolving one
+    without a client would either leak across clients or create an orphaned
+    record.
+    """

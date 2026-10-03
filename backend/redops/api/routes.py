@@ -38,6 +38,9 @@ from redops.api.schemas import (
     DecisionRecordResponse,
     EngagementProductionViewResponse,
     FunnelIntegrationInput,
+    JourneyReleaseAssetResponse,
+    JourneyReleaseListResponse,
+    JourneyReleaseResponse,
     LaunchQAInput,
     MethodReferenceResponse,
     MethodVersionInput,
@@ -49,6 +52,7 @@ from redops.api.schemas import (
     OfferVersionInput,
     OfferVersionResponse,
     RecordMeasurementRequest,
+    RecordJourneyReleaseRequest,
     RecordStageEightGateRequest,
     RecordStageFiveGateRequest,
     RecordStageFourGateRequest,
@@ -165,6 +169,7 @@ from redops.contexts.engagement.domain.value_objects import (
 )
 from redops.contexts.execution.application.ports import (
     FunnelIntegrationRepository,
+    JourneyReleaseRepository,
     LaunchQARepository,
 )
 from redops.contexts.execution.domain.entities import (
@@ -175,8 +180,10 @@ from redops.contexts.execution.domain.entities import (
 from redops.contexts.execution.domain.errors import (
     ExecutionError,
     FunnelVersionConflictError,
+    JourneyReleaseError,
     LaunchQAVersionConflictError,
 )
+from redops.contexts.execution.domain.journey_release import JourneyRelease
 from redops.contexts.execution.domain.value_objects import (
     ComplianceAsset,
     ComplianceAssetKind,
@@ -201,6 +208,7 @@ from redops.contexts.execution.domain.value_objects import (
 )
 from redops.contexts.execution.infrastructure.repositories import (
     funnel_integration_repository_from_env,
+    journey_release_repository_from_env,
     launch_qa_repository_from_env,
 )
 from redops.contexts.governance.application.ports import (
@@ -217,6 +225,7 @@ from redops.contexts.governance.domain.templates import stage_zero_to_ten_templa
 from redops.contexts.governance.domain.value_objects import (
     EngagementProductionView,
     MetricReportingView,
+    StageAssetVersion,
     StageProductionView,
 )
 from redops.contexts.governance.infrastructure.repositories import (
@@ -584,6 +593,28 @@ def get_launch_qa_repository() -> Iterator[LaunchQARepository]:
     """
 
     repository = launch_qa_repository_from_env(
+        os.environ.get("DATABASE_URL")
+    )
+    try:
+        yield repository
+    finally:
+        repository.close()
+
+
+def get_journey_release_repository() -> Iterator[JourneyReleaseRepository]:
+    """Provide the authorized journey release seam to the API (SPEC.md section 6).
+
+    SPEC.md section 3 names ``JourneyRelease`` as a core aggregate with the
+    invariant "launch needs signed readiness and authorized release", and SPEC.md
+    section 7 lists ``/journeys``. The dependency owns one adapter for the request
+    and releases any connection it opened when the request ends, so an authorized
+    release is read from and written to the durable store and shared across the
+    API and worker processes. The store is chosen once from ``DATABASE_URL``; a
+    request cannot silently downgrade to a process-local release store, because a
+    set-but-unusable configuration raises before the route runs.
+    """
+
+    repository = journey_release_repository_from_env(
         os.environ.get("DATABASE_URL")
     )
     try:
@@ -4140,3 +4171,150 @@ def record_measurement(
         ) from exc
 
     return _measurement_payload(record)
+
+
+def _journey_release_payload(release: JourneyRelease) -> JourneyReleaseResponse:
+    """Project one authorized journey release onto the read surface.
+
+    SPEC.md sections 3 and 4 pin exact asset versions at a passing gate, so the
+    released assets are returned in a deterministic order with their exact
+    identity, tenant, kind and version, and the grounding QA id is surfaced so the
+    release stays traceable to the stage 9 authorization that permitted it. The
+    route computes no rule; the aggregate already re-validated on construction.
+    """
+
+    assets = sorted(
+        release.assets, key=lambda asset: (asset.kind, asset.asset_id)
+    )
+    return JourneyReleaseResponse(
+        release_id=release.release_id,
+        tenant_id=release.tenant_id,
+        qa_id=release.qa.qa_id,
+        assets=[
+            JourneyReleaseAssetResponse(
+                asset_id=asset.asset_id,
+                tenant_id=asset.tenant_id,
+                kind=asset.kind,
+                version=asset.version,
+            )
+            for asset in assets
+        ],
+        routing=release.routing,
+        configuration_digest=release.configuration_digest,
+        rollback_ref=release.rollback_ref,
+        released_kinds=sorted(release.released_kinds),
+        is_signed_ready=release.is_signed_ready,
+        is_authorized=release.is_authorized,
+    )
+
+
+@router.get("/journeys", response_model=JourneyReleaseListResponse)
+def list_journeys(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose journey releases are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repository: JourneyReleaseRepository = Depends(
+        get_journey_release_repository
+    ),
+) -> JourneyReleaseListResponse:
+    """List one client tenant's authorized journey releases (SPEC.md sections 3, 7, 9).
+
+    SPEC.md section 7 lists ``/journeys`` and requires list endpoints to enforce
+    client access and pagination; SPEC.md section 9 requires every tenant resource
+    query to carry ``tenant_id``. The tenant is a required query parameter and the
+    repository read is tenant scoped, so another client's releases are unreadable
+    here. Pagination is applied after the tenant-scoped read so a page is stable,
+    and the route is read-only: a release is recorded through its own route and
+    listing one never authorizes traffic.
+    """
+
+    releases = repository.list(tenant_id)
+    page = releases[offset : offset + limit]
+    return JourneyReleaseListResponse(
+        tenant_id=tenant_id,
+        total=len(releases),
+        limit=limit,
+        offset=offset,
+        releases=[_journey_release_payload(release) for release in page],
+    )
+
+
+@router.post(
+    "/journeys", status_code=201, response_model=JourneyReleaseResponse
+)
+def create_journey_release(
+    body: RecordJourneyReleaseRequest,
+    repository: JourneyReleaseRepository = Depends(
+        get_journey_release_repository
+    ),
+    launch_qa_repository: LaunchQARepository = Depends(
+        get_launch_qa_repository
+    ),
+) -> JourneyReleaseResponse:
+    """Authorize one journey release grounded on a durable stage 9 launch QA.
+
+    SPEC.md section 3 names ``JourneyRelease`` (assets, routing, configuration
+    digest, rollback ref) with the invariant "launch needs signed readiness and
+    authorized release", and SPEC.md section 7 lists ``/journeys``. The route
+    resolves the named stage 9 launch QA from the durable ``LaunchQARepository``
+    rather than trusting a repeated QA body, so the release is grounded on the
+    exact QA a prior gate authorized; a missing QA is a named 404, not a release.
+    The released assets are mapped to exact ``StageAssetVersion`` evidence scoped
+    to the release tenant, and the ``JourneyRelease`` aggregate -- not this route
+    -- enforces the signed-ready and authorized QA, the non-blank routing, digest
+    and rollback reference, and exactly one exact version per released kind. A
+    rejection is a named 422 (a same-id re-statement is a named 409) and never a
+    partial write. Recording a release does not authorize live traffic; that stays
+    a stage 10 observation and a human approval.
+    """
+
+    try:
+        qa = launch_qa_repository.get(body.tenant_id, body.qa_id)
+        if qa is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "LaunchQANotFoundError",
+                    "message": (
+                        f"launch QA {body.qa_id!r} is not registered for "
+                        f"{body.tenant_id!r}"
+                    ),
+                },
+            )
+        release = JourneyRelease(
+            release_id=body.release_id,
+            tenant_id=body.tenant_id,
+            qa=qa,
+            assets=tuple(
+                StageAssetVersion(
+                    asset_id=asset.asset_id,
+                    tenant_id=body.tenant_id,
+                    kind=asset.kind,
+                    version=asset.version,
+                )
+                for asset in body.assets
+            ),
+            routing=body.routing,
+            configuration_digest=body.configuration_digest,
+            rollback_ref=body.rollback_ref,
+        )
+        repository.save(release)
+    except JourneyReleaseError as exc:
+        status = (
+            409
+            if type(exc).__name__ == "JourneyReleaseVersionConflictError"
+            else 422
+        )
+        raise HTTPException(
+            status_code=status,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return _journey_release_payload(release)
