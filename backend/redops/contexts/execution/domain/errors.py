@@ -93,6 +93,35 @@ class LaunchQAAuthorityError(LaunchQAError):
     """Traffic was not authorized by the designated human authority."""
 
 
+class LaunchQAReadinessError(LaunchQAError):
+    """A ready-for-traffic store was offered a QA that has not passed its checkpoint.
+
+    SPEC.md sections 3 and 4 pin the exact approved asset versions and intended
+    use at a passing gate, so the durable stage 9 store only holds a QA that
+    passed "Launch Approved". A draft QA cannot be stored, because the stage 10
+    gate would then resolve an unauthorized QA as if traffic had been authorized.
+    """
+
+
+class LaunchQAVersionConflictError(LaunchQAError):
+    """A same-id launch QA was re-stated with different content.
+
+    SPEC.md section 4 keeps a previous approved version historically
+    identifiable: an authorized QA is immutable, so the stage 10 gate must
+    resolve the exact stored stage 9 QA rather than overwrite it with a re-stated
+    request body.
+    """
+
+
+class LaunchQAVersionTenantBoundaryError(LaunchQAError):
+    """A launch QA store was used without a client scope.
+
+    SPEC.md sections 3 and 9 make a launch QA a client resource that must carry
+    its tenant on every command and query, so storing or resolving one without a
+    client would either leak across clients or create an orphaned record.
+    """
+
+
 class InvalidLaunchQAPackageError(LaunchQAError, ValueError):
     """A stage 9 reviewed asset package was built without identity, version or readiness.
 

@@ -108,6 +108,7 @@ from redops.contexts.engagement.domain.value_objects import (
 )
 from redops.contexts.execution.application.ports import (
     FunnelIntegrationRepository,
+    LaunchQARepository,
 )
 from redops.contexts.execution.domain.entities import (
     FunnelIntegration,
@@ -117,6 +118,7 @@ from redops.contexts.execution.domain.entities import (
 from redops.contexts.execution.domain.errors import (
     ExecutionError,
     FunnelVersionConflictError,
+    LaunchQAVersionConflictError,
 )
 from redops.contexts.execution.domain.value_objects import (
     ComplianceAsset,
@@ -142,6 +144,7 @@ from redops.contexts.execution.domain.value_objects import (
 )
 from redops.contexts.execution.infrastructure.repositories import (
     funnel_integration_repository_from_env,
+    launch_qa_repository_from_env,
 )
 from redops.contexts.governance.application.ports import (
     GateLedgerRepository,
@@ -362,6 +365,29 @@ def get_funnel_integration_repository() -> Iterator[
     """
 
     repository = funnel_integration_repository_from_env(
+        os.environ.get("DATABASE_URL")
+    )
+    try:
+        yield repository
+    finally:
+        repository.close()
+
+
+def get_launch_qa_repository() -> Iterator[LaunchQARepository]:
+    """Provide the authorized launch QA seam to the API (SPEC.md section 6).
+
+    SPEC.md section 3 pins exact approved asset versions and intended use at a
+    passing gate, and SPEC.md section 4 keeps the approved version identifiable,
+    so the stage 10 gate must resolve the stage 9 launch QA a prior gate
+    authorized rather than trust a repeated request body. The dependency owns one
+    adapter for the request and releases any connection it opened when the request
+    ends, so the resolved QA is read from the durable store and shared across the
+    API and worker processes. The store is chosen once from ``DATABASE_URL``; a
+    request cannot silently downgrade to a process-local QA store, because a
+    set-but-unusable configuration raises before the route runs.
+    """
+
+    repository = launch_qa_repository_from_env(
         os.environ.get("DATABASE_URL")
     )
     try:
@@ -766,18 +792,22 @@ def _authorize_launch_qa(
     tenant_id: str,
     qa_body: LaunchQAInput,
     funnel: FunnelIntegration,
+    qa_repository: LaunchQARepository,
 ) -> LaunchQA:
     """Rebuild the stage 9 launch QA and drive its traffic authorization.
 
     SPEC.md section 3: production requires approved dependencies, and the stage 10
     performance baseline is grounded on the stage 9 launch QA that authorized
-    traffic (SPEC.md section 4). No QA store is exposed over the API yet, so the
-    caller supplies the reviewed compliance package, the complete check set and the
-    designated authorization, and the domain re-proves the critical path outcomes,
-    the launch-blocking compliance assets and the traffic authorization -- rather
-    than the transport layer asserting them. Sharing this builder keeps the
-    stage 9 and stage 10 routes from drifting in how they re-state that upstream
-    dependency.
+    traffic (SPEC.md section 4). The reviewed QA is resolved from its store by
+    exact identity rather than trusted from the repeated request body: the stage 9
+    gate stores the authorized candidate, the stage 10 gate reuses the stored QA,
+    and a same-identity but different body is refused
+    (``LaunchQAVersionConflictError``). The caller still supplies the reviewed
+    compliance package, the complete check set and the designated authorization,
+    and the domain re-proves the critical path outcomes, the launch-blocking
+    compliance assets and the traffic authorization -- rather than the transport
+    layer asserting them. Sharing this builder keeps the stage 9 and stage 10
+    routes from drifting in how they resolve that upstream dependency.
     """
 
     compliance = CompliancePackage(
@@ -804,7 +834,7 @@ def _authorize_launch_qa(
             for entry in qa_body.compliance.waivers
         ),
     )
-    return LaunchQA(
+    candidate_qa = LaunchQA(
         qa_id=qa_body.qa_id,
         tenant_id=tenant_id,
         funnel=funnel,
@@ -827,6 +857,17 @@ def _authorize_launch_qa(
             intended_use=qa_body.authorization.intended_use,
             authorized_on=qa_body.authorization.authorized_on,
         )
+    )
+    stored_qa = qa_repository.get(tenant_id, qa_body.qa_id)
+    if stored_qa is None:
+        qa_repository.save(candidate_qa)
+        return candidate_qa
+    if stored_qa == candidate_qa:
+        return stored_qa
+    raise LaunchQAVersionConflictError(
+        f"authorized launch QA {qa_body.qa_id!r} was previously pinned for "
+        f"tenant {tenant_id!r} with different content; the stage gate must "
+        "reuse the exact stage 9 launch QA, not re-state it"
     )
 
 
@@ -2320,6 +2361,9 @@ def record_stage_nine_gate(
     funnel_repository: FunnelIntegrationRepository = Depends(
         get_funnel_integration_repository
     ),
+    launch_qa_repository: LaunchQARepository = Depends(
+        get_launch_qa_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 9 "Launch Approved" gate through the use case.
 
@@ -2381,7 +2425,9 @@ def record_stage_nine_gate(
         funnel = _complete_stage_eight_funnel(
             tenant_id, body.funnel, amplifier, funnel_repository
         )
-        qa = _authorize_launch_qa(tenant_id, body.qa, funnel)
+        qa = _authorize_launch_qa(
+            tenant_id, body.qa, funnel, launch_qa_repository
+        )
         package = LaunchQAPackage(
             package_id=body.qa_package_id,
             tenant_id=tenant_id,
@@ -2480,6 +2526,9 @@ def record_stage_ten_gate(
     funnel_repository: FunnelIntegrationRepository = Depends(
         get_funnel_integration_repository
     ),
+    launch_qa_repository: LaunchQARepository = Depends(
+        get_launch_qa_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 10 "Performance Baseline Established" gate.
 
@@ -2504,8 +2553,9 @@ def record_stage_ten_gate(
     twelve canonical kinds may be pinned as passing evidence. The route resolves
     the approved method, production ready offer, approved stage 6 message and
     approved stage 7 amplifier from their stores by exact identity, and resolves the
-    completed stage 8 funnel from its store while re-stating the stage 9 launch QA
-    because no QA store is exposed over the API yet; every integrity rule -- the
+    completed stage 8 funnel and the ready-for-traffic stage 9 launch QA from their
+    stores by exact identity rather than trusting the repeated request body; every
+    integrity rule -- the
     grounded stage 9 dependency, the distinct
     milestones, the observed-first-traffic rule, the canonical kinds, exact
     versions, owner/approver authority and the tenant boundary -- stays enforced by
@@ -2543,7 +2593,9 @@ def record_stage_ten_gate(
         funnel = _complete_stage_eight_funnel(
             tenant_id, body.funnel, amplifier, funnel_repository
         )
-        qa = _authorize_launch_qa(tenant_id, body.qa, funnel)
+        qa = _authorize_launch_qa(
+            tenant_id, body.qa, funnel, launch_qa_repository
+        )
         assets = LaunchAssetPackage(
             live_campaign=body.baseline.assets.live_campaign,
             spend_records=body.baseline.assets.spend_records,

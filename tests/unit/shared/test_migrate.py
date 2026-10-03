@@ -89,8 +89,10 @@ class MigrationRunnerTests(unittest.TestCase):
                     "SELECT to_regclass('public.funnel_integrations')"
                 )
                 self.assertIsNotNone(cursor.fetchone()[0])
+                cursor.execute("SELECT to_regclass('public.launch_qas')")
+                self.assertIsNotNone(cursor.fetchone()[0])
                 cursor.execute("SELECT version_num FROM alembic_version")
-                self.assertEqual(cursor.fetchone()[0], "0007_funnel_integrations")
+                self.assertEqual(cursor.fetchone()[0], "0008_launch_qas")
 
 
 if __name__ == "__main__":  # pragma: no cover

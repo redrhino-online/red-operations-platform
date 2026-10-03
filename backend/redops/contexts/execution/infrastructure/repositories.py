@@ -17,16 +17,22 @@ from typing import Any
 
 from redops.contexts.execution.application.ports import (
     FunnelIntegrationRepository,
+    LaunchQARepository,
 )
-from redops.contexts.execution.domain.entities import FunnelIntegration
+from redops.contexts.execution.domain.entities import FunnelIntegration, LaunchQA
 from redops.contexts.execution.domain.errors import (
     FunnelReadinessError,
     FunnelVersionConflictError,
     FunnelVersionTenantBoundaryError,
+    LaunchQAReadinessError,
+    LaunchQAVersionConflictError,
+    LaunchQAVersionTenantBoundaryError,
 )
 from redops.contexts.execution.infrastructure.mappers import (
     funnel_integration_from_payload,
     funnel_integration_to_payload,
+    launch_qa_from_payload,
+    launch_qa_to_payload,
 )
 
 try:  # psycopg is an app dependency; the domain-only test env lacks it.
@@ -210,3 +216,168 @@ def funnel_integration_repository_from_env(
             "the process-local completed funnel store"
         )
     return PostgresFunnelIntegrationRepository(psycopg.connect(database_url))
+
+
+class LaunchQAConfigurationError(RuntimeError):
+    """The authorized launch QA store was configured without a usable driver.
+
+    A set ``DATABASE_URL`` is an explicit instruction to use the durable store
+    (ADR 0003). Silently falling back to the process-local adapter would accept an
+    authorized stage 9 QA that vanishes on restart, so a missing psycopg driver is
+    a configuration error rather than a degraded mode (SPEC.md sections 3, 4 and
+    9).
+    """
+
+
+def _require_launch_qa_tenant(value: str, operation: str) -> None:
+    """Refuse an unscoped read or write of a client's authorized launch QA.
+
+    SPEC.md sections 3 and 9 make a launch QA a client resource that must carry
+    its tenant on every command and query; storing or resolving one without a
+    client would either leak across clients or create an orphaned record.
+    """
+
+    if not value or not value.strip():
+        raise LaunchQAVersionTenantBoundaryError(
+            f"a tenant-scoped launch QA {operation} requires a non-blank tenant "
+            "id; an authorized launch QA is a client resource and cannot be "
+            "stored or read unscoped"
+        )
+
+
+class InMemoryLaunchQARepository(LaunchQARepository):
+    """Append-only, process-local authorized launch QA store keyed by client and id."""
+
+    def __init__(self) -> None:
+        self._qas: dict[tuple[str, str], LaunchQA] = {}
+
+    def get(self, tenant_id: str, qa_id: str) -> LaunchQA | None:
+        _require_launch_qa_tenant(tenant_id, "read")
+        return self._qas.get((tenant_id, qa_id))
+
+    def save(self, qa: LaunchQA) -> None:
+        _require_launch_qa_tenant(qa.tenant_id, "write")
+        if not qa.is_ready_for_traffic:
+            raise LaunchQAReadinessError(
+                "an authorized launch QA store only holds QAs that passed the "
+                "Launch Approved checkpoint; a stage 9 QA whose traffic has not "
+                "been authorized by the designated authority cannot be stored"
+            )
+        key = (qa.tenant_id, qa.qa_id)
+        existing = self._qas.get(key)
+        if existing is not None and existing != qa:
+            raise LaunchQAVersionConflictError(
+                f"launch QA {qa.qa_id!r} is already stored for tenant "
+                f"{qa.tenant_id!r} with different content; an authorized launch "
+                "QA is immutable and a change must be a new revision"
+            )
+        self._qas[key] = qa
+
+    def close(self) -> None:
+        """A process-local store owns no external resource to release."""
+
+        return None
+
+
+class PostgresLaunchQARepository(LaunchQARepository):
+    """Durable, append-only authorized launch QA store backed by PostgreSQL.
+
+    Rows are created by migration ``0008_launch_qas`` and are scoped by a NOT
+    NULL ``tenant_id`` column (SPEC.md sections 3 and 9). ``get`` reads only the
+    requested tenant's row for the exact ``qa_id`` and rebuilds the aggregate
+    through ``launch_qa_from_payload``, so a stored row the aggregate would reject
+    raises on load rather than being read back as an authorized QA (SPEC.md
+    section 4). ``save`` refuses an unauthorized QA, inserts a new authorized QA,
+    and treats a same-id replay as idempotent while refusing a same-id row with
+    different content: an authorized QA is immutable and a change must be a new
+    revision (SPEC.md sections 3 and 4). Row-level security (ADR 0004) is a
+    follow-up; tenant scoping is enforced here by the WHERE clause and the NOT
+    NULL column.
+    """
+
+    def __init__(self, connection: "psycopg.Connection[Any]") -> None:
+        if psycopg is None:
+            raise RuntimeError(
+                "the PostgreSQL launch QA adapter requires psycopg; install the "
+                "app dependencies (psycopg[binary]) to use it"
+            )
+        self._connection = connection
+
+    def get(self, tenant_id: str, qa_id: str) -> LaunchQA | None:
+        _require_launch_qa_tenant(tenant_id, "read")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT qa
+                FROM launch_qas
+                WHERE tenant_id = %s
+                  AND qa_id = %s
+                """,
+                (tenant_id, qa_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return launch_qa_from_payload(row[0])
+
+    def save(self, qa: LaunchQA) -> None:
+        _require_launch_qa_tenant(qa.tenant_id, "write")
+        if not qa.is_ready_for_traffic:
+            raise LaunchQAReadinessError(
+                "an authorized launch QA store only holds QAs that passed the "
+                "Launch Approved checkpoint; a stage 9 QA whose traffic has not "
+                "been authorized by the designated authority cannot be stored"
+            )
+        existing = self.get(qa.tenant_id, qa.qa_id)
+        if existing is not None:
+            if existing != qa:
+                raise LaunchQAVersionConflictError(
+                    f"launch QA {qa.qa_id!r} is already stored for tenant "
+                    f"{qa.tenant_id!r} with different content; an authorized "
+                    "launch QA is immutable and a change must be a new revision"
+                )
+            return
+        payload = launch_qa_to_payload(qa)
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO launch_qas (
+                    tenant_id,
+                    qa_id,
+                    qa
+                ) VALUES (%s, %s, %s)
+                """,
+                (qa.tenant_id, qa.qa_id, Jsonb(payload)),
+            )
+        self._connection.commit()
+
+    def close(self) -> None:
+        """Release the connection the adapter holds for the request."""
+
+        self._connection.close()
+
+
+def launch_qa_repository_from_env(
+    database_url: str | None,
+) -> LaunchQARepository:
+    """Select the authorized launch QA store from configuration (ADR 0003).
+
+    With a ``DATABASE_URL`` the durable PostgreSQL adapter is used so the stage 9
+    QA a gate authorized survives a restart and is shared across the API and
+    worker processes (SPEC.md sections 3 and 4); without one the process-local
+    reference adapter keeps local development and the domain-only test interpreter
+    working. A set but unusable configuration raises
+    ``LaunchQAConfigurationError`` so a deployment cannot mistake a non-durable
+    store for a durable one. The caller owns the returned adapter's lifecycle and
+    calls ``close`` when the request ends.
+    """
+
+    if database_url is None or not database_url.strip():
+        return InMemoryLaunchQARepository()
+    if psycopg is None:
+        raise LaunchQAConfigurationError(
+            "DATABASE_URL is set but no PostgreSQL driver is installed; install "
+            "the app dependencies (psycopg[binary]) or unset DATABASE_URL to use "
+            "the process-local authorized launch QA store"
+        )
+    return PostgresLaunchQARepository(psycopg.connect(database_url))

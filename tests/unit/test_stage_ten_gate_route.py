@@ -98,6 +98,12 @@ class StageTenGateRouteTests(unittest.TestCase):
         cls.funnel_repository_class = staticmethod(
             StageNineGateRouteTests.funnel_repository_class
         )
+        cls.launch_qa_dependency = staticmethod(
+            StageNineGateRouteTests.launch_qa_dependency
+        )
+        cls.launch_qa_repository_class = staticmethod(
+            StageNineGateRouteTests.launch_qa_repository_class
+        )
         cls.baseline_kinds = CANONICAL_BASELINE_KINDS
 
     def setUp(self) -> None:
@@ -111,6 +117,7 @@ class StageTenGateRouteTests(unittest.TestCase):
         self.message_repository = self.message_repository_class()
         self.amplifier_repository = self.amplifier_repository_class()
         self.funnel_repository = self.funnel_repository_class()
+        self.launch_qa_repository = self.launch_qa_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
@@ -129,6 +136,9 @@ class StageTenGateRouteTests(unittest.TestCase):
         )
         self.app.dependency_overrides[self.funnel_dependency] = (
             lambda: self.funnel_repository
+        )
+        self.app.dependency_overrides[self.launch_qa_dependency] = (
+            lambda: self.launch_qa_repository
         )
         self.client = TestClient(self.app)
 
@@ -343,6 +353,26 @@ class StageTenGateRouteTests(unittest.TestCase):
         self.assertEqual(
             response.json()["detail"]["error"],
             "GateApproverNotAuthorizedError",
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(10))
+
+    def test_a_restated_launch_qa_with_different_content_is_refused(self) -> None:
+        self.seed_through_stage_nine()
+
+        qa = dict(self.payload()["qa"])
+        qa["owner"] = "different-qa-owner"
+        response = self.client.post(self.url(), json=self.payload(qa=qa))
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"],
+            "LaunchQAVersionConflictError",
         )
 
         from redops.contexts.governance.domain.templates import (

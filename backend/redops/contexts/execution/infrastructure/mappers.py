@@ -23,16 +23,29 @@ not a method artifact, so no reference-model file informs its shape.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Mapping
 
-from redops.contexts.execution.domain.entities import FunnelIntegration
+from redops.contexts.execution.domain.entities import (
+    FunnelIntegration,
+    LaunchQA,
+)
 from redops.contexts.execution.domain.value_objects import (
+    ComplianceAsset,
+    ComplianceAssetKind,
+    CompliancePackage,
+    ComplianceWaiver,
     FunnelAssetPackage,
     FunnelState,
     HandoffKind,
     HandoffOutcome,
     HandoffRecord,
+    LaunchQAState,
     ProspectPathDryRun,
+    QACheck,
+    QACheckKind,
+    QACheckOutcome,
+    TrafficAuthorization,
 )
 from redops.contexts.production.infrastructure.mappers import (
     authority_amplifier_from_payload,
@@ -161,5 +174,167 @@ def funnel_integration_from_payload(
         assets=_assets_from_payload(payload["assets"]),
         state=FunnelState(str(payload["state"])),
         dry_run=_dry_run_from_payload(payload.get("dry_run")),
+        review_reason=payload.get("review_reason"),
+    )
+
+
+def _compliance_to_payload(compliance: CompliancePackage | None) -> dict[str, Any] | None:
+    if compliance is None:
+        return None
+    return {
+        "package_id": compliance.package_id,
+        "tenant_id": compliance.tenant_id,
+        "target_markets": list(compliance.target_markets),
+        "assets": [
+            {
+                "kind": asset.kind.value,
+                "tenant_id": asset.tenant_id,
+                "reference": asset.reference,
+                "version": asset.version,
+            }
+            for asset in compliance.assets
+        ],
+        "waivers": [
+            {
+                "kind": waiver.kind.value,
+                "reason": waiver.reason,
+                "risk_owner": waiver.risk_owner,
+                "review_trigger": waiver.review_trigger,
+                "expires_on": (
+                    waiver.expires_on.isoformat()
+                    if waiver.expires_on is not None
+                    else None
+                ),
+            }
+            for waiver in compliance.waivers
+        ],
+    }
+
+
+def _compliance_from_payload(
+    payload: Mapping[str, Any] | None,
+) -> CompliancePackage | None:
+    if payload is None:
+        return None
+    return CompliancePackage(
+        package_id=str(payload["package_id"]),
+        tenant_id=str(payload["tenant_id"]),
+        target_markets=tuple(str(m) for m in payload["target_markets"]),
+        assets=tuple(
+            ComplianceAsset(
+                kind=ComplianceAssetKind(str(entry["kind"])),
+                tenant_id=str(entry["tenant_id"]),
+                reference=str(entry["reference"]),
+                version=int(entry["version"]),
+            )
+            for entry in payload["assets"]
+        ),
+        waivers=tuple(
+            ComplianceWaiver(
+                kind=ComplianceAssetKind(str(entry["kind"])),
+                reason=str(entry["reason"]),
+                risk_owner=str(entry["risk_owner"]),
+                review_trigger=str(entry["review_trigger"]),
+                expires_on=(
+                    date.fromisoformat(str(entry["expires_on"]))
+                    if entry.get("expires_on") is not None
+                    else None
+                ),
+            )
+            for entry in payload["waivers"]
+        ),
+    )
+
+
+def _qa_checks_to_payload(checks: tuple[QACheck, ...]) -> list[dict[str, Any]]:
+    return [
+        {
+            "kind": check.kind.value,
+            "outcome": check.outcome.value,
+            "evidence": check.evidence,
+            "owner": check.owner,
+            "detail": check.detail,
+        }
+        for check in checks
+    ]
+
+
+def _qa_checks_from_payload(
+    payload: list[Mapping[str, Any]],
+) -> tuple[QACheck, ...]:
+    return tuple(
+        QACheck(
+            kind=QACheckKind(str(entry["kind"])),
+            outcome=QACheckOutcome(str(entry["outcome"])),
+            evidence=str(entry["evidence"]),
+            owner=str(entry.get("owner", "")),
+            detail=str(entry.get("detail", "")),
+        )
+        for entry in payload
+    )
+
+
+def _authorization_to_payload(
+    authorization: TrafficAuthorization | None,
+) -> dict[str, Any] | None:
+    if authorization is None:
+        return None
+    return {
+        "authorized_by": authorization.authorized_by,
+        "intended_use": authorization.intended_use,
+        "authorized_on": authorization.authorized_on.isoformat(),
+    }
+
+
+def _authorization_from_payload(
+    payload: Mapping[str, Any] | None,
+) -> TrafficAuthorization | None:
+    if payload is None:
+        return None
+    return TrafficAuthorization(
+        authorized_by=str(payload["authorized_by"]),
+        intended_use=str(payload["intended_use"]),
+        authorized_on=date.fromisoformat(str(payload["authorized_on"])),
+    )
+
+
+def launch_qa_to_payload(qa: LaunchQA) -> dict[str, Any]:
+    """Serialise an authorized stage 9 launch QA into the JSONB payload.
+
+    The grounding stage 8 ``FunnelIntegration`` is emitted through the funnel
+    mapper and the compliance package keeps its own canonical field names, so the
+    QA cannot drift from the shapes of the assets it pins. A reload re-validates
+    through ``LaunchQA`` construction: a QA that storage cannot legally hold (a
+    blank identity, a grounding funnel from another tenant, a ready QA with no
+    compliance package) raises rather than being read back as authorized.
+    """
+
+    return {
+        "qa_id": qa.qa_id,
+        "tenant_id": qa.tenant_id,
+        "funnel": funnel_integration_to_payload(qa.funnel),
+        "owner": qa.owner,
+        "designated_authority": qa.designated_authority,
+        "checks": _qa_checks_to_payload(qa.checks),
+        "state": qa.state.value,
+        "authorization": _authorization_to_payload(qa.authorization),
+        "compliance": _compliance_to_payload(qa.compliance),
+        "review_reason": qa.review_reason,
+    }
+
+
+def launch_qa_from_payload(payload: Mapping[str, Any]) -> LaunchQA:
+    """Rebuild a launch QA from a stored payload for re-validation."""
+
+    return LaunchQA(
+        qa_id=str(payload["qa_id"]),
+        tenant_id=str(payload["tenant_id"]),
+        funnel=funnel_integration_from_payload(payload["funnel"]),
+        owner=str(payload["owner"]),
+        designated_authority=str(payload["designated_authority"]),
+        checks=_qa_checks_from_payload(payload["checks"]),
+        state=LaunchQAState(str(payload["state"])),
+        authorization=_authorization_from_payload(payload.get("authorization")),
+        compliance=_compliance_from_payload(payload.get("compliance")),
         review_reason=payload.get("review_reason"),
     )

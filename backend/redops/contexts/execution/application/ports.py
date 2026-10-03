@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import abc
 
-from redops.contexts.execution.domain.entities import FunnelIntegration
+from redops.contexts.execution.domain.entities import FunnelIntegration, LaunchQA
 
 
 class FunnelIntegrationRepository(abc.ABC):
@@ -35,6 +35,29 @@ class FunnelIntegrationRepository(abc.ABC):
     @abc.abstractmethod
     def save(self, funnel: FunnelIntegration) -> None:
         """Store a completed funnel, refusing a different same-id body."""
+
+    def close(self) -> None:
+        """A default no-op so a process-local adapter need not implement it."""
+
+
+class LaunchQARepository(abc.ABC):
+    """Seam for approved stage 9 launch QAs, keyed by client and QA id.
+
+    SPEC.md section 3: a passing gate pins the exact approved asset versions and
+    intended use; SPEC.md section 4 keeps a previous approved version
+    historically identifiable. The store is append-only per ``(tenant_id,
+    qa_id)``: an authorized launch QA is immutable, and the stage 10 gate
+    resolves it rather than re-declaring it. ``close`` releases any connection
+    the adapter opened.
+    """
+
+    @abc.abstractmethod
+    def get(self, tenant_id: str, qa_id: str) -> LaunchQA | None:
+        """Return the exact authorized launch QA, or ``None`` if unknown."""
+
+    @abc.abstractmethod
+    def save(self, qa: LaunchQA) -> None:
+        """Store an authorized launch QA, refusing a different same-id body."""
 
     def close(self) -> None:
         """A default no-op so a process-local adapter need not implement it."""

@@ -97,6 +97,12 @@ class StageNineGateRouteTests(unittest.TestCase):
         cls.funnel_repository_class = staticmethod(
             StageEightGateRouteTests.funnel_repository_class
         )
+        cls.launch_qa_dependency = staticmethod(
+            StageEightGateRouteTests.launch_qa_dependency
+        )
+        cls.launch_qa_repository_class = staticmethod(
+            StageEightGateRouteTests.launch_qa_repository_class
+        )
         cls.launch_kinds = CANONICAL_LAUNCH_KINDS
 
     def setUp(self) -> None:
@@ -110,6 +116,7 @@ class StageNineGateRouteTests(unittest.TestCase):
         self.message_repository = self.message_repository_class()
         self.amplifier_repository = self.amplifier_repository_class()
         self.funnel_repository = self.funnel_repository_class()
+        self.launch_qa_repository = self.launch_qa_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
@@ -128,6 +135,9 @@ class StageNineGateRouteTests(unittest.TestCase):
         )
         self.app.dependency_overrides[self.funnel_dependency] = (
             lambda: self.funnel_repository
+        )
+        self.app.dependency_overrides[self.launch_qa_dependency] = (
+            lambda: self.launch_qa_repository
         )
         self.client = TestClient(self.app)
 

@@ -4,7 +4,75 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T180725Z (Ralph cycle, this run): selected item was the durable
+- Cycle 2026-10-03T180944Z (Ralph cycle, this run): selected item was the durable
+  `LaunchQARepository` for the Execution context (port, mapper, migration and
+  PostgreSQL adapter) plus the resolve-not-restate rule for the stage 9 QA, the
+  exact next item the prior cycle named (SPEC.md sections 3, 4, 6 and 9; queue
+  Q6). The stage 10 route re-stated the ready-for-traffic stage 9 `LaunchQA` from
+  the request body, so a later gate could silently declare a different launch QA
+  after the stage 9 "Launch Approved" checkpoint. It outranked the Next.js
+  `frontend/` shell (DoD 6, blocked on the workflow engine Q5 via Q15), the larger
+  required-kind wiring (Q28, which changes every stage's asset package and route)
+  and the still-open gate-integrity items. The loop prioritizes exact approved
+  asset versions and persistence over downstream features. This closes Q6: the
+  funnel and launch-QA aggregates were the last two named there.
+- Outcome: new Execution application port `LaunchQARepository`
+  (`backend/redops/contexts/execution/application/ports.py`) and the Execution
+  `infrastructure` mappers/repositories extended in the same shape as the funnel
+  store. `launch_qa_to_payload`/`..._from_payload` round-trip the full authorized
+  QA (state, the pinned `TrafficAuthorization`, the complete `CompliancePackage`
+  with assets, waivers and target markets, the full check set, and the grounding
+  stage 8 `FunnelIntegration` via the funnel mapper), so the QA cannot drift from
+  the funnel shape and a reload re-validates through `LaunchQA.__post_init__`.
+  `InMemoryLaunchQARepository` and `PostgresLaunchQARepository` refuse a QA without
+  traffic authorization (`LaunchQAReadinessError`), a same-id different-body
+  re-statement (`LaunchQAVersionConflictError`) and a blank tenant
+  (`LaunchQAVersionTenantBoundaryError`). Migration `0008_launch_qas` creates
+  `launch_qas(id, tenant_id NOT NULL, qa_id, qa JSONB, recorded_at,
+  UNIQUE(tenant_id, qa_id))`. `api/routes.py::get_launch_qa_repository` is an
+  env-selected generator like the method, offer, message, amplifier and funnel
+  stores, and `_authorize_launch_qa(..., qa_repository=)` now resolves the QA: the
+  stage 9 gate stores the authorized candidate, the stage 10 gate reuses the
+  stored QA, and a different same-id body is refused (422). Both stage 9 and 10
+  routes take the new dependency.
+- Evidence: `make check` -> 1900 passed, 1 skipped, 656 subtests; pyflakes clean.
+  New `tests/unit/execution/test_launch_qa_repository.py` (7 plus 3 mapper tests)
+  and `test_launch_qa_postgres.py` (8, against the compose DB, exercising the real
+  migration), a stage 10 re-statement refusal test in
+  `tests/unit/test_stage_ten_gate_route.py`, an app-smoke QA-dep default test, and
+  `tests/unit/shared/test_migrate.py` head now `0008_launch_qas`. The stage nine
+  and ten route tests thread the QA dep override through the composed
+  StageEight/Nine setUpClass chain. `make done` clears [1/6]-[4/6] and still fails
+  at [5/6] (`frontend/` missing).
+- New findings: the durable QA store now satisfies DoD condition 4 for
+  `LaunchQA`; the stage 9 launch QA is tenant-scoped, immutable and shared across
+  processes, and stage 10 grounds on it. Q6 is complete for every aggregate it
+  named. The resolve-not-restate rule now covers stages 6, 7, 8 and 9; the only
+  pipeline gate left without it is stage 10 itself, which is terminal in the
+  prototype and is not consumed by a later gate.
+- Blockers: `frontend/` (DoD condition 6, Q32) is blocked on the workflow engine
+  Q5 via Q15; request idempotency (Q16) blocked on the same; RLS is a WHERE clause
+  only (ADR 0004); the condition 3 retrieval, background worker and artifact-URL
+  layers are unbuilt; the remaining canon gap register entries need named-owner
+  decisions.
+- Highest priority ready next item: wire the implemented canon-informed assets as
+  required asset kinds of their target stage gates (queue Q28; owner decision
+  2026-10-03), the larger required-kind policy item the last several cycles have
+  repeatedly deferred as the alternative. It advances gate integrity and
+  dependency enforcement across stages 1 to 10 by pinning each implemented asset
+  as exact gate evidence through the existing `StageTemplate`/`StageGate` factory,
+  in stage order, without adding or renaming a stage (SPEC.md sections 4 and
+  12.5). Stage 1 first; required assets: the `MarketAwarenessMap`,
+  `AudienceReachEstimate` and `TargetMarketCandidate`; approver: the client
+  designated authority; blocked downstream dependency: the stage 2 Currency
+  Locked gate. Prerequisite: none beyond the assets already in place. Alternatives
+  rejected this cycle: the Next.js `frontend/` shell (DoD 6, blocked on Q5 via
+  Q15) and request idempotency (Q16, blocked on Q5). Canon gap register unchanged
+  this cycle; no new gap identified.
+
+### Prior cycle (2026-10-03T180725Z)
+
+- Cycle 2026-10-03T180725Z (Ralph cycle): selected item was the durable
   `FunnelIntegrationRepository` for the Execution context (port, mapper,
   migration and PostgreSQL adapter) plus the resolve-not-restate rule for the
   stage 9 and 10 gates, the exact next item the prior cycle named (SPEC.md
@@ -1411,7 +1479,7 @@ stalls:
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
 | Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key |
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test |
-| Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005) and authority amplifiers (0006); funnel and launch-QA aggregates remain |
+| Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
 | Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams |
 | Q9 | REST `/clients` and `/clients/{id}/sources` | api | Q7 | route tests, tenant scoping, pagination |
