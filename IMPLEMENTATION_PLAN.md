@@ -4,7 +4,81 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T201934Z (Ralph cycle, this run): selected item was Q36, the
+- Cycle 2026-10-03T202056Z (Ralph cycle, this run): selected item was Q37, the
+  offer and journey editor screen (SPEC.md sections 3, 5, 7 and 8; section 13
+  condition 6; queue item Q37). It is the highest priority ready item: its only
+  dependency Q36 is done, and it is now the head of the Q37-Q45 chain for
+  condition 6, the largest unstarted DoD condition. It outranks alternatives:
+  Q38-Q45 each depend on Q37; Q28 stage 8-10 required kinds are still blocked on
+  the named methodology-owner placement decision; Q16 needs a workflow write
+  route and a connector seam; Q3/Q4 need the ADR 0006 resolution and a live key;
+  Q8 layer coverage and the condition 2 cross-client-retrieval scenario have no
+  retrieval/worker/artifact seam yet; Q47-Q50 need the Atlas cluster. Q31 also
+  blocks condition 2 on a connector idempotency seam and the deploy-only
+  scenarios. The canon gap register has no ready pipeline item: its remaining
+  entries are implemented or are candidate pipeline additions awaiting a
+  named-owner decision, so no canon-covered method artifact outranks this gate
+  work.
+- Outcome: new `frontend/src/features/offer-journey/` feature.
+  `OfferJourneyEditor.tsx` is a presentational view over the tenant-scoped
+  approved offers and authorized journey releases: it renders each stage 5
+  production-ready offer (audience, promise, eligibility, price hypothesis,
+  owner, state and the exact method versions it pins, with a visible warning when
+  no method dependency is pinned) and each stage 8/9 journey release (routing,
+  configuration digest, rollback ref, released kinds and the exact pinned asset
+  versions), with the `pinnedMethodRefs` and `releasedAssetKinds` helpers
+  stabilizing display order; `OfferJourneyEditorScreen.tsx` owns the two
+  tenant-scoped reads from `GET /red/offers?tenant_id=` and
+  `GET /red/journeys?tenant_id=` in parallel; route `/offer-and-journey`
+  (`src/app/offer-and-journey/page.tsx`) binds the `offer-and-journey-editor`
+  screen id now declared in `frontend/dod-screens.txt`. The API client gained
+  `MethodReference`, `OfferVersion`, `OfferList`, `JourneyReleaseAsset`,
+  `JourneyRelease`, `JourneyReleaseList`, `listOffers` and `listJourneys`. No
+  product authority, gate decision or pipeline stage changed; the UI can approve
+  no offer and authorize no traffic. The stage 5 shape follows canon files 11 and
+  12 and the routing shape canon files 13, 14, 21 and 22, cited in the component
+  docstring (SPEC.md section 12.4).
+- Evidence: `frontend/src/features/offer-journey/OfferJourneyEditor.test.tsx`
+  (9 tests) pins `pinnedMethodRefs` ordering and empty handling,
+  `releasedAssetKinds` sorting, offer field and pinned-method rendering, the
+  missing-method warning, journey routing/digest/rollback/kinds/asset rendering,
+  the loading/error states, both empty states, and a stubbed-fetch screen read
+  asserting both tenant-scoped request paths. `npm test` -> 5 files, 32 passed
+  (9 new). `npm run build` -> compiled, `/offer-and-journey` route emitted.
+  `make check` -> 2265 passed, 2 skipped, 704 subtests passed.
+  `bash scripts/check_frontend_build.sh frontend` -> exit 0.
+  `bash scripts/check_frontend_screens.sh frontend` -> still exit 1, now 7
+  remaining section 8 ids (build-board, approval-inbox, workflow-run-detail,
+  launch-readiness, performance-review, portfolio-opportunities,
+  authority-settings; condition 6 needs Q38-Q45). `make done` still fails first
+  at `[2/6]` condition 2.
+- New findings: both reads are tenant-query-scoped (`GET /red/offers?tenant_id=`
+  and `GET /red/journeys?tenant_id=`) and read-only, matching SPEC.md section 7
+  and the backend's required-scope rule, so the editor needed only client types
+  and methods and no new backend route. An offer already returns its pinned
+  `method_refs` (method id, version, intended use) and a release already returns
+  its `released_kinds` and exact asset versions, so the editor re-derives no
+  offer-readiness or release-authorization rule; a release only exists after the
+  stage 9 launch QA is signed ready and authorized, and the offer only lists
+  production-ready versions, so the screen shows approved structure only.
+- Blockers (unchanged): `frontend/` Q38-Q45 are the path to DoD condition 6;
+  Q8's retrieval, worker and artifact-URL isolation coverage and the condition 2
+  cross-client-retrieval scenario are blocked until those seams exist; Q28 stage
+  8-10 required kinds blocked on the named methodology-owner placement decision;
+  Q16 idempotency keys blocked on a workflow write route and a connector seam;
+  Q3 agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
+  deploy-only scenarios need the Atlas cluster and a chosen backup target.
+- Highest priority ready next item: Q38, the build board with dependency view.
+  Required asset: a build board at a declared route showing the tenant-scoped
+  build objects with their dependency view and per-build owner, state and next
+  action (SPEC.md sections 3, 4 and 8) over the tenant-scoped build read, plus
+  its browser test; checkpoint: none (UI, not a gate); approver: none. Blocked
+  downstream dependency: Q39-Q45. Prerequisite: Q37 (done this cycle).
+
+### Prior cycle (2026-10-03T201934Z)
+
+- Cycle 2026-10-03T201934Z (Ralph cycle, prior): selected item was Q36, the
   transformation map screen (SPEC.md sections 3, 4 and 8; section 13 condition
   6; queue item Q36). It is the highest priority ready item: its only dependency
   Q35 is done, and it is the head of the Q37-Q45 chain for condition 6, the
@@ -4039,7 +4113,7 @@ stalls:
 | Q34 | Client workspace overview | ui | Q33 | Done 2026-10-03T201508Z: `frontend/src/features/client-workspace/` (`ClientWorkspaceOverview.tsx` presentational, `ClientWorkspaceOverviewScreen.tsx` tenant/engagement/date read, route `/client-workspace`, `frontend/dod-screens.txt` declares the screen id) over `getProductionView` (`GET /red/clients/{tenant}/engagements/{engagement}/production-view?on=`). `npm run build` clean, `npm test` 5 new passed (10 total), `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 10 remaining screens |
 | Q35 | Source and claim explorer | ui | Q34 | Done 2026-10-03T201635Z: `frontend/src/features/source-explorer/` (`SourceClaimExplorer.tsx` presentational with `claimsForSource`/`groundedClaims`, `SourceClaimExplorerScreen.tsx` tenant-scoped parallel read, route `/source-explorer`, `frontend/dod-screens.txt` declares the screen id) over `listSources`/`listClaims` (`GET /red/clients/{tenant}/sources` and `GET /red/claims?tenant_id=`). `npm run build` clean, `npm test` 6 new passed (16 total), `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 9 remaining screens |
 | Q36 | Transformation map | ui | Q35 | Done 2026-10-03T201934Z: `frontend/src/features/transformation-map/` (`TransformationMap.tsx` presentational with the `transformationSteps` phase-flattening helper, `TransformationMapScreen.tsx` tenant-scoped read, route `/transformation-map`, `frontend/dod-screens.txt` declares the screen id) over `listMethods` (`GET /red/methods?tenant_id=`). The method read now projects the pinned stage 4 `signature_solution` (transformation map, start/final states, narrative, three phases, nine named steps with inputs/actions/outputs) via the shared `signature_solution_to_payload` mapper plus `SignatureSolutionResponse`/`TransformationPhaseResponse`/`SignatureStepResponse`. `npm run build` clean (`/transformation-map` emitted), `npm test` 7 new passed (23 total), `tests/unit/method/test_methods_route.py` 6 passed, `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 8 remaining screens |
-| Q37 | Offer and journey editor | ui | Q36 | browser test |
+| Q37 | Offer and journey editor | ui | Q36 | Done 2026-10-03T202056Z: `frontend/src/features/offer-journey/` (`OfferJourneyEditor.tsx` presentational with the `pinnedMethodRefs`/`releasedAssetKinds` helpers, `OfferJourneyEditorScreen.tsx` parallel tenant-scoped read, route `/offer-and-journey`, `frontend/dod-screens.txt` declares the screen id) over `listOffers`/`listJourneys` (`GET /red/offers?tenant_id=` and `GET /red/journeys?tenant_id=`). Stage 5 shape cites canon 11-12 and routing cites canon 13-14, 21-22. `npm run build` clean (`/offer-and-journey` emitted), `npm test` 9 new passed (32 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 7 remaining screens |
 | Q38 | Build board with dependency view | ui | Q37 | browser test |
 | Q39 | Approval inbox with exact version diff | ui | Q38 | browser test; version diff shown |
 | Q40 | Workflow run detail | ui | Q39 | browser test |

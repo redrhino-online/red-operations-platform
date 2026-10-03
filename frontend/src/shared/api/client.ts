@@ -222,6 +222,74 @@ export interface MethodVersionList {
   methods: MethodVersion[];
 }
 
+// One production ready offer version and its pinned method dependencies
+// (SPEC.md sections 3, 5, 7 and 8; Q37). The stage 5 shape is informed by canon
+// files 11 and 12 (Perfect Product, Product Matrix, pricing by outcome). Mirrors
+// `OfferVersionResponse` in `backend/redops/api/schemas.py`. The editor reads the
+// exact approved offer and its pinned method references; the UI recomputes no
+// readiness rule and can approve nothing.
+export interface MethodReference {
+  method_id: string;
+  version: string;
+  intended_use: string;
+}
+
+export interface OfferVersion {
+  offer_id: string;
+  tenant_id: string;
+  audience: string;
+  promise: string;
+  eligibility: string;
+  price_hypothesis: string;
+  owner: string;
+  state: string;
+  is_production_ready: boolean;
+  method_refs: MethodReference[];
+  review_reason: string | null;
+}
+
+export interface OfferList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  offers: OfferVersion[];
+}
+
+// One authorized journey release and its routing (SPEC.md sections 3, 7 and 8;
+// Q37). The stage 8 routing shape is informed by canon files 13, 14, 21 and 22
+// (CAC funnel, funnel template, page set, swimlanes). Mirrors
+// `JourneyReleaseResponse` in `backend/redops/api/schemas.py`. The release pins
+// exact asset versions and is only surfaced after a signed, authorized stage 9
+// launch QA, so the editor shows routing but can authorize no traffic.
+export interface JourneyReleaseAsset {
+  asset_id: string;
+  tenant_id: string;
+  kind: string;
+  version: number;
+}
+
+export interface JourneyRelease {
+  release_id: string;
+  tenant_id: string;
+  qa_id: string;
+  assets: JourneyReleaseAsset[];
+  routing: string;
+  configuration_digest: string;
+  rollback_ref: string;
+  released_kinds: string[];
+  is_signed_ready: boolean;
+  is_authorized: boolean;
+}
+
+export interface JourneyReleaseList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  releases: JourneyRelease[];
+}
+
 // The production-manager view one client engagement (SPEC.md sections 4 and 8;
 // Q34). Mirrors `EngagementProductionViewResponse` in `backend/redops/api/
 // schemas.py`. State, provenance (exact pinned asset versions), dependencies,
@@ -372,6 +440,30 @@ export class RedOperationsApi extends RedApiClient {
     params: ListParams = {},
   ): Promise<MethodVersionList> {
     return this.get<MethodVersionList>("/red/methods", {
+      tenant_id: tenantId,
+      ...params,
+    });
+  }
+
+  // The offer and journey editor reads (SPEC.md sections 3, 5, 7, 8 and 9;
+  // Q37). The tenant is the required query scope on both routes and both reads
+  // are read-only, so a client never sees another's offers or releases and the
+  // screen can approve no offer and authorize no traffic.
+  listOffers(
+    tenantId: string,
+    params: ListParams = {},
+  ): Promise<OfferList> {
+    return this.get<OfferList>("/red/offers", {
+      tenant_id: tenantId,
+      ...params,
+    });
+  }
+
+  listJourneys(
+    tenantId: string,
+    params: ListParams = {},
+  ): Promise<JourneyReleaseList> {
+    return this.get<JourneyReleaseList>("/red/journeys", {
       tenant_id: tenantId,
       ...params,
     });
