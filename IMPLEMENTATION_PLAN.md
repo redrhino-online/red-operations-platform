@@ -31,8 +31,9 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   deferred; the app identity provider decision is deferred and the UI auth gate
   stays patched off for the internal LAN-only host; backups are deferred (owner
   will pick a target before client data); external access stays home-LAN-only;
-  capability agents 10/11 get proposed charters via one PR each, grounded in the
-  reference canon and the RED delivery pipeline; canon files 19/20 remain a known
+  capability agents 10/11 charters are proposed in PR #1 and PR #2, grounded in
+  the reference canon and the RED delivery pipeline, and are blocked awaiting the
+  operator's merge; canon files 19/20 remain a known
   blocker the owner will close.
 - Blockers: Tier 2 facts only the RED principal holds — approver/owner
   identities, pilot metric targets and 3F launch scope, model-provider data
@@ -184,8 +185,9 @@ Decisions still open, each with a named owner (the RED principal unless noted):
 app identity provider for client-facing auth (the UI auth gate is currently
 patched off); pilot metric targets and 3F launch scope; backup target and restore
 drills for truenas PVs, PostgreSQL and /data; charters for capability agents 10
-and 11 (owner action: open one PR each proposing a charter grounded in the
-reference canon, the RED method and the delivery pipelines); acquisition of canon
+and 11 (proposed now: PR #1 Client Success and Engagement Health, PR #2
+Assurance, Risk and Compliance, both open and blocked awaiting the operator's
+merge); acquisition of canon
 files 19/20 (sales/enrollment and email/follow-up modules) — a known blocker the
 owner will close when the content arrives; and per-stage required-kind decisions
 for the planning assets (enrollment, content roadmap, retargeting, dashboards).
