@@ -44,8 +44,13 @@ from redops.contexts.commercial.domain.errors import (
     InvalidOfferFunnelAuditError,
     InvalidOfferPackageError,
     InvalidPositioningDecisionError,
+    InvalidProductProgramError,
     InvalidSignaturePackageError,
     InvalidTargetMarketMatchmakerError,
+    ProductProgramDependencyError,
+    ProductProgramObservationError,
+    ProductProgramPricingError,
+    ProductProgramTenantBoundaryError,
     MarketAwarenessTargetingError,
     NurtureDependencyError,
     NurtureObservationError,
@@ -2635,4 +2640,296 @@ class ContentCrusher:
         raise ContentCrusherObservationError(
             f"content crusher {claim_id!r} is content to produce, not an observed "
             "result, and cannot be recorded as an observation"
+        )
+
+
+class ProductMatrixModel(Enum):
+    """The canon's seven ways to monetize a signature solution (canon 11, 12).
+
+    SPEC.md section 4, stage 5 "Productize" names the delivery model, and
+    SPEC.md section 12.3 shapes it with the canon's Perfect Product training
+    (canon files 11 and 12). The canon calls the seven models "the top seven
+    business models that you can use to monetize your knowledge" (canon file 11)
+    and recommends group consulting as the best of both worlds. The model is the
+    typed form of that delivery choice.
+    """
+
+    BOOKS_AND_INFO_PRODUCTS = "books_and_info_products"
+    TRAINING_AND_MEMBERSHIPS = "training_and_memberships"
+    SOFTWARE_APPLICATIONS = "software_applications"
+    LIVE_EVENTS_AND_WORKSHOPS = "live_events_and_workshops"
+    GROUP_CONSULTING = "group_consulting"
+    ONE_ON_ONE_CONSULTING = "one_on_one_consulting"
+    DONE_FOR_YOU_AGENCY = "done_for_you_agency"
+
+
+PRODUCT_MATRIX_MODELS: tuple[ProductMatrixModel, ...] = (
+    ProductMatrixModel.BOOKS_AND_INFO_PRODUCTS,
+    ProductMatrixModel.TRAINING_AND_MEMBERSHIPS,
+    ProductMatrixModel.SOFTWARE_APPLICATIONS,
+    ProductMatrixModel.LIVE_EVENTS_AND_WORKSHOPS,
+    ProductMatrixModel.GROUP_CONSULTING,
+    ProductMatrixModel.ONE_ON_ONE_CONSULTING,
+    ProductMatrixModel.DONE_FOR_YOU_AGENCY,
+)
+
+RECOMMENDED_PRODUCT_MODEL = ProductMatrixModel.GROUP_CONSULTING
+
+
+class ProgramPricingBasis(Enum):
+    """How a product program is priced (canon file 11).
+
+    The canon prices the program "based on outcomes and value to your clients,
+    not time and materials" (canon file 11). The basis is the typed form of that
+    choice, and the time and materials basis is refused.
+    """
+
+    OUTCOME_VALUE = "outcome_value"
+    TIME_AND_MATERIALS = "time_and_materials"
+
+
+class ProgramCadence(Enum):
+    """The canon's weekly delivery rhythm (canon file 12).
+
+    The canon's Monday and Thursday method releases one piece of training on
+    Monday and one coaching session on Thursday (canon file 12), so the program
+    delivers at most one module a week.
+    """
+
+    MONDAY_TRAINING_THURSDAY_COACHING = "monday_training_thursday_coaching"
+
+
+MINIMUM_PROGRAM_WEEKS = 6
+MAXIMUM_PROGRAM_WEEKS = 12
+
+
+@dataclass(frozen=True)
+class ProductModule:
+    """One step of the signature solution delivered as a program module.
+
+    SPEC.md section 12.3 shapes stage 5 with the canon's Perfect Product training
+    (canon files 11 and 12). The canon structures the program as one module per
+    step of the signature solution: "break your signature solution into nine
+    clear modules" (canon file 12), and each module names the outcome it produces
+    and the deliverable it leaves with the client. The module is frozen and
+    reject-only, so a module that leaves its step, outcome or deliverable unstated
+    cannot be represented as part of the program.
+    """
+
+    module_id: str
+    tenant_id: str
+    signature_step: str
+    position: int
+    outcome: str
+    deliverable: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("product module id", self.module_id),
+            ("product module tenant id", self.tenant_id),
+            ("product module signature step", self.signature_step),
+            ("product module outcome", self.outcome),
+            ("product module deliverable", self.deliverable),
+        ):
+            if not value or not value.strip():
+                raise InvalidProductProgramError(f"{label} is required")
+        if isinstance(self.position, bool) or not isinstance(self.position, int):
+            raise InvalidProductProgramError(
+                "a product module position must be an integer"
+            )
+        if self.position < 1:
+            raise InvalidProductProgramError(
+                "a product module position must be a positive integer"
+            )
+
+
+@dataclass(frozen=True)
+class ProductProgram:
+    """The canon's productized offer for one client and one Signature Solution.
+
+    SPEC.md section 4, stage 5 "Productize" and its "Offer Locked" checkpoint
+    need a delivery model, duration, pricing and a deliverable for every method
+    step, and SPEC.md section 12.3 shapes stage 5 with the canon's Perfect
+    Product training (canon files 11 and 12). The canon chooses one of the
+    product matrix's seven business models (canon file 11), structures the
+    program over six to twelve weeks (canon file 12), prices it on outcomes and
+    value rather than time and materials (canon file 11) and delivers it on the
+    Monday training and Thursday coaching cadence (canon file 12). The program is
+    grounded on the same-tenant stage 4 ``SignatureSolution`` and delivers each
+    of its steps as one module.
+
+    It is frozen and reject-only, so a blank identity or owner, an untyped model,
+    a time and materials pricing basis, a duration outside six to twelve weeks, a
+    cadence other than Monday and Thursday, a foreign or absent method, a
+    duplicate module, a module for a step the method does not have or a program
+    that packs more weekly modules than it has weeks cannot be represented as a
+    productized offer.
+
+    It is a stage 5 planning asset, not a new required gate kind (a
+    methodology-owner decision, SPEC.md section 12.5). It does not authorize
+    spending, publishing or client commitments (SPEC.md sections 4 and 9) and it
+    is never an observation (SPEC.md section 3).
+    """
+
+    program_id: str
+    tenant_id: str
+    owner: str
+    method: SignatureSolution
+    model: ProductMatrixModel
+    pricing_basis: ProgramPricingBasis
+    duration_weeks: int
+    cadence: ProgramCadence
+    modules: tuple[ProductModule, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("product program id", self.program_id),
+            ("product program tenant id", self.tenant_id),
+            ("product program owner", self.owner),
+        ):
+            if not value or not value.strip():
+                raise InvalidProductProgramError(f"{label} is required")
+        if not isinstance(self.model, ProductMatrixModel):
+            raise InvalidProductProgramError(
+                "a product program must choose a typed product matrix model"
+            )
+        if not isinstance(self.pricing_basis, ProgramPricingBasis):
+            raise InvalidProductProgramError(
+                "a product program must name a typed pricing basis"
+            )
+        if self.pricing_basis is ProgramPricingBasis.TIME_AND_MATERIALS:
+            raise ProductProgramPricingError(
+                f"product program {self.program_id!r} prices on time and "
+                "materials, but the canon prices the program on outcomes and "
+                "value to the client"
+            )
+        if isinstance(self.duration_weeks, bool) or not isinstance(
+            self.duration_weeks, int
+        ):
+            raise InvalidProductProgramError(
+                "a product program duration must be a whole number of weeks"
+            )
+        if not MINIMUM_PROGRAM_WEEKS <= self.duration_weeks <= MAXIMUM_PROGRAM_WEEKS:
+            raise InvalidProductProgramError(
+                "a product program duration must be between "
+                f"{MINIMUM_PROGRAM_WEEKS} and {MAXIMUM_PROGRAM_WEEKS} weeks, got "
+                f"{self.duration_weeks}"
+            )
+        if not isinstance(self.cadence, ProgramCadence):
+            raise InvalidProductProgramError(
+                "a product program must name a typed delivery cadence"
+            )
+        if self.cadence is not ProgramCadence.MONDAY_TRAINING_THURSDAY_COACHING:
+            raise InvalidProductProgramError(
+                "a product program must deliver on the canon's Monday training "
+                "and Thursday coaching cadence"
+            )
+        if not isinstance(self.method, SignatureSolution):
+            raise ProductProgramDependencyError(
+                "a product program must be grounded on a typed stage 4 Signature "
+                "Solution"
+            )
+        if self.method.tenant_id != self.tenant_id:
+            raise ProductProgramTenantBoundaryError(
+                f"product program {self.program_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Signature Solution "
+                f"{self.method.solution_id!r} belongs to tenant "
+                f"{self.method.tenant_id!r}"
+            )
+        modules = tuple(self.modules)
+        if not modules:
+            raise InvalidProductProgramError(
+                f"product program {self.program_id!r} requires at least one module"
+            )
+        step_names = {step.name for step in self.method.steps}
+        seen_ids: set[str] = set()
+        seen_steps: set[str] = set()
+        for module in modules:
+            if not isinstance(module, ProductModule):
+                raise InvalidProductProgramError(
+                    "a product program module must be a typed product module"
+                )
+            if module.tenant_id != self.tenant_id:
+                raise ProductProgramTenantBoundaryError(
+                    f"product program {self.program_id!r} cites module "
+                    f"{module.module_id!r} from another tenant"
+                )
+            if module.module_id in seen_ids:
+                raise InvalidProductProgramError(
+                    f"product program {self.program_id!r} contains duplicate module "
+                    f"id {module.module_id!r}"
+                )
+            seen_ids.add(module.module_id)
+            if module.signature_step in seen_steps:
+                raise InvalidProductProgramError(
+                    f"product program {self.program_id!r} delivers step "
+                    f"{module.signature_step!r} more than once"
+                )
+            seen_steps.add(module.signature_step)
+            if module.signature_step not in step_names:
+                raise ProductProgramDependencyError(
+                    f"product module {module.module_id!r} teaches step "
+                    f"{module.signature_step!r}, which the program's Signature "
+                    "Solution does not name"
+                )
+        if len(modules) > self.duration_weeks:
+            raise InvalidProductProgramError(
+                f"product program {self.program_id!r} delivers {len(modules)} "
+                f"modules in {self.duration_weeks} weeks, but the Monday and "
+                "Thursday cadence delivers at most one module a week"
+            )
+
+    @property
+    def covered_steps(self) -> tuple[str, ...]:
+        """The Signature Solution steps the program already delivers."""
+        modules = self.modules
+        return tuple(
+            step.name
+            for step in self.method.steps
+            if any(module.signature_step == step.name for module in modules)
+        )
+
+    @property
+    def missing_steps(self) -> tuple[str, ...]:
+        """Signature Solution steps the program does not yet deliver."""
+        covered = set(self.covered_steps)
+        return tuple(
+            step.name for step in self.method.steps if step.name not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_steps
+
+    def module_for(self, step_name: str) -> ProductModule:
+        """Return the single module delivering a named Signature Solution step."""
+        for module in self.modules:
+            if module.signature_step == step_name:
+                return module
+        raise ProductProgramDependencyError(
+            f"Signature Solution step {step_name!r} has no module in product "
+            f"program {self.program_id!r}"
+        )
+
+    @property
+    def is_recommended_model(self) -> bool:
+        """Whether the program chose the canon's recommended group consulting."""
+        return self.model is RECOMMENDED_PRODUCT_MODEL
+
+    @property
+    def is_plan(self) -> bool:
+        """A product program is a plan, not activity or an observed result."""
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a product program as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The
+        program describes the delivery model and pricing that will run, while any
+        measured movement is a separate observation, so a program is never an
+        observation.
+        """
+        raise ProductProgramObservationError(
+            f"product program {claim_id!r} is a delivery and pricing plan, not an "
+            "observed result, and cannot be recorded as an observation"
         )

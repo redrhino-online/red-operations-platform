@@ -4,53 +4,60 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T06:09:57Z (Ralph cycle 125).
-- Selected item: build the canon's content measurement loop (canon files 23 and
-  30) as the pure Measurement `AudienceBuildObservation`, closing the measurement
-  half of the audience-building and content flywheel canon gap (SPEC.md section
-  12.5). It is a canon-covered, decision-free stage 10 asset: the audience
-  campaign already plans the target cost per ten-second view and declares that
-  "the audience size it later reaches is a separate observation" (its own
-  docstring), and canon file 30's diagnostic rule ("if the cost is super high then
-  you have a problem with the topic; so you can stop it") had no typed observation
-  to read. It outranks the remaining bounded wiring follow-ups (awareness map,
-  matchmaker, funnel finder, transformations, umbrella, swimlanes, enrollment,
-  invisible opt-in, banner library, content roadmap, syndication and crusher into
-  gates or views), each of which needs a methodology-owner decision on a required
-  kind, and the blocked persistence work, which needs the storage ADR. It is not a
-  new pipeline stage.
+- Cycle timestamp: 2026-10-03T06:12:00Z (Ralph cycle 126).
+- Selected item: build the canon's Product Matrix and perfect product program
+  (canon files 11 and 12) as the pure Commercial Design `ProductProgram`
+  (`ProductMatrixModel`, `ProgramPricingBasis`, `ProgramCadence`, `ProductModule`),
+  closing the newly recorded stage 5 "Productize" gap where the delivery model and
+  pricing were free text on the `DeliverySpecification`. It is a canon-covered,
+  decision-free stage 5 asset: SPEC.md section 4 stage 5 names the delivery model,
+  duration and pricing but is silent on their substance, so the canon governs
+  (SPEC.md section 12.1), and canon file 11 makes choosing one of the product
+  matrix's seven business models and pricing on outcomes and value, not time and
+  materials, the center of "Productize". It outranks the remaining bounded wiring
+  follow-ups (awareness map, matchmaker, funnel finder, transformations, umbrella,
+  swimlanes, enrollment, invisible opt-in, banner library, content roadmap,
+  syndication, crusher and product program into gates or views), each of which
+  still needs a methodology-owner decision on a required kind, and the blocked
+  persistence work, which needs the storage ADR. It strengthens stage 5 gate
+  integrity rather than adding a downstream feature, and it is not a new pipeline
+  stage.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: the content measurement loop now lives in the Measurement bounded
-  context as the pure value object `AudienceBuildObservation`, with the named
-  errors `InvalidAudienceBuildObservationError`,
-  `AudienceBuildObservationDependencyError`,
-  `AudienceBuildObservationTenantBoundaryError`,
-  `AudienceBuildObservationBasisError` and
-  `AudienceBuildObservationWindowOpenError`. It binds a named owner to a
-  same-tenant `VideoViewAudienceCampaign`, an explicit closed `MeasurementWindow`,
-  an observed basis, a positive integer audience size and a positive Decimal cost
-  per ten-second view, and an observation source; it refuses a blank identity, a
-  non-positive or non-integer audience size, a non-positive or non-Decimal cost,
-  an untyped or cross-tenant campaign, an untyped window or basis, a placeholder
-  basis and a result read before its window closed. It exposes
-  `meets_target_cost` and `indicates_topic_problem` against the campaign's own
-  target cost, and projects to an OBSERVATION `PerformanceClaim` so the loop stays
-  an observation, never a causal conclusion. New behavioral coverage: 14 tests in
-  `tests/unit/measurement/test_audience_build_observation.py`. Running
+- Evidence: the product program now lives in the Commercial Design bounded
+  context as the pure, frozen value object `ProductProgram` with the named errors
+  `InvalidProductProgramError`, `ProductProgramPricingError`,
+  `ProductProgramDependencyError`, `ProductProgramTenantBoundaryError` and
+  `ProductProgramObservationError`. It chooses exactly one typed
+  `ProductMatrixModel` from the canon's seven (books and info products; training
+  and memberships; software applications; live events and workshops; group
+  consulting; one to one coaching and consulting; done for you agency), binds a
+  named owner and the same-tenant stage 4 `SignatureSolution`, requires an
+  outcome-and-value `ProgramPricingBasis` (refusing time and materials), a
+  six-to-twelve week duration on the Monday training and Thursday coaching
+  `ProgramCadence`, and at least one `ProductModule` per method step, each naming
+  its outcome and deliverable. It refuses a blank identity or owner, an untyped
+  model, basis or cadence, a time and materials price, a duration outside six to
+  twelve weeks, a foreign or absent method, a duplicate module id, two modules for
+  one step, a module for a step the method does not name, more weekly modules than
+  weeks and a cross-tenant method or module; it reports `covered_steps`,
+  `missing_steps`, `is_complete`, `module_for`, `is_recommended_model` and
+  `is_plan`, and never an observation. New behavioral coverage: 27 tests in
+  `tests/unit/commercial/test_product_program.py`. Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1539 passed, up from 1525. `python3 -m pyflakes backend/redops tests` is
+  reports 1566 passed, up from 1539. `python3 -m pyflakes backend/redops tests` is
   clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the content flywheel gap had a "produce" half (the crusher built
-  in cycle 124) and a "measure" half that was still represented only in prose. The
-  campaign's `target_cost_per_view` is a plan figure; the canonical diagnostic is
-  the observed cost per ten-second view and the size of the warm audience that was
-  actually built (canon file 30: "22,000 people to advertise to", "$0.03 for a 10
-  second video view"; canon file 23: a "top of funnel audience" of "25,000 people"
-  at "20 cents each"). The observation is read only after its window closes and
-  never from a placeholder, matching the metric registry discipline (cycles 93 and
-  100). The loop is stage 10 measurement, not a required gate kind: wiring an
-  observed audience into the stage 10 `PerformanceBaseline` milestone set is a
-  methodology-owner decision recorded below.
+- New findings: the canon gap register and the stage 5 required package had no
+  typed representation of the product matrix or the pricing basis, so a stage 5
+  `DeliverySpecification` could carry any delivery model and could be priced on
+  time and materials while still passing "Offer Locked". The canon treats the
+  model choice and outcome-based pricing as the substance of Productize (canon
+  files 11 and 12: "how to price and deliver your product" and "pricing based on
+  outcomes and value ... not time and materials"). This cycle records the gap and
+  implements it as an asset inside stage 5; wiring it into a required stage 5 gate
+  kind remains a methodology-owner decision recorded below. The program duration
+  lower bound of six weeks and the upper bound of twelve are the canon's stated
+  range, and the rule that a program cannot pack more weekly modules than it has
+  weeks comes from the weekly Monday and Thursday release cadence.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant model
   given slot-based single-active-client isolation, the lifecycle transition graph
@@ -58,35 +65,51 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   identities, and pilot metric targets. Persistence and the Operations delivery
   adapter still depend on the storage ADR; the placement of the planning assets
   built since cycle 110 (including the content roadmap, the syndication plan, the
-  audience campaign, the invisible opt-in, the banner library, the crusher and now
-  this observation) in a required stage 8/10 kind still needs a methodology-owner
-  decision. Any spend, send or publish authorization remains a human decision
-  (SPEC.md sections 4 and 9).
-- Highest priority ready next item: with this cycle the content flywheel gap is
-  complete for its planning and measurement scope, and the remaining named domain
-  work is either implemented or blocked on a named-owner decision (target
-  stage/kind, storage ADR, missing canon modules). The single most useful
-  unblocker is still a named-owner decision on the storage ADR (it releases
-  persistence for every pure artifact and the Operations delivery adapter)
-  followed by the methodology-owner decision on required stage 8/10 asset kinds
-  (it releases wiring the awareness map, matchmaker, funnel finder,
-  transformations, umbrella, swimlanes, enrollment, content roadmap, content
-  syndication, content crusher, content measurement loop, invisible opt-in and
-  banner library into gates or views). Until then the next implementable slice, if
-  a decision is granted, is wiring the content roadmap and crusher into a stage 6
-  required kind or the banner library and the invisible opt-in into a stage 8/10
+  audience campaign, the invisible opt-in, the banner library, the crusher, the
+  content measurement loop and now the product program) in a required gate kind
+  still needs a methodology-owner decision. Any spend, send or publish
+  authorization remains a human decision (SPEC.md sections 4 and 9).
+- Highest priority ready next item: with this cycle the newly found Product Matrix
+  gap is closed and the remaining named domain work is either implemented or
+  blocked on a named-owner decision (target stage/kind, storage ADR, missing canon
+  modules). The single most useful unblocker is still a named-owner decision on
+  the storage ADR (it releases persistence for every pure artifact and the
+  Operations delivery adapter) followed by the methodology-owner decision on
+  required stage 5/6/8/10 asset kinds (it releases wiring the product program, the
+  awareness map, the matchmaker, the funnel finder, the transformations, the
+  umbrella, the swimlanes, the enrollment, the content roadmap, the content
+  syndication, the content crusher, the content measurement loop, the invisible
+  opt-in and the banner library into gates or views). Until then the next
+  implementable slice, if a decision is granted, is wiring the product program
+  into a stage 5 required kind or the content roadmap and crusher into a stage 6
   required kind.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; a stage-parameterized gate recorder/handler refactor;
   projecting the compliance package onto a canonical stage 9 gate kind
-  (methodology-owner decision); wiring the Swimlanes, umbrella, transformation,
-  awareness/matcher/finder, enrollment, content syndication, invisible opt-in and
-  banner-ad reference plans into the production view, the command center or a
-  required gate kind (methodology-owner decisions); the content measurement loop
-  (completed in cycle 125 as the Measurement `AudienceBuildObservation`, with
-  wiring an observed audience into the stage 10 baseline a methodology-owner
-  decision); and all persistence.
+  (methodology-owner decision); wiring the product program, the Swimlanes, the
+  umbrella, the transformation, the awareness/matcher/finder, the enrollment, the
+  content syndication, the invisible opt-in and the banner-ad reference plans into
+  the production view, the command center or a required gate kind
+  (methodology-owner decisions); the content measurement loop (completed in cycle
+  125 as the Measurement `AudienceBuildObservation`, with wiring an observed
+  audience into the stage 10 baseline a methodology-owner decision); and all
+  persistence.
+  [DONE 2026-10-03 (Ralph cycle 126): built the canon's Product Matrix and perfect
+  product program as the pure Commercial Design `ProductProgram`
+  (`ProductMatrixModel`, `ProgramPricingBasis`, `ProgramCadence`, `ProductModule`),
+  which chooses one of the canon's seven business models for the offer, requires
+  outcome-and-value pricing rather than time and materials, a six-to-twelve week
+  duration on the Monday training and Thursday coaching cadence, and one module
+  per step of the same-tenant stage 4 `SignatureSolution`, each with an outcome
+  and a deliverable, refusing a cross-tenant or absent method, a duplicate module,
+  a module for a step the method does not name, a time and materials price and
+  more weekly modules than weeks (SPEC.md sections 4 and 12.3; canon files 11 and
+  12), so the stage 5 delivery model and pricing basis now have a typed, canon-
+  shaped form; verified by `tests/unit/commercial/test_product_program.py` (27
+  tests, full suite 1566 passed). It is a stage 5 planning asset, not a required
+  gate kind (a methodology-owner decision), and authorizes no spend, publish or
+  client commitment.]
   [DONE 2026-10-03 (Ralph cycle 124): built the canon's Content Crusher as the
   pure Commercial Design `ContentPromise` (a measure and a timeline) and
   `ContentCrusher`, which grounds a named owner on a same-tenant `ContentRoadmap`
@@ -730,6 +753,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: implemented 2026-10-03 (Ralph cycle 94) as the Execution `CompliancePackage` (`ComplianceAssetKind`, `ComplianceAsset`, `ComplianceWaiver`) with the `ComplianceRequiredPolicy` gating `LaunchQA` traffic authorization, so "Launch Approved" needs every required asset or a live owned waiver; projecting the compliance assets onto their own canonical stage 9 gate kind remains a candidate that needs a named-owner decision.
 - Positioning and decision tools (Target Market Matchmaker, awareness levels, Funnel Finder) — canon 00, 04, 13, 14 — stages 1 and 2 — status: implemented 2026-10-03 (Ralph cycle 112) for the market awareness levels as the Commercial Design `MarketAwarenessMap` (`MarketAwarenessLevel`), which types the stage 1 `awareness-map` kind with the canon's five levels, requires research evidence and message requirements, rejects a retarget level that is not strictly further down the funnel, and projects to exact `StageAssetVersion` evidence; implemented 2026-10-03 (Ralph cycle 113) for the Target Market Matchmaker as the Commercial Design `TargetMarketCandidate` and `TargetMarketMatchmaker`, which narrows at least two canon-judged candidates to the one to serve now, grounds the chosen market on a same-tenant `MarketAwarenessMap`, and has `TargetMarketMatchPolicy.require_servable` refuse a market whose awareness position is not initially targetable; and implemented 2026-10-03 (Ralph cycle 114) for the Funnel Finder as the Commercial Design `FunnelProfile`, `FunnelType`, `OfferPriceBand` and `FunnelFinder`, which chooses one of the canon's funnel types from the four canon factors, narrows at least two considered types to the selected one with a rationale, and has `FunnelSelectionPolicy.require_price_fit` refuse a high-ticket offer with a self-serve funnel and a low-ticket offer with the sales-call CAC funnel (canon 13, 14). No candidate remains in this gap. Wiring the awareness map, the match or the finder into the `AvatarProfile`, the stage 1 `DiagnosisPackage`, the stage 6 `CampaignMessage` or the stage 8 `FunnelIntegration` is a bounded follow-up; none is a required gate kind yet (a methodology-owner decision).
 - Thirteen transformations (the overall shift, three phase shifts and nine step-level from/to pairs, titled from the million dollar message) — canon 09, 10 — stage 4 — status: implemented 2026-10-03 (Ralph cycle 118) as the pure Method `Transformation`, `TransformationScope` and `ThirteenTransformations`, which ground on a same-tenant stage 4 `SignatureSolution`, require exactly one overall shift titled with the Million Dollar Message, three phase shifts and nine step shifts (thirteen total), match each shift's from/to states to the solution's own states, and refuse a missing/extra/duplicate shift, a shift naming a phase or step the solution does not have, a no-op shift and a cross-tenant solution or shift, and never represent the structure as an observation. It is a method structure asset, not a new required stage 4 gate kind; wiring it into the `SignaturePackage` bridge or a required kind remains a bounded follow-up and a methodology-owner decision.
+- Product Matrix and perfect product (the seven business models, group consulting, pricing on outcomes not time and materials, the six-to-twelve week program, one module per signature step, Monday training and Thursday coaching) — canon 11, 12 — stage 5 — status: implemented 2026-10-03 (Ralph cycle 126) as the pure Commercial Design `ProductProgram` (`ProductMatrixModel`, `ProgramPricingBasis`, `ProgramCadence`, `ProductModule`), which chooses one of the canon's seven business models, binds a named owner and the same-tenant stage 4 `SignatureSolution`, requires outcome-and-value pricing (refusing time and materials), a six-to-twelve week duration on the Monday training and Thursday coaching cadence, and one module per method step with an outcome and a deliverable, refuses an untyped model, basis or cadence, a foreign or absent method, a duplicate module, two modules for one step, a module for a step the method does not name, more weekly modules than weeks and a cross-tenant method or module, reports the covered and missing steps and is never an observation. This asset is inside stage 5, not a new stage; SPEC.md section 12.5 did not seed it, so it is recorded here as a newly identified gap because the stage 5 `DeliverySpecification` left the delivery model and pricing as free text. Wiring it into a required stage 5 gate kind remains a bounded follow-up and a methodology-owner decision, and any spend or client commitment stays a human decision.
 - Umbrella planning (Online Business Launch Map, Bulletproof Business Plan) — canon 00, 01 — over stages 0 to 10 — status: implemented 2026-10-03 (Ralph cycle 116) as the new Portfolio `UmbrellaPlan` (`LaunchMapSection`, `UmbrellaSection`, `BusinessTarget`, `QuarterlyReview`), which binds a named owner, a same-tenant `ClientWorkspace` and a versioned `StageTemplate` to exactly the canon's four launch-map sections (Foundation, Signature Solution, Funnel, Floodgates) covering every template stage exactly once, requires at least one specific measurable business target and an ordered 90-day revisit history, and has `UmbrellaReviewPolicy.require_current` refuse an overdue plan. Mapping the canon's four strategy parts onto stages 0-2/3-5/6-9/10 is a documented intentional deviation from the canon's 12-week calendar. Wiring the plan into the production view or a required gate kind remains a bounded follow-up and a methodology-owner decision.
 - Swimlanes channel model — canon 13, 14, 33, 34 — cross-cutting stages 8 to 10 — status: implemented 2026-10-03 (Ralph cycle 117) as the pure Execution `SwimlanesPlan` (`SwimlaneChannel`, `SwimlaneMove`), which types the canon's five channels (messages, ads, human outreach, offline and direct mail, content), maps each stalled funnel step to a distinct next step with a vehicle and one action, grounds on a same-tenant stage 8 `FunnelIntegration`, binds a named owner and reports the channels it covers and misses, and has `SwimlaneCoveragePolicy.require_all_channels` refuse a single-source plan (canon file 34: "you can't be single source dependent"). It lives in Execution because Commercial cannot import the Execution `FunnelIntegration` without a production-commercial-execution import cycle. Wiring it into the production view, the command center or a stage 8/10 kind remains a bounded follow-up and a methodology-owner decision, so it stays a planning asset rather than a required gate kind.
 - Missing canon files 19 and 20; promised sales/enrollment and email/follow-up modules absent — status: unresolved, request from license owner.

@@ -628,3 +628,61 @@ class ContentCrusherObservationError(CommercialError):
     """
 
 
+class InvalidProductProgramError(CommercialError, ValueError):
+    """A product program or one of its modules was built without its content.
+
+    SPEC.md section 4, stage 5 "Productize" and its "Offer Locked" checkpoint
+    need the delivery model, duration and pricing named, and SPEC.md section 12.3
+    shapes stage 5 with the canon's Perfect Product training (canon files 11 and
+    12). The canon chooses one of the product matrix's seven business models,
+    structures the offer over six to twelve weeks and delivers it on the Monday
+    training and Thursday coaching cadence. A module missing its step, outcome or
+    deliverable, or a program with a blank identity or owner, an untyped model, a
+    duration outside six to twelve weeks, a cadence other than Monday and
+    Thursday, a duplicate module or a module that names no method step cannot be
+    represented as a productized offer.
+    """
+
+
+class ProductProgramPricingError(CommercialError):
+    """A product program was priced against time and materials.
+
+    The canon prices the program "based on outcomes and value to your clients,
+    not time and materials" (canon file 11), because charging for time caps the
+    business and attracts clients who are not invested in the result. A program
+    whose pricing basis is time and materials cannot be represented as a canon-
+    shaped offer (SPEC.md sections 4 and 12.3).
+    """
+
+
+class ProductProgramDependencyError(CommercialError):
+    """A product program was not grounded on the locked Signature Solution.
+
+    SPEC.md section 12.3 shapes stage 5 with the canon's Perfect Product training
+    (canon files 11 and 12), which structures the program as one module per step
+    of the signature solution: "break your signature solution into nine clear
+    modules" (canon file 12). A program must be grounded on a same-tenant stage 4
+    ``SignatureSolution`` and every module must teach one of that solution's
+    named steps. A module for a step the method does not have cannot be
+    represented as part of the offer.
+    """
+
+
+class ProductProgramTenantBoundaryError(CommercialError):
+    """A product program mixed in an asset from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. A
+    program, its modules and the Signature Solution it is grounded on cannot
+    cross a tenant boundary.
+    """
+
+
+class ProductProgramObservationError(CommercialError):
+    """A product program was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The program
+    describes the delivery model and pricing that will run, while any measured
+    movement stays a separate observation, so a program is never an observation.
+    """
+
+
