@@ -31,6 +31,7 @@ from redops.contexts.execution.domain.errors import (
     PerformanceBaselineIncompleteError,
     PerformanceBaselinePrecedenceError,
     PerformanceClaimSupportError,
+    SwimlaneCoverageError,
 )
 from redops.contexts.execution.domain.value_objects import (
     HANDOFF_ORDER,
@@ -42,6 +43,7 @@ from redops.contexts.execution.domain.value_objects import (
     ProspectPathDryRun,
     TrafficAuthorization,
 )
+from redops.contexts.execution.domain.swimlanes import SwimlanesPlan
 
 
 class FunnelCompletionPolicy:
@@ -329,4 +331,26 @@ class PerformanceClaimPolicy:
                 f"sample size {claim.sample_size} is below the minimum "
                 f"{minimum_sample}; a low sample cannot support a causal "
                 "conclusion, record the movement as an interpretation"
+            )
+
+
+class SwimlaneCoveragePolicy:
+    """Refuses a swimlanes plan that depends on too few channels.
+
+    The canon warns "you can't just rely on email" and "you can't be single source
+    dependent" (canon file 34), and SPEC.md section 12.5 requires recovering
+    stalled prospects "across all channels, not only digital ads". A plan that
+    leaves a canon channel unused cannot claim to recover prospects across all
+    channels, so the policy refuses it rather than treating a partial plan as a
+    whole recovery strategy.
+    """
+
+    def require_all_channels(self, plan: SwimlanesPlan) -> None:
+        missing = plan.missing_channels()
+        if missing:
+            names = ", ".join(channel.value for channel in missing)
+            raise SwimlaneCoverageError(
+                f"swimlanes plan {plan.plan_id!r} does not use the canon channel "
+                f"set; missing {names}, and a single-source recovery plan is not "
+                "the canon's five-lane model"
             )

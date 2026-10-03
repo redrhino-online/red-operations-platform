@@ -210,3 +210,64 @@ class PerformanceBaselinePackageTenantBoundaryError(PerformanceBaselineError):
     belong to that workspace's tenant. A cross-tenant stage 10 baseline cannot be
     pinned as this client's gate evidence.
     """
+
+
+class SwimlanesError(ExecutionError):
+    """Base class for canon Swimlanes channel model rule violations."""
+
+
+class InvalidSwimlanesError(SwimlanesError, ValueError):
+    """A SwimlanesMove or SwimlanesPlan violates an invariant.
+
+    SPEC.md section 12.5 records the canon's Swimlanes channel model -- messages,
+    ads, human outreach, offline and direct mail, content (canon files 13, 14, 33
+    and 34) -- as a cross-cutting canon gap over stages 8 to 10. The canon's five
+    swimlanes are the modalities that "gently move" a stalled prospect "to the
+    next step" (canon file 13), so a move names its channel, the step the prospect
+    is stuck on, the next step it drives them to, the vehicle it uses and the one
+    action it presents. A plan binds a named owner and at least one typed move.
+    A blank identity, a missing or untyped field, a move that does not change the
+    prospect's step, an empty or untyped move set, or a duplicate move identity
+    cannot be represented as a recovery plan.
+    """
+
+
+class SwimlanesTenantBoundaryError(SwimlanesError):
+    """A Swimlanes plan mixed in a funnel or move from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. A
+    swimlanes plan belongs to the tenant of the stage 8 funnel it recovers for, so
+    a plan cannot cross a tenant boundary and a move cannot come from another
+    client.
+    """
+
+
+class SwimlanesDependencyError(SwimlanesError):
+    """A Swimlanes plan was not grounded on a typed stage 8 funnel.
+
+    SPEC.md section 12.5 places the Swimlanes channel model cross-cutting over
+    stages 8 to 10, and the plan recovers prospects that stall in the integrated
+    stage 8 funnel. A plan must therefore be grounded on a typed, same-tenant
+    ``FunnelIntegration`` before it can plan recovery moves for it.
+    """
+
+
+class SwimlaneCoverageError(SwimlanesError):
+    """A Swimlanes plan depends on too few channels to recover stalled prospects.
+
+    The canon warns "you can't just rely on email" and "you can't be single source
+    dependent" (canon file 34), and SPEC.md section 12.5 requires recovering
+    stalled prospects "across all channels, not only digital ads". A plan that
+    does not use all five canon channels is missing the reach the model exists to
+    provide, so the coverage policy refuses it rather than presenting a partial
+    plan as complete.
+    """
+
+
+class SwimlanesObservationError(SwimlanesError):
+    """A Swimlanes plan was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The plan
+    describes the recovery moves that will run, while any measured movement stays
+    a separate observation, so a plan is never an observation.
+    """
