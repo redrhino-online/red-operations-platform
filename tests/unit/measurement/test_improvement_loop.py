@@ -30,6 +30,7 @@ from redops.contexts.measurement.domain.errors import (
     ImprovementDependencyError,
     ImprovementNotApprovedError,
     ImprovementObservationError,
+    ImprovementObservationWindowError,
     ImprovementOutcomeSupportError,
     ImprovementStateError,
     InvalidImprovementError,
@@ -374,6 +375,75 @@ class ImprovementOutcomeTests(unittest.TestCase):
 
         with self.assertRaises(FrozenInstanceError):
             outcome.summary = "tampered"
+
+
+class ImprovementApprovalPrecedenceTests(unittest.TestCase):
+    """An improvement's result cannot be read before its owner authorized it.
+
+    SPEC.md section 4: "performance recommendations require evidence and owner
+    approval before material changes", and only then is the change applied and its
+    result read. The canon's optimization discipline (canon files 23 and 24: "I
+    wait 10 days to see how it does"; "don't touch anything for 10 days") treats
+    the result window as starting after the authorized change, so an after
+    observation window that begins before the named owner's approval date is
+    refused. The before window (the baseline period) may of course precede the
+    approval.
+    """
+
+    def test_an_outcome_cannot_read_its_after_window_before_owner_approval(self):
+        with self.assertRaises(ImprovementObservationWindowError):
+            approved_improvement().record_outcome(
+                outcome=improvement_outcome(
+                    before=measurement_record(
+                        record_id="measure-before-3f",
+                        value=12.0,
+                        window=MeasurementWindow(
+                            start=date(2026, 9, 1), end=date(2026, 9, 14)
+                        ),
+                    ),
+                    after=measurement_record(
+                        record_id="measure-after-3f",
+                        value=8.0,
+                        window=MeasurementWindow(
+                            start=date(2026, 9, 15), end=date(2026, 9, 20)
+                        ),
+                    ),
+                )
+            )
+
+    def test_the_after_window_may_begin_on_the_approval_date(self):
+        approved = improvement_proposal().approve(
+            approval=improvement_approval(approved_on=date(2026, 9, 15))
+        )
+
+        measured = approved.record_outcome(
+            outcome=improvement_outcome(
+                before=measurement_record(
+                    record_id="measure-before-3f",
+                    value=12.0,
+                    window=MeasurementWindow(
+                        start=date(2026, 9, 1), end=date(2026, 9, 14)
+                    ),
+                ),
+                after=measurement_record(
+                    record_id="measure-after-3f",
+                    value=8.0,
+                    window=MeasurementWindow(
+                        start=date(2026, 9, 15), end=date(2026, 9, 20)
+                    ),
+                ),
+            )
+        )
+
+        self.assertTrue(measured.is_measured)
+
+    def test_a_grounded_outcome_observes_after_its_approval_date(self):
+        measured = measured_improvement()
+
+        self.assertGreaterEqual(
+            measured.outcome.after.window.start,
+            measured.approval.approved_on,
+        )
 
 
 class ImprovementMetricGroundingTests(unittest.TestCase):

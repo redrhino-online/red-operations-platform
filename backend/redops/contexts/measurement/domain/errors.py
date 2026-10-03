@@ -43,6 +43,19 @@ class ImprovementObservationError(MeasurementError, ValueError):
     """
 
 
+class ImprovementObservationWindowError(MeasurementError):
+    """An outcome reads its after window before the owner approved the change.
+
+    SPEC.md section 4: a performance recommendation requires owner approval
+    before a material change, and only then is the change applied and its result
+    read. The canon's optimization discipline (canon files 23 and 24: "I wait 10
+    days to see how it does"; "don't touch anything for 10 days") starts the
+    result window after the authorized change, so an after observation window
+    cannot begin before the improvement's approval date. The before window, which
+    is the baseline period, may precede the approval.
+    """
+
+
 class ImprovementDependencyError(MeasurementError):
     """An improvement is not grounded on an established same-tenant baseline.
 

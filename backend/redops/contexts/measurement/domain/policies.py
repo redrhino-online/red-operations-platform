@@ -16,6 +16,7 @@ from redops.contexts.measurement.domain.errors import (
     ImprovementMetricMismatchError,
     ImprovementNotApprovedError,
     ImprovementObservationError,
+    ImprovementObservationWindowError,
     ImprovementOutcomeSupportError,
     ImprovementStateError,
     MetricBaselineNotObservedError,
@@ -80,7 +81,10 @@ class ImprovementMeasurementPolicy:
     canon's optimization discipline (canon files 23 and 24) does not accept a
     placeholder figure as a real metric, so an observed record is required and the
     projected observations must cite the approved baseline so the movement stays
-    traceable and distinct from a causal conclusion.
+    traceable and distinct from a causal conclusion. The canon also reads the
+    result only after the change was authorized ("I wait 10 days to see how it
+    does"; "don't touch anything for 10 days"), so the after observation window
+    cannot begin before the owner's approval date.
     """
 
     def require(
@@ -109,6 +113,14 @@ class ImprovementMeasurementPolicy:
             raise ImprovementDependencyError(
                 f"improvement {proposal.proposal_id!r} cannot be measured: its "
                 "performance baseline is no longer established"
+            )
+        approval = proposal.approval
+        if approval is not None and outcome.after.window.start < approval.approved_on:
+            raise ImprovementObservationWindowError(
+                f"improvement {proposal.proposal_id!r} was approved on "
+                f"{approval.approved_on}, but its after observation window "
+                f"starts {outcome.after.window.start}; a result window cannot "
+                "read before the owner approved the change"
             )
         for label, record in (("before", outcome.before), ("after", outcome.after)):
             if not record.is_observed:
