@@ -3,7 +3,7 @@ SHELL := /usr/bin/env bash
 
 REPO ?= .
 RALPH ?= ./ralph_cycle.sh
-COUNT := $(or $(n),$(N))
+COUNT := $(or $(n),$(N),1)
 
 # Local development database. The docker-compose postgres service exposes this
 # URL. Exporting it keeps the persistence adapter and migration tests running
@@ -51,6 +51,7 @@ $(filter-out help,$(HELP_ALIASES)): help
 help:
 	@printf '%s\n' \
 	  'make run                 Run one Ralph cycle' \
+	  'make loop                Run one cycle (n defaults to 1)' \
 	  'make loop n=5            Run five sequential Ralph cycles' \
 	  'make loop n=-1           Run continuously until done, STOP or a hard error' \
 	  'make run REPO=../fork    Run against a Git checkout in another folder' \

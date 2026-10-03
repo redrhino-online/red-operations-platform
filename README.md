@@ -30,7 +30,7 @@ To use it, put this README, `SPEC.md`, `IMPLEMENTATION_PLAN.md`, `ralph_cycle.sh
 make run REPO=/path/to/your/fork
 ```
 
-For several cycles, set `n` to a positive whole number. For `n=-1`, it runs continuously until the definition of done, a `.ralph/STOP` file, or a hard error. The count variable accepts either lowercase or uppercase `n`, and the command name ignores letter case. Each cycle starts after the previous one ends and reads the updated plan:
+For several cycles, set `n` to a positive whole number; if `n` is omitted it defaults to 1. For `n=-1`, it runs continuously until the definition of done, a `.ralph/STOP` file, or a hard error. The count variable accepts either lowercase or uppercase `n`, and the command name ignores letter case. Each cycle starts after the previous one ends and reads the updated plan:
 
 ```bash
 make loop n=5 REPO=/path/to/your/fork
