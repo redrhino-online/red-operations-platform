@@ -52,6 +52,7 @@ help:
 	@printf '%s\n' \
 	  'make run                 Run one Ralph cycle' \
 	  'make loop n=5            Run five sequential Ralph cycles' \
+	  'make loop n=-1           Run continuously until done, STOP or a hard error' \
 	  'make run REPO=../fork    Run against a Git checkout in another folder' \
 	  'make check               Run the full test suite (with Postgres) and pyflakes' \
 	  'make done                Run the prototype definition-of-done gate (SPEC section 13)' \
@@ -76,19 +77,27 @@ reset-hosted:
 	@./scripts/reset_redop_data.sh
 
 loop:
-	@[[ "$(COUNT)" =~ ^[1-9][0-9]*$$ ]] || { printf 'Use: make loop n=5, where n is a positive whole number\n' >&2; exit 2; }
+	@if [[ "$(COUNT)" != "-1" ]] && [[ ! "$(COUNT)" =~ ^[1-9][0-9]*$$ ]]; then \
+	  printf 'Use: make loop n=5 for five cycles, or make loop n=-1 to run continuously\n' >&2; exit 2; fi
 	@failures=0; cycle=1; \
-	while (( cycle <= $(COUNT) )); do \
+	if (( $(COUNT) == -1 )); then limit=9223372036854775807; continuous=1; total="continuous"; else limit=$(COUNT); continuous=0; total=$(COUNT); fi; \
+	while (( cycle <= limit )); do \
 	  if [[ -e "$(REPO)/.ralph/STOP" ]]; then \
 	    printf 'Stop requested: %s exists; halting before cycle %s\n' "$(REPO)/.ralph/STOP" "$$cycle"; \
 	    break; \
 	  fi; \
-	  if (( cycle == $(COUNT) )); then remotes="$(FINAL_PUSH_REMOTES)"; else remotes="$(PUSH_REMOTES)"; fi; \
-	  printf '\nRalph cycle %s of %s (publish: %s)\n' "$$cycle" "$(COUNT)" "$$remotes"; \
+	  if (( continuous == 0 )) && (( cycle == limit )); then remotes="$(FINAL_PUSH_REMOTES)"; else remotes="$(PUSH_REMOTES)"; fi; \
+	  printf '\nRalph cycle %s of %s (publish: %s)\n' "$$cycle" "$$total" "$$remotes"; \
 	  status=0; RALPH_PUSH_REMOTES="$$remotes" RALPH_PLAN_PUSH_REMOTES="$$remotes" "$(RALPH)" "$(REPO)" || status=$$?; \
 	  if (( status == 3 )); then \
 	    if [[ -e "$(REPO)/.ralph/DONE" ]]; then \
 	      printf 'Definition of done reached; halting loop\n'; \
+	      if (( continuous == 1 )); then \
+	        branch="$$(git -C "$(REPO)" symbolic-ref --quiet --short HEAD || printf main)"; \
+	        if git -C "$(REPO)" remote get-url atlas >/dev/null 2>&1; then \
+	          git -C "$(REPO)" push atlas "HEAD:refs/heads/$$branch" || printf 'atlas push failed; push manually\n'; \
+	        else printf 'atlas remote not configured; skipping atlas push\n'; fi; \
+	      fi; \
 	    else \
 	      printf 'Stop requested: %s exists; halting loop\n' "$(REPO)/.ralph/STOP"; \
 	    fi; \

@@ -30,13 +30,14 @@ To use it, put this README, `SPEC.md`, `IMPLEMENTATION_PLAN.md`, `ralph_cycle.sh
 make run REPO=/path/to/your/fork
 ```
 
-For several cycles, set `n` to a positive whole number. The count variable accepts either lowercase or uppercase `n`. The command name ignores letter case. Each cycle starts after the previous one ends and reads the updated plan:
+For several cycles, set `n` to a positive whole number. For `n=-1`, it runs continuously until the definition of done, a `.ralph/STOP` file, or a hard error. The count variable accepts either lowercase or uppercase `n`, and the command name ignores letter case. Each cycle starts after the previous one ends and reads the updated plan:
 
 ```bash
 make loop n=5 REPO=/path/to/your/fork
+make loop n=-1 REPO=/path/to/your/fork
 ```
 
-For a different count, replace `5` with the number of cycles you want. `make LOOP N=5` also works. Each cycle still handles one item and stops. The loop stops if OpenCode reports an error. If the files live elsewhere, set `RALPH_SPEC` and `RALPH_PLAN` to their full paths. You can set `RALPH_MODEL` to choose a model. The plan file must be writable.
+For a different count, replace `5` with the number of cycles you want. `make LOOP N=5` also works. Each cycle handles one item and stops. A failed cycle retries the same round up to `MAX_FAILURES` consecutive times before the loop halts. If the files live elsewhere, set `RALPH_SPEC` and `RALPH_PLAN` to their full paths. You can set `RALPH_MODEL` to choose a model. The plan file must be writable.
 
 The harness also reads the reference model canon, the licensed source reference for the shape and intention of the method artifacts RED generates. By default it looks for a `canon/` directory beside this planning repository. Point it elsewhere with `RALPH_CANON=/path/to/canon`. If the directory is missing, the cycle still runs and simply reports that the canon is unavailable.
 
