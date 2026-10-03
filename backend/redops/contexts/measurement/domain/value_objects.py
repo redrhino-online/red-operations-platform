@@ -1401,11 +1401,14 @@ class ConversionGoal:
     requested consultation or a purchase -- and tells the operator to put a dollar
     value on each one, even a guessed one, so return can be computed (canon file
     34: "Every conversion goal that you set up... put a dollar amount, even if you
-    have to guess"). The goal is grounded on a same-tenant tracking code, and its
-    value carries a ``MeasurementBasis`` so an estimated value stays explicitly
-    planned while a real one is observed. The canon's example values are
-    reverse-engineered per lead or consultation, so a non-negative amount is
-    required.
+    have to guess"). The canon creates "a conversion goal for every step in the
+    funnel" (canon file 34) so each goal marks the funnel step it completes; the
+    goal therefore names that step, and a retargeting list or focused campaign
+    can only segment or target a goal recorded at the step it claims. The goal is
+    grounded on a same-tenant tracking code, and its value carries a
+    ``MeasurementBasis`` so an estimated value stays explicitly planned while a
+    real one is observed. The canon's example values are reverse-engineered per
+    lead or consultation, so a non-negative amount is required.
     """
 
     goal_id: str
@@ -1415,6 +1418,7 @@ class ConversionGoal:
     value: float
     basis: MeasurementBasis
     tracking_code: TrackingCode
+    funnel_step: str
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -1422,6 +1426,7 @@ class ConversionGoal:
             ("conversion goal tenant id", self.tenant_id),
             ("conversion goal name", self.name),
             ("conversion goal url", self.url),
+            ("conversion goal funnel step", self.funnel_step),
         ):
             if not value or not value.strip():
                 raise InvalidRetargetingError(f"{label} is required")
@@ -1518,6 +1523,15 @@ class RetargetingAudience:
                 f"{self.achieved_goal.tracking_code.code_id!r}, not its own "
                 f"tracking code {self.tracking_code.code_id!r}"
             )
+        if self.achieved_goal.funnel_step != self.funnel_step:
+            raise RetargetingStepError(
+                f"retargeting audience {self.audience_id!r} is segmented on step "
+                f"{self.funnel_step!r}, but its achieved goal "
+                f"{self.achieved_goal.goal_id!r} marks step "
+                f"{self.achieved_goal.funnel_step!r}; a list must segment the "
+                "goal recorded at the step it occupies (canon file 34: a goal "
+                "for every step of the funnel)"
+            )
         if not isinstance(self.lookback_days, int) or isinstance(
             self.lookback_days, bool
         ):
@@ -1608,6 +1622,15 @@ class RetargetingCampaign:
                 f"{self.audience.audience_id!r} is segmented on step "
                 f"{self.audience.funnel_step!r}; a focused campaign must move the "
                 "list from the step it occupies"
+            )
+        if self.target_goal.funnel_step != self.to_step:
+            raise RetargetingStepError(
+                f"retargeting campaign {self.campaign_id!r} targets step "
+                f"{self.to_step!r}, but its target goal "
+                f"{self.target_goal.goal_id!r} marks step "
+                f"{self.target_goal.funnel_step!r}; a focused campaign must target "
+                "the conversion goal recorded at the step it moves the prospect to "
+                "(canon file 34: a goal for every step of the funnel)"
             )
 
 

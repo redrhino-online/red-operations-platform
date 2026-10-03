@@ -479,14 +479,18 @@ class RetargetingDependencyError(MeasurementError):
 
 
 class RetargetingStepError(MeasurementError):
-    """A retargeting campaign does not move a prospect to a new funnel step.
+    """A retargeting artifact does not line up on one funnel step.
 
     Canon file 34: a focused campaign presents "the right offer at the right time
     for each phase of your funnel" and "should accomplish one goal at a time",
-    moving people "from point A to point B". A campaign whose target step is the
-    step its audience is already on presents no next action, and a campaign whose
+    moving people "from point A to point B", and the operator creates "a
+    conversion goal for every step in the funnel". A campaign whose target step is
+    the step its audience is already on presents no next action, a campaign whose
     starting step is not the step its audience list is segmented on is not moving
-    that list at all, so neither can be a focused retargeting campaign.
+    that list at all, a list whose achieved goal is recorded at a different step
+    than the list claims is not segmenting that state, and a campaign whose target
+    goal marks a different step than the one it moves to is not targeting that
+    step, so none can be a focused retargeting artifact.
     """
 
 

@@ -60,6 +60,7 @@ def conversion_goal(**overrides) -> ConversionGoal:
         "value": 10.0,
         "basis": MeasurementBasis.OBSERVED,
         "tracking_code": tracking_code(),
+        "funnel_step": "opt-in",
     }
     values.update(overrides)
     return ConversionGoal(**values)
@@ -101,6 +102,7 @@ def next_audience(**overrides) -> RetargetingAudience:
             goal_id="goal-watch",
             name="authority amplifier watched",
             url="/watched",
+            funnel_step="authority-amplifier",
         ),
         "lookback_days": 30,
         "tracking_code": tracking_code(),
@@ -279,6 +281,7 @@ class InvisibleOptInOfferTests(unittest.TestCase):
                     achieved_goal=conversion_goal(
                         tenant_id="other-client",
                         tracking_code=tracking_code(tenant_id="other-client"),
+                        funnel_step="authority-amplifier",
                     ),
                 )
             )
@@ -289,7 +292,8 @@ class InvisibleOptInOfferTests(unittest.TestCase):
                 advances=next_audience(
                     tracking_code=tracking_code(code_id="pixel-other"),
                     achieved_goal=conversion_goal(
-                        tracking_code=tracking_code(code_id="pixel-other")
+                        tracking_code=tracking_code(code_id="pixel-other"),
+                        funnel_step="authority-amplifier",
                     ),
                 )
             )

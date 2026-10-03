@@ -65,6 +65,7 @@ def conversion_goal(**overrides) -> ConversionGoal:
         "value": 10.0,
         "basis": MeasurementBasis.OBSERVED,
         "tracking_code": tracking_code(),
+        "funnel_step": "lead",
     }
     values.update(overrides)
     return ConversionGoal(**values)
@@ -93,7 +94,10 @@ def retargeting_campaign(**overrides) -> RetargetingCampaign:
         "from_step": "lead",
         "to_step": "appointment",
         "target_goal": conversion_goal(
-            goal_id="goal-book", name="strategy session booked", url="/booked"
+            goal_id="goal-book",
+            name="strategy session booked",
+            url="/booked",
+            funnel_step="appointment",
         ),
         "channel": RetargetingChannel.FACEBOOK_NEWSFEED,
     }
@@ -110,7 +114,10 @@ def retargeting_plan(**overrides) -> RetargetingPlan:
         "goals": (
             conversion_goal(),
             conversion_goal(
-                goal_id="goal-book", name="strategy session booked", url="/booked"
+                goal_id="goal-book",
+                name="strategy session booked",
+                url="/booked",
+                funnel_step="appointment",
             ),
         ),
         "audiences": (retargeting_audience(),),
@@ -166,7 +173,7 @@ class ConversionGoalTests(unittest.TestCase):
         self.assertTrue(goal.is_placeholder)
 
     def test_a_goal_requires_its_name_and_url(self):
-        for field in ("goal_id", "tenant_id", "name", "url"):
+        for field in ("goal_id", "tenant_id", "name", "url", "funnel_step"):
             with self.subTest(field=field):
                 with self.assertRaises(InvalidRetargetingError):
                     conversion_goal(**{field: "  "})
@@ -201,6 +208,17 @@ class RetargetingAudienceTests(unittest.TestCase):
             retargeting_audience(
                 achieved_goal=conversion_goal(
                     tracking_code=tracking_code(code_id="pixel-other")
+                )
+            )
+
+    def test_a_list_segments_the_goal_recorded_at_its_own_step(self):
+        with self.assertRaises(RetargetingStepError):
+            retargeting_audience(
+                achieved_goal=conversion_goal(
+                    goal_id="goal-book",
+                    name="strategy session booked",
+                    url="/booked",
+                    funnel_step="appointment",
                 )
             )
 
@@ -251,6 +269,17 @@ class RetargetingCampaignTests(unittest.TestCase):
             retargeting_campaign(
                 target_goal=conversion_goal(
                     tracking_code=tracking_code(code_id="pixel-other")
+                )
+            )
+
+    def test_a_campaign_target_goal_must_be_recorded_at_its_target_step(self):
+        with self.assertRaises(RetargetingStepError):
+            retargeting_campaign(
+                target_goal=conversion_goal(
+                    goal_id="goal-book",
+                    name="strategy session booked",
+                    url="/booked",
+                    funnel_step="lead",
                 )
             )
 
@@ -340,7 +369,9 @@ class RetargetingPlanTests(unittest.TestCase):
                 campaigns=(
                     retargeting_campaign(
                         target_goal=conversion_goal(
-                            goal_id="goal-undeclared", name="undeclared"
+                            goal_id="goal-undeclared",
+                            name="undeclared",
+                            funnel_step="appointment",
                         )
                     ),
                 )

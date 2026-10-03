@@ -106,6 +106,7 @@ def conversion_goal(**overrides) -> ConversionGoal:
         "value": 10.0,
         "basis": MeasurementBasis.OBSERVED,
         "tracking_code": tracking_code(),
+        "funnel_step": "top-of-funnel",
     }
     values.update(overrides)
     return ConversionGoal(**values)
