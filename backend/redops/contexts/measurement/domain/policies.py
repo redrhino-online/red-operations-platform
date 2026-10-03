@@ -15,6 +15,7 @@ from redops.contexts.measurement.domain.errors import (
     ImprovementDependencyError,
     ImprovementMetricMismatchError,
     ImprovementNotApprovedError,
+    ImprovementObservationError,
     ImprovementOutcomeSupportError,
     ImprovementStateError,
     MetricBaselineNotObservedError,
@@ -73,8 +74,12 @@ class ImprovementMeasurementPolicy:
     """Refuses an outcome on an unapproved or ungrounded improvement.
 
     SPEC.md sections 3 and 4: only an approved improvement can be measured, and
-    the before-and-after must be grounded on the same established same-tenant
-    baseline the improvement was approved against so the observed movement stays
+    the before-and-after must be typed observed ``MeasurementRecord`` values
+    attached to the improvement's registered metric, grounded on the same
+    established same-tenant baseline the improvement was approved against. The
+    canon's optimization discipline (canon files 23 and 24) does not accept a
+    placeholder figure as a real metric, so an observed record is required and the
+    projected observations must cite the approved baseline so the movement stays
     traceable and distinct from a causal conclusion.
     """
 
@@ -105,8 +110,30 @@ class ImprovementMeasurementPolicy:
                 f"improvement {proposal.proposal_id!r} cannot be measured: its "
                 "performance baseline is no longer established"
             )
+        for label, record in (("before", outcome.before), ("after", outcome.after)):
+            if not record.is_observed:
+                raise ImprovementObservationError(
+                    f"the improvement outcome {label} must be an observed "
+                    "measurement; a placeholder figure cannot be a measured "
+                    "before or after"
+                )
+            if record.metric != proposal.metric:
+                raise ImprovementMetricMismatchError(
+                    f"the improvement outcome {label} measurement attaches to "
+                    f"metric {record.metric.metric_id!r} version "
+                    f"{record.metric.version}, not the approved metric "
+                    f"{proposal.metric.metric_id!r} version "
+                    f"{proposal.metric.version}"
+                )
+            if record.tenant_id != proposal.tenant_id:
+                raise ImprovementOutcomeSupportError(
+                    f"the improvement outcome {label} measurement belongs to "
+                    f"tenant {record.tenant_id!r}, not improvement tenant "
+                    f"{proposal.tenant_id!r}"
+                )
         baseline_id = proposal.baseline.baseline_id
-        for label, claim in (("before", outcome.before), ("after", outcome.after)):
+        before_claim, after_claim = outcome.observations(baseline_id=baseline_id)
+        for label, claim in (("before", before_claim), ("after", after_claim)):
             if claim.baseline_id != baseline_id:
                 raise ImprovementOutcomeSupportError(
                     f"the improvement outcome {label} observation must cite the "

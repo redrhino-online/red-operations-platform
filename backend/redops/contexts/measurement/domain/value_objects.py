@@ -21,6 +21,7 @@ from redops.contexts.execution.domain.value_objects import (
     PerformanceClaim,
 )
 from redops.contexts.measurement.domain.errors import (
+    ImprovementObservationError,
     InvalidImprovementError,
     InvalidImprovementOutcomeError,
     InvalidMeasurementRecordError,
@@ -82,19 +83,26 @@ class ImprovementOutcome:
 
     SPEC.md section 4, stage 10 and Phase 5: an improvement is "approved and
     measured", and a performance review "records baseline and observed result".
-    The before and after are both observations of the same subject for the same
-    tenant, so the outcome reports a movement rather than asserting a cause. A
-    causal conclusion is a separate PerformanceClaim that an established baseline
-    and an adequate sample must support (SPEC.md section 3, Measurement
-    invariant; Phase 5 TDD example "low sample size keeps causal claim as
-    interpretation").
+    The before and after are both typed ``MeasurementRecord`` observations of the
+    same registered metric for the same tenant, each over its own window with a
+    basis, sample and source, so the outcome reports a reproducible movement
+    rather than two free-text assertions. A causal conclusion is a separate
+    PerformanceClaim that an established baseline and an adequate sample must
+    support (SPEC.md section 3, Measurement invariant; Phase 5 TDD example "low
+    sample size keeps causal claim as interpretation").
+
+    Shaped by the canon's optimization discipline (canon files 23 and 24): a
+    baseline of real metrics must exist before optimizing, one variable changes at
+    a time, and placeholder figures are not real metrics until measured over
+    enough instances. A placeholder record therefore cannot serve as a measured
+    before or after, and the two observations must be distinct.
     """
 
     outcome_id: str
     tenant_id: str
     metric: MetricDefinition
-    before: PerformanceClaim
-    after: PerformanceClaim
+    before: MeasurementRecord
+    after: MeasurementRecord
     measured_on: date
     summary: str
 
@@ -121,34 +129,63 @@ class ImprovementOutcome:
             raise InvalidImprovementOutcomeError(
                 "improvement outcome measured date is required"
             )
-        for label, claim in (("before", self.before), ("after", self.after)):
-            if claim.tenant_id != self.tenant_id:
+        for label, record in (("before", self.before), ("after", self.after)):
+            if not isinstance(record, MeasurementRecord):
+                raise ImprovementObservationError(
+                    f"the improvement outcome {label} must be a typed measurement "
+                    "record over a window, not a free-text observation"
+                )
+            if record.tenant_id != self.tenant_id:
                 raise InvalidImprovementOutcomeError(
                     f"the improvement outcome {label} observation belongs to "
-                    f"tenant {claim.tenant_id!r}, not outcome tenant "
+                    f"tenant {record.tenant_id!r}, not outcome tenant "
                     f"{self.tenant_id!r}"
                 )
-            if claim.subject != self.metric.name:
-                raise InvalidImprovementOutcomeError(
-                    f"the improvement outcome {label} observation subject "
-                    f"{claim.subject!r} does not match its registered metric "
-                    f"name {self.metric.name!r}"
+            if record.metric != self.metric:
+                raise ImprovementObservationError(
+                    f"the improvement outcome {label} measurement attaches to "
+                    f"metric {record.metric.metric_id!r} version "
+                    f"{record.metric.version}, not its outcome metric "
+                    f"{self.metric.metric_id!r} version {self.metric.version}"
                 )
-        if self.before.subject != self.after.subject:
-            raise InvalidImprovementOutcomeError(
-                "an improvement outcome measures the same subject before and "
-                "after"
+            if not record.is_observed:
+                raise ImprovementObservationError(
+                    f"the improvement outcome {label} must be an observed "
+                    "measurement; a placeholder figure cannot be a measured "
+                    "before or after"
+                )
+        if self.before == self.after:
+            raise ImprovementObservationError(
+                "an improvement outcome measures the movement between two "
+                "distinct observations"
             )
-        if self.before.kind is not ClaimKind.OBSERVATION:
-            raise InvalidImprovementOutcomeError(
-                "the before state of an improvement outcome must be an "
-                "observation"
+
+    def observations(
+        self, *, baseline_id: str
+    ) -> tuple[PerformanceClaim, PerformanceClaim]:
+        """Project the before-and-after records onto observation claims.
+
+        SPEC.md section 3 keeps observations distinct from causal conclusions and
+        keys the Measurement aggregate by its source. Each typed record is
+        projected through ``MeasurementRecord.as_observation`` so the recorded
+        movement cites the approved baseline, the metric name, the value with its
+        unit, the sample and the source, rather than a free-text before-and-after.
+        A missing baseline reference is refused so the outcome cannot be read
+        without a baseline to compare against.
+        """
+        if not baseline_id or not baseline_id.strip():
+            raise ImprovementObservationError(
+                "an improvement outcome requires the approved baseline it was "
+                "measured against"
             )
-        if self.after.kind is not ClaimKind.OBSERVATION:
-            raise InvalidImprovementOutcomeError(
-                "the after state of an improvement outcome must be an observed "
-                "movement, not a causal conclusion or interpretation"
-            )
+        return (
+            self.before.as_observation(
+                claim_id=f"{self.outcome_id}:before", baseline_id=baseline_id
+            ),
+            self.after.as_observation(
+                claim_id=f"{self.outcome_id}:after", baseline_id=baseline_id
+            ),
+        )
 
 
 class MetricUnit(Enum):

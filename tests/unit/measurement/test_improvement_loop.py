@@ -31,6 +31,7 @@ from redops.contexts.measurement.domain.errors import (
 )
 from redops.contexts.measurement.domain.value_objects import (
     ImprovementState,
+    MeasurementBasis,
 )
 from redops.contexts.execution.domain.value_objects import ClaimKind
 
@@ -45,6 +46,7 @@ from .fixtures import (
     improvement_outcome,
     improvement_proposal,
     measured_improvement,
+    measurement_record,
     metric_definition,
 )
 
@@ -196,50 +198,40 @@ class ImprovementMeasurementTests(unittest.TestCase):
             rejected.record_outcome(outcome=improvement_outcome())
 
     def test_an_outcome_from_another_tenant_is_refused(self):
-        from ..execution.fixtures import performance_claim
-
         foreign = improvement_outcome(
             tenant_id="client-other",
             metric=metric_definition(tenant_id="client-other"),
-            before=performance_claim(
-                tenant_id="client-other", subject="cost per lead"
-            ),
-            after=performance_claim(
-                claim_id="after-3f",
-                tenant_id="client-other",
-                subject="cost per lead",
-            ),
         )
 
         with self.assertRaises(ImprovementOutcomeSupportError):
             approved_improvement().record_outcome(outcome=foreign)
 
-    def test_an_outcome_citing_another_baseline_is_refused(self):
-        from ..execution.fixtures import performance_claim
-
-        foreign = improvement_outcome(
-            before=performance_claim(
-                subject="cost per lead", baseline_id="baseline-other"
-            ),
-            after=performance_claim(
-                claim_id="after-3f",
-                subject="cost per lead",
-                baseline_id="baseline-other",
-            ),
+    def test_an_outcome_grounded_on_a_placeholder_measurement_is_refused(self):
+        from redops.contexts.measurement.domain.errors import (
+            ImprovementObservationError,
         )
 
-        with self.assertRaises(ImprovementOutcomeSupportError):
-            approved_improvement().record_outcome(outcome=foreign)
+        with self.assertRaises(ImprovementObservationError):
+            improvement_outcome(
+                after=measurement_record(
+                    record_id="measure-after-3f",
+                    value=8.0,
+                    basis=MeasurementBasis.PLACEHOLDER,
+                    sample_size=0,
+                )
+            )
 
     def test_a_measured_improvement_keeps_the_before_and_after_observation(self):
         measured = measured_improvement()
 
-        self.assertIs(ClaimKind.OBSERVATION, measured.outcome.before.kind)
-        self.assertIs(ClaimKind.OBSERVATION, measured.outcome.after.kind)
-        self.assertNotEqual(
-            measured.outcome.before.statement,
-            measured.outcome.after.statement,
+        before, after = measured.outcome.observations(
+            baseline_id=measured.baseline.baseline_id
         )
+        self.assertIs(ClaimKind.OBSERVATION, before.kind)
+        self.assertIs(ClaimKind.OBSERVATION, after.kind)
+        self.assertNotEqual(before.statement, after.statement)
+        self.assertEqual(measured.baseline.baseline_id, before.baseline_id)
+        self.assertEqual(measured.baseline.baseline_id, after.baseline_id)
 
 
 class ImprovementOutcomeTests(unittest.TestCase):
@@ -264,49 +256,68 @@ class ImprovementOutcomeTests(unittest.TestCase):
                     ImprovementOutcome(**{**values, field: "  "})
 
     def test_the_before_and_after_must_share_a_tenant(self):
-        from ..execution.fixtures import performance_claim
+        foreign = metric_definition(
+            metric_id="metric-foreign", tenant_id="client-other"
+        )
 
         with self.assertRaises(InvalidImprovementOutcomeError):
             improvement_outcome(
-                before=performance_claim(
-                    tenant_id="client-other", subject="cost per lead"
+                before=measurement_record(
+                    metric=foreign,
+                    tenant_id="client-other",
+                    record_id="measure-before-3f",
                 )
             )
 
-    def test_the_before_and_after_must_measure_the_same_subject(self):
-        from ..execution.fixtures import performance_claim
+    def test_the_before_and_after_must_attach_to_the_outcome_metric(self):
+        from redops.contexts.measurement.domain.errors import (
+            ImprovementObservationError,
+        )
 
-        with self.assertRaises(InvalidImprovementOutcomeError):
+        with self.assertRaises(ImprovementObservationError):
             improvement_outcome(
-                after=performance_claim(
-                    claim_id="after-3f",
-                    subject="lead volume",
-                    statement="lead volume was eight",
+                after=measurement_record(
+                    metric=metric_definition(metric_id="metric-lead-volume"),
+                    record_id="measure-after-3f",
+                    value=8.0,
                 )
             )
 
-    def test_a_causal_conclusion_cannot_be_the_observed_movement(self):
-        from ..execution.fixtures import performance_claim
+    def test_the_before_and_after_must_be_distinct_observations(self):
+        from redops.contexts.measurement.domain.errors import (
+            ImprovementObservationError,
+        )
 
-        with self.assertRaises(InvalidImprovementOutcomeError):
+        shared = measurement_record(record_id="measure-before-3f", value=12.0)
+
+        with self.assertRaises(ImprovementObservationError):
+            improvement_outcome(before=shared, after=shared)
+
+    def test_a_placeholder_measurement_cannot_be_an_observation(self):
+        from redops.contexts.measurement.domain.errors import (
+            ImprovementObservationError,
+        )
+
+        with self.assertRaises(ImprovementObservationError):
             improvement_outcome(
-                after=performance_claim(
-                    claim_id="after-3f",
-                    subject="cost per lead",
-                    statement="the headline change caused the fall",
-                    kind=ClaimKind.CAUSAL_CONCLUSION,
+                before=measurement_record(
+                    record_id="measure-before-3f",
+                    basis=MeasurementBasis.PLACEHOLDER,
+                    sample_size=0,
                 )
             )
 
-    def test_the_before_must_be_an_observation(self):
-        from ..execution.fixtures import performance_claim
+    def test_the_observation_claims_project_to_typed_observations(self):
+        outcome = improvement_outcome()
 
-        with self.assertRaises(InvalidImprovementOutcomeError):
-            improvement_outcome(
-                before=performance_claim(
-                    kind=ClaimKind.INTERPRETATION, subject="cost per lead"
-                )
-            )
+        before, after = outcome.observations(baseline_id="baseline-3f")
+
+        self.assertIs(ClaimKind.OBSERVATION, before.kind)
+        self.assertIs(ClaimKind.OBSERVATION, after.kind)
+        self.assertEqual(outcome.metric.name, before.subject)
+        self.assertEqual(outcome.metric.name, after.subject)
+        self.assertEqual("outcome-3f:before", before.claim_id)
+        self.assertIn("12.0", before.statement)
 
     def test_an_outcome_is_immutable(self):
         outcome = improvement_outcome()
@@ -366,24 +377,18 @@ class ImprovementMetricGroundingTests(unittest.TestCase):
         self.assertEqual("metric-cost-per-lead", outcome.metric.metric_id)
         self.assertEqual(1, outcome.metric.version)
 
-    def test_an_outcome_subject_must_match_its_registered_metric(self):
+    def test_an_outcome_records_must_attach_to_its_registered_metric(self):
         from redops.contexts.measurement.domain.errors import (
-            InvalidImprovementOutcomeError,
+            ImprovementObservationError,
         )
-        from ..execution.fixtures import performance_claim
 
-        with self.assertRaises(InvalidImprovementOutcomeError):
+        with self.assertRaises(ImprovementObservationError):
             improvement_outcome(
-                before=performance_claim(
-                    claim_id="before-3f",
-                    subject="lead volume",
-                    statement="lead volume was twelve",
-                ),
-                after=performance_claim(
-                    claim_id="after-3f",
-                    subject="lead volume",
-                    statement="lead volume was eight",
-                ),
+                after=measurement_record(
+                    metric=metric_definition(version=2),
+                    record_id="measure-after-3f",
+                    value=8.0,
+                )
             )
 
     def test_an_outcome_from_another_tenant_metric_is_refused(self):
@@ -391,11 +396,25 @@ class ImprovementMetricGroundingTests(unittest.TestCase):
             InvalidImprovementOutcomeError,
         )
 
+        foreign = metric_definition(
+            metric_id="metric-foreign", tenant_id="client-other"
+        )
         with self.assertRaises(InvalidImprovementOutcomeError):
             improvement_outcome(
-                metric=metric_definition(
-                    metric_id="metric-foreign", tenant_id="client-other"
-                )
+                tenant_id=TENANT,
+                metric=foreign,
+                before=measurement_record(
+                    metric=foreign,
+                    tenant_id="client-other",
+                    record_id="measure-before-3f",
+                    value=12.0,
+                ),
+                after=measurement_record(
+                    metric=foreign,
+                    tenant_id="client-other",
+                    record_id="measure-after-3f",
+                    value=8.0,
+                ),
             )
 
     def test_an_outcome_cannot_measure_against_a_different_metric(self):

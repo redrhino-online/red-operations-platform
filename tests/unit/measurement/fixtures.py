@@ -21,12 +21,9 @@ from redops.contexts.measurement.domain.value_objects import (
     MetricFunnelStep,
     MetricUnit,
 )
-from redops.contexts.execution.domain.value_objects import ClaimKind
-
 from ..execution.fixtures import (
     TODAY,
     established_baseline,
-    performance_claim,
 )
 
 TENANT = "client-3f"
@@ -65,22 +62,35 @@ def approved_improvement(**overrides) -> ImprovementProposal:
     )
 
 
-def improvement_outcome(**overrides) -> ImprovementOutcome:
+def improvement_outcome(
+    metric=None, before=None, after=None, tenant_id=TENANT, **overrides
+) -> ImprovementOutcome:
+    metric = (
+        metric_definition(tenant_id=tenant_id) if metric is None else metric
+    )
     values = {
         "outcome_id": "outcome-3f",
-        "tenant_id": TENANT,
-        "metric": metric_definition(),
-        "before": performance_claim(
-            claim_id="before-3f",
-            subject="cost per lead",
-            statement="cost per lead was twelve dollars",
-            kind=ClaimKind.OBSERVATION,
+        "tenant_id": tenant_id,
+        "metric": metric,
+        "before": (
+            measurement_record(
+                metric=metric,
+                tenant_id=tenant_id,
+                record_id="measure-before-3f",
+                value=12.0,
+            )
+            if before is None
+            else before
         ),
-        "after": performance_claim(
-            claim_id="after-3f",
-            subject="cost per lead",
-            statement="cost per lead was eight dollars",
-            kind=ClaimKind.OBSERVATION,
+        "after": (
+            measurement_record(
+                metric=metric,
+                tenant_id=tenant_id,
+                record_id="measure-after-3f",
+                value=8.0,
+            )
+            if after is None
+            else after
         ),
         "measured_on": TODAY,
         "summary": "cost per lead fell after the headline change",

@@ -28,6 +28,19 @@ class InvalidImprovementOutcomeError(MeasurementError, ValueError):
     """
 
 
+class ImprovementObservationError(MeasurementError, ValueError):
+    """An improvement outcome is not grounded on typed observed measurements.
+
+    SPEC.md section 3, Measurement aggregate is "metric definition, window,
+    baseline, observation, source" and its invariant keeps observations distinct
+    from causal conclusions. The canon's optimization discipline (canon files 23
+    and 24) warns that placeholder figures are not real metrics until measured
+    over enough instances, so the before-and-after of a measured improvement must
+    be observed ``MeasurementRecord`` values attached to the improvement's metric
+    over an explicit window, not free-text statements or placeholder figures.
+    """
+
+
 class ImprovementDependencyError(MeasurementError):
     """An improvement is not grounded on an established same-tenant baseline.
 

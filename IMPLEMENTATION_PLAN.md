@@ -4,75 +4,88 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:11:35Z (Ralph cycle 95).
-- Selected item: ground the stage 10 improvement loop on the registered metric
-  substrate -- pin `ImprovementProposal` and its before/after `ImprovementOutcome`
-  observations to a same-tenant, versioned `MetricDefinition` from the cycle 93
-  registry, so a stage 10 optimization cannot be proposed or measured against a
-  free-text metric (SPEC.md section 3 Measurement aggregate and section 4 stage 10
-  "performance recommendations require evidence and owner approval before
-  material changes"; Phase 5 "metric registry"; canon files 23 and 24 treat the
-  typed funnel metric as the lever an operator moves). This was the plan's named
-  highest priority ready next item after cycle 94. It outranks the advertising
-  and forecast dashboard (a downstream feature over the same substrate), the
-  Operations delivery adapter (blocked on the storage ADR) and the
-  stage-parameterized gate refactor (quality only), because it is the named
-  dependency-enforcement follow-up from cycle 93 and keeps the improvement loop's
-  evidence tied to exact metric versions.
+- Cycle timestamp: 2026-10-03T05:13:24Z (Ralph cycle 96).
+- Selected item: ground the stage 10 improvement outcome's before and after on
+  typed observed `MeasurementRecord`s of the proposal's registered metric (via
+  `MeasurementRecord.as_observation`) instead of two free `PerformanceClaim`s, so
+  a measured optimization cites a window, basis, sample and source and can never
+  rest on a placeholder or free-text figure (SPEC.md section 3 Measurement
+  aggregate "metric definition, window, baseline, observation, source" and
+  invariant "observations are distinct from causal conclusions"; section 4 stage
+  10 "performance recommendations require evidence and owner approval before
+  material changes"; Phase 5 "one improvement is approved and measured"; canon
+  files 23 and 24: a baseline of real metrics before optimizing, one variable at
+  a time, placeholder figures are not real metrics, and wait before reading the
+  result). This was the plan's named highest priority ready next item after cycle
+  95. It outranks the advertising and forecast dashboard (a downstream feature),
+  the Operations delivery adapter (blocked on the storage ADR), the stage 9
+  compliance projection (needs a named-owner decision on a canonical kind) and
+  the stage-parameterized gate refactor (quality only), because it closes the
+  last free-text hole in the stage 10 evidence chain without changing the
+  pipeline shape.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: 10 new behavioral tests in
-  `tests/unit/measurement/test_improvement_loop.py` under
-  `ImprovementMetricGroundingTests`, plus updated constructions in the same file:
-  a proposal and an outcome each pin the registered metric identity and version;
-  a proposal cannot cite another tenant's metric; a proposal subject must match
-  its metric name and must actually name a registered metric; an outcome subject
-  must match its metric name; an outcome cannot cite another tenant's metric; a
-  measured improvement cannot use a different metric than the approved proposal;
-  and an outcome scoped to a newer metric version is refused; a measured
-  improvement keeps the approved metric. Running
+- Evidence: behavioral coverage in
+  `tests/unit/measurement/test_improvement_loop.py`: an outcome's before and
+  after are typed `MeasurementRecord`s attached to the outcome's registered
+  metric; a placeholder record cannot be a measured before or after; the two
+  observations must be distinct; a record attached to another metric identity or
+  version is refused; `ImprovementOutcome.observations()` projects the records
+  onto baseline-citing `PerformanceClaim`s of kind OBSERVATION; and
+  `ImprovementMeasurementPolicy` grounds the outcome on the approved baseline and
+  refuses a placeholder or foreign/other-version record. Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1073 passed, up from 1063. `python3 -m pyflakes` on the changed
-  measurement modules, fixtures and tests is clean. `ruff` and `mypy` remain
-  uninstalled.
-- New findings: the proposal keeps a `subject` field but it is now required to
-  equal the registered metric's name, so the typed metric is authoritative and a
-  free-text subject cannot be proposed; `ImprovementOutcome` pins the metric and
-  both observations must carry that metric name as their subject, and
-  `ImprovementMeasurementPolicy` now requires the outcome metric to equal the
-  proposal metric exactly (identity, version, unit and direction), so a redefined
-  or different metric is refused with a named `ImprovementMetricMismatchError`.
-  The prior before-equals-after subject check is now subsumed by both equalling
-  the metric name and is kept as defense in depth. Three named errors were added
-  (`ImprovementMetricError`, `ImprovementMetricBoundaryError`,
-  `ImprovementMetricMismatchError`). The stage 10 `PerformanceBaseline` remains
-  the gate-grounded artifact; the registry metric is the typed lever inside the
-  optimization loop. No fork or cluster facts invented; no `docs/`, fork
-  checkout, `kubectl`, `helm`, or `argocd` present.
+  reports 1074 passed, up from 1073. `python3 -m pyflakes backend/redops tests`
+  is clean. `ruff` and `mypy` remain uninstalled.
+- New findings: `ImprovementOutcome.before`/`.after` are now
+  `MeasurementRecord`s, so each side of the stage 10 movement carries an explicit
+  window, basis, sample and source; `ImprovementOutcome.observations(baseline_id)`
+  is the single projection to `PerformanceClaim` and refuses a blank baseline; a
+  new named `ImprovementObservationError` covers a non-record, non-observed or
+  identical before/after, and `ImprovementMeasurementPolicy` now checks the
+  records directly (observed basis, same metric identity and version, same
+  tenant) before projecting them onto the approved baseline. Because a frozen
+  `ImprovementOutcome` cannot be built with a placeholder record, the policy's
+  placeholder check is defense in depth. The stage 10 `PerformanceBaseline`
+  remains the gate-grounded artifact; the registry metric and its observed
+  records are the typed evidence inside the optimization loop. No fork or cluster
+  facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or `argocd`
+  present.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
   graph assumed in cycle 56, scheduler/worker topology, the client-designated
-  approver identities, and pilot metric targets. The registry, the compliance
-  package and the improvement loop exist in pure domain code, but their
-  persistence and the Operations delivery adapter still depend on the storage
-  ADR.
-- Highest priority ready next item: ground the improvement outcome's before and
-  after observations on registered `MeasurementRecord`s of the proposal's metric
-  (via `MeasurementRecord.as_observation`), so the recorded movement cites typed
-  observation records with a window, basis, sample and source rather than two
-  free `PerformanceClaim`s. It outranks the advertising and forecast dashboard (a
-  downstream feature), the Operations delivery adapter (blocked on the storage
-  ADR) and the stage-parameterized gate refactor (quality only, no new
-  capability), because it is the direct dependency-enforcement continuation of
-  this cycle and keeps the before/after figure traceable to the registry that
-  already exists. Prerequisite: satisfied (the cycle 93 `MeasurementRecord` and
-  this cycle's metric pin both exist).
+  approver identities, and pilot metric targets. Persistence and the Operations
+  delivery adapter still depend on the storage ADR; the stage 9 compliance
+  projection still needs a named-owner decision on a canonical kind.
+- Highest priority ready next item: require the improvement outcome's before
+  window to end before its after window starts and keep the two windows distinct,
+  via a named `ImprovementObservationError`, so a measured stage 10 movement is
+  temporally sound and cannot report an after-state observed before its
+  before-state, matching the canon's "wait before reading how it did" discipline
+  (canon files 23 and 24) and the `MeasurementWindow` closed-range invariant. It
+  outranks the advertising and forecast dashboard (a downstream feature), the
+  Operations delivery adapter (blocked on the storage ADR) and the
+  stage-parameterized gate refactor (quality only), because it is the direct
+  dependency-enforcement continuation of this cycle and needs no new artifact.
+  Prerequisite: satisfied (this cycle's typed `MeasurementRecord` before/after and
+  `ImprovementOutcome.observations`).
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; the advertising and forecast dashboard; a
   stage-parameterized gate recorder/handler refactor; projecting the compliance
   package onto a canonical stage 9 gate kind (methodology-owner decision); and
   all persistence.
+  [DONE 2026-10-03 (Ralph cycle 96): grounded the stage 10 improvement outcome
+  on typed observed measurements -- `ImprovementOutcome.before` and `.after` are
+  now `MeasurementRecord`s attached to the outcome's registered `MetricDefinition`,
+  a placeholder record or an identical before/after is refused with the new named
+  `ImprovementObservationError`, `ImprovementOutcome.observations(baseline_id)`
+  projects them onto baseline-citing `PerformanceClaim`s of kind OBSERVATION, and
+  `ImprovementMeasurementPolicy` grounds the outcome on the approved
+  `PerformanceBaseline` and checks the records directly (observed basis, same
+  metric identity and version, same tenant) (SPEC.md section 3; canon files 23 and
+  24); verified by `tests/unit/measurement/test_improvement_loop.py` (37 tests),
+  so a stage 10 movement cites a window, basis, sample and source per side.]
   [DONE 2026-10-03 (Ralph cycle 95): grounded the stage 10 improvement loop on
   the cycle 93 metric registry -- `ImprovementProposal.metric` and
   `ImprovementOutcome.metric` are required same-tenant `MetricDefinition`s, the
