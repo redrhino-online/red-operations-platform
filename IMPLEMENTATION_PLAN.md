@@ -4,7 +4,65 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T193430Z (Ralph cycle, this run): selected item was Q12, the
+- Cycle 2026-10-03T193641Z (Ralph cycle, this run): selected item was the
+  `/measurements` half of Q13, the tenant-scoped stage 10 metric registry
+  (prerequisite Q12 met). It outranks the `/journeys` half because it closes a
+  real persistence gap: SPEC.md section 3 names the Measurement aggregate
+  ("metric definition, window, baseline, observation, source") and SPEC.md
+  section 7 lists `/measurements`, but `MetricDefinition` and `MeasurementRecord`
+  were pure values with no tenant-scoped store, no migration and no route, so DoD
+  condition 4 ("RED aggregates ... persist in PostgreSQL") was false for the
+  measurement registry and the production view's METRICS dimension had no durable
+  source to read. The `frontend/` shell Q32 was again rejected: the DoD [5/6]
+  script passes on `frontend/` merely existing with no `OpenExecutive` string, so
+  a screens-less shell would falsely turn `make done` green while condition 6
+  (Q45) is far off.
+- Outcome: new Measurement application port `MeasurementRegistry`
+  (`list_metrics`/`get_metric`/`list_records`/`get_record`/`save_metric`/
+  `save_record`), in-memory and PostgreSQL adapters,
+  `measurement_registry_from_env`, `MeasurementConfigurationError`,
+  `UnscopedMeasurementError` and `MeasurementConflictError`, payload mappers,
+  migration `0014_measurements` (`metric_definitions`, `measurement_records`,
+  both NOT NULL `tenant_id`), and tenant-scoped routes `GET /red/measurements`
+  (paginated list of observations) and `POST /red/measurements` (register one
+  exact metric version and record its observation). Both writes are append-only:
+  an identical replay is idempotent and a same-key re-statement is a named 409.
+  Recording an observation is not a gate and grants no authority; a material
+  optimization still needs the owner approval of SPEC.md section 4.
+- Evidence: `make check` -> 2139 passed, 2 skipped, 686 subtests; pyflakes clean.
+  New tests `tests/unit/measurement/test_measurement_registry.py` (24) and
+  `tests/unit/measurement/test_measurements_route.py` (9);
+  `tests/unit/shared/test_migrate.py` pins head `0014_measurements` and the two
+  tables, and the new PostgreSQL adapter tests ran against the live database.
+  `make done` still fails only [5/6] (`frontend/` missing, Q32); [1/6]-[4/6] pass.
+- New findings: the Measurement domain already refuses a blank tenant at
+  construction, so the store's unscoped read/write guard is defense-in-depth; the
+  metric registry had no store at all, so the cycle 106 METRICS projection was
+  only caller-supplied. `MetricDefinition` is keyed by
+  `(tenant_id, metric_id, version)` and a stored definition is append-only, so a
+  redefinition is a new version and an observation pins the exact metric identity.
+  SPEC.md section 3 also names `JourneyRelease` (assets, routing, configuration
+  digest, rollback ref), which is not implemented; `/journeys` needs either that
+  aggregate or a named decision to expose the stage 8 `FunnelIntegration` instead.
+- Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
+  land shell-only; Q28 stage 8-10 required kinds blocked on the named
+  methodology-owner placement decision; Q16 idempotency keys blocked on a
+  workflow write route; Q3 agent registration blocked on the ADR 0006 / vendor-edit
+  tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: the `/journeys` half of Q13 (prereq Q12 done).
+  Required asset: the journey release exposed through a tenant-scoped route. The
+  design question that gates it is whether to build the SPEC.md section 3
+  `JourneyRelease` aggregate or map `/journeys` onto the durable stage 8
+  `FunnelIntegration`; that is a named-owner decision, so the bounded next action
+  is to resolve it and expose the chosen store. Checkpoint: none (API surface, not
+  a gate); approver: none (no gate decides). Blocked downstream dependency: Q14
+  from Q13; then the `frontend/` screens Q32-Q45. The stage 0-10 e2e Q30 is
+  already green.
+
+### Prior cycle (2026-10-03T193430Z)
+
+- Cycle 2026-10-03T193430Z (Ralph cycle): selected item was Q12, the
   tenant-scoped REST surface for `/approvals` and `/decisions` (prerequisite Q11
   met). No gate-integrity item is ready: Q17-Q27 closed the caller-supplied
   authority defect across every stage 0-10 gate and Q29's method change impact is
@@ -3155,7 +3213,7 @@ stalls:
 | Q10 | REST `/claims`, `/methods` (done 2026-10-03T192641Z; `GET`/`POST /red/claims` and `GET /red/methods`, tenant required on GET and path/body-scoped to the tenant; new durable Knowledge `ClaimStore` port with in-memory and PostgreSQL adapters and migration `0012_claims`; the claim create route verifies every citation against the same tenant's stored immutable `SourceRecord` by id and checksum, and the claim store refuses a same-id non-append-only re-statement; `MethodVersionRepository.list` added so `/methods` is a tenant-scoped paginated read of approved methods, left read-only because approval is gate-owned. Tests `tests/unit/knowledge/test_claim_store.py`, `tests/unit/knowledge/test_claims_route.py`, `tests/unit/method/test_methods_route.py`) | api | Q9 | route tests |
 | Q11 | REST `/offers`, `/builds` (done 2026-10-03T193035Z; `GET /red/offers` and `GET`/`POST /red/builds`, tenant required on every read and carried on the create body; `BuildObject` now requires a `tenant_id` (SPEC.md sections 3 and 9); new Production `BuildObjectRepository` port with in-memory and PostgreSQL adapters and migration `0013_build_objects` (upsert per `(tenant_id, build_id)`); `/offers` is a tenant-scoped paginated read over the existing offer store, left read-only because production readiness is gate-owned; `/builds` list is tenant-scoped and paginated and create records an Identified proposal. Tests `tests/unit/commercial/test_offers_route.py`, `tests/unit/production/test_build_object_store.py`, `tests/unit/production/test_builds_route.py`, `tests/unit/production/test_build_object_postgres.py`) | api | Q10 | route tests |
 | Q12 | REST `/approvals`, `/decisions` with exact version approval (done 2026-10-03T193430Z; `GET /red/decisions` and `GET /red/approvals`, tenant required, paginated, projected from the durable tenant-scoped `GateLedgerRepository`; `/decisions` lists the append-only gate decisions in canonical stage order with disposition, reviewer, scope, rationale, exact pinned asset versions and next action, and `/approvals` flattens the per-asset `ApprovalRequest`s with exact asset version and scope, requester, designated approver, outcome and expiry; both read-only because a decision is recorded through its stage gate and listing an approval never grants authority. Tests `tests/unit/governance/test_governance_read_routes.py` (6)) | api | Q11 | version specific approval |
-| Q13 | REST `/journeys`, `/measurements` | api | Q12 | route tests |
+| Q13 | REST `/journeys`, `/measurements` (`/measurements` done 2026-10-03T193641Z; `GET /red/measurements` and `POST /red/measurements` over the new durable Measurement `MeasurementRegistry` (metric definitions + observations), in-memory and PostgreSQL adapters and migration `0014_measurements`; tenant required, append-only, an observation pins its exact metric version and a same-key re-statement is a 409. `/journeys` remains and is gated on the `JourneyRelease` vs stage 8 `FunnelIntegration` named-owner decision) | api | Q12 | route tests |
 | Q14 | REST `/opportunities`, `/interventions` | api | Q13 | route tests |
 | Q15 | REST `/workflows/{id}` with SSE or stable id polling (done 2026-10-03T185701Z; `GET /red/clients/{tenant_id}/workflows/{run_id}`; tenant-scoped polling read returning a stable append-only `event_id` and the transition log; 404 for a missing/foreign run. Tenant is the path authority, matching the stage routes, not the bare `/workflows/{id}`) | api | Q5 | route tests `tests/unit/workflows/test_workflow_run_route.py` (4) |
 | Q16 | Idempotency keys and optimistic version conflicts on mutations | api | Q15 | duplicate delivery one effect; stale update 409 |

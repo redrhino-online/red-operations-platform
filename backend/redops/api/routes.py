@@ -42,9 +42,13 @@ from redops.api.schemas import (
     MethodReferenceResponse,
     MethodVersionInput,
     MethodVersionListResponse,
+    MetricDefinitionResponse,
+    MeasurementListResponse,
+    MeasurementRecordResponse,
     OfferListResponse,
     OfferVersionInput,
     OfferVersionResponse,
+    RecordMeasurementRequest,
     RecordStageEightGateRequest,
     RecordStageFiveGateRequest,
     RecordStageFourGateRequest,
@@ -261,6 +265,20 @@ from redops.contexts.method.domain.value_objects import (
 from redops.contexts.method.infrastructure.repositories import (
     method_version_repository_from_env,
 )
+from redops.contexts.measurement.application.ports import MeasurementRegistry
+from redops.contexts.measurement.domain.errors import MeasurementError
+from redops.contexts.measurement.domain.value_objects import (
+    MeasurementBasis,
+    MeasurementRecord,
+    MeasurementWindow,
+    MetricDefinition,
+    MetricDirection,
+    MetricFunnelStep,
+    MetricUnit,
+)
+from redops.contexts.measurement.infrastructure.repositories import (
+    measurement_registry_from_env,
+)
 from redops.contexts.production.application.ports import (
     AuthorityAmplifierRepository,
     BuildObjectRepository,
@@ -455,6 +473,26 @@ def get_build_object_repository() -> Iterator[BuildObjectRepository]:
         yield repository
     finally:
         repository.close()
+
+
+def get_measurement_registry() -> Iterator[MeasurementRegistry]:
+    """Provide the stage 10 metric registry seam to the API (SPEC.md section 6).
+
+    SPEC.md section 7 lists ``/measurements`` and SPEC.md section 3 makes a
+    Measurement aggregate "metric definition, window, baseline, observation,
+    source"; the surface must read and write the same durable registry the
+    production view and optimization loop read. The dependency owns one adapter
+    for the request and releases any connection it opened when the request ends;
+    the store is chosen once from ``DATABASE_URL``, and a set-but-unusable
+    configuration raises before the route runs, so a deployment cannot mistake a
+    process-local registry for a durable one.
+    """
+
+    registry = measurement_registry_from_env(os.environ.get("DATABASE_URL"))
+    try:
+        yield registry
+    finally:
+        registry.close()
 
 
 def get_campaign_message_repository() -> Iterator[CampaignMessageRepository]:
@@ -3970,3 +4008,135 @@ def list_approvals(
             for decision, approval in page
         ],
     )
+
+
+def _metric_payload(metric: MetricDefinition) -> MetricDefinitionResponse:
+    """Project a registered metric definition, computing no rule."""
+
+    return MetricDefinitionResponse(
+        metric_id=metric.metric_id,
+        tenant_id=metric.tenant_id,
+        name=metric.name,
+        funnel_step=metric.funnel_step.value,
+        unit=metric.unit.value,
+        direction=metric.direction.value,
+        version=metric.version,
+    )
+
+
+def _measurement_payload(record: MeasurementRecord) -> MeasurementRecordResponse:
+    """Project a recorded observation, computing no rule.
+
+    SPEC.md section 3 keys an observation by its metric, window, basis and
+    source; the projection surfaces the exact metric version, the closed window
+    and whether the figure is observed or placeholder, so a placeholder never
+    reads as a measured result.
+    """
+
+    return MeasurementRecordResponse(
+        record_id=record.record_id,
+        tenant_id=record.tenant_id,
+        metric=_metric_payload(record.metric),
+        value=record.value,
+        window_start=record.window.start,
+        window_end=record.window.end,
+        basis=record.basis.value,
+        source=record.source,
+        sample_size=record.sample_size,
+        recorded_on=record.recorded_on,
+        is_observed=record.is_observed,
+    )
+
+
+@router.get("/measurements", response_model=MeasurementListResponse)
+def list_measurements(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose observations are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    registry: MeasurementRegistry = Depends(get_measurement_registry),
+) -> MeasurementListResponse:
+    """List one client tenant's recorded observations (SPEC.md sections 3, 7, 9).
+
+    SPEC.md section 7 lists ``/measurements`` and requires list endpoints to
+    enforce client access and pagination; SPEC.md section 9 requires every tenant
+    resource query to carry ``tenant_id``. The tenant is a required query
+    parameter, not an optional filter, so the endpoint cannot produce a
+    portfolio-wide read across clients; the registry read is tenant scoped and a
+    blank tenant is refused by the domain seam. Pagination is applied after the
+    tenant-scoped read so a page is stable. The route is read-only and computes
+    no metric or movement.
+    """
+
+    records = registry.list_records(tenant_id)
+    page = records[offset : offset + limit]
+    return MeasurementListResponse(
+        tenant_id=tenant_id,
+        total=len(records),
+        limit=limit,
+        offset=offset,
+        records=[_measurement_payload(record) for record in page],
+    )
+
+
+@router.post(
+    "/measurements", status_code=201, response_model=MeasurementRecordResponse
+)
+def record_measurement(
+    body: RecordMeasurementRequest,
+    registry: MeasurementRegistry = Depends(get_measurement_registry),
+) -> MeasurementRecordResponse:
+    """Record one observation of a versioned metric (SPEC.md sections 3 and 7).
+
+    SPEC.md section 3 keys a Measurement aggregate by its metric definition and
+    window and its invariant keeps observations distinct from causal
+    conclusions. The route registers the exact versioned metric definition and
+    then records the observation, both append-only; the domain refuses a record
+    written before its window closed and one that attaches to another tenant's
+    metric. An identical replay is idempotent and a changed same-key re-statement
+    is a named 409, never a silent rewrite. Recording an observation is not a
+    gate and grants no authority; a material optimization still needs the owner
+    approval of SPEC.md section 4.
+    """
+
+    metric = MetricDefinition(
+        metric_id=body.metric.metric_id,
+        tenant_id=body.metric.tenant_id,
+        name=body.metric.name,
+        funnel_step=MetricFunnelStep(body.metric.funnel_step),
+        unit=MetricUnit(body.metric.unit),
+        direction=MetricDirection(body.metric.direction),
+        version=body.metric.version,
+    )
+    try:
+        record = MeasurementRecord(
+            record_id=body.record_id,
+            tenant_id=body.tenant_id,
+            metric=metric,
+            value=body.value,
+            window=MeasurementWindow(
+                start=body.window.start, end=body.window.end
+            ),
+            basis=MeasurementBasis(body.basis),
+            source=body.source,
+            sample_size=body.sample_size,
+            recorded_on=body.recorded_on,
+        )
+        registry.save_metric(metric)
+        registry.save_record(record)
+    except MeasurementError as exc:
+        status = (
+            409 if type(exc).__name__ == "MeasurementConflictError" else 422
+        )
+        raise HTTPException(
+            status_code=status,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return _measurement_payload(record)

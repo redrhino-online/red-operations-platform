@@ -1654,3 +1654,87 @@ class ApprovalListResponse(BaseModel):
     limit: int
     offset: int
     approvals: list[ApprovalRecordResponse]
+
+
+class MetricDefinitionInput(BaseModel):
+    """One versioned metric definition to register (SPEC.md section 3).
+
+    The caller supplies the identity, tenant, name and the typed funnel step,
+    unit, direction and version; the domain refuses a blank identity or a
+    non-positive version, so an untyped metric cannot enter the registry.
+    """
+
+    metric_id: str
+    tenant_id: str
+    name: str
+    funnel_step: str
+    unit: str
+    direction: str
+    version: int
+
+
+class MetricDefinitionResponse(BaseModel):
+    """One registered metric definition version, re-validated through the domain."""
+
+    metric_id: str
+    tenant_id: str
+    name: str
+    funnel_step: str
+    unit: str
+    direction: str
+    version: int
+
+
+class MeasurementWindowInput(BaseModel):
+    """The closed date range an observation covers (SPEC.md section 3)."""
+
+    start: date
+    end: date
+
+
+class RecordMeasurementRequest(BaseModel):
+    """Record one observation of a versioned metric (SPEC.md sections 3 and 7).
+
+    The caller supplies the metric definition, the value, the window, the
+    placeholder-or-observed basis, the source, the sample size and the recorded
+    date. The domain refuses a record written before its window closed and a
+    metric owned by another tenant, so a placeholder figure cannot pass as a
+    closed-window observation and one client cannot attach an observation to
+    another client's metric.
+    """
+
+    record_id: str
+    tenant_id: str
+    metric: MetricDefinitionInput
+    value: float
+    window: MeasurementWindowInput
+    basis: str
+    source: str
+    sample_size: int
+    recorded_on: date
+
+
+class MeasurementRecordResponse(BaseModel):
+    """One recorded observation, re-validated through the domain aggregate."""
+
+    record_id: str
+    tenant_id: str
+    metric: MetricDefinitionResponse
+    value: float
+    window_start: date
+    window_end: date
+    basis: str
+    source: str
+    sample_size: int
+    recorded_on: date
+    is_observed: bool
+
+
+class MeasurementListResponse(BaseModel):
+    """A paginated page of one client tenant's observations."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    records: list[MeasurementRecordResponse]

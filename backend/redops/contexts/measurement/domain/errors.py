@@ -752,4 +752,26 @@ class AudienceBuildObservationWindowOpenError(MeasurementError):
     result to report and is refused."""
 
 
+class UnscopedMeasurementError(MeasurementError):
+    """A metric registry read or write was requested without a tenant.
+
+    SPEC.md sections 3 and 9 make every Measurement aggregate a client resource
+    that must carry ``tenant_id`` on every command and query, so storing or
+    reading a metric definition or an observation without a client would either
+    leak across clients or create an orphaned registry row.
+    """
+
+
+class MeasurementConflictError(MeasurementError):
+    """A same-key metric definition or record was re-stated with different content.
+
+    SPEC.md section 3 keys a MeasurementRecord by its exact versioned metric and
+    keeps observations distinct, so a stored metric definition at one
+    ``(metric_id, version)`` and a stored observation at one ``record_id`` are
+    append-only: an identical replay is idempotent, but a re-statement that
+    changes the body is refused rather than silently rewriting the pinned
+    reference historical observations already attach to.
+    """
+
+
 
