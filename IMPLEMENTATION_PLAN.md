@@ -4,6 +4,56 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T165627Z (Ralph cycle, this run): selected item was the read
+  route that exposes the production-manager view. The prior cycle added the
+  `EngagementProductionViewQuery` use case, but the view had no production
+  caller: the projection was exercised only by tests. SPEC.md section 4 requires
+  a production view per client that reports what is present and approved, who is
+  accountable, which dependency blocks work and what approval is next, and SPEC.md
+  section 6 requires the API to call a use case through ports. It outranked
+  populating the METRICS dimension (which needs a Measurement query seam and is a
+  later slice) and the `ClientProcess` canon gap (a methodology-owner decision),
+  because a durable state read model with no caller earns no verified progress.
+- Outcome: new `GET /red/clients/{tenant_id}/engagements/{engagement}/production-view`
+  in `backend/redops/api/routes.py`, wired through `get_gate_ledger_repository`
+  and `get_stage_run_repository` into `GetEngagementProductionViewHandler`. New
+  response schemas in `backend/redops/api/schemas.py`:
+  `EngagementProductionViewResponse`, `StageProductionViewResponse`,
+  `PipelineProgressResponse`, `AssetVersionResponse`, `MetricReportingResponse`,
+  `MetricMovementResponse`. The route serialises the pure domain view and
+  computes no rule: tenant boundary, dependency graph, exact pinned versions and
+  the activity-versus-progress split stay enforced in `EngagementProductionView`.
+  The evaluation instant `on` is a required query parameter; milestones and
+  activity counts are optional. Domain errors map to a named 422.
+- Evidence: `tests/unit/test_production_view_route.py` (4) pass: a seeded
+  approved stage 0 plus a working stage 1 run render current stage 1, one
+  approved gate, pinned stage 0 assets, stage 1 owner and `entered_at`; an empty
+  store renders all 11 stages not-started; a stage 0 decision is invisible to
+  another tenant; a missing `on` is 422. `make check` green: 1665 passed, 1
+  skipped, 632 subtests; pyflakes clean.
+- New findings: the route serves the METRICS dimension empty because it accepts
+  no metric input; populating it needs a Measurement-owned query seam feeding
+  `metric_reporting_views`. `make done` still fails at step 2 (`tests/e2e`
+  absent), so DoD 1 is not met. The stage 1 `Avatar Locked` gate already has its
+  domain assembler and application handler but no HTTP route, so the 0-10 API
+  surface is gated at stage 0.
+- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate route
+  and a repeated stage 0 gate POST after COMPLETE returns 422; RLS remains
+  WHERE-clause only (ADR 0004); the stage 0-10 e2e suite (DoD 1, Q30) and the
+  migration deployment step (separate GitOps chart) are absent from this repo.
+- Highest priority ready next item: expose the stage 1 "Avatar Locked" gate by
+  `POST /red/clients/{tenant_id}/stages/1/gate`, mapping a typed request to
+  `RecordStageOneGateCommand` and running `RecordStageOneGateHandler` through the
+  ledger and stage run ports, mirroring the stage 0 route. Prerequisites: the
+  `StageOneGateAssembler`/`StageOneGateRecorder` and `RecordStageOneGateHandler`
+  (done), the stage 0 route and its durable ledger/run ports (done), and a
+  passing stage 0 decision in the ledger (enforced by governance). This advances
+  the stage 0-10 API surface toward DoD 1. Alternative: the `ClientProcess`
+  design artifact from the canon gap register, if a methodology-owner decision is
+  preferred.
+
+### Prior cycle (2026-10-03T165342Z)
+
 - Cycle 2026-10-03T165342Z (Ralph cycle, this run): selected item was the
   production-view query use case in the Governance application layer. The prior
   cycle projected durable `StageRun` records into the pure

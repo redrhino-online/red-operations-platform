@@ -79,3 +79,101 @@ class RecordStageZeroGateRequest(BaseModel):
     correlation_id: str
     proposed_by: str | None = None
     next_action: str = ""
+
+
+class AssetVersionResponse(BaseModel):
+    """One exact asset version pinned or approved for a stage."""
+
+    asset_id: str
+    version: int
+
+
+class MetricMovementResponse(BaseModel):
+    """A measured before and after of one approved stage 10 improvement."""
+
+    improvement_id: str
+    before: float
+    after: float
+    measured_on: date
+
+
+class MetricReportingResponse(BaseModel):
+    """One observed metric row of the production view's METRICS dimension.
+
+    The Measurement context owns the metric registry and observations; this is
+    its typed projection onto the read model, so a placeholder figure never
+    appears as verified progress (SPEC.md section 4).
+    """
+
+    metric_id: str
+    tenant_id: str
+    name: str
+    funnel_step: str
+    unit: str
+    direction: str
+    value: float
+    window_start: date
+    window_end: date
+    sample_size: int
+    source: str
+    recorded_on: date
+    basis: str
+    movement: MetricMovementResponse | None = None
+
+
+class StageProductionViewResponse(BaseModel):
+    """One stage of the production-manager view (SPEC.md section 4).
+
+    Answers what should exist, what is present and approved, what is missing,
+    who is accountable, which dependency blocks work and what approval is next.
+    """
+
+    stage_number: int
+    name: str
+    checkpoint: str
+    status: str
+    required_asset_kinds: list[str]
+    approved_assets: list[AssetVersionResponse]
+    missing_asset_kinds: list[str]
+    accountable_role: str
+    approver_role: str
+    dependencies: list[int]
+    blocking_dependencies: list[int]
+    assigned_owner: str | None = None
+    recorded_approver: str | None = None
+    due_on: date | None = None
+    next_action: str = ""
+    blockers: list[str] = []
+    entered_at: date | None = None
+    is_approved: bool
+
+
+class PipelineProgressResponse(BaseModel):
+    """Verified progress across the pipeline, kept apart from activity."""
+
+    approved_gates: int
+    total_gates: int
+    verified_post_launch_milestones: int
+    activity_entries: int
+    verified_progress: int
+    gates_remaining: int
+
+
+class EngagementProductionViewResponse(BaseModel):
+    """The production-manager view for one client engagement (SPEC.md section 4).
+
+    The eight reporting dimensions are reported separately: assets,
+    checkpoints, owner, dependency, status and due date per stage; milestones
+    and metrics at the engagement level. Activity is reported apart from gate
+    completion so progress is never shown as tasks checked off.
+    """
+
+    engagement: str
+    tenant_id: str
+    template_version: str
+    current_stage_number: int | None
+    next_approval_stage_number: int | None
+    blocked_stage_numbers: list[int]
+    progress: PipelineProgressResponse
+    stages: list[StageProductionViewResponse]
+    metric_reporting: list[MetricReportingResponse]

@@ -12,11 +12,15 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from redops.api.schemas import RecordStageZeroGateRequest
+from redops.api.schemas import (
+    EngagementProductionViewResponse,
+    RecordStageZeroGateRequest,
+)
 from redops.contexts.engagement.application.commands import (
     RecordStageZeroGateCommand,
 )
@@ -35,9 +39,18 @@ from redops.contexts.governance.application.ports import (
     GateLedgerRepository,
     StageRunRepository,
 )
+from redops.contexts.governance.application.queries import (
+    EngagementProductionViewQuery,
+    GetEngagementProductionViewHandler,
+)
 from redops.contexts.governance.domain.entities import StageRun
 from redops.contexts.governance.domain.errors import GovernanceError
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
+from redops.contexts.governance.domain.value_objects import (
+    EngagementProductionView,
+    MetricReportingView,
+    StageProductionView,
+)
 from redops.contexts.governance.infrastructure.repositories import (
     gate_ledger_repository_from_env,
     stage_run_repository_from_env,
@@ -252,3 +265,146 @@ def record_stage_zero_gate(
             for asset in decision.required_assets
         ],
     }
+
+
+def _metric_reporting_payload(row: MetricReportingView) -> dict[str, Any]:
+    movement = None
+    if row.movement is not None:
+        movement = {
+            "improvement_id": row.movement.improvement_id,
+            "before": row.movement.before,
+            "after": row.movement.after,
+            "measured_on": row.movement.measured_on.isoformat(),
+        }
+    return {
+        "metric_id": row.metric_id,
+        "tenant_id": row.tenant_id,
+        "name": row.name,
+        "funnel_step": row.funnel_step,
+        "unit": row.unit,
+        "direction": row.direction,
+        "value": row.value,
+        "window_start": row.window_start.isoformat(),
+        "window_end": row.window_end.isoformat(),
+        "sample_size": row.sample_size,
+        "source": row.source,
+        "recorded_on": row.recorded_on.isoformat(),
+        "basis": row.basis.value,
+        "movement": movement,
+    }
+
+
+def _stage_production_view_payload(stage: StageProductionView) -> dict[str, Any]:
+    return {
+        "stage_number": stage.stage_number,
+        "name": stage.name,
+        "checkpoint": stage.checkpoint,
+        "status": stage.status.value,
+        "required_asset_kinds": sorted(stage.required_asset_kinds),
+        "approved_assets": sorted(
+            (
+                {"asset_id": asset.asset_id, "version": asset.version}
+                for asset in stage.approved_assets
+            ),
+            key=lambda asset: (asset["asset_id"], asset["version"]),
+        ),
+        "missing_asset_kinds": sorted(stage.missing_asset_kinds),
+        "accountable_role": stage.accountable_role,
+        "approver_role": stage.approver_role,
+        "dependencies": sorted(stage.dependencies),
+        "blocking_dependencies": sorted(stage.blocking_dependencies),
+        "assigned_owner": stage.assigned_owner,
+        "recorded_approver": stage.recorded_approver,
+        "due_on": stage.due_on.isoformat() if stage.due_on else None,
+        "next_action": stage.next_action,
+        "blockers": sorted(stage.blockers),
+        "entered_at": stage.entered_at.isoformat() if stage.entered_at else None,
+        "is_approved": stage.is_approved,
+    }
+
+
+def _production_view_payload(view: EngagementProductionView) -> dict[str, Any]:
+    current = view.current_stage
+    next_approval = view.next_approval
+    return {
+        "engagement": view.engagement,
+        "tenant_id": view.tenant_id,
+        "template_version": view.template_version,
+        "current_stage_number": current.stage_number if current else None,
+        "next_approval_stage_number": (
+            next_approval.stage_number if next_approval else None
+        ),
+        "blocked_stage_numbers": [
+            stage.stage_number for stage in view.blocked_stages
+        ],
+        "progress": {
+            "approved_gates": view.progress.approved_gates,
+            "total_gates": view.progress.total_gates,
+            "verified_post_launch_milestones": (
+                view.progress.verified_post_launch_milestones
+            ),
+            "activity_entries": view.progress.activity_entries,
+            "verified_progress": view.progress.verified_progress,
+            "gates_remaining": view.progress.gates_remaining,
+        },
+        "stages": [
+            _stage_production_view_payload(stage) for stage in view.stages
+        ],
+        "metric_reporting": [
+            _metric_reporting_payload(row) for row in view.metric_reporting
+        ],
+    }
+
+
+@router.get(
+    "/clients/{tenant_id}/engagements/{engagement}/production-view",
+    response_model=EngagementProductionViewResponse,
+)
+def get_engagement_production_view(
+    tenant_id: str,
+    engagement: str,
+    on: date,
+    verified_post_launch_milestones: int = 0,
+    activity_entries: int = 0,
+    ledger_repository: GateLedgerRepository = Depends(
+        get_gate_ledger_repository
+    ),
+    run_repository: StageRunRepository = Depends(get_stage_run_repository),
+) -> EngagementProductionViewResponse:
+    """Serve the production-manager view for one client engagement.
+
+    SPEC.md section 4 requires the production view to answer, per client, the
+    current stage, what should exist, what is present and approved, what is
+    missing, who is accountable, which dependency blocks work, what approval is
+    next and when it is due, and SPEC.md section 6 requires the API to call a use
+    case through ports rather than read a store directly. This route maps the
+    request to the Governance ``EngagementProductionViewQuery``, runs
+    ``GetEngagementProductionViewHandler`` through the ``GateLedgerRepository``
+    and ``StageRunRepository`` seams and returns the projected view. Every
+    integrity rule -- the tenant boundary, the stage dependency graph, exact
+    pinned versions and the separation of activity from verified progress -- stays
+    enforced by the pure domain view; the route computes none of it. The
+    evaluation instant ``on`` is required because a prerequisite's expiry is only
+    meaningful against a fixed time (SPEC.md section 4).
+    """
+
+    query = EngagementProductionViewQuery(
+        template=stage_zero_to_ten_template(),
+        engagement=engagement,
+        tenant_id=tenant_id,
+        on=on,
+        verified_post_launch_milestones=verified_post_launch_milestones,
+        activity_entries=activity_entries,
+    )
+    try:
+        view = GetEngagementProductionViewHandler(
+            ledger_repository=ledger_repository,
+            run_repository=run_repository,
+        ).handle(query)
+    except (GovernanceError, ValueError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return _production_view_payload(view)
