@@ -4,7 +4,92 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T183929Z (Ralph cycle, this run): selected item was queue Q1,
+- Cycle 2026-10-03T184310Z (Ralph cycle, this run): selected item was queue Q2,
+  the live RED LLM adapter that satisfies the `ModelGateway` port, wraps the
+  fork's provider registry, and logs model, prompt version, context references,
+  usage and trace id (SPEC.md sections 5, 6 and 13 condition 5; implementation
+  plan Q2). Q2 is the highest ready item whose prerequisites are met: Q1 (the
+  deterministic fake gateway and the `ModelGateway` port) landed in the prior
+  cycle, so the port exists and the live adapter is the next dependency-satisfied
+  queue item. It outranked the alternatives for these reasons. The stage 8-10
+  canon required-kind wiring (Q28) is still blocked on the named
+  methodology-owner placement decision the prior cycles recorded (`EnrollmentPlan`,
+  `ClientProcess`, `SwimlanesPlan` between the stage 8 "Funnel Complete" gate and
+  a later stage 9/10 gate), and the task forbids making that decision unattended.
+  The Next.js `frontend/` shell (DoD condition 6, Q32) is blocked on the workflow
+  engine Q5 via Q15, and Q5 is a multi-cycle adaptation of the fork's
+  workflow/resumer substrate, so it is not the smallest completable item. The
+  pipeline backbone is complete through stage 10 at the gate routes, so there was
+  no smaller gate-integrity defect with satisfied prerequisites. Q2 is a real,
+  currently undetected DoD gap: section 13 condition 5 requires the LLM adapter to
+  log model, prompt version, usage and trace id and to prove the real provider
+  path, and before this cycle the seam had only the offline fake. Alternatives
+  rejected: another canon asset outside the stage order (post-stage-10 assets do
+  not block the pipeline) and the REST resource routes Q9-Q14 (ready but surface,
+  not DoD blocking).
+- Outcome: new module
+  `backend/redops/agents/infrastructure/llm_gateway.py` with two adapters behind
+  the port. `ForkProviderModelGateway(provider_for, runner=None, max_tokens=...)`
+  selects the provider for the request's model through an injected lookup,
+  translates the typed `ModelRequest` into an Anthropic-shaped
+  `messages_create(model, max_tokens, messages)` call, runs it through an
+  injected runner (`asyncio.run` by default), and joins the text blocks back into
+  a `ModelResponse` that preserves the request's model, prompt version, trace id
+  and context references with a typed `ModelUsage`. `from_fork_registry()` lazily
+  binds the fork's `openexecutive.providers.registry.get_provider`, so the agent
+  package does not import the fork at module load. A new named error
+  `ModelGatewayRuntimeError` (`agents/domain/errors.py`) makes the adapter refuse
+  inside a running event loop instead of deadlocking. `LoggingModelGateway` is a
+  decorator over any `ModelGateway` that emits one structured INFO record per call
+  with the tenant, model, prompt version, trace id, context references and
+  input/output tokens, and never the prompt or response text (SPEC.md section 9),
+  so both the offline fake and the live adapter get the section 6 attribution log
+  without a second implementation. Onion rule respected: the adapter lives in
+  infrastructure and the logging decorator uses only stdlib; domain imports no
+  vendor code.
+- Evidence: `make check` -> 1959 passed, 1 skipped, 680 subtests; pyflakes clean.
+  New behavioral tests `tests/unit/agents/test_llm_gateway.py` (12 tests): the
+  adapter is a `ModelGateway`; it translates the request to the Anthropic shape
+  and back with preserved attribution and usage; it selects the provider by
+  request model; it joins multiple text blocks; it refuses a provider without
+  `messages_create`; it refuses inside a running loop; `from_fork_registry` binds
+  the fork's `get_provider`; the logging decorator delegates and returns the
+  delegate response, logs model, prompt version, trace id, tenant, context
+  references and input/output tokens, never logs the prompt or response text,
+  rejects a non-gateway delegate, and honors a supplied logger. `make done`
+  clears [1/6]-[4/6] and still fails [5/6] (`frontend/` missing, Q32).
+- New findings: section 13 condition 5's offline half (Q1) and the logging and
+  real-provider-adapter half (Q2) are now both implemented; the remaining piece
+  is the env-gated live OpenRouter smoke (Q4), which needs a key and proves one
+  live call. The fork provider is async while the RED port is synchronous, so the
+  adapter bridges with `asyncio.run` and raises `ModelGatewayRuntimeError` inside
+  a running loop; if a later worker runs inside an event loop the composition
+  layer must supply a thread/loop runner or make the port async. The unresolved
+  Q3 architecture tension remains: ADR 0006 registers RED agents through the
+  fork's `orchestrator/router.py` while DoD condition 7 requires zero vendor
+  edits; that is a named-owner/architecture decision, not a Q2 blocker.
+- Blockers: the Q28 stage 8/9/10 required-kind placement decision (named-owner);
+  `frontend/` (DoD condition 6, Q32) blocked on Q5 via Q15; request idempotency
+  (Q16) blocked on the same; RLS is a WHERE clause only (ADR 0004); the condition
+  3 retrieval, background worker and artifact-URL layers are unbuilt; Q3 agent
+  registration blocked on the ADR 0006 versus vendor-edit tension; the live
+  OpenRouter smoke (Q4) needs an `OPENROUTER_API_KEY` to run.
+- Highest priority ready next item: the Q4 live OpenRouter smoke test, an
+  env-gated test that skips without a key and, with a key, proves one live call
+  through `ForkProviderModelGateway` and the section 6 attribution log (Q2 now
+  supplies the adapter). In parallel, the single most useful unblocker for the
+  last failing DoD checkpoint remains the Q5 workflow engine slice (versioned
+  definition, durable run state, approval wait survives a restart, idempotent
+  effects), which unblocks Q15 -> Q32 and the SPEC.md section 11 "restarting
+  worker preserves a waiting workflow" acceptance scenario; it is larger than one
+  bounded canon-adjacent item and was not selected this cycle. Required owner
+  input for the pipeline: the stage 8/9/10 canon placement decision; approver for
+  any wired kind: the client designated authority; blocked downstream dependency:
+  the stage 9 gate.
+
+### Prior cycle (2026-10-03T183929Z)
+
+- Cycle 2026-10-03T183929Z (Ralph cycle, the prior cycle): selected item was queue Q1,
   the deterministic fake model gateway (a `ModelGateway` port plus an offline
   test adapter) in a new `backend/redops/agents/` bounded package (SPEC.md
   sections 5 and 6, section 13 condition 5; implementation plan Q1). Q1 is the
@@ -2051,7 +2136,7 @@ stalls:
 | # | Item | Area | Depends | Evidence / gate |
 | --- | --- | --- | --- | --- |
 | Q1 | Deterministic fake model gateway (port plus test adapter) | agents | — | unit test; agents run offline. Done 2026-10-03T183929Z: `backend/redops/agents/` (`ModelGateway` port, `ModelRequest`/`ModelUsage`/`ModelResponse`, `DeterministicFakeModelGateway`) verified by `tests/unit/agents/test_model_gateway.py` (13 tests) |
-| Q2 | RED LLM adapter logs model, prompt version, usage, trace id | agents | Q1 | adapter contract test. Q1 now supplies the port; the live OpenRouter adapter wraps the fork's provider registry behind it |
+| Q2 | RED LLM adapter logs model, prompt version, usage, trace id | agents | Q1 | adapter contract test. Done 2026-10-03T184310Z: `ForkProviderModelGateway` wraps the fork's `get_provider` behind `ModelGateway`; `LoggingModelGateway` logs tenant/model/prompt version/trace id/context refs/tokens without prompt text; `ModelGatewayRuntimeError` guards a running loop. Verified by `tests/unit/agents/test_llm_gateway.py` (12 tests). Live smoke remains Q4 |
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
 | Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key |
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test |

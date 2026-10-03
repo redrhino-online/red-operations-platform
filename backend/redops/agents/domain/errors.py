@@ -26,6 +26,18 @@ class InvalidModelUsageError(AgentModelError, ValueError):
     """
 
 
+class ModelGatewayRuntimeError(AgentModelError, RuntimeError):
+    """The live model adapter cannot serve the request in this runtime.
+
+    The fork's provider registry is async while the ``ModelGateway`` port is
+    synchronous (SPEC.md section 6: the adapter abstracts the provider). Calling
+    the adapter from inside a running event loop would deadlock a synchronous
+    bridge, so the adapter refuses with a named error instead of blocking or
+    silently dropping the call. The worker/composition layer decides how to
+    invoke it, or how to bridge the loop.
+    """
+
+
 class InvalidModelResponseError(AgentModelError, ValueError):
     """A model response is incomplete.
 
