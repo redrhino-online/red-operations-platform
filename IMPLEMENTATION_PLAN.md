@@ -25,6 +25,15 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   host is `redop.atlas.lan`, internal-only (Traefik ipAllowList 10.0.0.0/8), UI
   auth disabled by the patched image. Postgres persistence unblocks RED
   repositories; the OpenExec-internal SQLite remains a separate store.
+- Tier 2 facts recorded (2026-10-03): model-provider data handling is accepted
+  (client content may flow through OpenRouter); approver/owner identities stay
+  role-based placeholders for now; pilot metric targets and 3F launch scope are
+  deferred; the app identity provider decision is deferred and the UI auth gate
+  stays patched off for the internal LAN-only host; backups are deferred (owner
+  will pick a target before client data); external access stays home-LAN-only;
+  capability agents 10/11 get proposed charters via one PR each, grounded in the
+  reference canon and the RED delivery pipeline; canon files 19/20 remain a known
+  blocker the owner will close.
 - Blockers: Tier 2 facts only the RED principal holds — approver/owner
   identities, pilot metric targets and 3F launch scope, model-provider data
   handling acceptance, app identity provider (UI auth is currently patched off),
@@ -162,4 +171,23 @@ CI gate order: format and types, domain and application tests, adapter contracts
 
 Major risks: fork internals may differ from the prior description; upstream license may limit use; latent cross tenant leakage; AI output may be mistaken for approval; home cluster may lack durable storage or reliable ingress; connector side effects may duplicate on retries; migrating live workflows may strand approval gates. Mitigations are respectively inventory, license review, isolation tests, explicit human authority, restore drills, idempotency keys, and version pinned workflow definitions.
 
-Decisions requiring a named owner: fork URL and license, Kubernetes distribution and capacity, identity provider, database and storage operator, backup target, external access path, model provider data handling, client approval roles, pilot acceptance metrics, 3F launch scope, and the remaining two agent charters. Record these as unresolved until verified. Any work requiring these decisions may proceed to a reviewable proposal and tests, but may not assume authorization from missing information.
+Decisions resolved (2026-10-03, owner RED principal): fork and license
+(OpenExecutive upstream v0.4.6 pinned as a submodule, Apache-2.0); code location
+(ADR 0008, app is this repository); storage (ADR 0003, PostgreSQL container on
+truenas-backed PVs); tenancy (ADR 0004); scheduler topology (ADR 0005); RED agent
+registration (ADR 0006); model provider (OpenRouter, OPENROUTER_ENABLED, and the
+owner accepts client material flowing through it); Kubernetes platform (Atlas
+k3s). Approver and owner identities are role-based placeholders until real names
+are supplied. External access is home-LAN-only.
+
+Decisions still open, each with a named owner (the RED principal unless noted):
+app identity provider for client-facing auth (the UI auth gate is currently
+patched off); pilot metric targets and 3F launch scope; backup target and restore
+drills for truenas PVs, PostgreSQL and /data; charters for capability agents 10
+and 11 (owner action: open one PR each proposing a charter grounded in the
+reference canon, the RED method and the delivery pipelines); acquisition of canon
+files 19/20 (sales/enrollment and email/follow-up modules) — a known blocker the
+owner will close when the content arrives; and per-stage required-kind decisions
+for the planning assets (enrollment, content roadmap, retargeting, dashboards).
+Any work requiring these decisions may proceed to a reviewable proposal and
+tests, but may not assume authorization from missing information.
