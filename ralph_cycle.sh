@@ -2,8 +2,12 @@
 
 # RED Operations Platform: exactly one OpenCode implementation cycle.
 # Usage: ./ralph_cycle.sh [repository-directory]
+# The target repository (arg 1, default: the script directory) is where OpenCode
+# works. The spec and plan come from RALPH_SPEC / RALPH_PLAN (default: the script
+# directory). When the target repository differs from the spec/plan repository,
+# the cycle commits code in the target and spec/plan changes in their own repo.
 # Optional environment: RALPH_SPEC, RALPH_PLAN, RALPH_CANON, RALPH_OPENCODE,
-# RALPH_MODEL, RALPH_PUSH_REMOTE (default: atlas).
+# RALPH_MODEL, RALPH_PUSH_REMOTES, RALPH_PLAN_PUSH_REMOTES.
 
 set -Eeuo pipefail
 
@@ -13,12 +17,27 @@ readonly SPEC_FILE="${RALPH_SPEC:-$SCRIPT_DIR/SPEC.md}"
 readonly PLAN_FILE="${RALPH_PLAN:-$SCRIPT_DIR/IMPLEMENTATION_PLAN.md}"
 readonly CANON_DIR="${RALPH_CANON:-$(cd "$SCRIPT_DIR/.." && pwd -P)/canon}"
 readonly OPENCODE_BIN="${RALPH_OPENCODE:-opencode}"
-readonly PUSH_REMOTE="${RALPH_PUSH_REMOTE:-atlas}"
+# Space-separated remote names to publish to. Each is skipped when the
+# repository does not have that remote configured. Never pushes to `upstream`.
+readonly PUSH_REMOTES="${RALPH_PUSH_REMOTES:-${RALPH_PUSH_REMOTE:-atlas origin}}"
+readonly PLAN_PUSH_REMOTES="${RALPH_PLAN_PUSH_REMOTES:-$PUSH_REMOTES}"
 readonly RUN_DIR="$REPO_DIR/.ralph"
 readonly LOCK_DIR="$RUN_DIR/cycle.lock"
 
 die() { printf 'ralph: %s\n' "$*" >&2; exit 1; }
 release_lock() { rmdir "$LOCK_DIR" 2>/dev/null || true; }
+
+push_to_remotes() { # $1=repo $2=branch $3=space-separated remote names
+  local repo="$1" branch="$2" remotes="$3" remote pushed=0
+  for remote in $remotes; do
+    git -C "$repo" remote get-url "$remote" >/dev/null 2>&1 || continue
+    git -C "$repo" push "$remote" "HEAD:refs/heads/$branch" \
+      || die "failed to publish $branch to remote $remote in $repo"
+    printf 'ralph: published %s to %s (%s)\n' "$branch" "$remote" "$repo"
+    pushed=1
+  done
+  (( pushed )) || printf 'ralph: no publish remote among [%s] configured in %s; skipping publish\n' "$remotes" "$repo"
+}
 
 [[ -d "$REPO_DIR" ]] || die "repository directory does not exist: $REPO_DIR"
 [[ -f "$SPEC_FILE" && -r "$SPEC_FILE" ]] || die "spec is missing or unreadable: $SPEC_FILE"
@@ -43,6 +62,14 @@ readonly LOG_FILE="$RUN_DIR/$RUN_ID.log"
 readonly COMMIT_MSG_FILE="$RUN_DIR/$RUN_ID.commit-msg.txt"
 readonly SPEC_PATH="$(cd "$(dirname "$SPEC_FILE")" && pwd -P)/$(basename "$SPEC_FILE")"
 readonly PLAN_PATH="$(cd "$(dirname "$PLAN_FILE")" && pwd -P)/$(basename "$PLAN_FILE")"
+
+# When the target is a git submodule (e.g. vendor/openexecutive), the spec and
+# plan live in the superproject. Run OpenCode from the superproject so the spec,
+# plan and submodule are all in-project, and after committing inside the
+# submodule commit the spec/plan and the moved submodule pointer in the
+# superproject. SUPER_ROOT is empty for an ordinary single-repository target.
+SUPER_ROOT="$(git -C "$REPO_DIR" rev-parse --show-superproject-working-tree 2>/dev/null || true)"
+RUN_CWD="${RALPH_RUN_CWD:-${SUPER_ROOT:-$REPO_DIR}}"
 
 # The reference model canon is the licensed source reference for method
 # artifacts. It lives outside the repository, so point the agent at it only when
@@ -90,7 +117,7 @@ If the plan cannot be updated, report failure explicitly. Final response: select
 EOF
 
 printf 'ralph: starting one cycle; log: %s\n' "$LOG_FILE"
-cd "$REPO_DIR"
+cd "$RUN_CWD"
 opencode_args=(run)
 if [[ -n "${RALPH_MODEL:-}" ]]; then
   opencode_args+=(--model "$RALPH_MODEL")
@@ -126,16 +153,37 @@ else
   printf 'ralph: no repository changes to commit\n'
 fi
 
-# Publish to the delivery remote (Atlas Gitea) as changes are tested and
-# committed. Skipped when the remote is not configured.
-if git -C "$REPO_DIR" remote get-url "$PUSH_REMOTE" >/dev/null 2>&1; then
-  push_branch="$(git -C "$REPO_DIR" symbolic-ref --quiet --short HEAD || printf 'main')"
-  if git -C "$REPO_DIR" push "$PUSH_REMOTE" "HEAD:refs/heads/$push_branch"; then
-    printf 'ralph: published %s to %s\n' "$push_branch" "$PUSH_REMOTE"
-  else
-    die "failed to publish $push_branch to remote $PUSH_REMOTE"
+# Publish the target repository (for a submodule target, this is the fork
+# itself) to each configured remote, then, for a submodule target, record the
+# moved submodule pointer and any spec/plan change in the superproject.
+push_branch="$(git -C "$REPO_DIR" symbolic-ref --quiet --short HEAD || printf 'main')"
+push_to_remotes "$REPO_DIR" "$push_branch" "$PUSH_REMOTES"
+
+target_root="$(git -C "$REPO_DIR" rev-parse --show-toplevel)"
+if [[ -n "$SUPER_ROOT" && "$SUPER_ROOT" != "$target_root" ]]; then
+  sub_rel="$(realpath --relative-to="$SUPER_ROOT" "$target_root")"
+  super_changed=0
+  for f in "$SPEC_PATH" "$PLAN_PATH"; do
+    if [[ -n "$(git -C "$SUPER_ROOT" status --porcelain --untracked-files=all -- "$f")" ]]; then
+      git -C "$SUPER_ROOT" add -- "$f"
+      super_changed=1
+    fi
+  done
+  if [[ -n "$(git -C "$SUPER_ROOT" status --porcelain -- "$sub_rel")" ]]; then
+    git -C "$SUPER_ROOT" add -- "$sub_rel"
+    super_changed=1
   fi
-else
-  printf 'ralph: publish remote %s not configured; skipping publish\n' "$PUSH_REMOTE"
+  if (( super_changed )); then
+    [[ -s "$COMMIT_MSG_FILE" ]] || die "spec/plan or submodule pointer changed but the agent wrote no commit message to $COMMIT_MSG_FILE"
+    git -C "$SUPER_ROOT" -c user.name="${RALPH_GIT_NAME:-ralph}" \
+      -c user.email="${RALPH_GIT_EMAIL:-ralph@localhost}" \
+      commit -F "$COMMIT_MSG_FILE" || die "failed to commit spec/plan and submodule pointer in $SUPER_ROOT"
+    printf 'ralph: committed spec/plan and submodule pointer in %s as %s\n' \
+      "$SUPER_ROOT" "$(git -C "$SUPER_ROOT" rev-parse --short HEAD)"
+    super_branch="$(git -C "$SUPER_ROOT" symbolic-ref --quiet --short HEAD || printf 'main')"
+    push_to_remotes "$SUPER_ROOT" "$super_branch" "$PLAN_PUSH_REMOTES"
+  else
+    printf 'ralph: no spec/plan or submodule pointer changes to commit in %s\n' "$SUPER_ROOT"
+  fi
 fi
 printf 'ralph: cycle finished; review repository diff and %s\n' "$LOG_FILE"

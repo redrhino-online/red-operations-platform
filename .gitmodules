@@ -1,0 +1,3 @@
+[submodule "vendor/openexecutive"]
+	path = vendor/openexecutive
+	url = git@github.com:redrhino-online/OpenExecutive.git
