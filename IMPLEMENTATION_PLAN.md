@@ -4,48 +4,46 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:46:49Z (Ralph cycle 114).
-- Selected item: build the canon's Funnel Finder as the pure Commercial Design
-  `FunnelProfile`, `FunnelType`, `OfferPriceBand` and `FunnelFinder`, completing
-  the positioning and decision tools canon gap started in cycles 112 and 113.
-  Canon files 13 and 14 state the funnel finder is "based on the technical
-  level ... how experienced you are, the pricing of your offer ... And then the
-  business model" and chooses among the funnels the canon trains its community on
-  (liquid, local, CAC, webinar, quiz, launch); SPEC.md section 12.5 records it as
-  the last candidate in that gap and section 12.3 places the pre-stage-8
-  selection with canon files 13 and 14. It was the named highest priority ready
-  next item after cycle 113 and outranks the audience-building and content
-  flywheel (canon 25-31, stages 6 and 10) and the downstream candidates because
-  it is the smallest remaining sibling of the same gap, it precedes stage 8
-  "Funnel Complete", and it needs only the two cited canon files. It is a
-  bounded, pure-domain planning decision, not a new required gate kind (a
-  methodology-owner decision).
+- Cycle timestamp: 2026-10-03T05:48:08Z (Ralph cycle 115).
+- Selected item: build the canon's Content Roadmap as the pure Commercial Design
+  `ContentBeat`, `ContentChannel`, `ContentTopic`, `ContentRoadmap` and
+  `ContentDistributionPolicy`, advancing the audience-building and content
+  flywheel canon gap. SPEC.md section 12.5 records that candidate and maps it to
+  stages 6 and 10, and section 12.3 places the Content Roadmap with stage 6
+  (canon files 25-28, 32-34). The canon builds the roadmap by taking each step of
+  the Signature Solution and brainstorming the FAQs, topics and search queries the
+  audience asks about it (canon files 26 and 27), reuses the Authority Amplifier
+  script for every piece of content (canon file 26) and publishes to YouTube,
+  Facebook and blog at a minimum (canon files 29 and 31). It was the named
+  highest priority ready next item after cycle 114 and outranks the enrollment and
+  sales call, which needs a named-owner Sell/Enroll stage decision, and the
+  thirteen transformations (canon 09, 10), which need a methodology-owner
+  decision on the gate contract, because it is an asset inside an existing stage
+  that needs only the cited canon files and mirrors the cycle 111 `NurturePlan`.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: the canon funnel finder now lives in the Commercial Design domain
-  with the named `InvalidFunnelFinderError`, `FunnelFinderTenantBoundaryError`,
-  `FunnelFitError` and `FunnelFinderObservationError`. `FunnelProfile` requires
-  all four canon finder factors (technical level, experience, a typed offer price
-  band and business model) alongside its identity and tenant; `FunnelFinder`
-  requires at least two considered funnel types, one selected type among them,
-  unique types, a same-tenant profile and a rationale, and it refuses to be
-  recorded as an observation. `FunnelSelectionPolicy.require_price_fit` refuses a
-  high-ticket offer paired with a self-serve funnel and a low-ticket offer paired
-  with the canon's sales-call CAC funnel, reusing the canon's two stated
-  examples. New behavioral coverage: 15 tests in
-  `tests/unit/commercial/test_funnel_finder.py`. Running `PYTHONPATH=backend
-  python3 -m unittest discover -s tests -p 'test_*.py'` reports 1278 passed, up
-  from 1263. `python3 -m pyflakes backend/redops tests` is clean. `ruff` and
-  `mypy` remain uninstalled.
-- New findings: the positioning and decision tools canon gap is now fully
-  implemented -- market awareness levels (cycle 112), the Target Market
-  Matchmaker (cycle 113) and the Funnel Finder (this cycle) -- so no candidate
-  remains in that gap. The finder is a pre-stage-8 planning decision and is not
-  wired into the stage 6 `CampaignMessage` or the stage 8 `FunnelIntegration`;
-  neither is a required stage kind, so no gate changes. It does not authorize
-  outreach or spend (SPEC.md sections 4 and 9). The canon's offer-price factor is
-  modelled as three bands and the policy checks only the two stated extremes
-  (low and high ticket), an intentional RED extraction of canon file 13's "$5"
-  and "$20,000" examples.
+- Evidence: the canon content roadmap now lives in the Commercial Design domain
+  with the named `InvalidContentRoadmapError`, `ContentRoadmapTenantBoundaryError`,
+  `ContentRoadmapDependencyError`, `ContentRoadmapFormatError`,
+  `ContentDistributionError` and `ContentRoadmapObservationError`. `ContentTopic`
+  requires its identity, the Signature Solution step it maps from, the audience
+  question it answers, at least one typed, duplicate-free channel, and exactly the
+  Authority Amplifier beat order Promise, Proof, Problems, Steps, Context, Action;
+  `ContentRoadmap` requires a named owner, a same-tenant typed stage 4
+  `SignatureSolution`, at least one unique same-tenant topic and a topic step the
+  solution names, and reports the steps it covers and misses;
+  `ContentDistributionPolicy.require_minimum_reach` refuses a topic that does not
+  reach the canon's minimum blog, YouTube and Facebook channels. New behavioral
+  coverage: 22 tests in `tests/unit/commercial/test_content_roadmap.py`. Running
+  `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
+  reports 1300 passed, up from 1278. `python3 -m pyflakes backend/redops tests` is
+  clean. `ruff` and `mypy` remain uninstalled.
+- New findings: the content roadmap is a stage 6 planning decision and is not
+  wired into the `CampaignMessagePackage` or any canonical stage 6 kind; that is
+  a bounded follow-up and not a required gate kind, so no gate changes. It does
+  not authorize publishing or spend (SPEC.md sections 4 and 9). The audience
+  campaign, syndication scheduling, recycling and measurement remain in the
+  audience-building and content flywheel candidate (canon files 29-31), so that
+  candidate is partially implemented rather than closed.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -53,25 +51,39 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: build the canon's Content Roadmap (canon
-  files 25-31: plan evergreen content from the Signature Solution steps and
-  topics across produce, publish, promote and syndicate) as a pure Commercial
-  Design planning decision inside stage 6, keeping it a planning decision rather
-  than a new required gate kind (a methodology-owner decision). SPEC.md section
-  12.5 records the audience-building and content flywheel as a candidate and
-  section 12.3 maps it to stages 6 and 10. It is the next canon gap that can be
-  implemented as an asset inside an existing stage without a named-owner pipeline
-  change, so it outranks the enrollment and sales call (canon 00, 13, 14, 21, 24)
-  and umbrella planning, which need larger named-owner pipeline decisions, and
-  the thirteen transformations (canon 09, 10), which need a methodology-owner
-  decision on the gate contract. Prerequisite: read canon files 25-31 before
-  shaping and ground the roadmap on a same-tenant stage 4 `SignatureSolution`,
-  mirroring the cycle 111 `NurturePlan`.
+- Highest priority ready next item: build the canon's umbrella planning (the
+  Online Business Launch Map and the one-page Bulletproof Business Plan with a
+  90-day revisit, canon files 00 and 01) as a pure planning asset over the stage 0
+  to 10 template, keeping it a planning decision rather than a new required gate
+  kind (a methodology-owner decision). SPEC.md section 12.5 records it as a
+  candidate and section 12.3 maps it to portfolio and engagement planning. It is
+  the next canon gap that can be implemented as an asset without a named-owner
+  pipeline change, so it outranks the enrollment and sales call (canon 00, 13,
+  14, 21, 24), which needs a Sell/Enroll stage decision, and the Swimlanes channel
+  model (canon 13, 14, 33, 34), which spans stages 8 to 10. Prerequisite: read
+  canon files 00 and 01 before shaping, decide with a named owner whether it
+  becomes a required stage 0 asset, and ground the plan on the workspace and the
+  versioned stage 0 to 10 template; if that owner judges it needs a pipeline
+  stage, fall back to the Swimlanes channel model.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; a stage-parameterized gate recorder/handler refactor;
   projecting the compliance package onto a canonical stage 9 gate kind
   (methodology-owner decision); and all persistence.
+  [DONE 2026-10-03 (Ralph cycle 115): built the canon's Content Roadmap as the
+  pure Commercial Design `ContentBeat`, `ContentChannel`, `ContentTopic`,
+  `ContentRoadmap` and `ContentDistributionPolicy` -- a topic maps from a named
+  step of a same-tenant stage 4 `SignatureSolution`, names the audience question
+  it answers, at least one typed duplicate-free channel and exactly the Authority
+  Amplifier beat order Promise, Proof, Problems, Steps, Context, Action; the
+  roadmap binds a named owner, the same-tenant solution and at least one unique
+  topic, reports the steps it covers and misses, and is never an observation;
+  `ContentDistributionPolicy.require_minimum_reach` refuses a topic that does not
+  reach the canon's minimum blog, YouTube and Facebook channels (SPEC.md section
+  12.5; canon files 25-31); verified by
+  `tests/unit/commercial/test_content_roadmap.py` (22 tests, full suite 1300
+  passed), so the stage 6 content planning is now a typed, tenant-scoped asset
+  and the audience-building and content flywheel gap is partially implemented.]
   [DONE 2026-10-03 (Ralph cycle 114): built the canon's Funnel Finder as the
   pure Commercial Design `FunnelProfile`, `FunnelType`, `OfferPriceBand` and
   `FunnelFinder` -- a profile carries the canon's four finder factors (technical
@@ -544,7 +556,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 - Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 13, 14, 21, 24 — between stages 8 and 10 — status: candidate, needs named-owner decision on a Sell/Enroll stage.
 - Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: implemented 2026-10-03 (Ralph cycle 111) as the Commercial Design `NurturePlan` (`NurtureAudienceState`, `NurtureModality`, `NurtureMessage`, `NurtureSequence`), which grounds each message on a step of a same-tenant stage 4 `SignatureSolution`, uses the 5P modality (ping is the one-question survey), re-engages non-openers with distinct headlines and binds the sequences to a named owner. SPEC.md section 12.6 warns the dedicated email/follow-up module is absent from the supplied canon, so the shape is extracted from the covered files and recorded as a documented gap; wiring it into a required stage kind remains a named-owner decision.
 - Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93 built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate. Cycle 106 completed that slice: the METRICS dimension now reports each registered metric's newest observed figure and a measured movement via `metric_reporting_views`. Cycle 107 built the canon's forecast equation (`FunnelMetricRole`, `FunnelFigure`, `FunnelEconomics`, `FunnelForecast`, `funnel_figure`) so the metrics matrix unit economics exist before real data and a forecast stays distinct from an observed result.   Cycle 108 built the canon's scaling rule (`LearningPhase`, `ScalingAction`, `ScalingRecommendation`, `AdScalingPolicy`), so the dashboard can now turn an observed cost per lead into an owner-approved scale, hold, bid-up-the-funnel or pause-and-review recommendation. Cycle 109 built the canon's split-test logging (`SplitTestMode`, `SplitTestChange`, `SplitTest`), so a stage 10 optimization logs the one variable it changes (bound to the approved improvement's lever) before reading the result. This candidate is now fully implemented; no remaining scope.
-- Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: candidate.
+- Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: partially implemented 2026-10-03 (Ralph cycle 115) as the Commercial Design `ContentRoadmap` (`ContentBeat`, `ContentChannel`, `ContentTopic`, `ContentDistributionPolicy`), which maps each step of a same-tenant stage 4 `SignatureSolution` to content topics that follow the Authority Amplifier beat order and reach the canon's minimum blog, YouTube and Facebook channels, binds a named owner and reports the steps it covers and misses. Remaining candidate: the ten-second-view audience campaign, the syndication/recycling schedule and the content measurement loop (canon files 29-31) are delivery and operations assets outside this planning artifact and still need a named-owner decision on where they belong.
 - Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 110) as the Measurement `RetargetingPlan` (`TrackingCode`, `ConversionGoal`, `RetargetingAudience`, `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep`), which orders the canon's tracking code, conversion goals, retargeting lists and focused campaigns and binds them to one tenant and a named owner; the canon's effective-ads step is covered by the stage 10 `SplitTest` and its metrics step by the `MetricDefinition` registry. Remaining candidate: the canon's invisible opt-in offer and banner-ad spec/swipe-file assets are delivery assets outside this planning artifact and still need a named-owner decision on where they belong.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: implemented 2026-10-03 (Ralph cycle 94) as the Execution `CompliancePackage` (`ComplianceAssetKind`, `ComplianceAsset`, `ComplianceWaiver`) with the `ComplianceRequiredPolicy` gating `LaunchQA` traffic authorization, so "Launch Approved" needs every required asset or a live owned waiver; projecting the compliance assets onto their own canonical stage 9 gate kind remains a candidate that needs a named-owner decision.
 - Positioning and decision tools (Target Market Matchmaker, awareness levels, Funnel Finder) — canon 00, 04, 13, 14 — stages 1 and 2 — status: implemented 2026-10-03 (Ralph cycle 112) for the market awareness levels as the Commercial Design `MarketAwarenessMap` (`MarketAwarenessLevel`), which types the stage 1 `awareness-map` kind with the canon's five levels, requires research evidence and message requirements, rejects a retarget level that is not strictly further down the funnel, and projects to exact `StageAssetVersion` evidence; implemented 2026-10-03 (Ralph cycle 113) for the Target Market Matchmaker as the Commercial Design `TargetMarketCandidate` and `TargetMarketMatchmaker`, which narrows at least two canon-judged candidates to the one to serve now, grounds the chosen market on a same-tenant `MarketAwarenessMap`, and has `TargetMarketMatchPolicy.require_servable` refuse a market whose awareness position is not initially targetable; and implemented 2026-10-03 (Ralph cycle 114) for the Funnel Finder as the Commercial Design `FunnelProfile`, `FunnelType`, `OfferPriceBand` and `FunnelFinder`, which chooses one of the canon's funnel types from the four canon factors, narrows at least two considered types to the selected one with a rationale, and has `FunnelSelectionPolicy.require_price_fit` refuse a high-ticket offer with a self-serve funnel and a low-ticket offer with the sales-call CAC funnel (canon 13, 14). No candidate remains in this gap. Wiring the awareness map, the match or the finder into the `AvatarProfile`, the stage 1 `DiagnosisPackage`, the stage 6 `CampaignMessage` or the stage 8 `FunnelIntegration` is a bounded follow-up; none is a required gate kind yet (a methodology-owner decision).

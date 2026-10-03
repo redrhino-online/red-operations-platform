@@ -8,12 +8,17 @@ from typing import TYPE_CHECKING
 
 from redops.contexts.commercial.domain.errors import (
     CampaignMessageTenantBoundaryError,
+    ContentRoadmapDependencyError,
+    ContentRoadmapFormatError,
+    ContentRoadmapObservationError,
+    ContentRoadmapTenantBoundaryError,
     CurrencyTenantBoundaryError,
     DiagnosisTenantBoundaryError,
     DiagnosticTenantBoundaryError,
     FunnelFinderObservationError,
     FunnelFinderTenantBoundaryError,
     InvalidAvatarProfileError,
+    InvalidContentRoadmapError,
     InvalidBusinessSnapshotError,
     InvalidCampaignMessagePackageError,
     InvalidCurrencyInventoryError,
@@ -1940,4 +1945,230 @@ class FunnelFinder:
         raise FunnelFinderObservationError(
             f"funnel finder {claim_id!r} is a planning decision, not an observed "
             "result, and cannot be recorded as an observation"
+        )
+
+
+class ContentBeat(Enum):
+    """The beats of the Authority Amplifier script (canon file 26; SPEC stage 7).
+
+    SPEC.md section 12.3 maps the Authority Amplifier script to stages 6 and 7,
+    and section 4 stage 7 fixes its order as Promise, Proof, Problems, Steps,
+    Context, Action. The canon's Content Blitz reuses that script as the
+    framework for every piece of audience-building content (canon file 26: "these
+    two to five minute videos ... still use the authority amplifier script
+    because that's the framework I want you to use for every piece of content").
+    """
+
+    PROMISE = "promise"
+    PROOF = "proof"
+    PROBLEMS = "problems"
+    STEPS = "steps"
+    CONTEXT = "context"
+    ACTION = "action"
+
+
+AUTHORITY_AMPLIFIER_BEATS: tuple[ContentBeat, ...] = (
+    ContentBeat.PROMISE,
+    ContentBeat.PROOF,
+    ContentBeat.PROBLEMS,
+    ContentBeat.STEPS,
+    ContentBeat.CONTEXT,
+    ContentBeat.ACTION,
+)
+
+
+class ContentChannel(Enum):
+    """The channels each piece of canon content is published to (canon 29, 31).
+
+    The canon publishes every audience-building piece "to YouTube, Facebook and
+    blog at a minimum" (canon file 29), syndicates it to the email list, social
+    groups and podcast (canon file 31), and warns that posting an asset in only
+    one place loses most of its equity. The channel is the typed form of that
+    distribution route.
+    """
+
+    BLOG = "blog"
+    YOUTUBE = "youtube"
+    FACEBOOK = "facebook"
+    EMAIL = "email"
+    SOCIAL_GROUPS = "social_groups"
+    PODCAST = "podcast"
+
+
+MINIMUM_PUBLISH_CHANNELS: tuple[ContentChannel, ...] = (
+    ContentChannel.BLOG,
+    ContentChannel.YOUTUBE,
+    ContentChannel.FACEBOOK,
+)
+
+
+@dataclass(frozen=True)
+class ContentTopic:
+    """One content topic mapped from a Signature Solution step (canon 26, 27).
+
+    SPEC.md section 12.5 records the content roadmap as part of the
+    audience-building and content flywheel canon gap. The canon builds the
+    roadmap by taking each step of the Signature Solution and brainstorming the
+    FAQs, topics and search queries the audience asks about it (canon files 26
+    and 27), following the Authority Amplifier script format for every piece
+    (canon file 26). The topic is frozen and reject-only, so a topic that leaves
+    its step, question, channels or script format unstated cannot be represented
+    as content in the plan.
+    """
+
+    topic_id: str
+    tenant_id: str
+    name: str
+    signature_step: str
+    question: str
+    channels: tuple[ContentChannel, ...]
+    script_beats: tuple[ContentBeat, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("content topic id", self.topic_id),
+            ("content topic tenant id", self.tenant_id),
+            ("content topic name", self.name),
+            ("content topic signature step", self.signature_step),
+            ("content topic question", self.question),
+        ):
+            if not value or not value.strip():
+                raise InvalidContentRoadmapError(f"{label} is required")
+        channels = tuple(self.channels)
+        if not channels:
+            raise InvalidContentRoadmapError(
+                "a content topic must name at least one channel it is published to"
+            )
+        seen_channels: set[ContentChannel] = set()
+        for channel in channels:
+            if not isinstance(channel, ContentChannel):
+                raise InvalidContentRoadmapError(
+                    "a content topic channel must be a typed content channel"
+                )
+            if channel in seen_channels:
+                raise ContentRoadmapFormatError(
+                    f"content topic {self.topic_id!r} names duplicate channel "
+                    f"{channel.value!r}"
+                )
+            seen_channels.add(channel)
+        beats = tuple(self.script_beats)
+        if beats != AUTHORITY_AMPLIFIER_BEATS:
+            raise ContentRoadmapFormatError(
+                f"content topic {self.topic_id!r} must follow the Authority "
+                "Amplifier script order Promise, Proof, Problems, Steps, Context, "
+                "Action"
+            )
+
+
+@dataclass(frozen=True)
+class ContentRoadmap:
+    """The canon's content roadmap for one client and one Signature Solution.
+
+    SPEC.md section 12.5 records the content roadmap as part of the
+    audience-building and content flywheel canon gap and maps it to stage 6
+    content assets. The roadmap maps a same-tenant stage 4 ``SignatureSolution``
+    onto content topics (canon files 26 and 27: "create a content roadmap using
+    the signature solution to map out the topics, FAQs and search queries"),
+    binds the plan to a named owner and one tenant, and reports the solution
+    steps it does not yet cover. It is frozen and reject-only, so a blank
+    identity, an untyped or foreign method, a duplicate topic, or a topic from a
+    step the solution does not name cannot be represented as a content plan.
+
+    It is a stage 6 planning decision, not a new required gate kind (a
+    methodology-owner decision, SPEC.md section 12.5). It does not authorize
+    publishing or spend (SPEC.md sections 4 and 9) and it is never an observation
+    (SPEC.md section 3).
+    """
+
+    roadmap_id: str
+    tenant_id: str
+    owner: str
+    method: SignatureSolution
+    topics: tuple[ContentTopic, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("content roadmap id", self.roadmap_id),
+            ("content roadmap tenant id", self.tenant_id),
+            ("content roadmap owner", self.owner),
+        ):
+            if not value or not value.strip():
+                raise InvalidContentRoadmapError(f"{label} is required")
+        if not isinstance(self.method, SignatureSolution):
+            raise ContentRoadmapDependencyError(
+                "a content roadmap must map from a typed stage 4 Signature Solution"
+            )
+        if self.method.tenant_id != self.tenant_id:
+            raise ContentRoadmapTenantBoundaryError(
+                f"content roadmap {self.roadmap_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Signature Solution "
+                f"{self.method.solution_id!r} belongs to tenant "
+                f"{self.method.tenant_id!r}"
+            )
+        if not self.topics:
+            raise InvalidContentRoadmapError(
+                f"content roadmap {self.roadmap_id!r} requires at least one topic"
+            )
+        step_names = {step.name for step in self.method.steps}
+        seen: set[str] = set()
+        for topic in self.topics:
+            if not isinstance(topic, ContentTopic):
+                raise InvalidContentRoadmapError(
+                    "a content roadmap topic must be a typed content topic"
+                )
+            if topic.tenant_id != self.tenant_id:
+                raise ContentRoadmapTenantBoundaryError(
+                    f"content roadmap {self.roadmap_id!r} cites topic "
+                    f"{topic.topic_id!r} from another tenant"
+                )
+            if topic.topic_id in seen:
+                raise InvalidContentRoadmapError(
+                    f"content roadmap {self.roadmap_id!r} contains duplicate topic "
+                    f"id {topic.topic_id!r}"
+                )
+            seen.add(topic.topic_id)
+            if topic.signature_step not in step_names:
+                raise ContentRoadmapDependencyError(
+                    f"content topic {topic.topic_id!r} maps from Signature Solution "
+                    f"step {topic.signature_step!r}, which the roadmap's Signature "
+                    "Solution does not name"
+                )
+
+    @property
+    def covered_steps(self) -> tuple[str, ...]:
+        """The Signature Solution steps the roadmap already has a topic for."""
+        topics = self.topics
+        return tuple(
+            step.name
+            for step in self.method.steps
+            if any(topic.signature_step == step.name for topic in topics)
+        )
+
+    def missing_steps(self) -> tuple[str, ...]:
+        """Signature Solution steps the roadmap does not yet cover with a topic."""
+        covered = set(self.covered_steps)
+        return tuple(
+            step.name for step in self.method.steps if step.name not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_steps()
+
+    @property
+    def is_plan(self) -> bool:
+        """A content roadmap is a plan, not activity or an observed result."""
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a content roadmap as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The
+        roadmap describes the content that will be produced and published, while
+        any measured movement is a separate observation, so a roadmap is never an
+        observation.
+        """
+        raise ContentRoadmapObservationError(
+            f"content roadmap {claim_id!r} is content to produce and publish, not "
+            "an observed result, and cannot be recorded as an observation"
         )

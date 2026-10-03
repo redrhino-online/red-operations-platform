@@ -453,3 +453,71 @@ class FunnelFinderObservationError(CommercialError):
     movement stays a separate observation, so a finder is never an observation.
     """
 
+
+class InvalidContentRoadmapError(CommercialError, ValueError):
+    """A content topic or roadmap was built without its required content.
+
+    SPEC.md section 12.3 places the Content Roadmap with stage 6 and section
+    12.5 records the audience-building and content flywheel as a canon gap
+    shaped by the canon's Content Blitz (canon files 25-31). A content topic
+    names the Signature Solution step it derives from, the audience question it
+    answers, the channels it is published to and the Authority Amplifier script
+    it follows; a roadmap names its owner, the same-tenant Signature Solution it
+    is mapped from, and at least one topic. A blank or untyped topic or roadmap
+    cannot be represented as a content plan.
+    """
+
+
+class ContentRoadmapTenantBoundaryError(CommercialError):
+    """A content topic or roadmap mixed in an asset from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. A
+    content topic, its roadmap, or the Signature Solution the roadmap maps from
+    cannot cross a tenant boundary.
+    """
+
+
+class ContentRoadmapDependencyError(CommercialError):
+    """A content topic was not grounded on the mapped Signature Solution.
+
+    The canon builds the content roadmap by taking each step of the Signature
+    Solution and brainstorming the FAQs and questions the audience asks about it
+    (canon files 26 and 27), so a roadmap must be grounded on a same-tenant
+    stage 4 Signature Solution and every topic must address one of that
+    solution's named steps. A topic about a step the method does not have cannot
+    be represented as part of the content plan.
+    """
+
+
+class ContentRoadmapFormatError(CommercialError):
+    """A content topic broke the canon's content format discipline.
+
+    The canon asks every piece of audience-building content to follow the
+    Authority Amplifier script format (canon file 26), whose order is Promise,
+    Proof, Problems, Steps, Context, Action (SPEC.md section 4, stage 7), and it
+    does not repeat a channel for one piece of content. A topic whose script
+    beats are missing, reordered or duplicated, or whose channels are duplicated,
+    violates that discipline.
+    """
+
+
+class ContentDistributionError(CommercialError):
+    """A content topic was not published widely enough.
+
+    The canon requires each piece of content to be published "to YouTube,
+    Facebook and blog at a minimum" (canon file 29) and warns that posting an
+    asset in only one place loses most of its equity (canon file 31), so a topic
+    that does not reach all of the canon's minimum publish channels cannot be
+    represented as an evergreen content plan (SPEC.md sections 4 and 12.5).
+    """
+
+
+class ContentRoadmapObservationError(CommercialError):
+    """A content roadmap was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. A content
+    roadmap is the content that will be produced and published, while any
+    measured movement stays a separate observation, so a roadmap is never an
+    observation.
+    """
+

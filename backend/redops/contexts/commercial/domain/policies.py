@@ -19,6 +19,7 @@ from redops.contexts.commercial.domain.entities import (
 from redops.contexts.commercial.domain.errors import (
     AvatarLockedError,
     CampaignMessageAlignmentError,
+    ContentDistributionError,
     FunnelFitError,
     MarketAwarenessTargetingError,
     OfferReadinessError,
@@ -28,7 +29,9 @@ from redops.contexts.commercial.domain.errors import (
 from redops.contexts.commercial.domain.value_objects import (
     AvatarProfile,
     BusinessSnapshot,
+    ContentRoadmap,
     FunnelFinder,
+    MINIMUM_PUBLISH_CHANNELS,
     MarketAwarenessMap,
     MethodReference,
     OfferFunnelAudit,
@@ -395,4 +398,33 @@ class DiagnosisEvidencePolicy:
                     f"{label} {asset_id!r} cannot be evidenced: claim "
                     f"{claim_id!r} is not a known, directly sourced claim for "
                     "this tenant"
+                )
+
+
+class ContentDistributionPolicy:
+    """Refuses a content topic the canon would leave in one place.
+
+    SPEC.md section 12.5 records the content roadmap as part of the
+    audience-building and content flywheel canon gap. The canon requires every
+    piece of content to be published "to YouTube, Facebook and blog at a
+    minimum" (canon file 29) and warns that posting an asset in only one place
+    loses most of its equity (canon file 31). A topic that does not reach all of
+    the canon's minimum publish channels cannot be the evergreen content the
+    roadmap claims to build (SPEC.md sections 4 and 12.5).
+    """
+
+    def require_minimum_reach(self, roadmap: ContentRoadmap) -> None:
+        for topic in roadmap.topics:
+            channels = set(topic.channels)
+            missing = tuple(
+                channel
+                for channel in MINIMUM_PUBLISH_CHANNELS
+                if channel not in channels
+            )
+            if missing:
+                raise ContentDistributionError(
+                    f"content topic {topic.topic_id!r} in roadmap "
+                    f"{roadmap.roadmap_id!r} does not reach the canon minimum "
+                    "publish channels; missing "
+                    + ", ".join(channel.value for channel in missing)
                 )
