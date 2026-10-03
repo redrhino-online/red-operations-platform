@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from redops.contexts.measurement.domain.entities import ImprovementProposal
 from redops.contexts.measurement.domain.errors import (
+    ImprovementApprovalPrecedenceError,
     ImprovementAuthorityError,
     ImprovementDependencyError,
     ImprovementMetricMismatchError,
@@ -39,7 +40,10 @@ class ImprovementApprovalPolicy:
     only when a named human owner approves it, and an agent cannot confer human
     approval upon itself. A rejected or already-decided proposal cannot be
     approved, and the approval must come from the proposal's owner rather than the
-    proposer or anyone else.
+    proposer or anyone else. The canon's optimization discipline (canon files 23
+    and 24: "you need a baseline of metrics" before optimizing) also requires the
+    baseline to exist before a change is authorized, so an approval dated before
+    the baseline it optimizes was established is refused.
     """
 
     def require(
@@ -59,6 +63,14 @@ class ImprovementApprovalPolicy:
             raise ImprovementDependencyError(
                 f"improvement {proposal.proposal_id!r} cannot be approved: its "
                 "performance baseline is no longer established"
+            )
+        established_on = proposal.baseline.established_on
+        if established_on is not None and approval.approved_on < established_on:
+            raise ImprovementApprovalPrecedenceError(
+                f"improvement {proposal.proposal_id!r} was approved on "
+                f"{approval.approved_on}, before its performance baseline was "
+                f"established on {established_on}; a change cannot be authorized "
+                "before the baseline of metrics it optimizes exists"
             )
         if approval.approved_by != proposal.owner:
             raise ImprovementAuthorityError(

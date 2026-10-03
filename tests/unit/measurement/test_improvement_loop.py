@@ -30,6 +30,7 @@ from datetime import date
 
 from redops.contexts.measurement.domain.entities import ImprovementProposal
 from redops.contexts.measurement.domain.errors import (
+    ImprovementApprovalPrecedenceError,
     ImprovementAuthorityError,
     ImprovementDependencyError,
     ImprovementNotApprovedError,
@@ -419,7 +420,7 @@ class ImprovementApprovalPrecedenceTests(unittest.TestCase):
 
     def test_the_after_window_may_begin_on_the_approval_date(self):
         approved = improvement_proposal().approve(
-            approval=improvement_approval(approved_on=date(2026, 9, 15))
+            approval=improvement_approval(approved_on=date(2026, 10, 2))
         )
 
         measured = approved.record_outcome(
@@ -428,14 +429,14 @@ class ImprovementApprovalPrecedenceTests(unittest.TestCase):
                     record_id="measure-before-3f",
                     value=12.0,
                     window=MeasurementWindow(
-                        start=date(2026, 9, 1), end=date(2026, 9, 14)
+                        start=date(2026, 9, 18), end=date(2026, 10, 1)
                     ),
                 ),
                 after=measurement_record(
                     record_id="measure-after-3f",
                     value=8.0,
                     window=MeasurementWindow(
-                        start=date(2026, 9, 15), end=date(2026, 9, 20)
+                        start=date(2026, 10, 2), end=date(2026, 10, 2)
                     ),
                 ),
             )
@@ -449,6 +450,53 @@ class ImprovementApprovalPrecedenceTests(unittest.TestCase):
         self.assertGreaterEqual(
             measured.outcome.after.window.start,
             measured.approval.approved_on,
+        )
+
+
+class ImprovementBaselineApprovalPrecedenceTests(unittest.TestCase):
+    """An improvement cannot be authorized before its baseline was established.
+
+    SPEC.md section 4, stage 10: an improvement is grounded on an established
+    ``PerformanceBaseline`` and "performance recommendations require evidence and
+    owner approval before material changes". The canon's optimization discipline
+    (canon files 23 and 24: "you need a baseline of metrics" before optimizing;
+    "I wait 10 days to see how it does" after authorizing a change) requires the
+    baseline of metrics to exist before a change is authorized, so a named owner
+    cannot approve an improvement on a date before the very baseline it optimizes
+    was established. The improvement approval is otherwise only checked for owner
+    authority, state and an established baseline, which leaves this cross-record
+    temporal edge open.
+    """
+
+    def test_an_improvement_cannot_be_approved_before_its_baseline_was_established(
+        self,
+    ):
+        proposal = improvement_proposal(baseline=established_baseline())
+
+        with self.assertRaises(ImprovementApprovalPrecedenceError):
+            proposal.approve(
+                approval=improvement_approval(approved_on=date(2026, 10, 1))
+            )
+
+    def test_an_improvement_may_be_approved_the_day_its_baseline_was_established(
+        self,
+    ):
+        approved = improvement_proposal(
+            baseline=established_baseline()
+        ).approve(
+            approval=improvement_approval(approved_on=date(2026, 10, 2))
+        )
+
+        self.assertTrue(approved.is_approved)
+
+    def test_a_grounded_improvement_is_approved_no_earlier_than_its_baseline(
+        self,
+    ):
+        approved = approved_improvement()
+
+        self.assertGreaterEqual(
+            approved.approval.approved_on,
+            approved.baseline.established_on,
         )
 
 

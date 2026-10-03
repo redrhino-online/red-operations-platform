@@ -4,42 +4,45 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:26:43Z (Ralph cycle 103).
-- Selected item: floor the stage 10 baseline establishment date at the latest
-  observed milestone, not only the first-qualified-traffic one -- a
-  `PerformanceBaseline` cannot be established on a date before any milestone it
-  records as observed (`on >= max observed_on`) -- via `PerformanceBaselinePolicy`.
-  It was this plan's named highest priority ready next item after cycle 102: the
-  same-gate temporal counterpart of cycles 101 and 102, applying the canon's "you
-  need a baseline of metrics" and "don't touch anything for 10 days" discipline
-  (canon files 23 and 24) to the establishment date itself (SPEC.md section 4
-  stage 10 "Performance Baseline Established"; Phase 5 "stage 10 live traffic
-  milestones and baseline"). It outranks the advertising and forecast dashboard
-  (a downstream feature), the Operations delivery adapter (blocked on the storage
-  ADR), the stage 9 compliance projection (needs a named-owner decision) and the
-  stage-parameterized gate refactor (quality only), because it closes the last
-  same-gate temporal edge that let a baseline report an observation postdating its
-  own establishment.
+- Cycle timestamp: 2026-10-03T05:27:56Z (Ralph cycle 104).
+- Selected item: floor the stage 10 improvement approval date at the
+  establishment date of the baseline it optimizes -- a named owner cannot approve
+  an improvement before `baseline.established_on` (`approval.approved_on >=
+  baseline.established_on`) -- via `ImprovementApprovalPolicy` and the named
+  `ImprovementApprovalPrecedenceError`. It was this plan's named highest priority
+  ready next item after cycle 103: the same-chain temporal edge one hop
+  downstream, so an optimization cannot be authorized before the baseline of
+  metrics it changes existed (SPEC.md section 4 stage 10 "Performance Baseline
+  Established" and "performance recommendations require evidence and owner
+  approval before material changes"; Phase 5 "one improvement is approved and
+  measured"; canon files 23 and 24: "you need a baseline of metrics" before
+  optimizing, and wait after authorizing a change). It outranks the advertising
+  and forecast dashboard (a downstream feature), the Operations delivery adapter
+  (blocked on the storage ADR), the stage 9 compliance projection (needs a
+  named-owner decision) and the stage-parameterized gate refactor (quality only),
+  because gate integrity outranks dashboards and downstream features.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: behavioral coverage in
-  `tests/unit/execution/test_performance_baseline.py`
-  (`BaselinePrecedenceTests`): a baseline established after traffic but before a
-  later observed milestone (lead observed 2026-10-05) is refused with the named
-  `PerformanceBaselinePrecedenceError`, and a baseline established exactly on that
-  later milestone date is still accepted. Running
+- Evidence: new behavioral coverage in
+  `tests/unit/measurement/test_improvement_loop.py`
+  (`ImprovementBaselineApprovalPrecedenceTests`): an improvement approved
+  2026-10-01 against a baseline established 2026-10-02 is refused with the named
+  `ImprovementApprovalPrecedenceError`, and an improvement approved on the
+  establishment date itself is still accepted. The previously dated case in
+  `test_the_after_window_may_begin_on_the_approval_date` was re-based on the
+  establishment date (2026-10-02) because cycles 101 to 103 forbid establishing a
+  baseline before its authorized and observed traffic. Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1094 passed, up from 1092. `python3 -m pyflakes backend/redops tests`
+  reports 1097 passed, up from 1094. `python3 -m pyflakes backend/redops tests`
   is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: after cycles 101 to 103, every observed stage 10 milestone is
-  authorized-then-observed and the baseline is established no earlier than any
-  observation it records. The remaining temporal edge is one hop downstream, in
-  the linked optimization chain: `ImprovementProposal` is grounded on an
-  established `PerformanceBaseline` and `ImprovementApprovalPolicy` requires that
-  baseline to be established, but it never compares
-  `ImprovementApproval.approved_on` with `PerformanceBaseline.established_on`, so
-  an improvement can be approved on a date before the baseline it optimizes was
-  established. That approval-versus-baseline-establishment edge is the next
-  gate-integrity analogue.
+- New findings: after cycle 104 the improvement approval is grounded no earlier
+  than the baseline it optimizes, and by transitivity the after window and the
+  outcome read follow. The remaining same-chain temporal edge is the *before*
+  observation: `ImprovementMeasurementPolicy` enforces `after.window.start >=
+  approval.approved_on` and (through `ImprovementOutcome`) `before.window.end <
+  after.window.start`, but it never compares `before.window.end` with
+  `approval.approved_on`, so a "before" state observed after the change was
+  already authorized can still be recorded as the pre-change measurement. That
+  approval-versus-before-window edge is the next gate-integrity analogue.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -47,27 +50,39 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: floor the stage 10 improvement approval date
-  at the establishment date of the baseline it optimizes -- an improvement cannot
-  be approved on a date before `proposal.baseline.established_on`
-  (`approval.approved_on >= baseline.established_on`) -- via
-  `ImprovementApprovalPolicy` and a named error, so a stage 10 optimization cannot
-  be authorized before the baseline it changes was established (SPEC.md section 4
-  stage 10 and Phase 5 "one improvement is approved and measured"; canon files 23
-  and 24: you need a baseline of metrics before optimizing). It outranks the
-  advertising and forecast dashboard (a downstream feature), the Operations
-  delivery adapter (blocked on the storage ADR), the stage 9 compliance projection
-  (needs a named-owner decision) and the stage-parameterized gate refactor
-  (quality only), because it is the remaining same-chain temporal edge at stage
-  10. Prerequisite: satisfied (the existing `ImprovementApprovalPolicy`,
-  `ImprovementApproval.approved_on` and `PerformanceBaseline.established_on`); it
-  needs a fixture audit for any approval dated before its baseline establishment.
+- Highest priority ready next item: require the stage 10 improvement's "before"
+  observation window to close no later than the owner approval date -- the
+  pre-change measurement must end on or before the authorization of the change
+  (`outcome.before.window.end <= approval.approved_on`) -- via
+  `ImprovementMeasurementPolicy` and a named error, so the "before" state is
+  genuinely observed before the material change rather than merely before the
+  after window. It outranks the advertising and forecast dashboard (a downstream
+  feature), the Operations delivery adapter (blocked on the storage ADR), the
+  stage 9 compliance projection (needs a named-owner decision) and the
+  stage-parameterized gate refactor (quality only), because it closes the last
+  temporal edge in the stage 10 improvement chain and gate integrity outranks
+  dashboards. Prerequisite: satisfied (the existing `ImprovementMeasurementPolicy`,
+  `ImprovementApproval.approved_on` and `ImprovementOutcome.before.window`); it
+  needs a fixture audit for any before window ending after its approval, and it
+  must preserve the legitimate case where the baseline period precedes approval.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; the advertising and forecast dashboard; a
   stage-parameterized gate recorder/handler refactor; projecting the compliance
   package onto a canonical stage 9 gate kind (methodology-owner decision); and
   all persistence.
+  [DONE 2026-10-03 (Ralph cycle 104): floored the stage 10 improvement approval
+  date at the establishment date of the baseline it optimizes --
+  `ImprovementApprovalPolicy.require` now refuses an `ImprovementApproval` dated
+  before `PerformanceBaseline.established_on` with the named
+  `ImprovementApprovalPrecedenceError`, so a stage 10 optimization cannot be
+  authorized before the baseline of metrics it changes existed (SPEC.md section 4
+  stage 10 and "performance recommendations require evidence and owner approval
+  before material changes"; canon files 23 and 24: "you need a baseline of
+  metrics" before optimizing); verified by the new
+  `ImprovementBaselineApprovalPrecedenceTests` in
+  `tests/unit/measurement/test_improvement_loop.py` (full suite 1097 passed), so
+  the stage 10 improvement chain is now baseline-then-approved-then-observed.]
   [DONE 2026-10-03 (Ralph cycle 103): floored the stage 10 baseline establishment
   date at the latest observed milestone -- `PerformanceBaselinePolicy.require` now
   refuses a `PerformanceBaseline` established before any milestone it records as

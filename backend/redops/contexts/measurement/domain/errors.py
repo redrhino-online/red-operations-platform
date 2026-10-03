@@ -43,6 +43,20 @@ class ImprovementObservationError(MeasurementError, ValueError):
     """
 
 
+class ImprovementApprovalPrecedenceError(MeasurementError):
+    """An improvement is approved before its baseline was established.
+
+    SPEC.md section 4, stage 10 grounds an improvement on an established
+    ``PerformanceBaseline`` and requires owner approval before a material change.
+    The canon's optimization discipline (canon files 23 and 24: "you need a
+    baseline of metrics" before optimizing; "I wait 10 days to see how it does"
+    after authorizing a change) requires the baseline to exist before a change is
+    authorized, so an approval whose ``approved_on`` date falls before the
+    ``established_on`` date of the baseline it optimizes is refused: the change
+    would be authorized before the very baseline it is measured against existed.
+    """
+
+
 class ImprovementObservationWindowError(MeasurementError):
     """An outcome reads its after window before the owner approved the change.
 
