@@ -4,64 +4,70 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T191920Z (Ralph cycle, this run): selected item was Q24
-  hardening, the stage 7 "Authority Amplifier Approved" gate route hardened
-  against the caller-supplied-authority defect (prerequisite Q23 met). Q17-Q23
-  closed the defect on stages 0-6, but the stage 7 route still rebuilt
-  `ClientWorkspace` from `body.authorities`, so a caller could name itself the
-  client designated approver and the first gate that carries the Authority
-  Amplifier package and its dual script/creative approvals would approve against
-  a transient registry rather than the persisted tenant root (SPEC.md sections
-  3, 4 and 11). Stage 7 is the next dependent gate after the now-hardened stage
-  6, so closing it keeps gate integrity ahead of the remaining stages (Q25-Q27),
-  the REST surface (Q10-Q14) and UI (Q32-Q45). The `frontend/` shell Q32 was
-  again rejected: the DoD [5/6] script passes on `frontend/` merely existing
-  with no `OpenExecutive` string, so a screens-less shell would falsely turn
-  `make done` green while condition 6 (Q45) is far off. Q28 stays blocked on the
-  named methodology-owner placement decision.
-- Outcome: `RecordStageSevenGateRequest` drops `authorities`.
-  `record_stage_seven_gate` now depends on `get_client_workspace_store`,
+- Cycle 2026-10-03T192102Z (Ralph cycle, this run): selected item was Q25
+  hardening, the stage 8 "Funnel Complete" gate route hardened against the
+  caller-supplied-authority defect (prerequisite Q24 met). Q17-Q24 closed the
+  defect on stages 0-7, but the stage 8 route still rebuilt `ClientWorkspace`
+  from `body.authorities`, so a caller could name itself the client designated
+  approver and the gate that carries the funnel integration package and its
+  test-prospect dry run would approve against a transient registry rather than
+  the persisted tenant root (SPEC.md sections 3, 4 and 11). Stage 8 is the next
+  dependent gate after the now-hardened stage 7, so closing it keeps gate
+  integrity ahead of the remaining stages (Q26-Q27), the REST surface
+  (Q10-Q14) and UI (Q32-Q45).
+- Outcome: `RecordStageEightGateRequest` drops `authorities`.
+  `record_stage_eight_gate` now depends on `get_client_workspace_store`,
   resolves the workspace by `(tenant_id, body.workspace_id)` through the
   `ClientWorkspaceStore` port, and approves against the persisted registry; an
   unregistered workspace is a named 404 `ClientWorkspaceNotFoundError`, not a
-  gate built from caller-supplied authorities. `tests/unit/test_stage_seven_gate_route.py`
-  drops the `authorities` key from its payload and adds two behavioral tests: an
-  unregistered workspace is a 404 with no ledger write, and the identical
-  request is a 422 `GateApproverNotAuthorizedError` when the persisted registry
-  omits the client authority. Because the stage 8-10 schemas still require
-  `authorities` (Q25-Q27 not yet done), `tests/unit/test_stage_eight_gate_route.py`
-  now inlines its own authority list instead of borrowing it from the stage 7
-  payload; the stage 9 and 10 suites that reuse `eight["authorities"]` and
-  `nine["authorities"]` inherit the inline list unchanged.
-- Evidence: `make check` -> 2044 passed, 2 skipped, 684 subtests; pyflakes
+  gate built from caller-supplied authorities.
+  `tests/unit/test_stage_eight_gate_route.py` drops the `authorities` key from
+  its payload and adds two behavioral tests: an unregistered workspace is a 404
+  with no ledger write, and the identical request is a 422
+  `GateApproverNotAuthorizedError` when the persisted registry omits the client
+  authority. Because the stage 9-10 schemas still require `authorities`
+  (Q26-Q27 not yet done), `tests/unit/test_stage_nine_gate_route.py` now inlines
+  its own authority list; the stage 10 payload that borrows
+  `nine["authorities"]` inherits it unchanged.
+- Evidence: `make check` -> 2046 passed, 2 skipped, 684 subtests; pyflakes
   clean. `make done` still fails only [5/6] (`frontend/` missing, Q32);
   [1/6]-[4/6] pass.
-- New findings: with Q17-Q24 done, stages 0-7 resolve their tenant root and
-  authority registry from durable stores, but stages 8-10 gate routes still
+- New findings: with Q17-Q25 done, stages 0-8 resolve their tenant root and
+  authority registry from durable stores, but stages 9-10 gate routes still
   build `ClientWorkspace` from `body.authorities` (for example
-  `record_stage_eight_gate` at `backend/redops/api/routes.py`), so the
-  caller-supplied-authority defect remains on three routes. The stage 8 test's
-  inlined authority list can be dropped once Q25 hardens that route, and the
-  stage 9 and 10 payload builders that borrow `eight["authorities"]` and
-  `nine["authorities"]` must be updated in the same step.
+  `record_stage_nine_gate` at `backend/redops/api/routes.py`), so the
+  caller-supplied-authority defect remains on two routes. The stage 9 test's
+  inlined authority list can be dropped once Q26 hardens that route, and the
+  stage 10 payload that borrows `nine["authorities"]` must be updated in the
+  same step.
 - Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
   land shell-only; Q28 stage 8-10 required kinds blocked on the named
   methodology-owner placement decision; Q16 idempotency keys blocked on a
   workflow write route; Q3 agent registration blocked on the ADR 0006 /
   vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
   `REDOP_LIVE_OPENROUTER_SMOKE=1`.
-- Highest priority ready next item: Q25 hardening, extend the Q17-Q24 hardening
-  to the stage 8 "Funnel Complete" gate (resolve the persisted `ClientWorkspace`
+- Highest priority ready next item: Q26 hardening, extend the Q17-Q25 hardening
+  to the stage 9 "Launch Approved" gate (resolve the persisted `ClientWorkspace`
   and its authority registry, 404 when unregistered, drop `authorities` from
-  `RecordStageEightGateRequest`, the stage 8 route and the stage 8 test's inline
-  authority list). Prerequisite: Q24 (done this cycle). Required asset: the
-  stage 8 `FunnelIntegrationPackage` with the test-prospect dry run; checkpoint:
-  Funnel Complete; designated approver: the client designated authority in the
-  persisted registry. Blocked downstream dependency: the stage 9 "Launch
-  Approved" gate. Then Q26-Q27 hardening for the remaining stages, Q10-Q14
-  (remaining REST resources) and the `frontend/` screens Q32-Q45.
+  `RecordStageNineGateRequest`, the stage 9 route and the stage 9 test's inline
+  authority list). Prerequisite: Q25 (done this cycle). Required asset: the
+  stage 9 launch QA package with all critical path checks and the designated
+  human authorization; checkpoint: Launch Approved; designated approver: the
+  client designated authority in the persisted registry. Blocked downstream
+  dependency: the stage 10 "Performance Baseline Established" gate. Then Q27
+  hardening, Q10-Q14 (remaining REST resources) and the `frontend/` screens
+  Q32-Q45.
 
-### Prior cycle (2026-10-03T191741Z)
+### Prior cycle (2026-10-03T191920Z)
+
+- Cycle 2026-10-03T191920Z: selected item was Q24 hardening, the stage 7
+  "Authority Amplifier Approved" gate route hardened against the
+  caller-supplied-authority defect. `RecordStageSevenGateRequest` dropped
+  `authorities`; the route resolved the workspace from the durable
+  `ClientWorkspaceStore`, returning a named 404 when unregistered and a 422
+  domain error otherwise. Q25 was recorded as the next ready item.
+
+### Earlier cycle (2026-10-03T191741Z)
 
 - Cycle 2026-10-03T191741Z (Ralph cycle, this run): selected item was Q23
   hardening, the stage 6 "Campaign Message Approved" / "Content Plan Locked"
@@ -2889,7 +2895,7 @@ stalls:
 | Q22 | Stage 5 productize gate API surface (done 2026-10-03T172133Z; `POST /red/clients/{tenant_id}/stages/5/gate`); ProductProgram wiring done 2026-10-03T182409Z; workspace/authority hardening done 2026-10-03T191558Z: `RecordStageFiveGateRequest` no longer carries `authorities`; `record_stage_five_gate` resolves the persisted `ClientWorkspace` through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_five_gate_route.py` (8) and the reused stage 5 payload in `tests/unit/test_stage_six_gate_route.py` drop the field) | pipeline | Q21 | Offer Locked |
 | Q23 | Stage 6 message gate plus the content roadmap, crusher and plan wiring (gate API surface done 2026-10-03T172338Z; `POST /red/clients/{tenant_id}/stages/6/gate`; `content-roadmap`, `content-crusher` and `content-plan` wired through `CampaignMessagePackage`, stage 6 now fifteen kinds; content family complete 2026-10-03T183643Z) | pipeline | Q22 | Campaign Message Approved |
 | Q24 | Stage 7 Authority Amplifier dual approval (script before visual) (enforced: `_approve_authority_amplifier` in `routes.py` drives `approve_script` -> `produce_visuals` -> `approve_creative` in domain order, resolving the approved method/message and storing the exact amplifier; `AuthorityAmplifierPolicy` permits `approve_script` only on an approved message and a grounded method. Confirmed complete 2026-10-03T185701Z) | pipeline | Q23 | script approval then creative acceptance, `tests/unit/test_stage_seven_gate_route.py`, `tests/unit/engagement/test_record_stage_seven_gate.py` |
-| Q25 | Stage 8 integrate plus the enrollment and client-process asset and Funnel Complete | pipeline | Q24 | funnel dry run passes |
+| Q25 | Stage 8 integrate plus the enrollment and client-process asset and Funnel Complete (gate surface done; workspace/authority hardening done 2026-10-03T192102Z: `RecordStageEightGateRequest` no longer carries `authorities`; `record_stage_eight_gate` resolves the persisted `ClientWorkspace` through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_eight_gate_route.py` drop the field. The enrollment and client-process required kinds stay blocked on Q28) | pipeline | Q24 | funnel dry run passes |
 | Q26 | Stage 9 QA plus compliance gate kinds | pipeline | Q25 | Launch Approved; Ready for Traffic |
 | Q27 | Stage 10 launch plus baseline plus the METRICS dimension | pipeline | Q26 | Performance Baseline Established |
 | Q28 | Apply the required-kind policy: wire each canon asset as a required kind | pipeline | Q27 | stage templates updated; gate integrity tests. Stage 1 `awareness-map` wired from the typed `MarketAwarenessMap` 2026-10-03T181228Z; `audience-reach-estimate` and `target-market-match` and stages 2-10 remain. Stage 9     `compliance-package` wired from the reviewed `CompliancePackage` 2026-10-03T182015Z; stage 5 `product-program` wired from the typed `ProductProgram` 2026-10-03T182409Z (stage 5 now thirteen kinds); stage 4 `thirteen-transformations` wired from the typed `ThirteenTransformations` 2026-10-03T182806Z (stage 4 now thirteen kinds); stage 6 `content-roadmap` wired from the typed `ContentRoadmap` 2026-10-03T183151Z (thirteen kinds); stage 6 `content-crusher` wired from the typed `ContentCrusher` 2026-10-03T183447Z (fourteen kinds); stage 6 `content-plan` wired from the typed `ContentPlan` 2026-10-03T183643Z (fifteen kinds, stage 6 content family complete); stage 7 is canon-covered by the `AuthorityAmplifierPackage`, and stages 8-10 now await the named methodology-owner placement decision for `EnrollmentPlan`, `ClientProcess`, `SwimlanesPlan` and the post-stage-10 assets |

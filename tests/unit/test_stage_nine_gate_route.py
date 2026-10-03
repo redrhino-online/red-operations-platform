@@ -211,7 +211,10 @@ class StageNineGateRouteTests(unittest.TestCase):
         eight = self._eight.payload()
         body = {
             "workspace_id": eight["workspace_id"],
-            "authorities": eight["authorities"],
+            "authorities": [
+                {"actor": OWNER, "authority": "production-owner"},
+                {"actor": APPROVER, "authority": "client-designated-authority"},
+            ],
             "qa_package_id": "launch-package-3f",
             "qa_version": 1,
             "message": eight["message"],

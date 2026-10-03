@@ -1003,18 +1003,18 @@ class RecordStageEightGateRequest(BaseModel):
     The caller supplies the reviewed funnel and its prospect path dry run, the
     approved stage 7 amplifier the funnel grounds on (rebuilt from the approved
     method, production ready offer and approved stage 6 message), the known claims
-    that support the amplifier proof, the workspace authority registry and the
-    decision metadata. The route builds the canonical gate from these through the
-    use case; it deliberately accepts no pre-built gate, so the tenant boundary,
-    approver authority, owner authority and exact-version evidence cannot be
-    bypassed. Stage 8 depends on a passing stage 7 decision already in the ledger.
-    Unlike stages 2 through 6 the funnel checkpoint turns on its own same-tenant
-    prospect path, not external customer claims; claims remain only because the
-    amplified stage 7 dependency must still be rebuilt and re-proved.
+    that support the amplifier proof and the decision metadata; the authority
+    registry is resolved from the durable workspace store, never the body. The
+    route builds the canonical gate from these through the use case; it
+    deliberately accepts no pre-built gate, so the tenant boundary, approver
+    authority, owner authority and exact-version evidence cannot be bypassed.
+    Stage 8 depends on a passing stage 7 decision already in the ledger. Unlike
+    stages 2 through 6 the funnel checkpoint turns on its own same-tenant prospect
+    path, not external customer claims; claims remain only because the amplified
+    stage 7 dependency must still be rebuilt and re-proved.
     """
 
     workspace_id: str
-    authorities: list[ClientAuthorityInput]
     funnel_package_id: str
     funnel_version: int
     message: CampaignMessageInput
