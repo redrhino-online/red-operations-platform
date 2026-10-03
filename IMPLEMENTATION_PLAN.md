@@ -4,6 +4,72 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T210728Z (Ralph cycle, this run): selected item was Q8, the
+  prompt-injection guard (SPEC.md sections 5, 9 and 11; distinct from the four
+  condition 3 isolation layers). It is the highest priority ready item: it has
+  no prerequisite (no cluster, no owner decision), and it closes the last named
+  part of the SPEC.md section 5 injection guard. It outranks alternatives:
+  condition 2's two remaining scenarios are deploy-gated (Atlas cluster, chosen
+  backup target Q49); condition 5's deterministic e2e is blocked on Q3 (ADR 0006
+  / zero-vendor-edit tension) and the live smoke on a key; Q16's remaining
+  optimistic-version half has no mutation route carrying a version; Q28 stage
+  8-10 required kinds stay blocked on the named methodology-owner placement
+  decision; Q47-Q50 need the Atlas cluster. The canon gap register has no ready
+  pipeline item.
+- Outcome: new shared prompt-injection guard under
+  `backend/redops/shared/security/`: pure-domain `ContentTrust`, `AuthorityBasis`
+  (with `confers_authority` true only for an operator decision or an approved
+  gate), frozen `IngestedMaterial` (always untrusted, client-scoped, source-
+  pinned), `ProposedToolCall` and `ProposedGateChange`, the named
+  `UntrustedContentError` / `UntrustedAuthorityError` /
+  `InjectionTenantBoundaryError`, and `InjectionGuardPolicy`; the
+  `InjectionGuard` application port (`ingest`, `authorize_tool_call`,
+  `authorize_gate_change`) and the process-local `InMemoryInjectionGuard`
+  reference adapter bound to one active client. Ingested client material is
+  admitted only as untrusted data; a tool call or gate change grounded on model
+  output or ingested material is refused, while an operator decision or an
+  approved gate is allowed. No route, gate rule, approval authority, pipeline
+  stage, vendored file, migration or method artifact changed. A durable adapter
+  is a later composition consumer, exactly as the worker and connector seams
+  preceded theirs.
+- Evidence: new `tests/security/test_injection_guard.py` (18 tests) proves
+  instruction-shaped client material is admitted as untrusted, client-scoped,
+  source-pinned data that confers no authority; that an ingested or model-output
+  basis cannot direct a tool call or change a gate while an operator decision or
+  approved gate can; that a cross-client tool call, gate change or blank guard
+  session is refused; and that malformed material and calls are refused at
+  construction. `make check` -> 2338 passed, 2 skipped, 706 subtests (was 2320;
+  +18); `uv run pyflakes backend tests` clean. `make done` still stops at
+  `[2/6]` condition 2 (deploy-gated), unchanged.
+- New findings: the injection guard is enforceable as a pure policy plus a
+  client-scoped port with no route and no durable adapter; the authority line is
+  the value object (`AuthorityBasis.confers_authority`) and the policy, so an
+  ingested chunk that says "approve the gate" stays data by construction. This
+  guard is distinct from condition 3 and is not one of its four required layers,
+  so it is deliberately not declared in `tests/security/covered-layers.txt`.
+- No ready item remains. Every dependency-met queue item is externally gated:
+  Q3 (ADR 0006 / zero-vendor-edit tension), Q4 (live key), Q16 remaining half
+  (no version-carrying mutation route), Q28 (named methodology-owner placement
+  decision), Q30 (needs Q3), Q31/Q47-Q50 (Atlas cluster; Q49 backup target).
+  There is no completable unattended unblocker inside the current dependency
+  graph, so `.ralph/DONE` is touched and the loop stops rather than inventing
+  work or making a named-owner decision.
+- Blocker (make done head): condition 2 is the head blocker; its two remaining
+  scenarios are deploy-gated (Atlas cluster, chosen backup target Q49).
+- Highest priority ready next action (operator/owner input required, not a cycle
+  decision): the single most useful unblocker is to settle the deploy and
+  architecture inputs the loop cannot make unattended: (a) Atlas cluster access
+  plus the backup target and restore drill for Q47-Q50 and condition 9 (first
+  doable increment after that is Q47, the Dockerfile plus backend health
+  endpoint, whose declared dependency on Q30 could be relaxed once the operator
+  confirms an unverified image is acceptable); (b) the ADR 0006 / zero-vendor-
+  edit resolution so Q3 agent registration can satisfy Q30 and condition 5's
+  deterministic e2e; (c) a live `OPENROUTER_API_KEY` plus
+  `REDOP_LIVE_OPENROUTER_SMOKE=1` for Q4. Until one of these is supplied, no
+  unattended item is ready.
+
+### Prior cycle (2026-10-03T210459Z)
+
 - Cycle 2026-10-03T210459Z (Ralph cycle, this run): selected item was Q46, the
   condition 8 RED branding and notice sweep (SPEC.md sections 5 and 13 condition
   8). It is the highest priority ready item: after condition 3 closed, the
@@ -4987,7 +5053,7 @@ stalls:
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). REST `/workflows/{id}` polling read landed 2026-10-03T185701Z (Q15). The fork `workflows/resumer.py` adapter was reassessed and rejected as mis-specified: the resumer is an 809-line fork polling loop, not a per-step executor, so RED's `WorkflowStepExecutor` seam is served by connector adapters (Q16), not a resumer shim |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z). The stage 0 `ClientWorkspace` and the knowledge `SourceRecord` stores completed with Q9 2026-10-03T190017Z (`0010_client_workspaces`, `0011_source_records`); the Production `BuildObject` store completed with Q11 2026-10-03T193035Z (`0013_build_objects`, which also added the required `tenant_id` the aggregate lacked) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
-| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests). Retrieval layer done 2026-10-03T203755Z: `KnowledgeRetriever` port (`backend/redops/contexts/knowledge/application/ports.py`) with the `InMemoryKnowledgeRetriever` tenant-scoped reference adapter over the `ClaimStore`, and `tests/security/test_retrieval_isolation.py` (6 tests); `tests/security/covered-layers.txt` declares `retrieval`. Worker layer done 2026-10-03T205830Z: `WorkflowRunStore.list_resumable(*, tenant_id)` on the port with in-memory and PostgreSQL implementations, the `ResumeDueRunsHandler` per-client worker pass in `backend/redops/workflows/application/handlers.py`, and `tests/security/test_worker_isolation.py` (6 tests); `tests/security/covered-layers.txt` declares `worker`. Artifact-URL layer done 2026-10-03T210152Z: shared `ArtifactRef` value object, `ArtifactUrlResolver` port and `InMemoryArtifactUrlResolver` adapter under `backend/redops/shared/artifacts/`, and `tests/security/test_artifact_url_isolation.py` (7 tests); `tests/security/covered-layers.txt` declares `artifact-url`. Injection-guard coverage remains (a distinct concern from the four artifact/API layers). The condition 3 gate now enforces coverage: `tests/security/covered-layers.txt` declares each covered layer and `scripts/check_security_coverage.sh` (called by DoD `[3/6]`) refuses a suite that does not declare `api`, `retrieval`, `worker` and `artifact-url` with a test each (2026-10-03T195801Z); all four are now declared, so the gate passes (2026-10-03T210152Z). Condition 2's cross-client-retrieval scenario is now covered by `tests/security/test_retrieval_isolation.py` |
+| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests). Retrieval layer done 2026-10-03T203755Z: `KnowledgeRetriever` port (`backend/redops/contexts/knowledge/application/ports.py`) with the `InMemoryKnowledgeRetriever` tenant-scoped reference adapter over the `ClaimStore`, and `tests/security/test_retrieval_isolation.py` (6 tests); `tests/security/covered-layers.txt` declares `retrieval`. Worker layer done 2026-10-03T205830Z: `WorkflowRunStore.list_resumable(*, tenant_id)` on the port with in-memory and PostgreSQL implementations, the `ResumeDueRunsHandler` per-client worker pass in `backend/redops/workflows/application/handlers.py`, and `tests/security/test_worker_isolation.py` (6 tests); `tests/security/covered-layers.txt` declares `worker`. Artifact-URL layer done 2026-10-03T210152Z: shared `ArtifactRef` value object, `ArtifactUrlResolver` port and `InMemoryArtifactUrlResolver` adapter under `backend/redops/shared/artifacts/`, and `tests/security/test_artifact_url_isolation.py` (7 tests); `tests/security/covered-layers.txt` declares `artifact-url`. Injection-guard coverage remains (a distinct concern from the four artifact/API layers). The condition 3 gate now enforces coverage: `tests/security/covered-layers.txt` declares each covered layer and `scripts/check_security_coverage.sh` (called by DoD `[3/6]`) refuses a suite that does not declare `api`, `retrieval`, `worker` and `artifact-url` with a test each (2026-10-03T195801Z); all four are now declared, so the gate passes (2026-10-03T210152Z). Condition 2's cross-client-retrieval scenario is now covered by `tests/security/test_retrieval_isolation.py`. Injection-guard coverage done 2026-10-03T210728Z: the shared `InjectionGuard` port and `InMemoryInjectionGuard` reference adapter under `backend/redops/shared/security/` (pure-domain `ContentTrust`, `AuthorityBasis`, `IngestedMaterial`, `ProposedToolCall`, `ProposedGateChange`, `InjectionGuardPolicy`, named errors) admit ingested client material only as untrusted, client-scoped, source-pinned data and refuse a tool call or gate change grounded on model output or ingested material; `tests/security/test_injection_guard.py` (18 tests). This is a distinct concern from the four condition 3 layers and is deliberately not declared in `tests/security/covered-layers.txt`. Q8 complete |
 | Q9 | REST `/clients` and `/clients/{id}/sources` (done 2026-10-03T190017Z; `GET /red/clients?tenant_id=&limit=&offset=` and `POST /red/clients`, `GET`/`POST /red/clients/{tenant_id}/sources`; durable `ClientWorkspaceStore` and `SourceRecordStore` ports with in-memory and PostgreSQL adapters and migrations `0010_client_workspaces`/`0011_source_records`; tenant is a required query parameter, an unscoped read/write or a rewritten source is refused) | api | Q7 | route tests `tests/unit/engagement/test_clients_route.py` (8), adapter tests `tests/unit/engagement/test_client_workspace_store.py` and `tests/unit/knowledge/test_source_record_store.py` |
 | Q10 | REST `/claims`, `/methods` (done 2026-10-03T192641Z; `GET`/`POST /red/claims` and `GET /red/methods`, tenant required on GET and path/body-scoped to the tenant; new durable Knowledge `ClaimStore` port with in-memory and PostgreSQL adapters and migration `0012_claims`; the claim create route verifies every citation against the same tenant's stored immutable `SourceRecord` by id and checksum, and the claim store refuses a same-id non-append-only re-statement; `MethodVersionRepository.list` added so `/methods` is a tenant-scoped paginated read of approved methods, left read-only because approval is gate-owned. Tests `tests/unit/knowledge/test_claim_store.py`, `tests/unit/knowledge/test_claims_route.py`, `tests/unit/method/test_methods_route.py`) | api | Q9 | route tests |
 | Q11 | REST `/offers`, `/builds` (done 2026-10-03T193035Z; `GET /red/offers` and `GET`/`POST /red/builds`, tenant required on every read and carried on the create body; `BuildObject` now requires a `tenant_id` (SPEC.md sections 3 and 9); new Production `BuildObjectRepository` port with in-memory and PostgreSQL adapters and migration `0013_build_objects` (upsert per `(tenant_id, build_id)`); `/offers` is a tenant-scoped paginated read over the existing offer store, left read-only because production readiness is gate-owned; `/builds` list is tenant-scoped and paginated and create records an Identified proposal. Tests `tests/unit/commercial/test_offers_route.py`, `tests/unit/production/test_build_object_store.py`, `tests/unit/production/test_builds_route.py`, `tests/unit/production/test_build_object_postgres.py`) | api | Q10 | route tests |
