@@ -62,7 +62,9 @@ help:
 	  'make reset-hosted        Wipe the hosted instance data (onboarding/people)'
 
 run: canon-lock
-	@RALPH_PUSH_REMOTES="$(PUSH_REMOTES)" RALPH_PLAN_PUSH_REMOTES="$(PUSH_REMOTES)" "$(RALPH)" "$(REPO)"
+	@status=0; RALPH_PUSH_REMOTES="$(PUSH_REMOTES)" RALPH_PLAN_PUSH_REMOTES="$(PUSH_REMOTES)" "$(RALPH)" "$(REPO)" || status=$$?; \
+	if (( status == 4 )); then printf '\nCANON DRIFT: canon content changed; re-pin with make canon-pin, or set RALPH_CANON_STRICT=0. Halting cleanly.\n'; exit 0; fi; \
+	exit $$status
 
 check:
 	@printf 'check: pytest (unit + postgres adapters + migrations) and pyflakes\n'
@@ -98,6 +100,11 @@ loop: canon-lock
 	    printf 'Stop requested: %s exists; halting before cycle %s\n' "$(REPO)/.ralph/STOP" "$$cycle"; \
 	    break; \
 	  fi; \
+	  ck="$$(./scripts/canon_hash.sh)"; cp="$$(awk 'NR==1{print $$1}' canon.lock 2>/dev/null || true)"; \
+	  if [[ "$$ck" != "$$cp" ]]; then \
+	    printf '\nCANON DRIFT: canon content changed (pinned %s, now %s). Halting cleanly; re-pin with make canon-pin, or set RALPH_CANON_STRICT=0.\n' "$$cp" "$$ck"; \
+	    break; \
+	  fi; \
 	  if (( continuous == 0 )) && (( cycle == limit )); then remotes="$(FINAL_PUSH_REMOTES)"; else remotes="$(PUSH_REMOTES)"; fi; \
 	  printf '\nRalph cycle %s of %s (publish: %s)\n' "$$cycle" "$$total" "$$remotes"; \
 	  status=0; RALPH_PUSH_REMOTES="$$remotes" RALPH_PLAN_PUSH_REMOTES="$$remotes" "$(RALPH)" "$(REPO)" || status=$$?; \
@@ -116,7 +123,7 @@ loop: canon-lock
 	    break; \
 	  fi; \
 	  if (( status == 4 )); then \
-	    printf 'Canon content changed; halting the loop now (not a retryable failure). Re-pin with make canon-pin, or set RALPH_CANON_STRICT=0, then resume.\n'; \
+	    printf '\nCANON DRIFT: canon changed mid-cycle. Halting cleanly; re-pin with make canon-pin, or set RALPH_CANON_STRICT=0.\n'; \
 	    break; \
 	  fi; \
 	  if (( status != 0 )); then \

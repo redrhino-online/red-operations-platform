@@ -148,7 +148,7 @@ if [[ -d "$CANON_DIR" ]]; then
       pinned="$(awk 'NR==1{print $1}' "$CANON_LOCK")"
       if [[ "$pinned" != "$CANON_HASH" ]]; then
         if [[ "${RALPH_CANON_STRICT:-1}" == "1" ]]; then
-          printf 'ralph: canon content changed (pinned %s, now %s); re-pin with make canon-pin, or set RALPH_CANON_STRICT=0 to override\n' "$pinned" "$CANON_HASH" >&2
+          printf 'ralph: CANON DRIFT: canon content changed (pinned %s, now %s); re-pin with make canon-pin, or set RALPH_CANON_STRICT=0 to override (exit 4)\n' "$pinned" "$CANON_HASH" >&2
           exit 4
         fi
         printf 'ralph: WARNING canon content changed (pinned %s, now %s) and RALPH_CANON_STRICT=0\n' "$pinned" "$CANON_HASH" >&2
