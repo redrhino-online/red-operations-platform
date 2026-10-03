@@ -25,6 +25,7 @@ from redops.contexts.execution.domain.errors import (
     LaunchQAAuthorityError,
     LaunchQADependencyError,
     LaunchQAIncompleteError,
+    MilestoneObservationPrecedenceError,
     MissingComplianceAssetError,
     PerformanceBaselineDependencyError,
     PerformanceBaselineIncompleteError,
@@ -249,6 +250,20 @@ class PerformanceBaselinePolicy:
             raise PerformanceBaselineIncompleteError(
                 f"performance baseline {baseline.baseline_id!r} cannot be "
                 "established: first qualified traffic has not been observed"
+            )
+        authorized_on = qa.authorization.authorized_on
+        premature = sorted(
+            observation.kind.value
+            for observation in baseline.milestones
+            if observation.is_observed
+            and observation.observed_on < authorized_on
+        )
+        if premature:
+            raise MilestoneObservationPrecedenceError(
+                f"performance baseline {baseline.baseline_id!r} cannot be "
+                f"established: milestone(s) {', '.join(premature)} were observed "
+                f"before the stage 9 traffic authorization on "
+                f"{authorized_on.isoformat()}"
             )
         traffic = next(
             observation

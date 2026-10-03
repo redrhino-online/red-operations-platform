@@ -25,6 +25,7 @@ from datetime import date
 from redops.contexts.execution.domain.errors import (
     InvalidPerformanceBaselineError,
     InvalidPerformanceClaimError,
+    MilestoneObservationPrecedenceError,
     PerformanceBaselineDependencyError,
     PerformanceBaselineIncompleteError,
     PerformanceBaselinePrecedenceError,
@@ -171,12 +172,90 @@ class BaselinePrecedenceTests(unittest.TestCase):
         )
 
         with self.assertRaises(PerformanceBaselinePrecedenceError):
-            performance_baseline(launch_qa=qa).establish(on=TODAY)
+            performance_baseline(
+                launch_qa=qa,
+                milestones=self._traffic_observed_on(authorized_on),
+            ).establish(on=TODAY)
 
     def test_a_baseline_can_establish_on_or_after_its_evidence_date(self):
         established = established_baseline()
 
         self.assertEqual(TODAY, established.established_on)
+
+
+class MilestoneAuthorizationPrecedenceTests(unittest.TestCase):
+    """No observed milestone may predate the authority that permitted traffic.
+
+    SPEC.md section 4, stage 10: "Performance Baseline Established" reports first
+    qualified traffic and the later lead, appointment and sale milestones, all of
+    which are the traffic the stage 9 authority authorized. Canon files 23 and 24
+    ("you need a baseline of metrics", "don't touch anything for 10 days") treat
+    the baseline as accumulating only after the campaign has run, so an observed
+    ``MilestoneObservation.observed_on`` must not precede
+    ``qa.authorization.authorized_on``.
+    """
+
+    def _observations(self, *, lead_on, traffic_on):
+        return tuple(
+            milestone(
+                kind,
+                status=(
+                    ObservationStatus.OBSERVED
+                    if kind
+                    in (
+                        MilestoneKind.FIRST_QUALIFIED_TRAFFIC,
+                        MilestoneKind.LEAD,
+                    )
+                    else ObservationStatus.PENDING
+                ),
+                observed_on=(
+                    traffic_on
+                    if kind is MilestoneKind.FIRST_QUALIFIED_TRAFFIC
+                    else lead_on
+                ),
+            )
+            for kind in MILESTONE_ORDER
+        )
+
+    def _qa_authorized_on(self, day):
+        return launch_qa().authorize_traffic(
+            authorization=authorization(authorized_on=day)
+        )
+
+    def test_a_later_observed_milestone_before_authorization_is_refused(self):
+        authorized_on = date(2026, 10, 5)
+
+        with self.assertRaises(MilestoneObservationPrecedenceError):
+            performance_baseline(
+                launch_qa=self._qa_authorized_on(authorized_on),
+                milestones=self._observations(
+                    traffic_on=authorized_on, lead_on=date(2026, 10, 1)
+                ),
+            ).establish(on=date(2026, 10, 6))
+
+    def test_first_qualified_traffic_before_authorization_is_refused(self):
+        authorized_on = date(2026, 10, 5)
+
+        with self.assertRaises(MilestoneObservationPrecedenceError):
+            performance_baseline(
+                launch_qa=self._qa_authorized_on(authorized_on),
+                milestones=self._observations(
+                    traffic_on=date(2026, 10, 1),
+                    lead_on=date(2026, 10, 5),
+                ),
+            ).establish(on=date(2026, 10, 6))
+
+    def test_an_observed_milestone_on_the_authorization_date_is_allowed(self):
+        authorized_on = date(2026, 10, 5)
+
+        established = performance_baseline(
+            launch_qa=self._qa_authorized_on(authorized_on),
+            milestones=self._observations(
+                traffic_on=authorized_on, lead_on=authorized_on
+            ),
+        ).establish(on=authorized_on)
+
+        self.assertTrue(established.is_established)
 
 
 class MilestoneObservationTests(unittest.TestCase):

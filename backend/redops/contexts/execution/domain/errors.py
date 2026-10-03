@@ -158,6 +158,20 @@ class PerformanceBaselinePrecedenceError(PerformanceBaselineError):
     """
 
 
+class MilestoneObservationPrecedenceError(PerformanceBaselineError):
+    """A stage 10 milestone was observed before traffic was authorized.
+
+    SPEC.md section 4, stage 10: first qualified traffic and the later lead,
+    appointment and sale milestones are the traffic the stage 9 authority
+    authorized. Canon files 23 and 24 ("you need a baseline of metrics", "don't
+    touch anything for 10 days") treat the baseline as accumulating only after
+    the campaign has run, so an observed ``MilestoneObservation.observed_on``
+    must not precede ``qa.authorization.authorized_on``. Otherwise a baseline
+    could report a milestone observed before the authority that permitted
+    traffic existed.
+    """
+
+
 class PerformanceClaimError(PerformanceBaselineError):
     """Base class for observation-versus-causal claim rule violations."""
 
