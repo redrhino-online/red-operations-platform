@@ -15,7 +15,7 @@ from collections.abc import Iterator
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
 from redops.api.schemas import (
     AuthorityAmplifierInput,
@@ -166,7 +166,7 @@ from redops.contexts.method.domain.value_objects import (
     TransformationPhase,
 )
 from redops.contexts.method.infrastructure.repositories import (
-    InMemoryMethodVersionRepository,
+    method_version_repository_from_env,
 )
 from redops.contexts.production.domain.entities import AuthorityAmplifier
 from redops.contexts.production.domain.errors import ProductionError
@@ -219,25 +219,27 @@ def get_stage_run_repository() -> Iterator[StageRunRepository]:
         repository.close()
 
 
-def get_method_version_repository(request: Request) -> MethodVersionRepository:
+def get_method_version_repository() -> Iterator[MethodVersionRepository]:
     """Provide the approved method version seam to the API (SPEC.md section 6).
 
     SPEC.md section 3 pins an exact method version and intended use at approval,
     and SPEC.md section 4 keeps the approved version identifiable, so the stage
     6 to 10 gates must resolve the approved method a prior gate pinned rather
-    than trust a repeated request body. The adapter is held on the app state so
-    one app instance shares it across requests and a test app stays isolated; no
-    durable PostgreSQL adapter is wired yet, so the process-local reference
-    adapter stands in and the durable store remains a follow-up (the same
-    port-first path the gate ledger took). A caller may override this dependency
-    to supply a durable adapter.
+    than trust a repeated request body. The dependency owns one adapter for the
+    request and releases any connection it opened when the request ends, so the
+    resolved version is read from the durable store and shared across the API
+    and worker processes. The store is chosen once from ``DATABASE_URL``; a
+    request cannot silently downgrade to a process-local method store, because a
+    set-but-unusable configuration raises before the route runs.
     """
 
-    repository = getattr(request.app.state, "method_version_repository", None)
-    if repository is None:
-        repository = InMemoryMethodVersionRepository()
-        request.app.state.method_version_repository = repository
-    return repository
+    repository = method_version_repository_from_env(
+        os.environ.get("DATABASE_URL")
+    )
+    try:
+        yield repository
+    finally:
+        repository.close()
 
 
 def _approve_method_offer_message(

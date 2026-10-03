@@ -4,6 +4,63 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T175228Z (Ralph cycle, this run): selected item was the
+  durable PostgreSQL `MethodVersionRepository` plus mapper, migration and
+  factory, the exact next item the prior cycle named (SPEC.md sections 3, 4, 6
+  and 9; queue Q6). The prior cycle wired the resolve-not-restate rule but held
+  the approved method store on the FastAPI `app.state`, so an approved method
+  version did not survive a restart and was not shared across the API and worker
+  processes. The stage 6 to 10 gates resolve the method a prior gate approved,
+  so that approval must be durable. It outranked the Next.js `frontend/` shell
+  (blocked on the workflow engine Q5 via Q15) and the larger required-kind
+  wiring (Q28, which changes every stage's asset package and route). The loop
+  prioritizes exact approved asset versions and persistence over downstream
+  features.
+- Outcome: new `backend/redops/contexts/method/infrastructure/mappers.py` with
+  `method_to_payload`/`method_from_payload`, round-tripping the full aggregate
+  (semantic version, `MethodApproval`, pinned `PrimaryCurrency`,
+  `DiagnosticModel` with its levels, and `SignatureSolution` with its phases and
+  steps) so a reload re-validates through `MethodVersion.__post_init__` rather
+  than trusting storage. `method/infrastructure/repositories.py` gains
+  `PostgresMethodVersionRepository` and
+  `method_version_repository_from_env`, plus
+  `MethodVersionConfigurationError`. Migration `0003_method_versions` creates
+  `method_versions(id, tenant_id NOT NULL, method_id, semantic_version, method
+  JSONB, recorded_at, UNIQUE(tenant_id, method_id, semantic_version))`.
+  `api/routes.py::get_method_version_repository` is now an env-selected
+  generator (like the gate ledger and stage run deps), so a set-but-unusable
+  `DATABASE_URL` raises instead of silently using the process-local store.
+- Evidence: `make check` -> 1800 passed, 1 skipped, 646 subtests; pyflakes
+  clean. New `tests/unit/method/test_method_version_postgres.py` (8, against the
+  compose DB; they exercise the real migration), new `MethodVersionMapperTests`
+  in `tests/unit/method/test_method_version_repository.py` (3), an updated
+  `tests/unit/shared/test_migrate.py` head assertion (`0003_method_versions`),
+  and a method-dep default test in `tests/unit/test_app_smoke.py`. The stage 6
+  to 10 route tests now override the method dependency with a fresh in-memory
+  adapter so they stay DB-independent. `make done` clears [1/6]-[4/6] and still
+  fails at [5/6] (`frontend/` missing).
+- New findings: the durable method store now satisfies DoD condition 4 for
+  `MethodVersion`; the tenant boundary and immutability rules are proven against
+  real PostgreSQL. `OfferVersion` and `CampaignMessage` are still re-stated from
+  the request (no offer/message store), so the resolve-not-restate rule for the
+  stage 5 offer remains open. The stage 6 to 10 route docstrings still describe
+  the old re-statement behavior for the offer and message and should be updated
+  when those stores land.
+- Blockers: `frontend/` (DoD condition 6, Q32) is blocked on the workflow engine
+  Q5 via Q15; request idempotency (Q16) is blocked on the same; RLS is still a
+  WHERE clause only (ADR 0004); no durable offer, funnel or launch-QA store; the
+  condition 3 retrieval, background worker and artifact-URL layers are unbuilt;
+  the remaining canon gap register entries need named-owner decisions.
+- Highest priority ready next item: apply the same resolve-not-restate rule to
+  the stage 5 `OfferVersion` -- a durable offer store (port, mapper, migration
+  and adapter) so the stage 6 to 10 gates ground on the exact approved stage 5
+  offer instead of a re-stated request body (SPEC.md sections 3, 4; DoD condition
+  1). Prerequisite: none beyond the method store now in place. Alternative
+  gate-integrity item: wire the implemented canon assets as required gate kinds
+  (Q28) -- larger, changes the stage asset packages and routes.
+
+### Prior cycle (2026-10-03T174702Z)
+
 - Cycle 2026-10-03T174702Z (Ralph cycle, this run): selected item was the durable
   approved method version store, the gate-integrity item the prior cycles named as
   the next alternative to the dashboard work (SPEC.md sections 3, 4, 6 and 9).

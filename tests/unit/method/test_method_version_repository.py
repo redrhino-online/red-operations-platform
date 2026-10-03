@@ -23,6 +23,10 @@ from redops.contexts.method.domain.errors import (
     MethodVersionTenantBoundaryError,
 )
 from redops.contexts.method.domain.value_objects import SemanticVersion
+from redops.contexts.method.infrastructure.mappers import (
+    method_from_payload,
+    method_to_payload,
+)
 from redops.contexts.method.infrastructure.repositories import (
     InMemoryMethodVersionRepository,
 )
@@ -105,6 +109,42 @@ class MethodVersionRepositoryTests(unittest.TestCase):
         )
 
         self.assertIsNone(foreign)
+
+
+class MethodVersionMapperTests(unittest.TestCase):
+    """The durable payload round-trips the full approved aggregate.
+
+    SPEC.md section 4: a passing gate pins the exact approved version, so the
+    payload the PostgreSQL adapter stores must rebuild an equal aggregate -- its
+    approval, its pinned stage 2 currency, stage 3 model and stage 4 Signature
+    Solution included -- rather than a laxer method that would read back as
+    approved after a restart.
+    """
+
+    def test_an_approved_method_round_trips_exactly(self):
+        method = approved_method()
+
+        self.assertEqual(method, method_from_payload(method_to_payload(method)))
+
+    def test_a_draft_method_round_trips_without_an_approval(self):
+        method = method_version()
+
+        rebuilt = method_from_payload(method_to_payload(method))
+
+        self.assertEqual(method, rebuilt)
+        self.assertIsNone(rebuilt.approval)
+
+    def test_a_stored_payload_the_domain_would_reject_raises(self):
+        payload = method_to_payload(method_version())
+        payload["approval"] = {
+            "version": "2.0.0",
+            "intended_use": "3f pilot campaign",
+            "approved_by": "client-approver-1",
+            "approved_on": ON.isoformat(),
+        }
+
+        with self.assertRaises(MethodApprovalError):
+            method_from_payload(payload)
 
 
 if __name__ == "__main__":  # pragma: no cover

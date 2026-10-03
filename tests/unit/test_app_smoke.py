@@ -96,3 +96,21 @@ class AppSmokeTest(unittest.TestCase):
         finally:
             if previous is not None:
                 os.environ["DATABASE_URL"] = previous
+
+    def test_method_version_dependency_defaults_to_the_process_local_adapter(
+        self,
+    ) -> None:
+        import os
+
+        from redops.api.routes import get_method_version_repository
+        from redops.contexts.method.infrastructure.repositories import (
+            InMemoryMethodVersionRepository,
+        )
+
+        previous = os.environ.pop("DATABASE_URL", None)
+        try:
+            repository = next(get_method_version_repository())
+            self.assertIsInstance(repository, InMemoryMethodVersionRepository)
+        finally:
+            if previous is not None:
+                os.environ["DATABASE_URL"] = previous

@@ -62,11 +62,17 @@ class StageTenGateRouteTests(unittest.TestCase):
         cls.create_app = staticmethod(StageNineGateRouteTests.create_app)
         cls.dependency = staticmethod(StageNineGateRouteTests.dependency)
         cls.run_dependency = staticmethod(StageNineGateRouteTests.run_dependency)
+        cls.method_dependency = staticmethod(
+            StageNineGateRouteTests.method_dependency
+        )
         cls.repository_class = staticmethod(
             StageNineGateRouteTests.repository_class
         )
         cls.run_repository_class = staticmethod(
             StageNineGateRouteTests.run_repository_class
+        )
+        cls.method_repository_class = staticmethod(
+            StageNineGateRouteTests.method_repository_class
         )
         cls.baseline_kinds = CANONICAL_BASELINE_KINDS
 
@@ -76,9 +82,13 @@ class StageTenGateRouteTests(unittest.TestCase):
         self.app = self.create_app()
         self.repository = self.repository_class()
         self.run_repository = self.run_repository_class()
+        self.method_repository = self.method_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
+        )
+        self.app.dependency_overrides[self.method_dependency] = (
+            lambda: self.method_repository
         )
         self.client = TestClient(self.app)
 

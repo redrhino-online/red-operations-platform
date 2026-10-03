@@ -43,6 +43,7 @@ class StageSixGateRouteTests(unittest.TestCase):
             from redops.api.app import create_app
             from redops.api.routes import (
                 get_gate_ledger_repository,
+                get_method_version_repository,
                 get_stage_run_repository,
             )
             from redops.contexts.commercial.domain.value_objects import (
@@ -60,6 +61,9 @@ class StageSixGateRouteTests(unittest.TestCase):
                 InMemoryGateLedgerRepository,
                 InMemoryStageRunRepository,
             )
+            from redops.contexts.method.infrastructure.repositories import (
+                InMemoryMethodVersionRepository,
+            )
         except Exception as exc:  # pragma: no cover - depends on environment
             raise unittest.SkipTest(
                 f"app dependencies unavailable: {exc}"
@@ -68,8 +72,12 @@ class StageSixGateRouteTests(unittest.TestCase):
         cls.create_app = staticmethod(create_app)
         cls.dependency = staticmethod(get_gate_ledger_repository)
         cls.run_dependency = staticmethod(get_stage_run_repository)
+        cls.method_dependency = staticmethod(get_method_version_repository)
         cls.repository_class = staticmethod(InMemoryGateLedgerRepository)
         cls.run_repository_class = staticmethod(InMemoryStageRunRepository)
+        cls.method_repository_class = staticmethod(
+            InMemoryMethodVersionRepository
+        )
         cls.intake_kinds = CANONICAL_INTAKE_KINDS
         cls.diagnosis_kinds = CANONICAL_DIAGNOSIS_KINDS
         cls.currency_kinds = CANONICAL_CURRENCY_KINDS
@@ -82,9 +90,13 @@ class StageSixGateRouteTests(unittest.TestCase):
         self.app = self.create_app()
         self.repository = self.repository_class()
         self.run_repository = self.run_repository_class()
+        self.method_repository = self.method_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
+        )
+        self.app.dependency_overrides[self.method_dependency] = (
+            lambda: self.method_repository
         )
         self.client = self.test_client(self.app)
 
