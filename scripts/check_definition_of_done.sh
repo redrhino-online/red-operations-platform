@@ -17,6 +17,8 @@ printf '\n[2/6] stage 0-10 API e2e (one client, intake to Performance Baseline)\
 uv run pytest tests/e2e -q || fail "the stage 0-10 e2e suite is missing or failing"
 
 printf '\n[3/6] cross-tenant security suite (API, retrieval, worker, artifact URL)\n'
+./scripts/check_security_coverage.sh tests/security \
+  || fail "the cross-tenant security suite does not cover all four condition 3 layers"
 uv run pytest tests/security -q || fail "the cross-tenant security suite is missing or failing"
 
 printf '\n[4/6] vendored OpenExecutive is unmodified (zero vendor edits)\n'

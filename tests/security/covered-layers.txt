@@ -1,0 +1,10 @@
+# Cross-tenant isolation layers covered by tests/security, checked by
+# scripts/check_security_coverage.sh against SPEC.md section 13 condition 3.
+#
+# Format: <layer-id> <test-file> (path relative to this directory).
+# Canonical layer ids: api, retrieval, worker, artifact-url.
+#
+# Only the API layer is covered today; there is no retrieval port, worker entry
+# point or artifact-serving route yet, so those layers are unrepresented and the
+# gate must keep failing condition 3 until those seams exist and are tested.
+api test_cross_tenant_isolation.py

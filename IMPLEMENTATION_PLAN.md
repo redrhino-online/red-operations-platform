@@ -4,7 +4,63 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T195507Z (Ralph cycle, this run): selected item was hardening
+- Cycle 2026-10-03T195801Z (Ralph cycle, this run): selected item was hardening
+  the prototype definition-of-done gate so DoD `[3/6]` can no longer pass on an
+  API-only security suite. `scripts/check_definition_of_done.sh` `[3/6]` ran
+  `pytest tests/security`, and the suite covers only the API layer, so condition
+  3 ("a security suite covers API, retrieval, background worker and artifact
+  URL", SPEC.md sections 9 and 13) was unmet while the gate passed: once the
+  Q32-Q45 screens landed, `make done` could have turned green with three of the
+  four named isolation layers untested. It is the same class of false stop
+  condition the prior cycle closed for `[5/6]`, and it outranks starting Q32:
+  Q32-Q45 are downstream dashboards, and the task prioritizes missing gate
+  integrity over downstream features. No ready method-artifact or stage-gate item
+  remained: Q28 stage 8-10 required kinds are blocked on the named
+  methodology-owner placement decision, Q29 (method change impact) is
+  domain-complete and tested, Q16 is blocked on a workflow write route, Q3/Q4 are
+  blocked on the ADR 0006 tension and a live key, and the remaining Q8 layers
+  (retrieval, worker, artifact URL) have no seam to test yet.
+- Outcome: new standalone `scripts/check_security_coverage.sh` enforces condition
+  3 against a data-driven contract. `tests/security/covered-layers.txt` declares
+  each covered layer as `<layer-id> <test-file>`; every canonical layer id
+  (`api`, `retrieval`, `worker`, `artifact-url`) must be declared, each declared
+  file must exist under `tests/security/` and contain at least one test, and an
+  unknown or duplicate layer id is refused. `[3/6]` now calls it before running
+  the suite; a missing layer is a named failure that lists what is absent. The
+  gate now fails honestly today (`retrieval worker artifact-url` uncovered), so a
+  green `[3/6]` requires real per-layer isolation tests. No product authority,
+  gate decision or pipeline stage changed.
+- Evidence: `make check` -> 2237 passed, 2 skipped, 704 subtests; pyflakes clean.
+  New `tests/unit/shared/test_security_coverage_check.py` (8 tests) covers a
+  complete suite passing, a missing directory, a missing manifest, an uncovered
+  layer, an unknown layer, a declared file that is missing, a declared file with
+  no test, and the real suite failing with the three absent layers named.
+  `make done` still fails, now at `[3/6]` with "the cross-tenant security suite
+  does not cover all four condition 3 layers" (after `[1/6]`-`[2/6]` pass).
+- New findings: `[3/6]` was the second approximated DoD condition. The four
+  condition 3 layers are declared by the suite, not hard-coded by the gate check,
+  so a future cycle adds retrieval, worker and artifact-URL coverage without
+  editing the gate. The condition cannot pass until those seams exist, which is
+  correct: condition 3 is unmet, not merely under-tested.
+- Blockers (unchanged): `frontend/` screens Q32-Q45 are the path to `make done`
+  condition 6; Q8's retrieval, worker and artifact-URL isolation coverage is
+  blocked until those seams are built; Q28 stage 8-10 required kinds blocked on
+  the named methodology-owner placement decision; Q16 idempotency keys blocked on
+  a workflow write route; Q3 agent registration blocked on the ADR 0006 /
+  vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's section 11 acceptance suite is blocked
+  in part on the deploy-only scenarios (GitOps revert, backup restore).
+- Highest priority ready next item: Q32, the Next.js shell in `frontend/` plus
+  the RED theme and API client, now safe to start because `make done` cannot pass
+  on a screens-less shell (`[5/6]`) or an API-only security suite (`[3/6]`).
+  Required asset: the Next.js app shell that consumes the complete SPEC.md
+  section 7 REST surface; checkpoint: none (UI, not a gate); approver: none.
+  Blocked downstream dependency: Q33-Q45. The stage 0-10 e2e Q30 is already
+  green.
+
+### Prior cycle (2026-10-03T195507Z)
+
+- Cycle 2026-10-03T195507Z (Ralph cycle): selected item was hardening
   the prototype definition-of-done gate so a screens-less `frontend/` cannot
   falsely pass condition 6. It outranks starting Q32: `scripts/check_definition_of_done.sh`
   [5/6] passed on `frontend/` merely existing with no `OpenExecutive` string, so
@@ -3502,7 +3558,7 @@ stalls:
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). REST `/workflows/{id}` polling read landed 2026-10-03T185701Z (Q15). The fork `workflows/resumer.py` adapter was reassessed and rejected as mis-specified: the resumer is an 809-line fork polling loop, not a per-step executor, so RED's `WorkflowStepExecutor` seam is served by connector adapters (Q16), not a resumer shim |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z). The stage 0 `ClientWorkspace` and the knowledge `SourceRecord` stores completed with Q9 2026-10-03T190017Z (`0010_client_workspaces`, `0011_source_records`); the Production `BuildObject` store completed with Q11 2026-10-03T193035Z (`0013_build_objects`, which also added the required `tenant_id` the aggregate lacked) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
-| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams |
+| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams. The condition 3 gate now enforces coverage: `tests/security/covered-layers.txt` declares each covered layer and `scripts/check_security_coverage.sh` (called by DoD `[3/6]`) refuses a suite that does not declare `api`, `retrieval`, `worker` and `artifact-url` with a test each (2026-10-03T195801Z), so condition 3 cannot pass on an API-only suite |
 | Q9 | REST `/clients` and `/clients/{id}/sources` (done 2026-10-03T190017Z; `GET /red/clients?tenant_id=&limit=&offset=` and `POST /red/clients`, `GET`/`POST /red/clients/{tenant_id}/sources`; durable `ClientWorkspaceStore` and `SourceRecordStore` ports with in-memory and PostgreSQL adapters and migrations `0010_client_workspaces`/`0011_source_records`; tenant is a required query parameter, an unscoped read/write or a rewritten source is refused) | api | Q7 | route tests `tests/unit/engagement/test_clients_route.py` (8), adapter tests `tests/unit/engagement/test_client_workspace_store.py` and `tests/unit/knowledge/test_source_record_store.py` |
 | Q10 | REST `/claims`, `/methods` (done 2026-10-03T192641Z; `GET`/`POST /red/claims` and `GET /red/methods`, tenant required on GET and path/body-scoped to the tenant; new durable Knowledge `ClaimStore` port with in-memory and PostgreSQL adapters and migration `0012_claims`; the claim create route verifies every citation against the same tenant's stored immutable `SourceRecord` by id and checksum, and the claim store refuses a same-id non-append-only re-statement; `MethodVersionRepository.list` added so `/methods` is a tenant-scoped paginated read of approved methods, left read-only because approval is gate-owned. Tests `tests/unit/knowledge/test_claim_store.py`, `tests/unit/knowledge/test_claims_route.py`, `tests/unit/method/test_methods_route.py`) | api | Q9 | route tests |
 | Q11 | REST `/offers`, `/builds` (done 2026-10-03T193035Z; `GET /red/offers` and `GET`/`POST /red/builds`, tenant required on every read and carried on the create body; `BuildObject` now requires a `tenant_id` (SPEC.md sections 3 and 9); new Production `BuildObjectRepository` port with in-memory and PostgreSQL adapters and migration `0013_build_objects` (upsert per `(tenant_id, build_id)`); `/offers` is a tenant-scoped paginated read over the existing offer store, left read-only because production readiness is gate-owned; `/builds` list is tenant-scoped and paginated and create records an Identified proposal. Tests `tests/unit/commercial/test_offers_route.py`, `tests/unit/production/test_build_object_store.py`, `tests/unit/production/test_builds_route.py`, `tests/unit/production/test_build_object_postgres.py`) | api | Q10 | route tests |
