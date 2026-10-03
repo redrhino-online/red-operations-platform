@@ -24,6 +24,7 @@ from redops.contexts.engagement.domain.value_objects import IntakePackage
 from redops.contexts.execution.domain.value_objects import (
     FunnelIntegrationPackage,
     LaunchQAPackage,
+    PerformanceBaselinePackage,
 )
 from redops.contexts.governance.domain.entities import StageRun
 from redops.contexts.governance.domain.value_objects import StageTemplate
@@ -402,6 +403,46 @@ class RecordStageNineGateCommand:
     template: StageTemplate
     workspace: ClientWorkspace
     package: LaunchQAPackage
+    stage_run: StageRun
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
+@dataclass(frozen=True)
+class RecordStageTenGateCommand:
+    """Request to assemble and record the stage 10 "Performance Baseline" gate.
+
+    The command carries the reviewed ``PerformanceBaselinePackage`` (the bridge
+    that projects the single established stage 10 ``PerformanceBaseline`` onto the
+    twelve canonical kinds), the workspace authority registry and the exact
+    decision metadata; it deliberately carries no ``StageGate``. The use case
+    builds the canonical gate itself from the package, so a caller cannot
+    substitute a hand-built gate and skip the tenant-boundary, approver-authority
+    and owner-authority checks (SPEC.md sections 3, 4 and 6). Unlike the stage 1
+    command it carries no claims, because the "Performance Baseline Established"
+    checkpoint turns on the baseline's own completion -- the ready-for-traffic
+    stage 9 launch QA, the observed first qualified traffic and the distinct
+    observed-or-pending milestones -- which ``PerformanceBaselinePackage`` already
+    enforces, rather than on external customer evidence.
+
+    It also carries the stage 10 ``StageRun`` to close. Recording a passing gate
+    and completing the stage are one application operation, so the durable
+    ``GateDecision`` and the stage status cannot drift apart. Stage 10 depends on
+    stage 9, so the passing stage 9 decision must already be present in the
+    ``GateLedger`` the use case is given (SPEC.md section 4).
+    """
+
+    template: StageTemplate
+    workspace: ClientWorkspace
+    package: PerformanceBaselinePackage
     stage_run: StageRun
     approver: str
     scope: str

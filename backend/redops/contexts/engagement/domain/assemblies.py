@@ -47,6 +47,7 @@ from redops.contexts.engagement.domain.errors import (
     NotStageOneGateError,
     NotStageSevenGateError,
     NotStageSixGateError,
+    NotStageTenGateError,
     NotStageThreeGateError,
     NotStageTwoGateError,
     NotStageZeroGateError,
@@ -61,6 +62,7 @@ from redops.contexts.engagement.domain.value_objects import IntakePackage
 from redops.contexts.execution.domain.value_objects import (
     FunnelIntegrationPackage,
     LaunchQAPackage,
+    PerformanceBaselinePackage,
 )
 from redops.contexts.governance.domain.entities import (
     ApprovalRequest,
@@ -88,6 +90,7 @@ STAGE_SIX = 6
 STAGE_SEVEN = 7
 STAGE_EIGHT = 8
 STAGE_NINE = 9
+STAGE_TEN = 10
 
 
 class StageZeroGateAssembler:
@@ -1452,6 +1455,147 @@ class StageNineGateRecorder:
                 actor=approver,
                 on=on,
                 rationale=f"stage 9 asset {asset} approved for {scope}",
+            )
+            gate.record_asset_approval(request)
+        gate.state = GateState.APPROVED
+        decision = GateDecision.from_gate(
+            gate,
+            ledger=ledger,
+            reviewer=approver,
+            scope=scope,
+            checkpoint_evidence=checkpoint_evidence,
+            disposition=GateDisposition.APPROVED,
+            rationale=rationale,
+            on=on,
+            assigned_owner=assigned_owner,
+            due_on=due_on,
+            next_action=next_action,
+        )
+        ledger.record(decision)
+        return decision
+
+
+class StageTenGateAssembler:
+    """Builds and validates the canonical stage 10 "Performance Baseline" gate.
+
+    SPEC.md section 4, stage 10 "Launch" and its "Performance Baseline
+    Established" checkpoint: "the first qualified traffic and subsequent lead,
+    appointment and sale are distinct observed milestones, with missing
+    observations shown as pending", and the stage is complete only when its
+    required assets exist, pass the checkpoint, and receive approval for
+    downstream use. The Execution ``PerformanceBaselinePackage`` (cycle 87)
+    projects the single reviewed ``PerformanceBaseline`` -- the live campaign,
+    spend and lead records, conversion and engagement measures, applications,
+    bookings, shows, closes, acquisition cost, attribution and issue log -- onto
+    the twelve canonical stage 10 asset kinds as exact ``StageAssetVersion``
+    evidence, and the canon maps stage 10 to files 22, 23, 29-31, 33 and 34
+    (SPEC.md section 12.3).
+
+    The reviewed baseline is not constructively established at construction: it
+    reaches ``PerformanceBaselineState.ESTABLISHED`` only after ``establish``
+    passes the checkpoint on the ready-for-traffic stage 9 launch QA and an
+    observed first qualified traffic milestone, and the bridge package itself
+    refuses a baseline that has not passed "Performance Baseline Established".
+    This assembler therefore never pins a draft or review-required baseline as
+    passing stage 10 evidence. It checks the reviewed package against the
+    workspace tenant, pins the gate from the template's exact stage 10 asset
+    package, and binds the designated approver to the workspace authority registry
+    (``GateApproverAuthorityPolicy``). It is a pure domain service: it returns a
+    gate and mutates nothing, invokes no persistence, and never invents a concrete
+    approver identity or authority role (SPEC.md section 11).
+    """
+
+    def assemble(
+        self,
+        *,
+        template: StageTemplate,
+        workspace: ClientWorkspace,
+        package: PerformanceBaselinePackage,
+        approver: str,
+        proposed_by: str | None = None,
+    ) -> StageGate:
+        if package.tenant_id != workspace.tenant_id:
+            raise TenantBoundaryError(
+                f"performance baseline package {package.package_id!r} belongs to "
+                f"tenant {package.tenant_id!r}, not workspace tenant "
+                f"{workspace.tenant_id!r}"
+            )
+        gate = StageGate.from_assets(
+            template,
+            STAGE_TEN,
+            tenant_id=workspace.tenant_id,
+            assets=package.stage_asset_versions(),
+        )
+        gate.approver = approver
+        gate.proposed_by = proposed_by
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        return gate
+
+
+class StageTenGateRecorder:
+    """Records the passing stage 10 "Performance Baseline Established" decision.
+
+    SPEC.md section 4: a passing gate pins "the exact evidence and intended
+    downstream use", approval is version specific, and the author cannot
+    impersonate the approver. Given the gate ``StageTenGateAssembler`` already
+    validated, this pure-domain path issues one version-specific
+    ``ApprovalRequest`` per required asset on behalf of the gate's author, has the
+    workspace's designated approver approve each one, records them on the gate,
+    and stores the immutable ``GateDecision`` in the durable ``GateLedger``. It
+    refuses a gate for another stage, an absent author or approver, an approver who
+    holds no authority on the workspace, and an assigned work owner who holds no
+    authority on the workspace, so the stage 10 rubric can never approve an
+    unrelated asset package, a self-issued approval or an unaccountable owner
+    (SPEC.md sections 3, 4, 5 and 11). Because stage 10 depends on stage 9,
+    ``GateDecision.from_gate`` and ``GateLedger.record`` refuse a passing decision
+    until the ledger holds a passing stage 9 decision, so a failed prerequisite
+    blocks dependent authorization (SPEC.md section 4). It mutates only the gate it
+    is given and the ledger; it never invents a concrete human identity.
+    """
+
+    def record(
+        self,
+        *,
+        gate: StageGate,
+        workspace: ClientWorkspace,
+        ledger: GateLedger,
+        scope: str,
+        checkpoint_evidence: str,
+        rationale: str,
+        assigned_owner: str,
+        due_on: date,
+        on: date,
+        next_action: str = "",
+    ) -> GateDecision:
+        if gate.stage_number != STAGE_TEN:
+            raise NotStageTenGateError(
+                f"stage 10 recording path cannot record a decision for stage "
+                f"{gate.stage_number}"
+            )
+        author = gate.proposed_by
+        if not author or not author.strip():
+            raise GateAuthorRequiredError(
+                "stage 10 recording requires the gate's author so an approval "
+                "request has a requester distinct from the designated approver"
+            )
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        GateOwnerAuthorityPolicy().require(assigned_owner, workspace)
+        approver = gate.approver
+        if not approver or not approver.strip():
+            raise GateApproverNotAuthorizedError(
+                "stage 10 recording requires the gate's designated approver"
+            )
+        for asset in sorted(gate.required_assets, key=str):
+            request = ApprovalRequest(
+                asset=asset,
+                scope=scope,
+                requested_by=author,
+                approver=approver,
+            )
+            request.approve(
+                actor=approver,
+                on=on,
+                rationale=f"stage 10 asset {asset} approved for {scope}",
             )
             gate.record_asset_approval(request)
         gate.state = GateState.APPROVED
