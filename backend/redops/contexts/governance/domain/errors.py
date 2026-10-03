@@ -107,3 +107,15 @@ class UnapprovedAssetError(GateDecisionError):
     approval for every pinned asset. A self-declared approved set is not
     evidence of approval (SPEC.md sections 3, 4 and 11).
     """
+
+
+class ProductionViewError(GovernanceError, ValueError):
+    """The production-manager view was built or read in a way its rules forbid.
+
+    SPEC.md section 4 requires the production view to answer for every stage from
+    the versioned template and the durable ledger and to separate its eight
+    reporting dimensions. A stage view that pins an approved asset outside the
+    stage's required package, or a read for a dimension the view does not
+    represent, would let the view show evidence or a report the pipeline never
+    produced, so it is refused rather than rendered.
+    """

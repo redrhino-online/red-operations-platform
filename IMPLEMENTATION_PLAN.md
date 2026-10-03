@@ -4,85 +4,98 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T04:57:45Z (Ralph cycle 88).
-- Selected item: wire the stage 10 "Performance Baseline Established"
-  `GateDecision` end to end with `StageTenGateAssembler`, `StageTenGateRecorder`,
-  `RecordStageTenGateCommand` and `RecordStageTenGateHandler`, plus named errors
-  `NotStageTenGateError` and `StageRunNotStageTenError`, binding the reviewed
-  `PerformanceBaselinePackage` to the workspace tenant and the workspace authority
-  registry and closing the stage 10 `StageRun` (canon 22, 23, 29-31, 33, 34).
-  Cycle 87 built the bridge and the plan named this as the highest priority ready
-  next item; it is the smallest change that closes the final stage of the pipeline
-  and makes the full stage 0-10 gate ledger derivable end to end. This outranks
-  the production-manager view reads (which only read the ledger these gates write)
-  and the command center intervention ranking (which needs the production view
-  first).
+- Cycle timestamp: 2026-10-03T04:59:23Z (Ralph cycle 89).
+- Selected item: build the pure Governance production-manager view read model
+  (`StageProductionView`, `EngagementProductionView`, `ReportingDimension` and
+  the `PRODUCTION_REPORTING_DIMENSIONS` tuple) deriving, for each stage from the
+  versioned `StageTemplate` and the durable `GateLedger`, what should exist, what
+  is present and approved, what is missing, who is accountable, which dependency
+  blocks work, what approval is next and when it is due (SPEC.md section 4, "Gate
+  record and production manager view"). Cycle 88 closed the last gate without a
+  write path (stage 10), so the plan named this as the highest priority ready next
+  item: it is the read side of the full stage 0-10 backbone and every downstream
+  screen and command-center query needs it. This outranks the command center
+  intervention ranking (which consumes this view), the per-kind stage 9 through 10
+  content schemas (a methodology-owner decision) and the stage-parameterized gate
+  refactor (quality only, no new capability).
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: 22 new behavioral tests in
-  `tests/unit/engagement/test_record_stage_ten_gate.py`, mirroring the stage 1
-  through 9 gate paths: the reviewed `PerformanceBaselinePackage` assembles the
-  canonical stage 10 gate with dependencies `{9}` and all twelve canonical kinds
-  at the package's exact version; the assembler refuses a cross-tenant package,
-  an absent or unauthorized approver, and mutates nothing; the recorder issues one
-  approved exact-version request per kind and refuses a non-stage-10 gate, an
-  absent author, a self-approval and an unauthorized owner; the handler records
-  the passing decision, closes the stage 10 `StageRun`, counts eleven approved
-  gates in `PipelineProgress`, and refuses a run for another stage or template
-  version, a not-completable run, and a stage 10 gate while stage 9 is unapproved.
-  Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 931 passed, up from 909. `python3 -m pyflakes` on the changed modules
+- Evidence: 17 new behavioral tests in
+  `tests/unit/governance/test_production_view.py`: an empty ledger reports every
+  stage with its template asset package, none approved and all missing, names
+  stage 0 as the current stage and its checkpoint as the next approval; an
+  approved stage reports its exact pinned versions, owner, recorded approver, due
+  date and next action and advances the current stage; a fully approved pipeline
+  has no current stage; a blocked decision surfaces its blockers, its dependent
+  stages' `blocking_dependencies`, and the `blocked_stages` tuple; an expired
+  approval leaves the stage `BLOCKED` with missing assets rather than approved; an
+  approved dependency is not blocking; a scoped waiver is reported without
+  approving the stage; the eight reporting dimensions are separate (assets,
+  milestones, checkpoints, metrics, owner, dependency, status, due date) and
+  derived from the template and ledger; activity is counted separately from
+  verified progress; a blank engagement or tenant, an approved asset outside the
+  required package and an unknown dimension are refused; and both view value
+  objects are immutable. Running
+  `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
+  reports 948 passed, up from 931. `python3 -m pyflakes` on the changed modules
   and test file is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the stage 10 assembler and recorder mirror stage 9 one-to-one; no
-  separate readiness guard is needed because `PerformanceBaselinePackage` already
-  refuses a baseline that has not passed "Performance Baseline Established", so
-  the wiring only adds the tenant check, the exact-version approval issuance and
-  the stage closure. With stage 10 wired, every one of the eleven gates in the
-  canonical 0-10 template now has an assembler/recorder/command/handler path, so
-  the durable `GateLedger` can be driven from intake through performance baseline
-  and verified progress is derivable end to end. The production-manager view
-  (SPEC.md section 4) is now the highest-value unrepresented backbone read: it is
-  the only spec requirement that answers "what should exist, what is present and
-  approved, what is missing, who is accountable, which dependency blocks work,
-  what approval is next, and when it is due" for every stage. Canon gaps are
-  unchanged: the compliance suite (files 21, 34) still needs a methodology-owner
-  decision on required kinds; the advertising/forecast dashboard (files 22, 23,
-  24) and the audience/content flywheel and retargeting (files 25-31, 33, 34)
-  remain open candidates; the stage 10 `attribution` and `acquisition-cost` kinds
-  partially represent the dashboard metrics but the forecast model and bid rules
-  are not required kinds. All prior tests still pass.
+- New findings: the production view is derivable entirely from the template and
+  the durable ledger, so no persistence is required to render it once the ledger
+  exists. Two of the eight reporting dimensions have no Governance source:
+  milestones are caller-supplied (Measurement owns post-launch evidence) and
+  metrics are reported empty because no context sources them yet; the empty
+  metrics dimension maps directly to the existing canon gap register entry
+  "Advertising and forecast dashboard" (canon 22, 23, 24), so it is recorded as a
+  known gap rather than invented. "When it is due" is only knowable once a
+  `GateDecision` exists; the template carries roles, not schedules, so the next
+  (undecided) stage's due date is `None` until an owner supplies a schedule —
+  this is a real prerequisite-scheduling gap, not a defect. Because a pass
+  requires every pinned asset approved, the view's `approved_assets` is the exact
+  set still effective at the evaluation instant and `missing_asset_kinds` is the
+  complement, so a blocked or expired gate never shows fabricated coverage.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
   graph assumed in cycle 56, scheduler/worker topology, the client-designated
-  approver identities, and pilot metric targets. The full stage 0-10 gate path now
-  exists in pure domain and application code, but durable persistence of any
-  `GateDecision`, `StageRun`, retained waiver decision or blocker still depends on
-  the storage ADR; no real client approver identity may be invented. Per-kind
-  stage 9 through 10 asset content schemas remain prose and shapes rather than
-  typed value objects. No fork or cluster facts invented; no `docs/`, fork
-  checkout, `kubectl`, `helm`, or `argocd` present.
-- Highest priority ready next item: build the pure Governance production-manager
-  view read model (`StageProductionView` and `EngagementProductionView`) that
-  answers, for each stage from the versioned template and the durable
-  `GateLedger`, what should exist, what is present and approved, what is missing,
-  who is accountable, which dependency blocks work, what approval is next, and
-  when it is due (SPEC.md section 4, "Gate record and production manager view").
-  Stage 10 was the last gate without a write path, so the whole ledger is now
-  readable; the view separates the eight reporting dimensions (assets, milestones,
-  checkpoints, metrics, owner, dependency, status, due date) and counts activity
-  separately from gate completion. Pipeline mapping: cross-cutting read over
-  stages 0 to 10; required asset none (pure read over the template and ledger);
-  checkpoint n/a; approver n/a; downstream dependency the command center
-  intervention queries and ranking and the production-manager screen. This
-  outranks the command center intervention ranking (which consumes this view),
-  the per-kind stage 9 through 10 content schemas (which are a methodology-owner
-  decision) and the stage-parameterized gate refactor (quality only, no new
-  capability).
-- Deferred cross-context items: the production-manager view (now the ready next
-  item); the command center intervention ranking and the improvement loop;
-  per-kind stage 9 through 10 asset content schemas; a stage-parameterized gate
-  recorder/handler refactor now that eleven identical shapes are proven; and all
-  persistence, blocked on the storage ADR.
+  approver identities, and pilot metric targets. The full stage 0-10 gate path
+  and its production view now exist in pure domain code, but durable persistence
+  of any `GateDecision`, `StageRun`, retained waiver decision or blocker still
+  depends on the storage ADR; no real client approver identity may be invented.
+  Per-kind stage 9 through 10 asset content schemas remain prose and shapes
+  rather than typed value objects. No fork or cluster facts invented; no `docs/`,
+  fork checkout, `kubectl`, `helm`, or `argocd` present.
+- Highest priority ready next item: build the pure Governance command center
+  intervention query and ranking (`Intervention` and an intervention policy) that
+  surfaces, per client, the blocked critical path, overdue approvals, failed live
+  journeys and nearing commitments, with client, severity, reason, evidence,
+  owner, next action, due time, state and affected builds, and an explainable
+  ranking that shows why each card is surfaced (SPEC.md section 7, "Command center
+  intervention fields" and "Ranking favors blocked critical path, overdue
+  approvals, failed live journeys, and nearing commitments. Show why each card is
+  surfaced"). The production view now supplies the per-stage status, owner,
+  dependency and due-date inputs, so the intervention query can be derived from
+  it without new storage. Pipeline mapping: cross-cutting read over stages 0 to
+  10; required asset none (pure read over the template, ledger and view);
+  checkpoint n/a; approver n/a; downstream dependency the command center screen
+  and the Operations notification/deduplication work. This outranks the per-kind
+  stage 9 through 10 content schemas (which are a methodology-owner decision) and
+  the stage-parameterized gate refactor (quality only, no new capability).
+- Deferred cross-context items: the command center intervention ranking and the
+  improvement loop (now the ready next item); per-kind stage 9 through 10 asset
+  content schemas; a stage-parameterized gate recorder/handler refactor now that
+  eleven identical shapes are proven; and all persistence, blocked on the storage
+  ADR.
+  [DONE 2026-10-03 (Ralph cycle 89): built the pure Governance
+  production-manager view read model (`StageProductionView`,
+  `EngagementProductionView`, `ReportingDimension`,
+  `PRODUCTION_REPORTING_DIMENSIONS`) derived from the versioned `StageTemplate`
+  and the durable `GateLedger` (SPEC.md section 4, "Gate record and production
+  manager view"), answering per stage what should exist, what is present and
+  approved, what is missing, who is accountable, which dependency blocks work,
+  what approval is next and when it is due, separating the eight reporting
+  dimensions and counting activity apart from gate completion; verified by
+  `tests/unit/governance/test_production_view.py` (17 tests), so the full stage
+  0-10 pipeline is now both writable and readable as verified progress and gate
+  evidence.]
   [DONE 2026-10-03 (Ralph cycle 88): wired the stage 10 "Performance Baseline
   Established" `GateDecision` end to end with `StageTenGateAssembler`,
   `StageTenGateRecorder`, `RecordStageTenGateCommand` and
@@ -249,7 +262,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 
 - Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 13, 14, 21, 24 — between stages 8 and 10 — status: candidate, needs named-owner decision on a Sell/Enroll stage.
 - Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: candidate.
-- Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate.
+- Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension.
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: candidate.
 - Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: candidate.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: candidate.
