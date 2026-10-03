@@ -106,12 +106,18 @@ from redops.contexts.engagement.domain.value_objects import (
     IntakeAssetKind,
     IntakePackage,
 )
+from redops.contexts.execution.application.ports import (
+    FunnelIntegrationRepository,
+)
 from redops.contexts.execution.domain.entities import (
     FunnelIntegration,
     LaunchQA,
     PerformanceBaseline,
 )
-from redops.contexts.execution.domain.errors import ExecutionError
+from redops.contexts.execution.domain.errors import (
+    ExecutionError,
+    FunnelVersionConflictError,
+)
 from redops.contexts.execution.domain.value_objects import (
     ComplianceAsset,
     ComplianceAssetKind,
@@ -133,6 +139,9 @@ from redops.contexts.execution.domain.value_objects import (
     QACheckKind,
     QACheckOutcome,
     TrafficAuthorization,
+)
+from redops.contexts.execution.infrastructure.repositories import (
+    funnel_integration_repository_from_env,
 )
 from redops.contexts.governance.application.ports import (
     GateLedgerRepository,
@@ -328,6 +337,31 @@ def get_authority_amplifier_repository() -> Iterator[
     """
 
     repository = authority_amplifier_repository_from_env(
+        os.environ.get("DATABASE_URL")
+    )
+    try:
+        yield repository
+    finally:
+        repository.close()
+
+
+def get_funnel_integration_repository() -> Iterator[
+    FunnelIntegrationRepository
+]:
+    """Provide the completed funnel seam to the API (SPEC.md section 6).
+
+    SPEC.md section 3 pins exact approved asset versions and intended use at a
+    passing gate, and SPEC.md section 4 keeps the approved version identifiable,
+    so the stage 9 and 10 gates must resolve the stage 8 funnel a prior gate
+    completed rather than trust a repeated request body. The dependency owns one
+    adapter for the request and releases any connection it opened when the request
+    ends, so the resolved funnel is read from the durable store and shared across
+    the API and worker processes. The store is chosen once from ``DATABASE_URL``;
+    a request cannot silently downgrade to a process-local funnel store, because a
+    set-but-unusable configuration raises before the route runs.
+    """
+
+    repository = funnel_integration_repository_from_env(
         os.environ.get("DATABASE_URL")
     )
     try:
@@ -659,17 +693,21 @@ def _complete_stage_eight_funnel(
     tenant_id: str,
     funnel_body: FunnelIntegrationInput,
     amplifier: AuthorityAmplifier,
+    funnel_repository: FunnelIntegrationRepository,
 ) -> FunnelIntegration:
     """Rebuild the stage 8 funnel and drive its "Funnel Complete" checkpoint.
 
     SPEC.md section 3: production requires approved dependencies, and the stage 9
-    launch QA grounds on the completed stage 8 funnel (SPEC.md section 4). No
-    funnel store is exposed over the API yet, so the caller supplies the reviewed
-    funnel assets and its prospect path dry run, and the domain re-proves the
-    funnel completion -- every canonical handoff present exactly once and routed
-    with a record and an owner -- rather than the transport layer asserting it.
-    Sharing this builder keeps the stage 8 and stage 9 routes from drifting in how
-    they re-state that upstream dependency.
+    launch QA grounds on the completed stage 8 funnel (SPEC.md section 4). The
+    reviewed funnel is resolved from its store by exact identity rather than
+    trusted from the repeated request body: the stage 8 gate stores the completed
+    candidate, a later gate reuses the stored funnel, and a same-identity but
+    different body is refused (``FunnelVersionConflictError``). The caller still
+    supplies the reviewed funnel assets and its prospect path dry run, and the
+    domain re-proves the funnel completion -- every canonical handoff present
+    exactly once and routed with a record and an owner -- rather than the transport
+    layer asserting it. Sharing this builder keeps the stage 8 to 10 routes from
+    drifting in how they resolve that upstream dependency.
     """
 
     assets = FunnelAssetPackage(
@@ -702,13 +740,26 @@ def _complete_stage_eight_funnel(
             for entry in funnel_body.dry_run.handoffs
         ),
     )
-    return FunnelIntegration(
+    candidate_funnel = FunnelIntegration(
         integration_id=funnel_body.integration_id,
         tenant_id=tenant_id,
         amplifier=amplifier,
         owner=funnel_body.owner,
         assets=assets,
     ).mark_funnel_complete(dry_run)
+    stored_funnel = funnel_repository.get(
+        tenant_id, funnel_body.integration_id
+    )
+    if stored_funnel is None:
+        funnel_repository.save(candidate_funnel)
+        return candidate_funnel
+    if stored_funnel == candidate_funnel:
+        return stored_funnel
+    raise FunnelVersionConflictError(
+        f"completed funnel integration {funnel_body.integration_id!r} was "
+        f"previously pinned for tenant {tenant_id!r} with different content; "
+        "the stage gate must reuse the exact stage 8 funnel, not re-state it"
+    )
 
 
 def _authorize_launch_qa(
@@ -2110,6 +2161,9 @@ def record_stage_eight_gate(
     authority_amplifier_repository: AuthorityAmplifierRepository = Depends(
         get_authority_amplifier_repository
     ),
+    funnel_repository: FunnelIntegrationRepository = Depends(
+        get_funnel_integration_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 8 "Funnel Complete" gate through the use case.
 
@@ -2166,7 +2220,7 @@ def record_stage_eight_gate(
             amplifier_repository=authority_amplifier_repository,
         )
         funnel = _complete_stage_eight_funnel(
-            tenant_id, body.funnel, amplifier
+            tenant_id, body.funnel, amplifier, funnel_repository
         )
         package = FunnelIntegrationPackage(
             package_id=body.funnel_package_id,
@@ -2263,6 +2317,9 @@ def record_stage_nine_gate(
     authority_amplifier_repository: AuthorityAmplifierRepository = Depends(
         get_authority_amplifier_repository
     ),
+    funnel_repository: FunnelIntegrationRepository = Depends(
+        get_funnel_integration_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 9 "Launch Approved" gate through the use case.
 
@@ -2284,8 +2341,9 @@ def record_stage_nine_gate(
     layer -- decide whether the sixteen canonical kinds may be pinned as passing
     evidence. The route resolves the approved method, production ready offer,
     approved stage 6 message and approved stage 7 amplifier from their stores by
-    exact identity, and re-states the stage 8 funnel because no funnel store is
-    exposed over the API yet; every integrity rule -- the complete
+    exact identity, and resolves the completed stage 8 funnel from its store by
+    exact identity rather than trusting the repeated request body; every integrity
+    rule -- the complete
     same-tenant check set, the critical path outcomes, the compliance package, the
     grounded stage 8 dependency, the canonical kinds, exact versions,
     owner/approver authority and the tenant boundary -- stays enforced by the
@@ -2321,7 +2379,7 @@ def record_stage_nine_gate(
             amplifier_repository=authority_amplifier_repository,
         )
         funnel = _complete_stage_eight_funnel(
-            tenant_id, body.funnel, amplifier
+            tenant_id, body.funnel, amplifier, funnel_repository
         )
         qa = _authorize_launch_qa(tenant_id, body.qa, funnel)
         package = LaunchQAPackage(
@@ -2419,6 +2477,9 @@ def record_stage_ten_gate(
     authority_amplifier_repository: AuthorityAmplifierRepository = Depends(
         get_authority_amplifier_repository
     ),
+    funnel_repository: FunnelIntegrationRepository = Depends(
+        get_funnel_integration_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 10 "Performance Baseline Established" gate.
 
@@ -2442,10 +2503,10 @@ def record_stage_ten_gate(
     ``PerformanceBaselinePolicy`` -- not the transport layer -- decides whether the
     twelve canonical kinds may be pinned as passing evidence. The route resolves
     the approved method, production ready offer, approved stage 6 message and
-    approved stage 7 amplifier from their stores by exact identity, and re-states
-    the stage 8 funnel and stage 9 launch QA because no funnel or QA store is
-    exposed over the API yet; every integrity rule -- the grounded stage
-    9 dependency, the distinct
+    approved stage 7 amplifier from their stores by exact identity, and resolves the
+    completed stage 8 funnel from its store while re-stating the stage 9 launch QA
+    because no QA store is exposed over the API yet; every integrity rule -- the
+    grounded stage 9 dependency, the distinct
     milestones, the observed-first-traffic rule, the canonical kinds, exact
     versions, owner/approver authority and the tenant boundary -- stays enforced by
     the domain, and a rejection is a named 422 and never a partial write. The path
@@ -2480,7 +2541,7 @@ def record_stage_ten_gate(
             amplifier_repository=authority_amplifier_repository,
         )
         funnel = _complete_stage_eight_funnel(
-            tenant_id, body.funnel, amplifier
+            tenant_id, body.funnel, amplifier, funnel_repository
         )
         qa = _authorize_launch_qa(tenant_id, body.qa, funnel)
         assets = LaunchAssetPackage(

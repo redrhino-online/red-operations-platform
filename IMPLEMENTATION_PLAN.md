@@ -4,7 +4,78 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T180150Z (Ralph cycle, this run): selected item was the durable
+- Cycle 2026-10-03T180725Z (Ralph cycle, this run): selected item was the durable
+  `FunnelIntegrationRepository` for the Execution context (port, mapper,
+  migration and PostgreSQL adapter) plus the resolve-not-restate rule for the
+  stage 9 and 10 gates, the exact next item the prior cycle named (SPEC.md
+  sections 3, 4, 6 and 9; queue Q6). The stage 9 and 10 routes re-stated the
+  completed stage 8 funnel from the request body, so a later gate could silently
+  declare a different funnel after the stage 8 "Funnel Complete" checkpoint. It
+  outranked the Next.js `frontend/` shell (DoD 6, blocked on the workflow engine
+  Q5 via Q15), the larger required-kind wiring (Q28, which changes every stage's
+  asset package and route) and the stage 9 launch QA store (the next re-stated
+  asset after the funnel). The loop prioritizes exact approved asset versions and
+  persistence over downstream features.
+- Outcome: new Execution application port `FunnelIntegrationRepository`
+  (`backend/redops/contexts/execution/application/ports.py`) and a new Execution
+  `infrastructure` layer (`mappers.py`, `repositories.py`) in the same shape as
+  the Commercial, Method and Production stores. `funnel_integration_to_payload`/
+  `..._from_payload` round-trip the full completed funnel (state, the pinned
+  `ProspectPathDryRun` with every handoff record and owner, all thirteen
+  canonical asset references and the grounding stage 7 `AuthorityAmplifier`, via
+  the Production `authority_amplifier...` helpers), so the funnel cannot drift
+  from the amplifier shape and a reload re-validates through
+  `FunnelIntegration.__post_init__`. `InMemoryFunnelIntegrationRepository` and
+  `PostgresFunnelIntegrationRepository` refuse a funnel without completion
+  (`FunnelReadinessError`), a same-id different-body re-statement
+  (`FunnelVersionConflictError`) and a blank tenant
+  (`FunnelVersionTenantBoundaryError`). Migration `0007_funnel_integrations`
+  creates `funnel_integrations(id, tenant_id NOT NULL, integration_id, funnel
+  JSONB, recorded_at, UNIQUE(tenant_id, integration_id))`.
+  `api/routes.py::get_funnel_integration_repository` is an env-selected generator
+  like the method, offer, message and amplifier stores, and
+  `_complete_stage_eight_funnel(..., funnel_repository=)` now resolves the
+  funnel: the stage 8 gate stores the completed candidate, a later gate reuses
+  the stored funnel, a different same-id body is refused (422). All three stage
+  8 to 10 routes take the new dependency.
+- Evidence: `make check` -> 1880 passed, 1 skipped, 654 subtests; pyflakes clean.
+  New `tests/unit/execution/test_funnel_integration_repository.py` (7 plus 3
+  mapper tests) and `test_funnel_integration_postgres.py` (8, against the compose
+  DB, exercising the real migration), a stage 9 re-statement refusal test in
+  `tests/unit/test_stage_nine_gate_route.py`, an app-smoke funnel-dep default
+  test, and `tests/unit/shared/test_migrate.py` head now
+  `0007_funnel_integrations`. The stage 9 and 10 route tests thread the funnel
+  dep override through the composed StageEight/Nine setUpClass chain. `make done`
+  clears [1/6]-[4/6] and still fails at [5/6] (`frontend/` missing).
+- New findings: the durable funnel store now satisfies DoD condition 4 for
+  `FunnelIntegration`; the stage 8 funnel is tenant-scoped, immutable and shared
+  across processes, and stage 9 and 10 ground on it. The stage 9 launch QA is
+  still re-stated from the request (no store), so the resolve-not-restate rule
+  for the stage 9 launch QA remains open. Execution now has its first
+  application and infrastructure layers; the launch QA store will extend them in
+  the same shape (nests the completed funnel).
+- Blockers: `frontend/` (DoD condition 6, Q32) is blocked on the workflow engine
+  Q5 via Q15; request idempotency (Q16) blocked on the same; RLS is a WHERE clause
+  only (ADR 0004); no durable launch-QA store; the condition 3 retrieval,
+  background worker and artifact-URL layers are unbuilt; the remaining canon gap
+  register entries need named-owner decisions.
+- Highest priority ready next item: apply the same resolve-not-restate rule to
+  the stage 9 `LaunchQA` -- a durable launch-QA store (port, mapper, migration and
+  adapter in the Execution context) so the stage 10 gate grounds on the exact
+  ready-for-traffic stage 9 QA instead of a re-stated request body (SPEC.md
+  sections 3, 4; DoD condition 1). Stage 9 "QA"; required asset: the approved
+  `LaunchQA` at "Launch Approved"; approver: the designated human authority;
+  blocked downstream dependency: the stage 10 Performance Baseline Established
+  gate. Prerequisite: none beyond the method, offer, message, amplifier and
+  funnel stores now in place. The QA nests the completed stage 8
+  `FunnelIntegration`, so its mapper will reuse the funnel mapper. Alternative
+  gate-integrity item: wire the implemented canon assets as required gate kinds
+  (Q28) -- larger, changes the stage asset packages and routes. Canon gap
+  register unchanged this cycle; no new gap identified.
+
+### Prior cycle (2026-10-03T180150Z)
+
+- Cycle 2026-10-03T180150Z (Ralph cycle): selected item was the durable
   `AuthorityAmplifierRepository` for the Production context (port, mapper,
   migration and PostgreSQL adapter) plus the resolve-not-restate rule for the
   stage 8 to 10 gates, the exact next item the prior cycle named (SPEC.md

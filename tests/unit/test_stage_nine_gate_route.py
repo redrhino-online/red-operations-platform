@@ -91,6 +91,12 @@ class StageNineGateRouteTests(unittest.TestCase):
         cls.amplifier_repository_class = staticmethod(
             StageEightGateRouteTests.amplifier_repository_class
         )
+        cls.funnel_dependency = staticmethod(
+            StageEightGateRouteTests.funnel_dependency
+        )
+        cls.funnel_repository_class = staticmethod(
+            StageEightGateRouteTests.funnel_repository_class
+        )
         cls.launch_kinds = CANONICAL_LAUNCH_KINDS
 
     def setUp(self) -> None:
@@ -103,6 +109,7 @@ class StageNineGateRouteTests(unittest.TestCase):
         self.offer_repository = self.offer_repository_class()
         self.message_repository = self.message_repository_class()
         self.amplifier_repository = self.amplifier_repository_class()
+        self.funnel_repository = self.funnel_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
@@ -118,6 +125,9 @@ class StageNineGateRouteTests(unittest.TestCase):
         )
         self.app.dependency_overrides[self.amplifier_dependency] = (
             lambda: self.amplifier_repository
+        )
+        self.app.dependency_overrides[self.funnel_dependency] = (
+            lambda: self.funnel_repository
         )
         self.client = TestClient(self.app)
 
@@ -314,6 +324,30 @@ class StageNineGateRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(
             response.json()["detail"]["error"], "MissingComplianceAssetError"
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(9))
+
+    def test_re_stating_the_completed_funnel_with_different_content_is_refused(
+        self,
+    ) -> None:
+        self.seed_through_stage_eight()
+
+        funnel = self._eight.payload()["funnel"]
+        funnel["owner"] = "a different funnel owner"
+        response = self.client.post(
+            self.url(), json=self.payload(funnel=funnel)
+        )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"],
+            "FunnelVersionConflictError",
         )
 
         from redops.contexts.governance.domain.templates import (

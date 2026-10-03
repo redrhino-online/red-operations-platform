@@ -46,8 +46,14 @@ class StageEightGateRouteTests(unittest.TestCase):
 
         try:
             StageSevenGateRouteTests.setUpClass()
+            from redops.api.routes import (
+                get_funnel_integration_repository,
+            )
             from redops.contexts.execution.domain.value_objects import (
                 CANONICAL_FUNNEL_KINDS,
+            )
+            from redops.contexts.execution.infrastructure.repositories import (
+                InMemoryFunnelIntegrationRepository,
             )
         except unittest.SkipTest:
             raise
@@ -91,6 +97,12 @@ class StageEightGateRouteTests(unittest.TestCase):
         cls.amplifier_repository_class = staticmethod(
             StageSevenGateRouteTests.amplifier_repository_class
         )
+        cls.funnel_dependency = staticmethod(
+            get_funnel_integration_repository
+        )
+        cls.funnel_repository_class = staticmethod(
+            InMemoryFunnelIntegrationRepository
+        )
         cls.funnel_kinds = CANONICAL_FUNNEL_KINDS
 
     def setUp(self) -> None:
@@ -103,6 +115,7 @@ class StageEightGateRouteTests(unittest.TestCase):
         self.offer_repository = self.offer_repository_class()
         self.message_repository = self.message_repository_class()
         self.amplifier_repository = self.amplifier_repository_class()
+        self.funnel_repository = self.funnel_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
@@ -118,6 +131,9 @@ class StageEightGateRouteTests(unittest.TestCase):
         )
         self.app.dependency_overrides[self.amplifier_dependency] = (
             lambda: self.amplifier_repository
+        )
+        self.app.dependency_overrides[self.funnel_dependency] = (
+            lambda: self.funnel_repository
         )
         self.client = TestClient(self.app)
 

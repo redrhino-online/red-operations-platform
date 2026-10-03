@@ -15,6 +15,35 @@ class FunnelDependencyError(ExecutionError):
     """A funnel is not grounded on an approved stage 7 dependency."""
 
 
+class FunnelReadinessError(ExecutionError):
+    """A complete funnel store was offered a funnel that has not passed its checkpoint.
+
+    SPEC.md sections 3 and 4 pin the exact approved asset versions and intended
+    use at a passing gate, so the durable stage 8 store only holds a funnel that
+    passed "Funnel Complete". A draft funnel cannot be stored, because a later
+    gate would then resolve an uncompleted funnel as if it were approved.
+    """
+
+
+class FunnelVersionConflictError(ExecutionError):
+    """A same-id funnel was re-stated with different content.
+
+    SPEC.md section 4 keeps a previous approved version historically
+    identifiable: an approved funnel is immutable, so a later stage gate must
+    resolve the exact stored stage 8 funnel rather than overwrite it with a
+    re-stated request body.
+    """
+
+
+class FunnelVersionTenantBoundaryError(ExecutionError):
+    """A funnel store was used without a client scope.
+
+    SPEC.md sections 3 and 9 make a funnel a client resource that must carry its
+    tenant on every command and query, so storing or resolving one without a
+    client would either leak across clients or create an orphaned record.
+    """
+
+
 class FunnelIncompleteError(ExecutionError):
     """The prospect path does not satisfy the "Funnel Complete" checkpoint."""
 
