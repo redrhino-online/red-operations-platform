@@ -506,7 +506,6 @@ class StageSixGateRouteTests(unittest.TestCase):
     def stage_four_payload(self):
         return {
             "workspace_id": "ws-3f",
-            "authorities": self._authorities(),
             "signature_package_id": "signature-3f",
             "solution": self._solution(),
             "transformations": {

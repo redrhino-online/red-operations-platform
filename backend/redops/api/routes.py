@@ -1772,6 +1772,7 @@ def record_stage_four_gate(
     body: RecordStageFourGateRequest,
     repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
     run_repository: StageRunRepository = Depends(get_stage_run_repository),
+    workspace_store: ClientWorkspaceStore = Depends(get_client_workspace_store),
 ) -> dict[str, Any]:
     """Record the stage 4 "IP Architecture Locked" gate through the use case.
 
@@ -1791,18 +1792,23 @@ def record_stage_four_gate(
     and never a partial write. The path tenant, not the body, is the authoritative
     client scope. Stage 4 carries no claims: the checkpoint turns on the coherence
     and continuity of the reviewed transformation, not external customer evidence.
+
+    SPEC.md sections 3 and 4 make the ClientWorkspace the tenant root that holds
+    the authority registry a gate approves against. The workspace is resolved
+    from the durable store by ``(tenant_id, workspace_id)`` rather than rebuilt
+    from the request body, so the approver and owner are checked against the
+    persisted registry and a caller cannot substitute its own; an unregistered
+    workspace is a named 404, not a gate (SPEC.md section 11).
     """
 
     template = stage_zero_to_ten_template()
     try:
-        workspace = ClientWorkspace(
-            workspace_id=body.workspace_id,
-            tenant_id=tenant_id,
-            authorities=tuple(
-                ClientAuthority(actor=entry.actor, authority=entry.authority)
-                for entry in body.authorities
-            ),
-        )
+        workspace = workspace_store.get(tenant_id, body.workspace_id)
+        if workspace is None:
+            raise ClientWorkspaceNotFoundError(
+                f"workspace {body.workspace_id!r} is not registered for "
+                f"{tenant_id!r}"
+            )
         solution = SignatureSolution(
             solution_id=body.solution.solution_id,
             tenant_id=tenant_id,
@@ -1926,6 +1932,11 @@ def record_stage_four_gate(
         decision = RecordStageFourGateHandler().handle(command, ledger=ledger)
         repository.append(decision)
         run_repository.save(stage_run)
+    except ClientWorkspaceNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
     except (
         CommercialError,
         EngagementError,

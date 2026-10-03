@@ -107,12 +107,6 @@ class StageFourGateRouteTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.app.dependency_overrides.clear()
 
-    def _authorities(self):
-        return [
-            {"actor": OWNER, "authority": "production-owner"},
-            {"actor": APPROVER, "authority": "client-designated-authority"},
-        ]
-
     def stage_zero_payload(self):
         return {
             "workspace_id": "ws-3f",
@@ -158,7 +152,6 @@ class StageFourGateRouteTests(unittest.TestCase):
     def stage_one_payload(self):
         return {
             "workspace_id": "ws-3f",
-            "authorities": self._authorities(),
             "diagnosis_package_id": "diagnosis-3f",
             "avatar": {
                 "avatar_id": "avatar-3f",
@@ -286,7 +279,6 @@ class StageFourGateRouteTests(unittest.TestCase):
     def stage_two_payload(self):
         return {
             "workspace_id": "ws-3f",
-            "authorities": self._authorities(),
             "currency_package_id": "currency-3f",
             "inventory": {
                 "inventory_id": "inventory-3f",
@@ -343,7 +335,6 @@ class StageFourGateRouteTests(unittest.TestCase):
     def stage_three_payload(self):
         return {
             "workspace_id": "ws-3f",
-            "authorities": self._authorities(),
             "diagnostic_package_id": "diagnostic-model-3f",
             "model": {
                 "model_id": "diagnostic-model-3f",
@@ -465,7 +456,6 @@ class StageFourGateRouteTests(unittest.TestCase):
     def payload(self, **overrides):
         body = {
             "workspace_id": "ws-3f",
-            "authorities": self._authorities(),
             "signature_package_id": "signature-3f",
             "solution": self._solution(),
             "transformations": {
@@ -586,6 +576,49 @@ class StageFourGateRouteTests(unittest.TestCase):
         response = self.client.post(
             self.url(), json=self.payload(approver="stranger")
         )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"],
+            "GateApproverNotAuthorizedError",
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(4))
+
+    def test_a_gate_without_a_registered_workspace_is_a_named_404(self) -> None:
+        self.seed_stage_three()
+
+        response = self.client.post(
+            self.url(), json=self.payload(workspace_id="ws-unregistered")
+        )
+
+        self.assertEqual(response.status_code, 404, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"], "ClientWorkspaceNotFoundError"
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(4))
+
+    def test_the_gate_approves_against_the_persisted_registry(self) -> None:
+        # The body no longer carries authorities; the approver is authorized
+        # only if the persisted workspace registry names them. Seed stage 3 with
+        # an authorized approver, then rebuild the store without a
+        # client-designated authority and the same stage 4 request is refused.
+        self.seed_stage_three()
+        self.workspaces = self.workspace_store_class()
+        self.register_workspace(with_approver=False)
+
+        response = self.client.post(self.url(), json=self.payload())
 
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(

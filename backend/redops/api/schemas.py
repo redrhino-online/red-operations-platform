@@ -458,18 +458,18 @@ class TransformationsInput(BaseModel):
 class RecordStageFourGateRequest(BaseModel):
     """The stage 4 "IP Architecture Locked" gate request (SPEC.md section 4).
 
-    The caller supplies the reviewed transformation values, the workspace
-    authority registry and the decision metadata. The route builds the canonical
-    gate from these through the use case; it deliberately accepts no pre-built
-    gate, so approver authority and exact-version evidence cannot be bypassed.
-    Stage 4 depends on a passing stage 3 decision already in the ledger. The
-    solution carries no claims: the "IP Architecture Locked" checkpoint turns on
-    the coherence and continuity of the reviewed transformation, which the domain
-    enforces at construction, rather than external customer evidence.
+    The caller supplies the reviewed transformation values and the decision
+    metadata; the authority registry is resolved from the durable workspace
+    store, never the body. The route builds the canonical gate from these through
+    the use case; it deliberately accepts no pre-built gate, so approver authority
+    and exact-version evidence cannot be bypassed. Stage 4 depends on a passing
+    stage 3 decision already in the ledger. The solution carries no claims: the
+    "IP Architecture Locked" checkpoint turns on the coherence and continuity of
+    the reviewed transformation, which the domain enforces at construction, rather
+    than external customer evidence.
     """
 
     workspace_id: str
-    authorities: list[ClientAuthorityInput]
     signature_package_id: str
     solution: SignatureSolutionInput
     transformations: TransformationsInput
