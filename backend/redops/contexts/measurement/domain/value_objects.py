@@ -15,10 +15,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
+from typing import TYPE_CHECKING, Iterable
 
 from redops.contexts.execution.domain.value_objects import (
     ClaimKind,
     PerformanceClaim,
+)
+from redops.contexts.governance.domain.value_objects import (
+    MetricMovement,
+    MetricReportingBasis,
+    MetricReportingView,
 )
 from redops.contexts.measurement.domain.errors import (
     ImprovementObservationError,
@@ -27,10 +33,14 @@ from redops.contexts.measurement.domain.errors import (
     InvalidImprovementOutcomeError,
     InvalidMeasurementRecordError,
     InvalidMetricDefinitionError,
+    InvalidMetricReportingError,
     InvalidMetricWindowError,
     MeasurementTenantBoundaryError,
     MeasurementWindowOpenError,
 )
+
+if TYPE_CHECKING:
+    from redops.contexts.measurement.domain.entities import ImprovementProposal
 
 
 class ImprovementState(Enum):
@@ -461,3 +471,117 @@ class MeasurementRecord:
             source=self.source,
             baseline_id=baseline_id,
         )
+
+
+def _latest_metric_definitions(
+    metrics: Iterable[MetricDefinition], *, tenant_id: str
+) -> dict[str, MetricDefinition]:
+    """Return the newest version of each same-tenant registered metric."""
+    latest: dict[str, MetricDefinition] = {}
+    for metric in metrics:
+        if metric.tenant_id != tenant_id:
+            continue
+        current = latest.get(metric.metric_id)
+        if current is None or metric.version > current.version:
+            latest[metric.metric_id] = metric
+    return latest
+
+
+def _measured_movement(
+    metric: MetricDefinition,
+    improvements: Iterable["ImprovementProposal"],
+    *,
+    tenant_id: str,
+) -> MetricMovement | None:
+    """Return the measured movement of the newest measured same-tenant improvement."""
+    measured = [
+        proposal
+        for proposal in improvements
+        if proposal.tenant_id == tenant_id
+        and proposal.state is ImprovementState.MEASURED
+        and proposal.metric == metric
+        and proposal.outcome is not None
+    ]
+    if not measured:
+        return None
+    newest = max(
+        measured, key=lambda proposal: proposal.outcome.measured_on
+    )
+    outcome = newest.outcome
+    return MetricMovement(
+        improvement_id=newest.proposal_id,
+        before=float(outcome.before.value),
+        after=float(outcome.after.value),
+        measured_on=outcome.measured_on,
+    )
+
+
+def metric_reporting_views(
+    *,
+    tenant_id: str,
+    metrics: Iterable[MetricDefinition],
+    records: Iterable[MeasurementRecord],
+    improvements: Iterable["ImprovementProposal"] = (),
+) -> tuple[MetricReportingView, ...]:
+    """Project the metric registry and improvement loop onto METRICS rows.
+
+    SPEC.md section 4 separates metrics as one of the production view's eight
+    reporting dimensions, and Phase 5 requires a metric registry and observed
+    results. This pure projection is the Measurement context's contribution to
+    that dimension: for each registered metric that has at least one observed
+    same-tenant record it reports the newest observed figure over its closed
+    window, and, where an approved improvement of the same metric has been
+    measured, the observed before-and-after movement. The canon's dashboard
+    discipline (canon files 22, 23 and 24) treats a placeholder number as not a
+    real metric until observed, so a placeholder-only metric produces no row and
+    another tenant's metric is never projected onto this client's view.
+
+    The projection reads only the registry and the improvement loop; it never
+    invents a metric, window, sample, source or causal conclusion, and it counts
+    no activity (SPEC.md sections 3, 4 and 12.4).
+    """
+    if not tenant_id or not tenant_id.strip():
+        raise InvalidMetricReportingError(
+            "metric reporting requires the owning tenant so the projection stays "
+            "tenant scoped"
+        )
+    latest_definitions = _latest_metric_definitions(metrics, tenant_id=tenant_id)
+    tenant_records = [
+        record
+        for record in records
+        if record.tenant_id == tenant_id and record.metric.tenant_id == tenant_id
+    ]
+    rows: list[MetricReportingView] = []
+    for metric_id in sorted(latest_definitions):
+        metric = latest_definitions[metric_id]
+        observed = [
+            record
+            for record in tenant_records
+            if record.metric == metric and record.is_observed
+        ]
+        if not observed:
+            continue
+        newest = max(
+            observed, key=lambda record: (record.recorded_on, record.record_id)
+        )
+        rows.append(
+            MetricReportingView(
+                metric_id=metric.metric_id,
+                tenant_id=metric.tenant_id,
+                name=metric.name,
+                funnel_step=metric.funnel_step.value,
+                unit=metric.unit.value,
+                direction=metric.direction.value,
+                value=float(newest.value),
+                window_start=newest.window.start,
+                window_end=newest.window.end,
+                sample_size=newest.sample_size,
+                source=newest.source,
+                recorded_on=newest.recorded_on,
+                basis=MetricReportingBasis.OBSERVED,
+                movement=_measured_movement(
+                    metric, improvements, tenant_id=tenant_id
+                ),
+            )
+        )
+    return tuple(rows)

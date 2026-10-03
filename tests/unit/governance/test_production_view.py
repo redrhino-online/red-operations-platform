@@ -27,13 +27,19 @@ from redops.contexts.governance.domain.entities import (
     GateDecision,
     GateLedger,
 )
-from redops.contexts.governance.domain.errors import ProductionViewError
+from redops.contexts.governance.domain.errors import (
+    MetricReportingError,
+    MetricReportingTenantBoundaryError,
+    ProductionViewError,
+)
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
 from redops.contexts.governance.domain.value_objects import (
     AssetVersionRef,
     EngagementProductionView,
     GateDisposition,
     GateState,
+    MetricReportingBasis,
+    MetricReportingView,
     PRODUCTION_REPORTING_DIMENSIONS,
     ReportingDimension,
     StageProductionView,
@@ -114,6 +120,26 @@ def view(ledger: GateLedger, **overrides) -> EngagementProductionView:
     }
     kwargs.update(overrides)
     return EngagementProductionView.from_ledger(ledger, **kwargs)
+
+
+def metric_row(**overrides) -> MetricReportingView:
+    values = {
+        "metric_id": "metric-cost-per-lead",
+        "tenant_id": "tenant-3f",
+        "name": "cost per lead",
+        "funnel_step": "lead",
+        "unit": "currency",
+        "direction": "lower_is_better",
+        "value": 12.0,
+        "window_start": date(2026, 9, 18),
+        "window_end": date(2026, 10, 1),
+        "sample_size": 250,
+        "source": "analytics://campaign-report",
+        "recorded_on": TODAY,
+        "basis": MetricReportingBasis.OBSERVED,
+    }
+    values.update(overrides)
+    return MetricReportingView(**values)
 
 
 class EmptyPipelineViewTests(unittest.TestCase):
@@ -373,6 +399,37 @@ class ProductionViewInvariantTests(unittest.TestCase):
             result.engagement = "other"
         with self.assertRaises(FrozenInstanceError):
             result.stages[0].status = GateState.BLOCKED
+
+
+class MetricReportingDimensionTests(unittest.TestCase):
+    def test_metrics_dimension_reports_caller_supplied_observed_rows(self):
+        row = metric_row()
+        result = view(ledger_through(11), metric_reporting=(row,))
+
+        self.assertEqual((row,), result.dimension(ReportingDimension.METRICS))
+
+    def test_metrics_dimension_is_empty_without_measured_metrics(self):
+        result = view(ledger_through(11))
+
+        self.assertEqual((), result.dimension(ReportingDimension.METRICS))
+
+    def test_a_placeholder_metric_row_is_refused(self):
+        with self.assertRaises(MetricReportingError):
+            metric_row(basis=MetricReportingBasis.PLACEHOLDER)
+
+    def test_a_cross_tenant_metric_row_is_refused_by_the_view(self):
+        with self.assertRaises(MetricReportingTenantBoundaryError):
+            view(
+                ledger_through(11),
+                metric_reporting=(metric_row(tenant_id="other-client"),),
+            )
+
+    def test_two_rows_for_one_metric_are_refused(self):
+        with self.assertRaises(ProductionViewError):
+            view(
+                ledger_through(11),
+                metric_reporting=(metric_row(), metric_row()),
+            )
 
 
 if __name__ == "__main__":

@@ -4,44 +4,50 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:29:34Z (Ralph cycle 105).
-- Selected item: floor the stage 10 improvement's "before" observation window at
-  the owner approval date -- the pre-change measurement cannot close after the
-  authorization of the change (`outcome.before.window.end <=
-  approval.approved_on`) -- via `ImprovementMeasurementPolicy` and the named
-  `ImprovementBeforeWindowError`. It was this plan's named highest priority ready
-  next item after cycle 104: the last temporal edge in the stage 10 improvement
-  chain, so a period already affected by the authorized change cannot be recorded
-  as the pre-change baseline (SPEC.md section 4 stage 10 "Performance Baseline
-  Established" and "performance recommendations require evidence and owner
-  approval before material changes"; Phase 5 "one improvement is approved and
-  measured"; canon files 23 and 24: "you need a baseline of metrics" before
-  optimizing). It outranks the advertising and forecast dashboard (a downstream
-  feature), the Operations delivery adapter (blocked on the storage ADR), the
-  stage 9 compliance projection (needs a named-owner decision) and the
-  stage-parameterized gate refactor (quality only), because gate integrity
-  outranks dashboards.
+- Cycle timestamp: 2026-10-03T05:31:18Z (Ralph cycle 106).
+- Selected item: populate the Governance production-manager view's `METRICS`
+  reporting dimension from the Measurement metric registry and the improvement
+  loop (canon files 22, 23 and 24), so each client's verified progress shows the
+  typed stage 10 metrics and their observed movement alongside the seven other
+  dimensions the view already separates. It was the named highest priority ready
+  next item after cycle 105: the last spec-named reporting dimension that was
+  deliberately empty, so a production manager could not see the typed metrics or
+  a measured movement next to the gates (SPEC.md section 4, "separate eight
+  reporting dimensions"; Phase 5 "metric registry ... observations and experiment
+  records"; canon 23 and 24 Metrics Matrix). It outranks the advertising and
+  forecast dashboard proper (the forecast equation, bid-up/bid-down rule and
+  split-test logging are a larger downstream feature), the Operations delivery
+  adapter (blocked on the storage ADR), the stage 9 compliance projection (needs a
+  named-owner decision) and the stage-parameterized gate refactor (quality only),
+  because it closes a spec-named verified-progress gap with a bounded, pure-domain
+  change.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: new behavioral coverage in
-  `tests/unit/measurement/test_improvement_loop.py`
-  (`ImprovementBeforeWindowPrecedenceTests`): an outcome whose before window
-  closes 2026-10-05 after an approval on 2026-10-02 is refused with the named
-  `ImprovementBeforeWindowError`, a before window closing on the approval date is
-  still accepted, and the grounded fixture observes before no later than its
-  approval. Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
-  'test_*.py'` reports 1100 passed, up from 1097. `python3 -m pyflakes
-  backend/redops tests` is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: with the before window now floored at the owner approval, the
-  stage 10 improvement movement is temporally closed on both sides:
-  `before.window.end <= approval.approved_on <= after.window.start`,
-  `before.window.end < after.window.start`, `after.window.end <= measured_on`, and
-  `recorded_on >= window.end`. No further same-chain temporal edge remains in the
-  improvement loop. The next gap the spec names is the production-manager view's
-  `METRICS` reporting dimension, which is deliberately empty because nothing
-  sources metrics yet; that is the named home of the advertising and forecast
-  dashboard canon gap (canon files 22, 23 and 24) and advances verified progress
-  (SPEC.md section 4, eight reporting dimensions) rather than a consumer
-  dashboard.
+- Evidence: the Governance `EngagementProductionView` now carries caller-supplied
+  typed `MetricReportingView` rows (`MetricReportingView`, `MetricMovement`,
+  `MetricReportingBasis`, and the named `MetricReportingError` /
+  `MetricReportingTenantBoundaryError`) and returns them from
+  `dimension(ReportingDimension.METRICS)`; the Measurement
+  `metric_reporting_views` projection fills them from the newest same-tenant
+  observed `MeasurementRecord` per registered `MetricDefinition` and attaches the
+  before-and-after `MetricMovement` of the newest measured `ImprovementProposal`.
+  New behavioral coverage: `MetricReportingDimensionTests` in
+  `tests/unit/governance/test_production_view.py` (placeholder and cross-tenant
+  rows and duplicate metric ids refused) and
+  `tests/unit/measurement/test_metric_reporting.py` (latest observed figure,
+  placeholder-only metric produces no row, measured movement attached only when
+  measured, another tenant's metric excluded, blank tenant refused). Running
+  `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'` reports
+  1112 passed, up from 1100. `python3 -m pyflakes backend/redops tests` is clean.
+  `ruff` and `mypy` remain uninstalled.
+- New findings: all eight production-view reporting dimensions are now sourced.
+  The METRICS dimension is deliberately a read-model projection: Governance never
+  imports the Measurement write model and never invents a metric, window, sample,
+  source or causal conclusion; the Measurement context owns the registry and the
+  improvement loop and supplies typed observed rows, and a placeholder figure or
+  another client's metric never appears as verified progress. The forecast
+  equation, metrics matrix, bid-up/bid-down rule and split-test logging from canon
+  22 and 23 are still absent, so the advertising and forecast dashboard canon gap
+  remains open beyond the observed-figure slice completed here.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -49,27 +55,41 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: populate the Governance production-manager
-  view's `METRICS` reporting dimension from the Measurement metric registry and
-  the improvement loop (canon files 22, 23 and 24), so each client's verified
-  progress shows the typed stage 10 metrics and their observed movement alongside
-  the seven other dimensions the view already separates (SPEC.md section 4). It
-  outranks the advertising and forecast dashboard proper (the forecast equation,
-  metrics matrix, bid-up/bid-down rule and split-test logging are a larger
-  downstream feature), the Operations delivery adapter (blocked on the storage
-  ADR), the stage 9 compliance projection (needs a named-owner decision) and the
-  stage-parameterized gate refactor (quality only), because it closes a spec-named
-  verified-progress gap with a bounded, pure-domain change. Prerequisite:
-  satisfied (the cycle 89 `StageProductionView` / `EngagementProductionView` and
-  the cycle 93 `MetricDefinition` / `MeasurementRecord` registry); it must not
-  duplicate activity counts and must keep the METRICS dimension sourced only from
-  typed observed measurements.
+- Highest priority ready next item: build the first grounded slice of the
+  advertising and forecast dashboard -- a pure Measurement `FunnelEconomics` /
+  forecast value object that computes target cost per lead and return on ad spend
+  from the typed metric registry and the newest observed records, keeping
+  placeholder inputs explicitly planned-not-observed and the forecast distinct
+  from an observed result (canon files 22 and 23: the Metrics Matrix solves the
+  funnel unit economics before real data exists; SPEC.md section 4 stage 10 and
+  Phase 5). It now has its typed input substrate from this cycle's METRICS
+  projection and the cycle 93 registry, and it outranks the Operations delivery
+  adapter (blocked on the storage ADR) and the stage 9 compliance projection
+  (needs a named-owner decision). Prerequisite: read canon files 22 and 23 to
+  shape the required fields and completion criteria before implementing.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; the advertising and forecast dashboard; a
   stage-parameterized gate recorder/handler refactor; projecting the compliance
   package onto a canonical stage 9 gate kind (methodology-owner decision); and
   all persistence.
+  [DONE 2026-10-03 (Ralph cycle 106): populated the Governance production-manager
+  view's `METRICS` reporting dimension -- `EngagementProductionView` now carries
+  caller-supplied typed `MetricReportingView` rows (with `MetricMovement` and
+  `MetricReportingBasis`, and the named `MetricReportingError` /
+  `MetricReportingTenantBoundaryError`) and returns them from
+  `dimension(ReportingDimension.METRICS)`, while the Measurement
+  `metric_reporting_views` projection fills them from the newest same-tenant
+  observed `MeasurementRecord` per registered `MetricDefinition` and attaches the
+  measured before-and-after of the newest measured `ImprovementProposal`, so all
+  eight spec-named reporting dimensions are now sourced and a production manager
+  can see typed stage 10 metrics and their observed movement next to the gates
+  (SPEC.md section 4 "separate eight reporting dimensions"; Phase 5; canon files
+  22, 23 and 24); verified by `MetricReportingDimensionTests` in
+  `tests/unit/governance/test_production_view.py` and
+  `tests/unit/measurement/test_metric_reporting.py` (full suite 1112 passed), so a
+  placeholder figure or another client's metric never appears as verified
+  progress.]
   [DONE 2026-10-03 (Ralph cycle 105): floored the stage 10 improvement's "before"
   observation window at the owner approval date --
   `ImprovementMeasurementPolicy.require` now refuses an outcome whose before
@@ -426,7 +446,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 
 - Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 13, 14, 21, 24 — between stages 8 and 10 — status: candidate, needs named-owner decision on a Sell/Enroll stage.
 - Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: candidate.
-- Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93   built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from, but the forecast equation, the metrics matrix, the bid-up/bid-down rule and split-test logging remain candidates. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate.
+- Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93   built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from, but the forecast equation, the metrics matrix, the bid-up/bid-down rule and split-test logging remain candidates. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate. Cycle 106 completed that slice: the METRICS dimension now reports each registered metric's newest observed figure and a measured movement via `metric_reporting_views`, so this candidate's remaining scope is the forecast equation and the Metrics Matrix/bid rules.
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: candidate.
 - Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: candidate.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: implemented 2026-10-03 (Ralph cycle 94) as the Execution `CompliancePackage` (`ComplianceAssetKind`, `ComplianceAsset`, `ComplianceWaiver`) with the `ComplianceRequiredPolicy` gating `LaunchQA` traffic authorization, so "Launch Approved" needs every required asset or a live owned waiver; projecting the compliance assets onto their own canonical stage 9 gate kind remains a candidate that needs a named-owner decision.

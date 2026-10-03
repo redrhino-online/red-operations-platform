@@ -119,3 +119,25 @@ class ProductionViewError(GovernanceError, ValueError):
     represent, would let the view show evidence or a report the pipeline never
     produced, so it is refused rather than rendered.
     """
+
+
+class MetricReportingError(ProductionViewError):
+    """A METRICS reporting row violates the production-view invariant.
+
+    SPEC.md section 4 separates metrics as one of the eight reporting dimensions
+    and the Measurement invariant keeps observations distinct from causal
+    conclusions. The METRICS dimension must show a typed figure that was actually
+    observed over a closed window, so a row missing its metric identity, window,
+    sample, source or recorded date, or one carrying a placeholder figure, is
+    refused rather than rendered as verified progress.
+    """
+
+
+class MetricReportingTenantBoundaryError(ProductionViewError):
+    """A METRICS reporting row belongs to another client.
+
+    SPEC.md section 3: every tenant resource carries a tenant id and a query is
+    tenant scoped. The production view for one client may report only that
+    client's metrics, so a row from another tenant is refused rather than
+    rendered alongside this engagement's verified progress.
+    """

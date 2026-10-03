@@ -243,3 +243,13 @@ class MetricSampleTooSmallError(MeasurementError):
     metrics accumulate over many instances, so a baseline requires an observed
     sample at or above the caller-supplied minimum.
     """
+
+
+class InvalidMetricReportingError(MeasurementError, ValueError):
+    """A METRICS reporting projection was requested in a way its rules forbid.
+
+    SPEC.md section 4 separates metrics as a production-view reporting dimension
+    and section 3 requires every query to be tenant scoped. The projection needs
+    an owning tenant to scope the registry and the improvement loop, so a request
+    without one cannot produce this client's verified metric rows.
+    """

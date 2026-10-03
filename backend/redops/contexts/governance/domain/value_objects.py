@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Iterable, Mapping
 from redops.contexts.governance.domain.errors import (
     CrossTenantAssetError,
     InvalidStageTemplateError,
+    MetricReportingError,
+    MetricReportingTenantBoundaryError,
     ProductionViewError,
     VersionlessAssetError,
 )
@@ -403,6 +405,141 @@ class PipelineProgress:
         return self.total_gates - self.approved_gates
 
 
+class MetricReportingBasis(Enum):
+    """Whether a METRICS reporting figure is observed or a placeholder.
+
+    SPEC.md section 4 separates metrics as a reporting dimension and the
+    Measurement invariant keeps observations distinct from causal conclusions.
+    The canon's dashboard discipline (canon files 23 and 24) starts from
+    placeholder numbers that are not real metrics until observed over enough
+    instances, so the METRICS dimension reports only OBSERVED rows; a PLACEHOLDER
+    row is refused rather than rendered as verified progress.
+    """
+
+    OBSERVED = "observed"
+    PLACEHOLDER = "placeholder"
+
+
+@dataclass(frozen=True)
+class MetricMovement:
+    """A measured before-and-after of one approved stage 10 improvement.
+
+    SPEC.md section 4, stage 10 with Phase 5: "one improvement is approved and
+    measured" and a performance review "records baseline and observed result".
+    The governance view does not compute the movement; it carries the measured
+    before and after values and the measured date so the METRICS dimension can
+    show the observed movement next to the metric's latest figure. Values are
+    kept distinct from a causal conclusion (SPEC.md section 3, Measurement
+    invariant).
+    """
+
+    improvement_id: str
+    before: float
+    after: float
+    measured_on: date
+
+    def __post_init__(self) -> None:
+        if not self.improvement_id or not self.improvement_id.strip():
+            raise MetricReportingError(
+                "a metric movement requires the improvement it measured"
+            )
+        for label, value in (("before", self.before), ("after", self.after)):
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise MetricReportingError(
+                    f"a metric movement {label} value must be a real number"
+                )
+        if not isinstance(self.measured_on, date):
+            raise MetricReportingError(
+                "a metric movement requires the date it was measured"
+            )
+
+
+@dataclass(frozen=True)
+class MetricReportingView:
+    """One observed metric row of the production view's METRICS dimension.
+
+    SPEC.md section 4 requires the production view to separate metrics from the
+    other seven reporting dimensions, and section 3 keys a Measurement aggregate
+    by "metric definition, window, baseline, observation, source". The
+    Measurement context owns that write model; this frozen row is that context's
+    typed projection onto the read model, so the view never invents a metric,
+    window, sample or source. A row carries the registered metric identity and
+    classification, the latest observed value over a closed window with its
+    sample and source, and, where an approved improvement has been measured, the
+    observed ``MetricMovement``. A placeholder figure or a row outside the
+    required shape is refused rather than rendered as verified progress (SPEC.md
+    sections 4 and 12.4).
+    """
+
+    metric_id: str
+    tenant_id: str
+    name: str
+    funnel_step: str
+    unit: str
+    direction: str
+    value: float
+    window_start: date
+    window_end: date
+    sample_size: int
+    source: str
+    recorded_on: date
+    basis: MetricReportingBasis = MetricReportingBasis.OBSERVED
+    movement: MetricMovement | None = None
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("metric id", self.metric_id),
+            ("metric tenant id", self.tenant_id),
+            ("metric name", self.name),
+            ("metric funnel step", self.funnel_step),
+            ("metric unit", self.unit),
+            ("metric direction", self.direction),
+            ("metric source", self.source),
+        ):
+            if not value or not value.strip():
+                raise MetricReportingError(
+                    f"a METRICS reporting row requires its {label}"
+                )
+        if self.basis is not MetricReportingBasis.OBSERVED:
+            raise MetricReportingError(
+                "the METRICS dimension reports observed measurements only; a "
+                "placeholder figure cannot appear as a verified metric"
+            )
+        if not isinstance(self.value, (int, float)) or isinstance(self.value, bool):
+            raise MetricReportingError(
+                "a METRICS reporting row requires a real observed value"
+            )
+        if not isinstance(self.window_start, date) or not isinstance(
+            self.window_end, date
+        ):
+            raise MetricReportingError(
+                "a METRICS reporting row requires a start and end window date"
+            )
+        if self.window_end < self.window_start:
+            raise MetricReportingError(
+                "a METRICS reporting row window cannot end before it starts"
+            )
+        if (
+            not isinstance(self.sample_size, int)
+            or isinstance(self.sample_size, bool)
+            or self.sample_size < 0
+        ):
+            raise MetricReportingError(
+                "a METRICS reporting row requires a non-negative integer sample"
+            )
+        if not isinstance(self.recorded_on, date):
+            raise MetricReportingError(
+                "a METRICS reporting row requires the date it was recorded"
+            )
+        if self.movement is not None and not isinstance(
+            self.movement, MetricMovement
+        ):
+            raise MetricReportingError(
+                "a METRICS reporting row movement must be a typed measured "
+                "movement"
+            )
+
+
 class ReportingDimension(Enum):
     """The eight reporting dimensions of the production-manager view.
 
@@ -411,10 +548,10 @@ class ReportingDimension(Enum):
     status and due date" and to count activity separately from gate completion.
     Governance derives six of them directly from the versioned ``StageTemplate``
     and the durable ``GateLedger``: assets, checkpoints, owner, dependency, status
-    and due date. Milestones are supplied because the Measurement context owns
-    post-launch evidence, and metrics are not yet sourced by any context, so that
-    dimension is reported empty rather than invented (SPEC.md sections 12.1 and
-    12.5).
+    and due date. Milestones and metrics are supplied by the caller because the
+    Measurement context owns post-launch evidence and the typed metric registry,
+    and the view never invents a metric, milestone or causal conclusion from them
+    (SPEC.md sections 4 and 12.5).
     """
 
     ASSETS = "assets"
@@ -562,6 +699,7 @@ class EngagementProductionView:
     template_version: str
     stages: tuple[StageProductionView, ...]
     progress: PipelineProgress
+    metric_reporting: tuple[MetricReportingView, ...] = ()
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -590,6 +728,25 @@ class EngagementProductionView:
                 f"progress reports {self.progress.total_gates} gates but the "
                 f"view holds {len(self.stages)} stages"
             )
+        seen_metrics: set[str] = set()
+        for row in self.metric_reporting:
+            if not isinstance(row, MetricReportingView):
+                raise ProductionViewError(
+                    "production view metric reporting must be typed observed "
+                    "metric rows"
+                )
+            if row.tenant_id != self.tenant_id:
+                raise MetricReportingTenantBoundaryError(
+                    f"production view metric {row.metric_id!r} belongs to tenant "
+                    f"{row.tenant_id!r}, not workspace tenant {self.tenant_id!r}"
+                )
+            if row.metric_id in seen_metrics:
+                raise ProductionViewError(
+                    f"production view reports metric {row.metric_id!r} more than "
+                    "once; the METRICS dimension shows one row per registered "
+                    "metric"
+                )
+            seen_metrics.add(row.metric_id)
 
     @classmethod
     def from_ledger(
@@ -601,6 +758,7 @@ class EngagementProductionView:
         on: date,
         verified_post_launch_milestones: int = 0,
         activity_entries: int = 0,
+        metric_reporting: tuple[MetricReportingView, ...] = (),
     ) -> "EngagementProductionView":
         """Derive the whole production view from a template and gate ledger.
 
@@ -612,8 +770,9 @@ class EngagementProductionView:
         or because its own approvals have expired — is reported as a blocking
         dependency, so a failed or expired prerequisite blocks the dependent
         stage in the view until it is resolved (SPEC.md section 4). Milestone and
-        activity counts are supplied by the caller because the Measurement and
-        Operations contexts own them; the view never infers or fabricates them.
+        activity counts and the typed observed metric rows are supplied by the
+        caller because the Measurement and Operations contexts own them; the view
+        never infers or fabricates them.
         """
         states = ledger.dependency_states(on=on)
         stages = tuple(
@@ -632,6 +791,7 @@ class EngagementProductionView:
             template_version=ledger.template.version,
             stages=stages,
             progress=progress,
+            metric_reporting=metric_reporting,
         )
 
     def stage_by_number(self, stage_number: int) -> StageProductionView | None:
@@ -670,10 +830,11 @@ class EngagementProductionView:
 
         Each dimension is reported separately, never conflated: assets expose the
         required, approved and missing kinds per stage; milestones expose the
-        caller-supplied verified post-launch count; checkpoints, owner,
-        dependency, status and due date expose the per-stage view values; and
-        metrics are empty because no context sources them yet. Activity is not a
-        dimension and never appears in a slice (SPEC.md section 4).
+        caller-supplied verified post-launch count; metrics expose the
+        caller-supplied typed observed metric rows and their measured movements;
+        checkpoints, owner, dependency, status and due date expose the per-stage
+        view values. Activity is not a dimension and never appears in a slice
+        (SPEC.md section 4).
         """
         if dimension is ReportingDimension.ASSETS:
             return tuple(
@@ -692,7 +853,7 @@ class EngagementProductionView:
                 (stage.stage_number, stage.checkpoint) for stage in self.stages
             )
         if dimension is ReportingDimension.METRICS:
-            return ()
+            return self.metric_reporting
         if dimension is ReportingDimension.OWNER:
             return tuple(
                 (stage.stage_number, stage.assigned_owner)
