@@ -4,7 +4,83 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T183643Z (Ralph cycle, this run): selected item was wiring the
+- Cycle 2026-10-03T183929Z (Ralph cycle, this run): selected item was queue Q1,
+  the deterministic fake model gateway (a `ModelGateway` port plus an offline
+  test adapter) in a new `backend/redops/agents/` bounded package (SPEC.md
+  sections 5 and 6, section 13 condition 5; implementation plan Q1). Q1 is the
+  highest ready item in the Prototype ready queue: its dependency list is empty,
+  it is the queue's number-one seed item, and nothing else ready precedes it.
+  It outranked the alternatives for these reasons. The stage 8-10 canon
+  required-kind wiring (Q28) is blocked on the named methodology-owner placement
+  decision the prior cycle recorded (the register leaves the home of
+  `EnrollmentPlan`, `ClientProcess` and `SwimlanesPlan` open between the stage 8
+  "Funnel Complete" gate and a later stage 9/10 gate), and the task forbids
+  making that decision unattended. The Next.js `frontend/` shell (DoD condition
+  6, Q32) is blocked on the workflow engine Q5 via Q15, and Q5 is a multi-cycle
+  adaptation of the fork's workflow/resumer substrate, so it is not the smallest
+  completable item. The pipeline backbone itself is complete through stage 10 at
+  the gate routes, so there was no smaller gate-integrity defect with satisfied
+  prerequisites. Q1 is a real, currently undetected DoD gap: section 13 condition
+  5 requires a deterministic fake model gateway and the loop has no model seam
+  at all, so no agent can run offline and the "real provider path" has no
+  interface to prove against. Alternatives rejected: another canon asset outside
+  the stage order (the register's remaining unimplemented assets, Serve/Grow and
+  the service and partnership lines, sit after stage 10 and do not block the
+  pipeline) and the REST resource routes Q9-Q14 (ready but surface, not DoD
+  blocking).
+- Outcome: new package `backend/redops/agents/` with `domain/errors.py`,
+  `domain/value_objects.py`, `application/ports.py` and
+  `infrastructure/fake_gateway.py`. `ModelRequest` pins the tenant, model,
+  prompt, prompt version, trace id and duplicate-free context references (SPEC.md
+  sections 6 and 9); `ModelUsage` holds non-negative integer token counts;
+  `ModelResponse` carries the text plus the same model, prompt version, trace id
+  and context references and a typed usage, and refuses blank text or a missing
+  usage. The abstract `ModelGateway.generate(request) -> ModelResponse` port is
+  the seam agent use cases depend on. `DeterministicFakeModelGateway` answers
+  offline and deterministically: a configured prompt-to-text map wins, otherwise
+  the text is derived from the prompt version and prompt; it records each call's
+  attribution and holds no credentials, so nothing secret can appear in a
+  request or response. Onion rule respected: domain imports no framework, ORM,
+  queue, vendor or model SDK code; the port is defined by the application need.
+- Evidence: `make check` -> 1947 passed, 1 skipped, 680 subtests; pyflakes
+  clean. New behavioral tests `tests/unit/agents/test_model_gateway.py` (13
+  tests, 5 subtests): request identity and blank/duplicate context refusals,
+  usage refusal of negative/bool/string counts, response refusal of blank text
+  and untyped usage, determinism (same request equal, distinct prompts distinct),
+  configured response lookup, attribution passthrough, the call log, and no
+  secret leakage, plus `isinstance(fake, ModelGateway)`. `make done` clears
+  [1/6]-[4/6] and still fails [5/6] (`frontend/` missing, Q32).
+- New findings: the loop has no model seam despite section 13 condition 5
+  requiring a deterministic fake gateway and a proven live provider path; Q1 now
+  supplies the offline half. Context map and ADR 0006 place RED agents over the
+  fork's specialist/provider machinery, and this port is resolution-agnostic, so
+  the Q2 live OpenRouter adapter can wrap the fork's `providers` behind it
+  without touching the vendor. An unresolved architecture tension remains for Q3
+  agent registration: ADR 0006 registers RED agents through the fork's
+  `orchestrator/router.py` while DoD condition 7 requires zero vendor edits;
+  that conflict is a named-owner/architecture decision, not a Q1 blocker.
+- Blockers: the Q28 stage 8/9/10 required-kind placement decision (named-owner);
+  `frontend/` (DoD condition 6, Q32) blocked on Q5 via Q15; request idempotency
+  (Q16) blocked on the same; RLS is a WHERE clause only (ADR 0004); the
+  condition 3 retrieval, background worker and artifact-URL layers are unbuilt;
+  Q3 agent registration blocked on the ADR 0006 versus vendor-edit tension.
+- Highest priority ready next item: the Q2 live RED LLM adapter that satisfies
+  the new `ModelGateway` port, wraps the fork's provider registry, and logs
+  model, prompt version, context references, usage and trace id, with a
+  contract test and an env-gated live OpenRouter smoke (Q4). It is the next
+  dependency-satisfied queue item after Q1. In parallel, the single most useful
+  unblocker for the last failing DoD checkpoint remains the Q5 workflow engine
+  slice (versioned definition, durable run state, approval wait survives a
+  restart, idempotent effects), which unblocks Q15 -> Q32 and the SPEC.md
+  section 11 "restarting worker preserves a waiting workflow" acceptance
+  scenario; it is larger than one bounded canon-adjacent item and was not
+  selected this cycle. Required owner input for the pipeline: the stage 8/9/10
+  canon placement decision; approver for any wired kind: the client designated
+  authority; blocked downstream dependency: the stage 9 gate.
+
+### Prior cycle (2026-10-03T183643Z)
+
+- Cycle 2026-10-03T183643Z (Ralph cycle, the prior cycle): selected item was wiring the
   canon Extract `ContentPlan` as a required stage 6 "Campaign Message Approved"
   kind (queue Q28; owner decision 2026-10-03; SPEC.md sections 4, 12.3 and 12.5;
   canon files 25, 27 and 28). The typed `ContentPlan` was implemented (Ralph
@@ -1974,8 +2050,8 @@ stalls:
 
 | # | Item | Area | Depends | Evidence / gate |
 | --- | --- | --- | --- | --- |
-| Q1 | Deterministic fake model gateway (port plus test adapter) | agents | — | unit test; agents run offline |
-| Q2 | RED LLM adapter logs model, prompt version, usage, trace id | agents | Q1 | adapter contract test |
+| Q1 | Deterministic fake model gateway (port plus test adapter) | agents | — | unit test; agents run offline. Done 2026-10-03T183929Z: `backend/redops/agents/` (`ModelGateway` port, `ModelRequest`/`ModelUsage`/`ModelResponse`, `DeterministicFakeModelGateway`) verified by `tests/unit/agents/test_model_gateway.py` (13 tests) |
+| Q2 | RED LLM adapter logs model, prompt version, usage, trace id | agents | Q1 | adapter contract test. Q1 now supplies the port; the live OpenRouter adapter wraps the fork's provider registry behind it |
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
 | Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key |
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test |
@@ -2001,7 +2077,7 @@ stalls:
 | Q25 | Stage 8 integrate plus the enrollment and client-process asset and Funnel Complete | pipeline | Q24 | funnel dry run passes |
 | Q26 | Stage 9 QA plus compliance gate kinds | pipeline | Q25 | Launch Approved; Ready for Traffic |
 | Q27 | Stage 10 launch plus baseline plus the METRICS dimension | pipeline | Q26 | Performance Baseline Established |
-| Q28 | Apply the required-kind policy: wire each canon asset as a required kind | pipeline | Q27 | stage templates updated; gate integrity tests. Stage 1 `awareness-map` wired from the typed `MarketAwarenessMap` 2026-10-03T181228Z; `audience-reach-estimate` and `target-market-match` and stages 2-10 remain. Stage 9     `compliance-package` wired from the reviewed `CompliancePackage` 2026-10-03T182015Z; stage 5 `product-program` wired from the typed `ProductProgram` 2026-10-03T182409Z (stage 5 now thirteen kinds); stage 4 `thirteen-transformations` wired from the typed `ThirteenTransformations` 2026-10-03T182806Z (stage 4 now thirteen kinds); stage 6 `content-roadmap` wired from the typed `ContentRoadmap` 2026-10-03T183151Z (thirteen kinds); stage 6 `content-crusher` wired from the typed `ContentCrusher` 2026-10-03T183447Z (fourteen kinds); stage 6 `content-plan` wired from the typed `ContentPlan` 2026-10-03T183643Z (fifteen kinds, stage 6 content family complete); stages 7-10 remain |
+| Q28 | Apply the required-kind policy: wire each canon asset as a required kind | pipeline | Q27 | stage templates updated; gate integrity tests. Stage 1 `awareness-map` wired from the typed `MarketAwarenessMap` 2026-10-03T181228Z; `audience-reach-estimate` and `target-market-match` and stages 2-10 remain. Stage 9     `compliance-package` wired from the reviewed `CompliancePackage` 2026-10-03T182015Z; stage 5 `product-program` wired from the typed `ProductProgram` 2026-10-03T182409Z (stage 5 now thirteen kinds); stage 4 `thirteen-transformations` wired from the typed `ThirteenTransformations` 2026-10-03T182806Z (stage 4 now thirteen kinds); stage 6 `content-roadmap` wired from the typed `ContentRoadmap` 2026-10-03T183151Z (thirteen kinds); stage 6 `content-crusher` wired from the typed `ContentCrusher` 2026-10-03T183447Z (fourteen kinds); stage 6 `content-plan` wired from the typed `ContentPlan` 2026-10-03T183643Z (fifteen kinds, stage 6 content family complete); stage 7 is canon-covered by the `AuthorityAmplifierPackage`, and stages 8-10 now await the named methodology-owner placement decision for `EnrollmentPlan`, `ClientProcess`, `SwimlanesPlan` and the post-stage-10 assets |
 | Q29 | Method change impact assessment emits the dependent review queue | pipeline | Q21 | a change identifies its dependents |
 | Q30 | Stage 0-10 API e2e with deterministic agents | e2e | Q27 | DoD 1: one client intake to baseline |
 | Q31 | Section 11 acceptance suite | e2e | Q30 | DoD 2 |
