@@ -201,6 +201,7 @@ def stage_zero_to_ten_template(
                         "angles",
                         "landing-message",
                         "authority-amplifier-outline",
+                        "content-roadmap",
                     }
                 ),
             ),

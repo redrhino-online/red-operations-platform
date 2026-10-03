@@ -38,6 +38,7 @@ from .fixtures import (
     TENANT,
     approved_method,
     campaign_message,
+    content_roadmap,
     delivery_specification,
     offer_version,
 )
@@ -62,35 +63,56 @@ def package(**overrides) -> CampaignMessagePackage:
         "tenant_id": TENANT,
         "message": campaign_message(),
         "message_version": 1,
+        "roadmap": content_roadmap(),
+        "roadmap_version": 1,
     }
     values.update(overrides)
     return CampaignMessagePackage(**values)
 
 
 class CampaignMessagePackageProjectionTests(unittest.TestCase):
-    def test_the_package_projects_all_twelve_canonical_stage_six_kinds(self):
+    def test_the_package_projects_all_thirteen_canonical_stage_six_kinds(self):
         assets = package().stage_asset_versions()
 
         kinds = {asset.kind for asset in assets}
         self.assertEqual(frozenset(CANONICAL_MESSAGE_KINDS), kinds)
-        self.assertEqual(12, len(assets))
+        self.assertEqual(13, len(assets))
 
     def test_the_canonical_kinds_match_the_template_stage_six_package(self):
         template_kinds = stage_zero_to_ten_template().required_asset_kinds(6)
 
         self.assertEqual(template_kinds, frozenset(CANONICAL_MESSAGE_KINDS))
 
-    def test_every_kind_pins_the_reviewed_message_at_its_exact_version(self):
+    def test_the_twelve_message_kinds_pin_the_message_at_its_exact_version(self):
         assets = package(message_version=4).stage_asset_versions()
 
-        self.assertEqual(12, len(assets))
-        for asset in assets:
+        message_assets = [
+            asset for asset in assets if asset.kind != "content-roadmap"
+        ]
+        self.assertEqual(12, len(message_assets))
+        for asset in message_assets:
             self.assertEqual(4, asset.version)
 
-    def test_each_kind_pins_the_reviewed_message_identity(self):
+    def test_the_content_roadmap_kind_pins_the_roadmap_at_its_own_version(self):
+        assets = package(roadmap_version=7).stage_asset_versions()
+
+        roadmap_assets = {
+            asset.kind: asset
+            for asset in assets
+            if asset.kind == "content-roadmap"
+        }
+        self.assertEqual(1, len(roadmap_assets))
+        asset = roadmap_assets["content-roadmap"]
+        self.assertEqual("roadmap-3f", asset.asset_id)
+        self.assertEqual(7, asset.version)
+
+    def test_each_message_kind_pins_the_reviewed_message_identity(self):
         assets = package().stage_asset_versions()
 
-        for asset in assets:
+        message_assets = [
+            asset for asset in assets if asset.kind != "content-roadmap"
+        ]
+        for asset in message_assets:
             self.assertEqual("message-3f", asset.asset_id)
 
     def test_the_projected_evidence_is_tenant_scoped(self):
@@ -124,6 +146,24 @@ class CampaignMessagePackageBoundaryTests(unittest.TestCase):
             with self.subTest(override=override):
                 with self.assertRaises(InvalidCampaignMessagePackageError):
                     package(**override)
+
+    def test_a_cross_tenant_roadmap_is_refused(self):
+        with self.assertRaises(CampaignMessageTenantBoundaryError):
+            package(
+                roadmap=content_roadmap(
+                    solution=signature_solution(tenant_id=OTHER_TENANT)
+                )
+            )
+
+    def test_a_versionless_roadmap_is_refused(self):
+        for override in ({"roadmap_version": 0}, {"roadmap_version": -1}):
+            with self.subTest(override=override):
+                with self.assertRaises(InvalidCampaignMessagePackageError):
+                    package(**override)
+
+    def test_an_untyped_roadmap_is_refused(self):
+        with self.assertRaises(InvalidCampaignMessagePackageError):
+            package(roadmap="not-a-roadmap")
 
 
 if __name__ == "__main__":

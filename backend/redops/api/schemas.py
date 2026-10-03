@@ -681,6 +681,39 @@ class CampaignMessageInput(BaseModel):
     authority_amplifier_outline: str
 
 
+class ContentTopicInput(BaseModel):
+    """One content roadmap topic mapped from a Signature Solution step.
+
+    SPEC.md sections 4 and 12.5 (canon files 25-28): the stage 6 content roadmap
+    maps each step of the locked stage 4 Signature Solution to the FAQs,
+    questions and channels the audience asks about it, and every piece follows
+    the fixed Authority Amplifier script order. The route derives those script
+    beats from the canonical order, so this transport model carries only the
+    step, question and channels the domain validates.
+    """
+
+    topic_id: str
+    name: str
+    signature_step: str
+    question: str
+    channels: list[str]
+
+
+class ContentRoadmapInput(BaseModel):
+    """The stage 6 content roadmap the gate pins as a required asset kind.
+
+    SPEC.md sections 4 and 12.5 (owner decision 2026-10-03): the canon-informed
+    content roadmap is a required asset of the stage 6 "Campaign Message
+    Approved" gate. The route grounds it on the locked stage 4 Signature
+    Solution, so the caller supplies its identity, owner and topics.
+    """
+
+    roadmap_id: str
+    version: int
+    owner: str
+    topics: list[ContentTopicInput]
+
+
 class RecordStageSixGateRequest(BaseModel):
     """The stage 6 "Campaign Message Approved" gate request (SPEC.md section 4).
 
@@ -700,6 +733,7 @@ class RecordStageSixGateRequest(BaseModel):
     campaign_message_package_id: str
     message_version: int
     message: CampaignMessageInput
+    content_roadmap: ContentRoadmapInput
     offer: OfferVersionInput
     method: MethodVersionInput
     stage_owner: str

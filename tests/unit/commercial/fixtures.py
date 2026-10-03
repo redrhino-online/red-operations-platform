@@ -11,6 +11,10 @@ from datetime import date
 
 from redops.contexts.commercial.domain.entities import CampaignMessage, OfferVersion
 from redops.contexts.commercial.domain.value_objects import (
+    AUTHORITY_AMPLIFIER_BEATS,
+    ContentChannel,
+    ContentRoadmap,
+    ContentTopic,
     DeliverySpecification,
     MethodReference,
     ProductMatrixModel,
@@ -107,6 +111,35 @@ def product_program(
     }
     values.update(overrides)
     return ProductProgram(**values)
+
+
+def content_roadmap(
+    solution: SignatureSolution | None = None, **overrides
+) -> ContentRoadmap:
+    """A valid stage 6 content roadmap mapped from a Signature Solution."""
+
+    solution = solution or signature_solution()
+    topics = tuple(
+        ContentTopic(
+            topic_id=f"topic-{index + 1}",
+            tenant_id=solution.tenant_id,
+            name=f"{step.name} audience questions",
+            signature_step=step.name,
+            question=f"what does {step.name} change for the client?",
+            channels=(ContentChannel.BLOG,),
+            script_beats=AUTHORITY_AMPLIFIER_BEATS,
+        )
+        for index, step in enumerate(solution.steps)
+    )
+    values = {
+        "roadmap_id": "roadmap-3f",
+        "tenant_id": solution.tenant_id,
+        "owner": "content-owner",
+        "method": solution,
+        "topics": topics,
+    }
+    values.update(overrides)
+    return ContentRoadmap(**values)
 
 
 def approved_method(

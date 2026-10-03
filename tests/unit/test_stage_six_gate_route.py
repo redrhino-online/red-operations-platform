@@ -686,6 +686,7 @@ class StageSixGateRouteTests(unittest.TestCase):
             "campaign_message_package_id": "message-package-3f",
             "message_version": 1,
             "message": self._message(),
+            "content_roadmap": self._roadmap(),
             "offer": self._offer(),
             "method": self._method(),
             "stage_owner": OWNER,
@@ -698,6 +699,30 @@ class StageSixGateRouteTests(unittest.TestCase):
             "due_on": DUE,
             "on": ON,
             "correlation_id": CORRELATION,
+        }
+        body.update(overrides)
+        return body
+
+    def _roadmap(self, **overrides):
+        steps = [
+            step["name"]
+            for phase in self._solution()["phases"]
+            for step in phase["steps"]
+        ]
+        body = {
+            "roadmap_id": "roadmap-3f",
+            "version": 1,
+            "owner": "content-owner",
+            "topics": [
+                {
+                    "topic_id": f"topic-{index + 1}",
+                    "name": f"{name} audience questions",
+                    "signature_step": name,
+                    "question": f"what does {name} change for the client?",
+                    "channels": ["blog", "youtube", "facebook"],
+                }
+                for index, name in enumerate(steps)
+            ],
         }
         body.update(overrides)
         return body
@@ -813,6 +838,29 @@ class StageSixGateRouteTests(unittest.TestCase):
         self.assertEqual(
             response.json()["detail"]["error"],
             "GateApproverNotAuthorizedError",
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(6))
+
+    def test_a_versionless_content_roadmap_is_rejected_without_a_write(
+        self,
+    ) -> None:
+        self.seed_stage_five()
+
+        response = self.client.post(
+            self.url(),
+            json=self.payload(content_roadmap=self._roadmap(version=0)),
+        )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"],
+            "InvalidCampaignMessagePackageError",
         )
 
         from redops.contexts.governance.domain.templates import (

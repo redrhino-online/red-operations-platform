@@ -56,11 +56,15 @@ from redops.contexts.commercial.infrastructure.repositories import (
     offer_version_repository_from_env,
 )
 from redops.contexts.commercial.domain.value_objects import (
+    AUTHORITY_AMPLIFIER_BEATS,
     AudienceDefinition,
     AudienceReachEstimate,
     AvatarProfile,
     BusinessSnapshot,
     CampaignMessagePackage,
+    ContentChannel,
+    ContentRoadmap,
+    ContentTopic,
     CurrencyInventory,
     CurrencyPackage,
     DeliverySpecification,
@@ -2107,11 +2111,33 @@ def record_stage_six_gate(
             offer_repository=offer_repository,
             message_repository=campaign_message_repository,
         )
+        roadmap = ContentRoadmap(
+            roadmap_id=body.content_roadmap.roadmap_id,
+            tenant_id=tenant_id,
+            owner=body.content_roadmap.owner,
+            method=method.signature_solution,
+            topics=tuple(
+                ContentTopic(
+                    topic_id=topic.topic_id,
+                    tenant_id=tenant_id,
+                    name=topic.name,
+                    signature_step=topic.signature_step,
+                    question=topic.question,
+                    channels=tuple(
+                        ContentChannel(channel) for channel in topic.channels
+                    ),
+                    script_beats=AUTHORITY_AMPLIFIER_BEATS,
+                )
+                for topic in body.content_roadmap.topics
+            ),
+        )
         package = CampaignMessagePackage(
             package_id=body.campaign_message_package_id,
             tenant_id=tenant_id,
             message=message,
             message_version=body.message_version,
+            roadmap=roadmap,
+            roadmap_version=body.content_roadmap.version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 6, tenant_id

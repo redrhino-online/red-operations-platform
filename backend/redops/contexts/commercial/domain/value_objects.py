@@ -1419,6 +1419,8 @@ class OfferPackage:
         )
 
 
+CONTENT_ROADMAP_KIND = "content-roadmap"
+
 CANONICAL_MESSAGE_KINDS: tuple[str, ...] = (
     "promise",
     "problem-hierarchy",
@@ -1432,6 +1434,7 @@ CANONICAL_MESSAGE_KINDS: tuple[str, ...] = (
     "angles",
     "landing-message",
     "authority-amplifier-outline",
+    CONTENT_ROADMAP_KIND,
 )
 
 
@@ -1456,9 +1459,12 @@ class CampaignMessagePackage:
     frame, the Authority Amplifier script as the universal content framework, and
     a Content Roadmap and Content Crusher. ``CampaignMessage`` already enforces
     that coherent shape and its dependency on the approved stage 5 offer at
-    construction, so each canonical kind is projected from the single reviewed
-    message at one positive integer version, and a blank identity, a versionless
-    message or a cross-tenant message is refused rather than silently pinned
+    construction, so each message kind is projected from the single reviewed
+    message at one positive integer version. The Content Roadmap (canon files
+    25-28, owner decision 2026-10-03) is a separate typed Commercial asset, so its
+    ``content-roadmap`` kind is projected from the roadmap's own identity at the
+    roadmap's exact version. A blank identity, a versionless message or roadmap,
+    or a cross-tenant message or roadmap is refused rather than silently pinned
     (SPEC.md sections 3 and 4).
     """
 
@@ -1466,6 +1472,8 @@ class CampaignMessagePackage:
     tenant_id: str
     message: "CampaignMessage"
     message_version: int
+    roadmap: "ContentRoadmap"
+    roadmap_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -1480,9 +1488,24 @@ class CampaignMessagePackage:
                 f"{self.message.tenant_id!r}, not package tenant"
                 f" {self.tenant_id!r}"
             )
+        if not isinstance(self.roadmap, ContentRoadmap):
+            raise InvalidCampaignMessagePackageError(
+                "the stage 6 content roadmap must be a typed content roadmap"
+            )
+        if self.roadmap.tenant_id != self.tenant_id:
+            raise CampaignMessageTenantBoundaryError(
+                f"stage 6 content roadmap {self.roadmap.roadmap_id!r} belongs to "
+                f"tenant {self.roadmap.tenant_id!r}, not package tenant"
+                f" {self.tenant_id!r}"
+            )
         if not isinstance(self.message_version, int) or self.message_version < 1:
             raise InvalidCampaignMessagePackageError(
                 "the campaign message version must be a positive integer so the "
+                "stage 6 gate can pin the reviewed asset at an exact version"
+            )
+        if not isinstance(self.roadmap_version, int) or self.roadmap_version < 1:
+            raise InvalidCampaignMessagePackageError(
+                "the content roadmap version must be a positive integer so the "
                 "stage 6 gate can pin the reviewed asset at an exact version"
             )
 
@@ -1503,22 +1526,29 @@ class CampaignMessagePackage:
         return not self.missing_kinds()
 
     def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
-        """Project the reviewed stage 6 message onto exact governance evidence.
+        """Project the reviewed stage 6 message and roadmap onto exact evidence.
 
-        Every canonical kind belongs to the same reviewed ``CampaignMessage``, so
-        each is pinned to that message's identity at its exact version. Governance
-        still pins each projection for the workspace tenant, so a cross-client
-        message is refused rather than silently authorized (SPEC.md sections 3, 4
-        and 11).
+        Every message kind belongs to the same reviewed ``CampaignMessage``, so
+        each is pinned to that message's identity at its exact version, while the
+        ``content-roadmap`` kind is pinned to the roadmap's own identity at the
+        roadmap's exact version. Governance still pins each projection for the
+        workspace tenant, so a cross-client message or roadmap is refused rather
+        than silently authorized (SPEC.md sections 3, 4 and 11).
         """
-        return tuple(
-            StageAssetVersion(
-                asset_id=self.message.message_id,
-                tenant_id=self.tenant_id,
-                kind=kind,
-                version=self.message_version,
-            )
-            for kind in CANONICAL_MESSAGE_KINDS
+        message_kinds = tuple(
+            kind for kind in CANONICAL_MESSAGE_KINDS if kind != CONTENT_ROADMAP_KIND
+        )
+        return (
+            *(
+                StageAssetVersion(
+                    asset_id=self.message.message_id,
+                    tenant_id=self.tenant_id,
+                    kind=kind,
+                    version=self.message_version,
+                )
+                for kind in message_kinds
+            ),
+            self.roadmap.as_stage_asset(version=self.roadmap_version),
         )
 
 
@@ -2338,6 +2368,28 @@ class ContentRoadmap:
     def is_plan(self) -> bool:
         """A content roadmap is a plan, not activity or an observed result."""
         return True
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the roadmap onto exact ``content-roadmap`` gate evidence.
+
+        SPEC.md sections 4 and 12.5 (owner decision 2026-10-03): a
+        canon-informed asset already implemented in a bounded context becomes a
+        required asset kind of its target stage gate, so the stage 6 "Campaign
+        Message Approved" gate pins the typed content roadmap (canon files 25-28)
+        as one exact ``StageAssetVersion``. A versionless projection is refused
+        rather than silently pinned (SPEC.md sections 3 and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidContentRoadmapError(
+                "the content roadmap version must be a positive integer so the "
+                "stage 6 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.roadmap_id,
+            tenant_id=self.tenant_id,
+            kind=CONTENT_ROADMAP_KIND,
+            version=version,
+        )
 
     def as_observation(self, *, claim_id: str) -> None:
         """Refuse to represent a content roadmap as an observed result.
