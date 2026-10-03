@@ -4,74 +4,39 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Integration milestone: 2026-10-03. Owner decision: this application is built
-  on top of the OpenExecutive fork. RED code ports into the fork at
-  `packages/core/openexecutive/redops/` (importable as `openexecutive.redops`);
-  the fork is the primary build and deploy target, and this planning repository
-  remains the spec and plan authority. This resolves the "where RED code lives"
-  blocker. The accepted decision is recorded as fork `docs/adr/0002`.
-- Prior integration cycle: wrote the fork's `docs/context_map.md` and the
-  initial ADRs, per the fork inventory's recommended next actions. Completed and
-  verified; committed to the fork as `7b5a958` and pushed to `origin`
-  (`redrhino-online/OpenExecutive`). The fork's Phase 0 inventory is already
-  complete and pushed (`docs/fork_inventory.md`; upstream pinned
-  `4b370b0b8e6939c247d5a3541de86617408f7462`, Apache-2.0 with NOTICE retained,
-  baseline 7213 unit + 52 integration tests green, 334 typed source files).
-  Reality differs from the original SPEC assumptions: SQLite plus embedded
-  ChromaDB (not PostgreSQL), slot-based single-active-client isolation (not
-  concurrent multi-tenancy), and a single-instance scheduler.
-- Current cycle (2026-10-03, Ralph cycle 136): selected item was to port the
-  Knowledge bounded context's pure domain layer, then the Engagement pure domain
-  layer it unblocks. The plan named Engagement as next, but Knowledge is a
-  prerequisite (see new findings); porting Knowledge alone would leave the named
-  item broken, so both went into this one bounded port.
-- Outcome: completed and verified. Knowledge now lives in the fork at
-  `packages/core/openexecutive/redops/contexts/knowledge/domain/` (errors,
-  value_objects, entities, policies) with its two test modules at
-  `packages/core/tests/unit/redops/knowledge/`; Engagement's pure domain lives at
-  `.../contexts/engagement/domain/` (errors, value_objects, entities, policies)
-  with `test_client_workspace`, `test_intake_package` and
-  `test_gate_approver_authority` at `.../tests/unit/redops/engagement/`. All
-  import paths rewritten to `openexecutive.redops`. This brings the tenant root
-  `ClientWorkspace`, the stage 0 `IntakePackage`/`IntakeAsset` package and its
-  `ProductionReadyPolicy`, the `WorkspaceLifecyclePolicy`, the gate owner and
-  approver authority policies, the immutable `SourceRecord` and provenance-typed
-  `Claim`, and the shared `sourced_claim_ids` evidence rule into the fork.
-- Evidence: `uv run pytest tests/unit/redops/ -q` → 321 passed, 85 subtests
-  passed; `uv run ruff check openexecutive/` → clean; `uv run mypy
-  openexecutive/` → Success, 355 source files. `python3 scripts/pr_checks.py
-  --base HEAD` → no-stubs and tests-present pass; arch-doc-drift is covered by
-  the `Arch-Docs: n/a` waiver because the ported pure domain has no route or
-  runtime behavior yet.
-- New findings: the plan's claim that Engagement's domain "imports only the
-  now-ported Governance domain" was incomplete. `ProductionReadyPolicy` and the
-  gate owner/approver authority policies depend on Knowledge's `Claim` and the
-  shared `sourced_claim_ids` rule ("Known cannot be sourced without a direct
-  source"), so Knowledge is a prerequisite for the stage 0 Production Ready
-  checkpoint and was ported first this cycle. Engagement's
-  `domain/assemblies.py` (stage gate assemblers and recorders, 1616 lines) was
-  deliberately NOT ported: it imports the Commercial, Execution, Knowledge and
-  Production contexts, so it is a cross-context bridge that belongs with the
-  application layer and waits on those contexts. `test_gate_owner_authority`,
-  `test_stage_*_gate_assembly` and `test_record_stage_*_gate` depend on
-  assemblies and are likewise deferred.
-- Blockers: unchanged. The storage, tenant-isolation, scheduler-topology and
-  agent-registration ADRs still need the RED principal's explicit acceptance
-  before any real client data; the `redops` application/API/UI wiring is
-  unstarted; and the remaining contexts (Method, Commercial, Production,
-  Execution, Measurement, Portfolio, Operations) are not yet in the fork.
-- Highest priority ready next item: port the Method context's pure domain layer
-  (`PrimaryCurrency`, `ProfitPyramidLevel`/`DiagnosticModel`, the three-phase
-  nine-step `SignatureSolution`, `Transformation` and the `MethodVersion`
-  aggregate), because stages 2 to 5 method artifacts are the next pipeline gate
-  after stages 0 and 1 and Method imports only its own modules plus the
-  now-ported Governance/Knowledge. Prerequisites: accepted code-location ADR
-  (done); ported Governance domain (done); ported Knowledge domain (done); no
-  storage dependency for the pure domain. Deferred: Engagement `assemblies.py`
-  and the Engagement application layer (depends on Commercial/Execution/
-  Production/Knowledge), the remaining contexts, the persistence port (storage
-  ADR), the application/API/UI wiring, and RED agent registration
-  (agent-registration ADR).
+- Architecture decision (2026-10-03, owner RED principal): the running
+  application is this repository, `redrhino-online/red-operations-platform`, and
+  cycles target it. RED code lives here under `backend/redops/` — RED's extension
+  of the OpenExecutive system. OpenExecutive is a pinned dependency, vendored as
+  the git submodule at `vendor/openexecutive/`, reused through ports and
+  composition, and kept close to upstream so updates stay cheap (ADR 0008, which
+  supersedes ADR 0002). TypeScript is UI-only (ADR 0007).
+- Cleanup done: the earlier attempt to write RED into the fork was reverted. The
+  fork no longer carries the ported `openexecutive.redops` module, its tests, or
+  RED docs (`docs/context_map.md`, `docs/adr/`, `docs/fork_inventory.md`); those
+  now live in this repository's `docs/`. The fork is at `1bf1ed3`, near upstream.
+- Outcome: repository realigned to the app model; the submodule pointer advances
+  to the cleaned fork.
+- Evidence: `docs/adr/0008-red-lives-in-the-app.md`, `docs/context_map.md`,
+  `docs/fork_inventory.md`, `docs/adr/0001`-`0008`; fork `1bf1ed3`; the submodule
+  pointer in this repository.
+- New findings: this repository already held the full RED domain at
+  `backend/redops/` (~1,600 tests); it was only ever copied into the fork by the
+  revert now undone. The fork is the application shell (FastAPI `packages/core` +
+  Next.js `packages/ui`). Building on top requires making the vendored
+  `openexecutive` package importable by this repository's backend and composing
+  RED into the fork's app through ports, not by editing the fork.
+- Blockers: the storage, tenant-isolation, scheduler-topology and
+  agent-registration ADRs still await the RED principal before real client data.
+  The reuse dependency and the app backend/frontend scaffold are not yet set up.
+- Highest priority ready next item: establish the reuse layer so the app can
+  compose OpenExecutive. Make the vendored `openexecutive` package importable to
+  this repository's backend (a path or pyproject dependency on
+  `vendor/openexecutive/packages/core`), and add a minimal RED FastAPI entrypoint
+  that mounts the existing `backend/redops` domain behind the OpenExecutive app
+  with a smoke test. Everything runs in this repository; the fork stays
+  untouched. Prerequisites: the cleaned submodule (done); no storage dependency
+  for a smoke composition.
 
 ## Canon reference and gap register
 
