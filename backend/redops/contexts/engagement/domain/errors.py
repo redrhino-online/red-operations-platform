@@ -350,6 +350,28 @@ class StageRunNotStageEightError(EngagementError):
     """
 
 
+class NotStageNineGateError(EngagementError):
+    """A stage 9 recording path was handed a gate for another stage.
+
+    SPEC.md section 4 makes stage 9 "QA" the "Launch Approved" checkpoint after
+    the stage 8 "Funnel Complete" gate. The stage 9 recording path pins and
+    approves only the canonical stage 9 launch QA gate; a gate for another stage
+    must be recorded by that stage's own path so the wrong asset package is never
+    approved under the stage 9 rubric.
+    """
+
+
+class StageRunNotStageNineError(EngagementError):
+    """A stage 9 closure was handed a StageRun for another stage or template.
+
+    SPEC.md sections 3 and 4 make a StageRun track one stage of one versioned
+    template. Completing a stage 9 gate must close the matching stage 9 run for
+    the same template version, so a run for another stage or version cannot be
+    closed by the stage 9 path and left showing verified progress the run does
+    not represent.
+    """
+
+
 class StageRunNotCompletableError(EngagementError):
     """A stage 0 closure was handed a StageRun whose state cannot complete.
 
