@@ -260,6 +260,39 @@ class StageRunNotStageFiveError(EngagementError):
     """
 
 
+class NotStageSixGateError(EngagementError):
+    """A stage 6 recording path was handed a gate for another stage.
+
+    SPEC.md section 4 makes stage 6 "Message" the "Campaign Message Approved"
+    checkpoint after the stage 5 "Offer Locked" gate. The stage 6 recording path
+    pins and approves only the canonical stage 6 campaign message gate; a gate for
+    another stage must be recorded by that stage's own path so the wrong asset
+    package is never approved under the stage 6 rubric.
+    """
+
+
+class StageRunNotStageSixError(EngagementError):
+    """A stage 6 closure was handed a StageRun for another stage or template.
+
+    SPEC.md sections 3 and 4 make a StageRun track one stage of one versioned
+    template. Completing a stage 6 gate must close the matching stage 6 run for
+    the same template version, so a run for another stage or version cannot be
+    closed by the stage 6 path and left showing verified progress the run does
+    not represent.
+    """
+
+
+class CampaignMessageNotApprovedError(EngagementError):
+    """A stage 6 gate was assembled from a campaign message that is not approved.
+
+    SPEC.md section 4, stage 6 "Message" and its "Campaign Message Approved"
+    checkpoint: "avatar, currency, problem, promise, method, product and CTA
+    agree". The ``CampaignMessage`` only proves that congruence when it has passed
+    ``approve``; a draft or review-required message must never be projected into a
+    passing stage 6 gate, or the stage would show a checkpoint it never met.
+    """
+
+
 class StageRunNotCompletableError(EngagementError):
     """A stage 0 closure was handed a StageRun whose state cannot complete.
 

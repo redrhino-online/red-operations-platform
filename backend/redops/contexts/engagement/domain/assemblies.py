@@ -27,6 +27,7 @@ from redops.contexts.commercial.domain.policies import (
     DiagnosisEvidencePolicy,
 )
 from redops.contexts.commercial.domain.value_objects import (
+    CampaignMessagePackage,
     CurrencyPackage,
     DiagnosisPackage,
     DiagnosticPackage,
@@ -35,11 +36,13 @@ from redops.contexts.commercial.domain.value_objects import (
 )
 from redops.contexts.engagement.domain.entities import ClientWorkspace
 from redops.contexts.engagement.domain.errors import (
+    CampaignMessageNotApprovedError,
     GateApproverNotAuthorizedError,
     GateAuthorRequiredError,
     NotStageFiveGateError,
     NotStageFourGateError,
     NotStageOneGateError,
+    NotStageSixGateError,
     NotStageThreeGateError,
     NotStageTwoGateError,
     NotStageZeroGateError,
@@ -70,6 +73,7 @@ STAGE_TWO = 2
 STAGE_THREE = 3
 STAGE_FOUR = 4
 STAGE_FIVE = 5
+STAGE_SIX = 6
 
 
 class StageZeroGateAssembler:
@@ -863,6 +867,153 @@ class StageFiveGateRecorder:
                 actor=approver,
                 on=on,
                 rationale=f"stage 5 asset {asset} approved for {scope}",
+            )
+            gate.record_asset_approval(request)
+        gate.state = GateState.APPROVED
+        decision = GateDecision.from_gate(
+            gate,
+            ledger=ledger,
+            reviewer=approver,
+            scope=scope,
+            checkpoint_evidence=checkpoint_evidence,
+            disposition=GateDisposition.APPROVED,
+            rationale=rationale,
+            on=on,
+            assigned_owner=assigned_owner,
+            due_on=due_on,
+            next_action=next_action,
+        )
+        ledger.record(decision)
+        return decision
+
+
+class StageSixGateAssembler:
+    """Builds and validates the canonical stage 6 "Campaign Message Approved" gate.
+
+    SPEC.md section 4, stage 6 "Message" and its "Campaign Message Approved"
+    checkpoint: "avatar, currency, problem, promise, method, product and CTA
+    agree", and the stage is complete only when its required assets exist, pass the
+    checkpoint, and receive approval for downstream use. The Commercial
+    ``CampaignMessagePackage`` (cycle 79) projects the single reviewed
+    ``CampaignMessage`` -- the promise, problem hierarchy, desired outcome, proof
+    and objections, story, method explanation, CTA, lead magnet, hook, angles,
+    landing message and Authority Amplifier outline, grounded on the approved
+    stage 5 offer -- onto the twelve canonical stage 6 asset kinds as exact
+    ``StageAssetVersion`` evidence, and the canon maps stage 6 to files 06, 15, 24
+    and 25-28 (SPEC.md section 12.3).
+
+    Unlike stages 2 through 5, the reviewed message is not constructively complete
+    at construction: ``CampaignMessage`` only proves the "Campaign Message
+    Approved" congruence when it has passed ``approve``, which checks the message
+    against the approved stage 5 offer and the approved method's locked stage 2
+    currency and stage 3 diagnostic model. This assembler therefore refuses a
+    package whose message is not approved, so a draft or review-required message
+    can never be pinned as passing stage 6 evidence. It also checks the reviewed
+    package against the workspace tenant, pins the gate from the template's exact
+    stage 6 asset package, and binds the designated approver to the workspace
+    authority registry (``GateApproverAuthorityPolicy``). It is a pure domain
+    service: it returns a gate and mutates nothing, invokes no persistence, and
+    never invents a concrete approver identity or authority role (SPEC.md section
+    11).
+    """
+
+    def assemble(
+        self,
+        *,
+        template: StageTemplate,
+        workspace: ClientWorkspace,
+        package: CampaignMessagePackage,
+        approver: str,
+        proposed_by: str | None = None,
+    ) -> StageGate:
+        if package.tenant_id != workspace.tenant_id:
+            raise TenantBoundaryError(
+                f"campaign message package {package.package_id!r} belongs to "
+                f"tenant {package.tenant_id!r}, not workspace tenant "
+                f"{workspace.tenant_id!r}"
+            )
+        if not package.message.is_approved:
+            raise CampaignMessageNotApprovedError(
+                f"campaign message {package.message.message_id!r} cannot pass "
+                "stage 6: it has not been approved against the stage 5 offer and "
+                "the approved method"
+            )
+        gate = StageGate.from_assets(
+            template,
+            STAGE_SIX,
+            tenant_id=workspace.tenant_id,
+            assets=package.stage_asset_versions(),
+        )
+        gate.approver = approver
+        gate.proposed_by = proposed_by
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        return gate
+
+
+class StageSixGateRecorder:
+    """Records the passing stage 6 "Campaign Message Approved" gate decision.
+
+    SPEC.md section 4: a passing gate pins "the exact evidence and intended
+    downstream use", approval is version specific, and the author cannot
+    impersonate the approver. Given the gate ``StageSixGateAssembler`` already
+    validated, this pure-domain path issues one version-specific
+    ``ApprovalRequest`` per required asset on behalf of the gate's author, has the
+    workspace's designated approver approve each one, records them on the gate,
+    and stores the immutable ``GateDecision`` in the durable ``GateLedger``. It
+    refuses a gate for another stage, an absent author or approver, an approver
+    who holds no authority on the workspace, and an assigned work owner who holds
+    no authority on the workspace, so the stage 6 rubric can never approve an
+    unrelated asset package, a self-issued approval or an unaccountable owner
+    (SPEC.md sections 3, 4, 5 and 11). Because stage 6 depends on stage 5,
+    ``GateDecision.from_gate`` and ``GateLedger.record`` refuse a passing decision
+    until the ledger holds a passing stage 5 decision, so a failed prerequisite
+    blocks dependent authorization (SPEC.md section 4). It mutates only the gate
+    it is given and the ledger; it never invents a concrete human identity.
+    """
+
+    def record(
+        self,
+        *,
+        gate: StageGate,
+        workspace: ClientWorkspace,
+        ledger: GateLedger,
+        scope: str,
+        checkpoint_evidence: str,
+        rationale: str,
+        assigned_owner: str,
+        due_on: date,
+        on: date,
+        next_action: str = "",
+    ) -> GateDecision:
+        if gate.stage_number != STAGE_SIX:
+            raise NotStageSixGateError(
+                f"stage 6 recording path cannot record a decision for stage "
+                f"{gate.stage_number}"
+            )
+        author = gate.proposed_by
+        if not author or not author.strip():
+            raise GateAuthorRequiredError(
+                "stage 6 recording requires the gate's author so an approval "
+                "request has a requester distinct from the designated approver"
+            )
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        GateOwnerAuthorityPolicy().require(assigned_owner, workspace)
+        approver = gate.approver
+        if not approver or not approver.strip():
+            raise GateApproverNotAuthorizedError(
+                "stage 6 recording requires the gate's designated approver"
+            )
+        for asset in sorted(gate.required_assets, key=str):
+            request = ApprovalRequest(
+                asset=asset,
+                scope=scope,
+                requested_by=author,
+                approver=approver,
+            )
+            request.approve(
+                actor=approver,
+                on=on,
+                rationale=f"stage 6 asset {asset} approved for {scope}",
             )
             gate.record_asset_approval(request)
         gate.state = GateState.APPROVED
