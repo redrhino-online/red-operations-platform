@@ -20,21 +20,28 @@ from fastapi import APIRouter, Depends, HTTPException
 from redops.api.schemas import (
     EngagementProductionViewResponse,
     RecordStageOneGateRequest,
+    RecordStageTwoGateRequest,
     RecordStageZeroGateRequest,
 )
 from redops.contexts.commercial.domain.errors import CommercialError
 from redops.contexts.commercial.domain.value_objects import (
     AvatarProfile,
     BusinessSnapshot,
+    CurrencyInventory,
+    CurrencyPackage,
     DiagnosisPackage,
+    MillionDollarMessage,
     OfferFunnelAudit,
+    PositioningDecision,
 )
 from redops.contexts.engagement.application.commands import (
     RecordStageOneGateCommand,
+    RecordStageTwoGateCommand,
     RecordStageZeroGateCommand,
 )
 from redops.contexts.engagement.application.handlers import (
     RecordStageOneGateHandler,
+    RecordStageTwoGateHandler,
     RecordStageZeroGateHandler,
 )
 from redops.contexts.engagement.domain.entities import ClientWorkspace
@@ -71,6 +78,8 @@ from redops.contexts.knowledge.domain.value_objects import (
     ProvenanceClass,
     SourceCitation,
 )
+from redops.contexts.method.domain.errors import MethodError
+from redops.contexts.method.domain.value_objects import PrimaryCurrency
 
 router = APIRouter(prefix="/red", tags=["red"])
 
@@ -532,6 +541,159 @@ def _production_view_payload(view: EngagementProductionView) -> dict[str, Any]:
         ],
         "metric_reporting": [
             _metric_reporting_payload(row) for row in view.metric_reporting
+        ],
+    }
+
+
+@router.post("/clients/{tenant_id}/stages/2/gate", status_code=201)
+def record_stage_two_gate(
+    tenant_id: str,
+    body: RecordStageTwoGateRequest,
+    repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
+    run_repository: StageRunRepository = Depends(get_stage_run_repository),
+) -> dict[str, Any]:
+    """Record the stage 2 "Currency Locked" gate through the use case seam.
+
+    SPEC.md section 6: the API calls the use case and never mutates persistence
+    directly. This route maps the typed request to the Engagement
+    ``RecordStageTwoGateCommand``, loads the tenant's ledger through the
+    ``GateLedgerRepository`` port, runs ``RecordStageTwoGateHandler`` and appends
+    the resulting ``GateDecision``. Stage 2 depends on stage 1, so governance
+    refuses the decision unless the ledger already holds a passing stage 1
+    decision (SPEC.md section 4). The stage 2 ``StageRun`` is loaded-or-created
+    and upserted through the ``StageRunRepository`` port in the same operation,
+    so its assigned owner, status and timestamps stay durable alongside the
+    decision. Every integrity rule -- canonical kinds, exact versions,
+    owner/approver authority, the primary currency's internal specificity and
+    the tenant boundary -- is enforced by the domain; a rejection is a named 422
+    and never a partial write. The path tenant, not the body, is the
+    authoritative client scope. Stage 2 carries no claims: the checkpoint turns
+    on the locked currency, not on external customer evidence.
+    """
+
+    template = stage_zero_to_ten_template()
+    try:
+        workspace = ClientWorkspace(
+            workspace_id=body.workspace_id,
+            tenant_id=tenant_id,
+            authorities=tuple(
+                ClientAuthority(actor=entry.actor, authority=entry.authority)
+                for entry in body.authorities
+            ),
+        )
+        package = CurrencyPackage(
+            package_id=body.currency_package_id,
+            tenant_id=tenant_id,
+            inventory=CurrencyInventory(
+                inventory_id=body.inventory.inventory_id,
+                tenant_id=tenant_id,
+                category=body.inventory.category,
+                currencies_to_increase=tuple(
+                    body.inventory.currencies_to_increase
+                ),
+                currencies_to_decrease=tuple(
+                    body.inventory.currencies_to_decrease
+                ),
+            ),
+            inventory_version=body.inventory.version,
+            positioning=PositioningDecision(
+                decision_id=body.positioning.decision_id,
+                tenant_id=tenant_id,
+                core_problem=body.positioning.core_problem,
+                transformation_statement=(
+                    body.positioning.transformation_statement
+                ),
+                horizon=body.positioning.horizon,
+                qualifications=tuple(body.positioning.qualifications),
+                disqualifications=tuple(body.positioning.disqualifications),
+            ),
+            positioning_version=body.positioning.version,
+            primary_currency=PrimaryCurrency(
+                tenant_id=tenant_id,
+                currency=body.primary_currency.currency,
+                audience=body.primary_currency.audience,
+                current_measure=body.primary_currency.current_measure,
+                desired_measure=body.primary_currency.desired_measure,
+                mechanism=body.primary_currency.mechanism,
+            ),
+            primary_currency_version=body.primary_currency.version,
+            million_dollar_message=MillionDollarMessage(
+                message_id=body.million_dollar_message.message_id,
+                tenant_id=tenant_id,
+                avatar=body.million_dollar_message.avatar,
+                currency=body.million_dollar_message.currency,
+                metric=body.million_dollar_message.metric,
+                timeline=body.million_dollar_message.timeline,
+                pain=body.million_dollar_message.pain,
+                message=body.million_dollar_message.message,
+            ),
+            million_dollar_message_version=body.million_dollar_message.version,
+        )
+        stage_run = run_repository.load(
+            template.version, workspace.workspace_id, 2, tenant_id
+        )
+        if stage_run is None:
+            stage_run = StageRun(
+                engagement=workspace.workspace_id,
+                stage_number=2,
+                template_version=template.version,
+                assigned_owner=body.stage_owner,
+                tenant_id=tenant_id,
+            )
+        stage_run.record_activity(
+            actor=body.stage_owner,
+            reason="stage 2 positioning work began",
+            on=body.on,
+            correlation_id=body.correlation_id,
+        )
+        command = RecordStageTwoGateCommand(
+            template=template,
+            workspace=workspace,
+            package=package,
+            stage_run=stage_run,
+            approver=body.approver,
+            scope=body.scope,
+            checkpoint_evidence=body.checkpoint_evidence,
+            rationale=body.rationale,
+            assigned_owner=body.assigned_owner,
+            due_on=body.due_on,
+            on=body.on,
+            correlation_id=body.correlation_id,
+            proposed_by=body.proposed_by,
+            next_action=body.next_action,
+        )
+        ledger = repository.load(template, tenant_id)
+        decision = RecordStageTwoGateHandler().handle(command, ledger=ledger)
+        repository.append(decision)
+        run_repository.save(stage_run)
+    except (
+        CommercialError,
+        EngagementError,
+        GovernanceError,
+        MethodError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return {
+        "stage_number": decision.stage_number,
+        "template_version": decision.template_version,
+        "checkpoint": decision.checkpoint,
+        "disposition": decision.disposition.value,
+        "reviewer": decision.reviewer,
+        "scope": decision.scope,
+        "tenant_id": decision.tenant_id,
+        "decided_on": decision.decided_on.isoformat(),
+        "next_action": decision.next_action,
+        "required_assets": [
+            {
+                "asset_id": asset.asset_id,
+                "version": asset.version,
+            }
+            for asset in decision.required_assets
         ],
     }
 

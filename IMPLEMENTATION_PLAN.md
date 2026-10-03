@@ -4,6 +4,60 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T171703Z (Ralph cycle, this run): selected item was the HTTP
+  route that exposes the stage 2 "Currency Locked" gate. The prior cycle named
+  it the highest priority ready next item: the `StageTwoGateAssembler`
+  /`StageTwoGateRecorder`, the `RecordStageTwoGateCommand`
+  /`RecordStageTwoGateHandler` and the durable ledger/run ports all exist, but
+  only stages 0 and 1 had write routes, so the canonical 0-10 API surface
+  stopped at stage 1 and DoD condition 1 stayed unreachable. It outranked the
+  stage 3 route (which depends on it) and the `ClientProcess` canon gap (a
+  methodology-owner decision), because gate visibility through the real use case
+  is the pipeline backbone.
+- Outcome: new `POST /red/clients/{tenant_id}/stages/2/gate` in
+  `backend/redops/api/routes.py`, mapping the typed request to the Commercial
+  `CurrencyPackage` (`CurrencyInventory`, `PositioningDecision`,
+  `MillionDollarMessage`) and the Method `PrimaryCurrency`, then running
+  `RecordStageTwoGateHandler` through `get_gate_ledger_repository` and
+  `get_stage_run_repository`, mirroring the stage 1 route. New request schemas
+  in `backend/redops/api/schemas.py`: `CurrencyInventoryInput`,
+  `PositioningDecisionInput`, `PrimaryCurrencyInput`, `MillionDollarMessageInput`,
+  `RecordStageTwoGateRequest`. The route computes no rule: canonical kinds, exact
+  versions, approver authority, the primary currency's internal specificity, the
+  tenant boundary and the stage 1 prerequisite stay enforced by the domain.
+  Stage 2 errors map to a named 422, including the Commercial and Method error
+  families. Stage 2 carries no claims, because the "Currency Locked" checkpoint
+  turns on the locked currency rather than external customer evidence.
+- Evidence: `tests/unit/test_stage_two_gate_route.py` (5) pass: stages 0 and 1
+  are seeded through their own routes, then a passing stage 2 decision pins the
+  ten canonical currency kinds at version 1, the stage 2 run persists COMPLETE
+  with its owner, a stage 2 gate with no passing stage 1 is refused, an
+  unauthorized approver is refused without a write, and the decision is invisible
+  to another tenant. `make check` green: 1675 passed, 1 skipped, 632 subtests;
+  pyflakes clean.
+- New findings: unchanged from the prior cycle for the prerequisite refusal shape
+  (`GateDecisionError` from `GateIntegrityPolicy` via `GateDecision.from_gate`,
+  not `UnsatisfiedPrerequisiteError`). The persisted
+  `GateDecision.required_assets` carry the canonical kind as `asset_id`.
+  `make done` still fails at step 2 (`tests/e2e` absent), so DoD 1 is not met.
+- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate
+  routes and a repeated gate POST after COMPLETE returns 422; RLS remains
+  WHERE-clause only (ADR 0004); the stage 0-10 e2e suite (DoD 1, Q30) and the
+  migration deployment step (separate GitOps chart) are absent from this repo.
+- Highest priority ready next item: expose the stage 3 "Diagnostic Model
+  Approved" gate by `POST /red/clients/{tenant_id}/stages/3/gate`, mapping a
+  typed request to `RecordStageThreeGateCommand` and running
+  `RecordStageThreeGateHandler` through the ledger and stage run ports,
+  mirroring the stage 2 route. Prerequisites: the
+  `StageThreeGateAssembler`/`StageThreeGateRecorder` and
+  `RecordStageThreeGateHandler` (done), the stage 2 route (done), and a passing
+  stage 2 decision in the ledger (enforced by governance). This advances the
+  stage 0-10 API surface toward DoD 1. Alternative: the `ClientProcess` design
+  artifact from the canon gap register, if a methodology-owner decision is
+  preferred.
+
+### Prior cycle (2026-10-03T165834Z)
+
 - Cycle 2026-10-03T165834Z (Ralph cycle, this run): selected item was the HTTP
   route that exposes the stage 1 "Avatar Locked" gate. The plan's prior cycle
   named this as the highest priority ready next item: the `StageOneGateAssembler`

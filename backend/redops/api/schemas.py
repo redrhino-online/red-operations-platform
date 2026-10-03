@@ -153,6 +153,84 @@ class RecordStageOneGateRequest(BaseModel):
     next_action: str = ""
 
 
+class CurrencyInventoryInput(BaseModel):
+    """The reviewed stage 2 currency inventory (SPEC.md section 4, stage 2)."""
+
+    inventory_id: str
+    version: int
+    category: str
+    currencies_to_increase: list[str]
+    currencies_to_decrease: list[str]
+
+
+class PositioningDecisionInput(BaseModel):
+    """The reviewed stage 2 positioning decision (SPEC.md section 4, stage 2)."""
+
+    decision_id: str
+    version: int
+    core_problem: str
+    transformation_statement: str
+    horizon: str
+    qualifications: list[str]
+    disqualifications: list[str]
+
+
+class PrimaryCurrencyInput(BaseModel):
+    """The one locked stage 2 currency with its measurable movement."""
+
+    currency: str
+    version: int
+    audience: str
+    current_measure: str
+    desired_measure: str
+    mechanism: str
+
+
+class MillionDollarMessageInput(BaseModel):
+    """The stage 2 million dollar message and its formula components."""
+
+    message_id: str
+    version: int
+    avatar: str
+    currency: str
+    metric: str
+    timeline: str
+    pain: str
+    message: str
+
+
+class RecordStageTwoGateRequest(BaseModel):
+    """The stage 2 "Currency Locked" gate request (SPEC.md section 4).
+
+    The caller supplies the reviewed positioning values, the workspace authority
+    registry and the decision metadata. The route builds the canonical gate from
+    these through the use case; it deliberately accepts no pre-built gate, so
+    approver authority and exact-version evidence cannot be bypassed. Stage 2
+    depends on a passing stage 1 decision already in the ledger. The currency
+    inventory carries no claims: the "Currency Locked" checkpoint turns on the
+    primary currency's internal specificity, not external customer evidence.
+    """
+
+    workspace_id: str
+    authorities: list[ClientAuthorityInput]
+    currency_package_id: str
+    inventory: CurrencyInventoryInput
+    positioning: PositioningDecisionInput
+    primary_currency: PrimaryCurrencyInput
+    million_dollar_message: MillionDollarMessageInput
+    stage_owner: str
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
 class AssetVersionResponse(BaseModel):
     """One exact asset version pinned or approved for a stage."""
 
