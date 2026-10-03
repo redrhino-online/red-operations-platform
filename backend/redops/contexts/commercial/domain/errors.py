@@ -202,3 +202,24 @@ class CurrencyTenantBoundaryError(CommercialError):
     client's gate evidence.
     """
 
+
+class InvalidDiagnosticPackageError(CommercialError, ValueError):
+    """A stage 3 reviewed asset package was built without identity or version.
+
+    SPEC.md sections 3 and 4: a passing stage 3 gate pins the exact evidence and
+    intended downstream use, so the reviewed stage 3 ``DiagnosticModel`` is
+    projected onto the ten canonical asset kinds with a positive integer version.
+    A package that leaves its identity or the model version unspecified cannot be
+    represented as exact gate evidence.
+    """
+
+
+class DiagnosticTenantBoundaryError(CommercialError):
+    """A stage 3 reviewed asset package mixed in a model from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client, so the
+    ``DiagnosticModel`` projected onto a workspace's stage 3 gate package must
+    belong to that workspace's tenant. A cross-tenant stage 3 model cannot be
+    pinned as this client's gate evidence.
+    """
+

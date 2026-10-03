@@ -9,19 +9,21 @@ from typing import TYPE_CHECKING
 from redops.contexts.commercial.domain.errors import (
     CurrencyTenantBoundaryError,
     DiagnosisTenantBoundaryError,
+    DiagnosticTenantBoundaryError,
     InvalidAvatarProfileError,
     InvalidBusinessSnapshotError,
     InvalidCurrencyInventoryError,
     InvalidCurrencyPackageError,
     InvalidDeliverySpecificationError,
     InvalidDiagnosisPackageError,
+    InvalidDiagnosticPackageError,
     InvalidMillionDollarMessageError,
     InvalidOfferError,
     InvalidOfferFunnelAuditError,
     InvalidPositioningDecisionError,
 )
 from redops.contexts.governance.domain.value_objects import StageAssetVersion
-from redops.contexts.method.domain.entities import SignatureSolution
+from redops.contexts.method.domain.entities import DiagnosticModel, SignatureSolution
 from redops.contexts.method.domain.value_objects import (
     ImpactAssessment,
     PrimaryCurrency,
@@ -816,4 +818,101 @@ class CurrencyPackage:
                 kind="million-dollar-message",
                 version=message_version,
             ),
+        )
+
+
+CANONICAL_DIAGNOSTIC_KINDS: tuple[str, ...] = (
+    "profit-pyramid-levels",
+    "observable-measures",
+    "level-symptoms",
+    "level-behaviors",
+    "level-problems",
+    "progression",
+    "qualification-logic",
+    "diagnostic-model-name",
+    "diagnostic-model-visual",
+    "diagnostic-model-copy",
+)
+
+
+@dataclass(frozen=True)
+class DiagnosticPackage:
+    """The reviewed stage 3 model, projected to the ten canonical gate kinds.
+
+    SPEC.md section 4, stage 3 "Model" and its "Diagnostic Model Approved"
+    checkpoint: a stage is complete only when its required assets exist, pass the
+    checkpoint and receive approval for downstream use, and a passing gate pins
+    the exact evidence. The required asset package is the Profit Pyramid levels,
+    their observable measures, symptoms, behaviors and problems, progression,
+    qualification logic, name, visual and explanatory copy. The Method context
+    reviews that as one rich ``DiagnosticModel`` (the levels, progression,
+    qualification logic, name, visual and copy are all attributes of the same
+    delivered pyramid); this package is the bridge to the governance gate, which
+    pins one exact ``StageAssetVersion`` per canonical kind.
+
+    The canon (SPEC.md section 12.3: stage 3 uses canon files 07 and 08) requires
+    a clear currency, four observable levels with clear titles, symptoms and
+    metrics, one powerful visual model presented to every prospect, and
+    explanatory copy, graded by a pre-launch checklist. Each canonical kind is
+    projected from the single reviewed model at one positive integer version, and
+    a blank identity, a versionless model or a cross-tenant model is refused
+    rather than silently pinned (SPEC.md sections 3 and 4).
+    """
+
+    package_id: str
+    tenant_id: str
+    model: DiagnosticModel
+    model_version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("diagnostic package id", self.package_id),
+            ("diagnostic package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidDiagnosticPackageError(f"{label} is required")
+        if self.model.tenant_id != self.tenant_id:
+            raise DiagnosticTenantBoundaryError(
+                f"stage 3 model {self.model.model_id!r} belongs to tenant "
+                f"{self.model.tenant_id!r}, not package tenant {self.tenant_id!r}"
+            )
+        if not isinstance(self.model_version, int) or self.model_version < 1:
+            raise InvalidDiagnosticPackageError(
+                "the diagnostic model version must be a positive integer so the "
+                "stage 3 gate can pin the reviewed asset at an exact version"
+            )
+
+    @property
+    def kinds(self) -> frozenset[str]:
+        """The canonical kinds the reviewed stage 3 model projects onto."""
+        return frozenset(CANONICAL_DIAGNOSTIC_KINDS)
+
+    def missing_kinds(self) -> tuple[str, ...]:
+        """Canonical stage 3 kinds not covered by the projected model."""
+        covered = {asset.kind for asset in self.stage_asset_versions()}
+        return tuple(
+            kind for kind in CANONICAL_DIAGNOSTIC_KINDS if kind not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_kinds()
+
+    def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
+        """Project the reviewed stage 3 model onto exact governance evidence.
+
+        Every canonical kind belongs to the same reviewed ``DiagnosticModel``, so
+        each is pinned to that model's identity at its exact version. Governance
+        still pins each projection for the workspace tenant, so a cross-client
+        model is refused rather than silently authorized (SPEC.md sections 3, 4
+        and 11).
+        """
+        return tuple(
+            StageAssetVersion(
+                asset_id=self.model.model_id,
+                tenant_id=self.tenant_id,
+                kind=kind,
+                version=self.model_version,
+            )
+            for kind in CANONICAL_DIAGNOSTIC_KINDS
         )

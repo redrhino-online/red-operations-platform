@@ -11,11 +11,12 @@ represent an approved diagnostic model or be pinned as stage 3 gate evidence.
 """
 
 import unittest
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 
 from redops.contexts.method.domain.entities import DiagnosticModel
 from redops.contexts.method.domain.errors import (
     InvalidDiagnosticModelError,
+    InvalidMethodError,
     InvalidProfitPyramidLevelError,
 )
 from redops.contexts.method.domain.value_objects import ProfitPyramidLevel
@@ -61,6 +62,11 @@ def diagnostic_model(levels: tuple[ProfitPyramidLevel, ...] | None = None) -> Di
         levels=levels if levels is not None else (level(), scaling_level()),
         progression="climb from Stuck to Scaling by installing the referral network",
         qualification_logic="rank the prospect by observable monthly referral count",
+        visual="asset://diagnostic/3f-growth-pyramid.png",
+        explanatory_copy=(
+            "Four levels from Stuck to Scaling, each placed by observable "
+            "monthly referral count"
+        ),
     )
 
 
@@ -105,6 +111,20 @@ class DiagnosticModelCheckpointTests(unittest.TestCase):
         self.assertEqual(2, len(model.levels))
         self.assertTrue(model.progression)
         self.assertTrue(model.qualification_logic)
+
+    def test_a_model_records_its_visual_and_explanatory_copy(self):
+        model = diagnostic_model()
+
+        self.assertEqual(
+            "asset://diagnostic/3f-growth-pyramid.png", model.visual
+        )
+        self.assertTrue(model.explanatory_copy)
+
+    def test_a_model_missing_its_visual_or_copy_is_rejected(self):
+        for override in ({"visual": ""}, {"explanatory_copy": "  "}):
+            with self.subTest(override=override):
+                with self.assertRaises(InvalidMethodError):
+                    replace(diagnostic_model(), **override)
 
     def test_a_model_requires_at_least_two_levels(self):
         for levels in ((), (level(),)):

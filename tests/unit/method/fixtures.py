@@ -57,6 +57,11 @@ def diagnostic_model(tenant_id: str = TENANT) -> DiagnosticModel:
         ),
         progression="climb from Stuck to Scaling by installing the referral network",
         qualification_logic="rank the prospect by observable monthly referral count",
+        visual="asset://diagnostic/3f-growth-pyramid.png",
+        explanatory_copy=(
+            "Four levels from Stuck to Scaling, each placed by observable "
+            "monthly referral count"
+        ),
     )
 
 

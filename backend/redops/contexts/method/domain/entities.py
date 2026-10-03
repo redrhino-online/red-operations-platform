@@ -184,11 +184,16 @@ class DiagnosticModel:
     """A client's Profit Pyramid at the stage 3 "Diagnostic Model Approved" gate.
 
     SPEC.md section 4, stage 3 "Model": the model records the ordered Profit
-    Pyramid levels, their progression and qualification logic. The checkpoint
-    requires a prospect to recognize their current and desired next level using
-    observable differences, so adjacent levels with an identical observable
-    signature are rejected. The model is frozen: approval pins an exact version
-    of the asset rather than mutating it (SPEC.md section 3).
+    Pyramid levels, their progression and qualification logic, and the required
+    asset package also names the model's "visual and explanatory copy". The
+    reference model canon (SPEC.md section 12.3: stage 3 uses canon files 07 and
+    08) treats the designed visual and the copy as the two halves of the same
+    delivered pyramid, so both are required here rather than left to a later
+    presentation step. The checkpoint requires a prospect to recognize their
+    current and desired next level using observable differences, so adjacent
+    levels with an identical observable signature are rejected. The model is
+    frozen: approval pins an exact version of the asset rather than mutating it
+    (SPEC.md section 3).
     """
 
     model_id: str
@@ -197,6 +202,8 @@ class DiagnosticModel:
     levels: tuple[ProfitPyramidLevel, ...]
     progression: str
     qualification_logic: str
+    visual: str
+    explanatory_copy: str
 
     def __post_init__(self) -> None:
         _require_text(self.model_id, "diagnostic model id")
@@ -205,6 +212,10 @@ class DiagnosticModel:
         _require_text(self.progression, "diagnostic model progression")
         _require_text(
             self.qualification_logic, "diagnostic model qualification logic"
+        )
+        _require_text(self.visual, "diagnostic model visual")
+        _require_text(
+            self.explanatory_copy, "diagnostic model explanatory copy"
         )
         if len(self.levels) < 2:
             raise InvalidDiagnosticModelError(
