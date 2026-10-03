@@ -580,7 +580,6 @@ _AVATAR_DIAGNOSIS_KINDS: tuple[str, ...] = (
     "pains",
     "goals",
     "consequences-of-inaction",
-    "awareness-map",
     "customer-evidence",
     "voice-notes",
 )
@@ -607,6 +606,12 @@ class DiagnosisPackage:
     the avatar's pains, goals, consequences and why into one Avatar Goals Grid,
     but the SPEC stage 1 package enumerates them as separate required items, so
     they are projected as separate kinds while the avatar carries the content.
+
+    The ``awareness-map`` kind is pinned from the typed ``MarketAwarenessMap``
+    canon asset, not from the avatar's free-text awareness note (SPEC.md sections
+    4 and 12.5). Requiring the typed map with its research evidence and message
+    requirements makes the gate reject a stage 1 package whose awareness position
+    is an untyped note rather than a researched, targetable position.
     """
 
     package_id: str
@@ -617,6 +622,8 @@ class DiagnosisPackage:
     business_snapshot_version: int
     offer_funnel_audit: OfferFunnelAudit
     offer_funnel_audit_version: int
+    awareness_map: MarketAwarenessMap
+    awareness_map_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -625,11 +632,17 @@ class DiagnosisPackage:
         ):
             if not value or not value.strip():
                 raise InvalidDiagnosisPackageError(f"{label} is required")
-        for label, value in (
-            ("avatar", self.avatar),
-            ("business snapshot", self.business_snapshot),
-            ("offer and funnel audit", self.offer_funnel_audit),
+        for label, value, expected in (
+            ("avatar", self.avatar, AvatarProfile),
+            ("business snapshot", self.business_snapshot, BusinessSnapshot),
+            ("offer and funnel audit", self.offer_funnel_audit,
+             OfferFunnelAudit),
+            ("awareness map", self.awareness_map, MarketAwarenessMap),
         ):
+            if not isinstance(value, expected):
+                raise InvalidDiagnosisPackageError(
+                    f"diagnosis {label} must be a typed reviewed asset"
+                )
             if value.tenant_id != self.tenant_id:
                 raise DiagnosisTenantBoundaryError(
                     f"diagnosis {label} belongs to tenant {value.tenant_id!r}, "
@@ -639,6 +652,7 @@ class DiagnosisPackage:
             ("avatar version", self.avatar_version),
             ("business snapshot version", self.business_snapshot_version),
             ("offer and funnel audit version", self.offer_funnel_audit_version),
+            ("awareness map version", self.awareness_map_version),
         ):
             if not isinstance(value, int) or value < 1:
                 raise InvalidDiagnosisPackageError(
@@ -681,6 +695,7 @@ class DiagnosisPackage:
         """
         return (
             *(self._avatar_asset(kind) for kind in _AVATAR_DIAGNOSIS_KINDS),
+            self.awareness_map.as_stage_asset(version=self.awareness_map_version),
             StageAssetVersion(
                 asset_id=self.business_snapshot.snapshot_id,
                 tenant_id=self.tenant_id,

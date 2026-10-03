@@ -25,6 +25,7 @@ from typing import Iterable
 from redops.contexts.commercial.domain.policies import (
     AvatarLockedPolicy,
     DiagnosisEvidencePolicy,
+    MarketAwarenessPolicy,
 )
 from redops.contexts.commercial.domain.value_objects import (
     CampaignMessagePackage,
@@ -257,6 +258,7 @@ class StageOneGateAssembler:
         DiagnosisEvidencePolicy().require_offer_funnel_audit_sourced(
             package.offer_funnel_audit, evidence
         )
+        MarketAwarenessPolicy().require_targetable(package.awareness_map)
         gate = StageGate.from_assets(
             template,
             STAGE_ONE,

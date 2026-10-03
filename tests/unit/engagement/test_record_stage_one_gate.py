@@ -28,12 +28,15 @@ from datetime import date
 
 from redops.contexts.commercial.domain.errors import (
     AvatarLockedError,
+    MarketAwarenessTargetingError,
     UnsourcedDiagnosisEvidenceError,
 )
 from redops.contexts.commercial.domain.value_objects import (
     AvatarProfile,
     BusinessSnapshot,
     DiagnosisPackage,
+    MarketAwarenessLevel,
+    MarketAwarenessMap,
     OfferFunnelAudit,
 )
 from redops.contexts.engagement.application.commands import (
@@ -177,6 +180,17 @@ def audit(*, tenant_id: str = TENANT, evidence=("claim-offer-2",)) -> OfferFunne
     )
 
 
+def awareness_map(*, tenant_id: str = TENANT) -> MarketAwarenessMap:
+    return MarketAwarenessMap(
+        map_id="awareness-3f",
+        tenant_id=tenant_id,
+        primary_level=MarketAwarenessLevel.PROBLEM_AWARE,
+        research_evidence=("reviews name the unpredictable pipeline",),
+        message_requirements=("lead with the predictable pipeline outcome",),
+        retarget_level=MarketAwarenessLevel.SOLUTION_AWARE,
+    )
+
+
 def package(**overrides) -> DiagnosisPackage:
     values = {
         "package_id": "diagnosis-3f",
@@ -187,6 +201,8 @@ def package(**overrides) -> DiagnosisPackage:
         "business_snapshot_version": 1,
         "offer_funnel_audit": audit(),
         "offer_funnel_audit_version": 1,
+        "awareness_map": awareness_map(),
+        "awareness_map_version": 1,
     }
     values.update(overrides)
     return DiagnosisPackage(**values)
@@ -302,6 +318,8 @@ class StageOneGateAssemblerTests(unittest.TestCase):
             business_snapshot_version=1,
             offer_funnel_audit=audit(tenant_id=OTHER_TENANT),
             offer_funnel_audit_version=1,
+            awareness_map=awareness_map(tenant_id=OTHER_TENANT),
+            awareness_map_version=1,
         )
 
         with self.assertRaises(TenantBoundaryError):
@@ -326,6 +344,18 @@ class StageOneGateAssemblerTests(unittest.TestCase):
                     sourced_claim(AUDIT_CLAIM),
                 )
             )
+
+    def test_an_untargetable_awareness_map_cannot_assemble_a_gate(self):
+        unaware = MarketAwarenessMap(
+            map_id="awareness-3f",
+            tenant_id=TENANT,
+            primary_level=MarketAwarenessLevel.COMPLETELY_UNAWARE,
+            research_evidence=("no active search for the problem",),
+            message_requirements=("educate the market before any offer",),
+        )
+
+        with self.assertRaises(MarketAwarenessTargetingError):
+            self.assemble(package_=package(awareness_map=unaware))
 
     def test_unsourced_audit_evidence_cannot_assemble_a_gate(self):
         with self.assertRaises(UnsourcedDiagnosisEvidenceError):

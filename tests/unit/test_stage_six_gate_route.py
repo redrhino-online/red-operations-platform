@@ -220,6 +220,16 @@ class StageSixGateRouteTests(unittest.TestCase):
                 "narrative": "The funnel has no owner between referral and quote",
                 "evidence_claim_ids": ["claim-offer-2"],
             },
+            "awareness_map": {
+                "map_id": "awareness-3f",
+                "version": 1,
+                "primary_level": "problem_aware",
+                "research_evidence": ["reviews name the unpredictable pipeline"],
+                "message_requirements": [
+                    "lead with the predictable pipeline outcome"
+                ],
+                "retarget_level": "solution_aware",
+            },
             "claims": [
                 {
                     "claim_id": claim_id,

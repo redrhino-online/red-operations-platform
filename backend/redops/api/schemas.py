@@ -123,6 +123,24 @@ class OfferFunnelAuditInput(BaseModel):
     evidence_claim_ids: list[str]
 
 
+class AwarenessMapInput(BaseModel):
+    """The stage 1 typed market awareness map (canon file 04).
+
+    SPEC.md section 4 requires stage 1 to pin an awareness asset and section 12.5
+    records the market awareness levels as canon-informed. The typed
+    ``MarketAwarenessMap`` carries the research evidence and message requirements
+    the avatar's free-text awareness note does not, so the route accepts this
+    shape and the domain projects it as the ``awareness-map`` gate kind.
+    """
+
+    map_id: str
+    version: int
+    primary_level: str
+    research_evidence: list[str]
+    message_requirements: list[str]
+    retarget_level: str | None = None
+
+
 class RecordStageOneGateRequest(BaseModel):
     """The stage 1 "Avatar Locked" gate request (SPEC.md section 4).
 
@@ -139,6 +157,7 @@ class RecordStageOneGateRequest(BaseModel):
     avatar: AvatarProfileInput
     business_snapshot: BusinessSnapshotInput
     offer_funnel_audit: OfferFunnelAuditInput
+    awareness_map: AwarenessMapInput
     claims: list[ClaimInput]
     stage_owner: str
     approver: str

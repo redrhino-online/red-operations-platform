@@ -37,6 +37,8 @@ from redops.contexts.commercial.domain.value_objects import (
     AvatarProfile,
     BusinessSnapshot,
     DiagnosisPackage,
+    MarketAwarenessLevel,
+    MarketAwarenessMap,
     OfferFunnelAudit,
 )
 from redops.contexts.governance.domain.entities import StageGate
@@ -88,6 +90,17 @@ def audit(*, tenant_id: str = TENANT) -> OfferFunnelAudit:
     )
 
 
+def awareness_map(*, tenant_id: str = TENANT) -> MarketAwarenessMap:
+    return MarketAwarenessMap(
+        map_id="awareness-3f",
+        tenant_id=tenant_id,
+        primary_level=MarketAwarenessLevel.PROBLEM_AWARE,
+        research_evidence=("reviews name the unpredictable pipeline",),
+        message_requirements=("lead with the predictable pipeline outcome",),
+        retarget_level=MarketAwarenessLevel.SOLUTION_AWARE,
+    )
+
+
 def package(**overrides) -> DiagnosisPackage:
     values = {
         "package_id": "diagnosis-3f",
@@ -98,6 +111,8 @@ def package(**overrides) -> DiagnosisPackage:
         "business_snapshot_version": 1,
         "offer_funnel_audit": audit(),
         "offer_funnel_audit_version": 1,
+        "awareness_map": awareness_map(),
+        "awareness_map_version": 1,
     }
     values.update(overrides)
     return DiagnosisPackage(**values)
@@ -130,6 +145,7 @@ class DiagnosisPackageProjectionTests(unittest.TestCase):
             avatar_version=2,
             business_snapshot_version=3,
             offer_funnel_audit_version=4,
+            awareness_map_version=5,
         )
 
         versions = {
@@ -141,13 +157,24 @@ class DiagnosisPackageProjectionTests(unittest.TestCase):
             "pains",
             "goals",
             "consequences-of-inaction",
-            "awareness-map",
             "customer-evidence",
             "voice-notes",
         ):
             self.assertEqual(2, versions[kind], kind)
+        self.assertEqual(5, versions["awareness-map"])
         self.assertEqual(3, versions["business-snapshot"])
         self.assertEqual(4, versions["offer-funnel-audit"])
+
+    def test_the_awareness_map_kind_is_pinned_from_the_typed_map(self):
+        value = package(awareness_map_version=7)
+
+        by_kind = {ref.asset_id: ref for ref in _pins(value)}
+        source = {
+            asset.kind: asset for asset in value.stage_asset_versions()
+        }
+
+        self.assertEqual(7, by_kind["awareness-map"].version)
+        self.assertEqual("awareness-3f", source["awareness-map"].asset_id)
 
     def test_the_projected_assets_assemble_a_canonical_stage_one_gate(self):
         gate = StageGate.from_assets(
@@ -181,6 +208,7 @@ class DiagnosisPackageRejectionTests(unittest.TestCase):
             {"avatar_version": 0},
             {"business_snapshot_version": -1},
             {"offer_funnel_audit_version": 0},
+            {"awareness_map_version": 0},
         ):
             with self.subTest(override=override):
                 with self.assertRaises(InvalidDiagnosisPackageError):
@@ -193,6 +221,8 @@ class DiagnosisPackageRejectionTests(unittest.TestCase):
             package(business_snapshot=snapshot(tenant_id=OTHER_TENANT))
         with self.assertRaises(DiagnosisTenantBoundaryError):
             package(offer_funnel_audit=audit(tenant_id=OTHER_TENANT))
+        with self.assertRaises(DiagnosisTenantBoundaryError):
+            package(awareness_map=awareness_map(tenant_id=OTHER_TENANT))
 
     def test_the_package_is_immutable(self):
         with self.assertRaises(FrozenInstanceError):

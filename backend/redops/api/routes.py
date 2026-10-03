@@ -64,6 +64,8 @@ from redops.contexts.commercial.domain.value_objects import (
     DeliverySpecification,
     DiagnosisPackage,
     DiagnosticPackage,
+    MarketAwarenessLevel,
+    MarketAwarenessMap,
     MethodReference,
     MillionDollarMessage,
     OfferFunnelAudit,
@@ -1133,6 +1135,23 @@ def record_stage_one_gate(
                 ),
             ),
             offer_funnel_audit_version=body.offer_funnel_audit.version,
+            awareness_map=MarketAwarenessMap(
+                map_id=body.awareness_map.map_id,
+                tenant_id=tenant_id,
+                primary_level=MarketAwarenessLevel(
+                    body.awareness_map.primary_level
+                ),
+                research_evidence=tuple(body.awareness_map.research_evidence),
+                message_requirements=tuple(
+                    body.awareness_map.message_requirements
+                ),
+                retarget_level=(
+                    MarketAwarenessLevel(body.awareness_map.retarget_level)
+                    if body.awareness_map.retarget_level is not None
+                    else None
+                ),
+            ),
+            awareness_map_version=body.awareness_map.version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 1, tenant_id
