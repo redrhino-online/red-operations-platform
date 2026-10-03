@@ -4,6 +4,74 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T202643Z (Ralph cycle, this run): selected item was Q40, the
+  workflow run detail (SPEC.md sections 4, 7, 8 and 13 condition 6; queue item
+  Q40). It is the highest priority ready item: its only dependency Q39 is done,
+  and it is now the head of the Q40-Q45 chain for condition 6, the largest
+  unstarted DoD condition. It outranks alternatives: Q41-Q45 each depend on Q40;
+  Q28 stage 8-10 required kinds are still blocked on the named methodology-owner
+  placement decision; Q16 needs a workflow write route and a connector seam;
+  Q3/Q4 need the ADR 0006 resolution and a live key; Q8 layer coverage and the
+  condition 2 cross-client-retrieval scenario have no retrieval/worker/artifact
+  seam yet; Q47-Q50 need the Atlas cluster. Q31 also blocks condition 2 on a
+  connector idempotency seam and the deploy-only scenarios. The canon gap
+  register has no ready pipeline item: its remaining entries are implemented or
+  are candidate pipeline additions awaiting a named-owner decision, so no
+  canon-covered method artifact outranks this gate work.
+- Outcome: new `frontend/src/features/workflow-run/` feature.
+  `WorkflowRunDetail.tsx` is a presentational detail over the tenant-scoped
+  durable run from `GET /red/clients/{tenant_id}/workflows/{run_id}`: it shows
+  the run status, the exact pinned definition version (SPEC.md section 10), the
+  completed step prefix, the in-progress step, pending approval, next step and
+  failure reason, the stable run `event_id`, and the append-only event log
+  ordered by the `eventOrdinal` parsed from each transition `event_id`, with
+  every transition's actor, reason, timestamp, old and new status and
+  correlation id (SPEC.md section 4). `WorkflowRunDetailScreen.tsx` owns the
+  tenant- plus run-scoped read; route `/workflow-run-detail`
+  (`src/app/workflow-run-detail/page.tsx`) binds the `workflow-run-detail`
+  screen id now declared in `frontend/dod-screens.txt`. The API client's
+  `WorkflowRunView` was an inaccurate minimal stub (never used by a screen) and
+  was corrected to the actual route projection, adding `WorkflowRunTransition`.
+  No product authority, gate decision or pipeline stage changed; the detail can
+  advance no run.
+- Evidence: `frontend/src/features/workflow-run/WorkflowRunDetail.test.tsx` (10
+  tests) pins `eventOrdinal`, `orderedTransitions` ordering and no-ordinal
+  handling, the rendered run state/definition/event id/completed/progress
+  fields, the exact per-transition log fields and order, the failure-only
+  reason, the prompt/loading/error/empty states, and a stubbed-fetch screen read
+  asserting the tenant-scoped run path. `npm test` -> 8 files, 65 passed (10
+  new). `npm run build` -> compiled, `/workflow-run-detail` route emitted.
+  `make check` -> 2265 passed, 2 skipped, 704 subtests passed.
+  `bash scripts/check_frontend_build.sh frontend` -> exit 0.
+  `bash scripts/check_frontend_screens.sh frontend` -> still exit 1, now 4
+  remaining section 8 ids (launch-readiness, performance-review,
+  portfolio-opportunities, authority-settings; condition 6 needs Q41-Q45).
+  `make done` still fails first at `[2/6]` condition 2.
+- New findings: `GET /red/clients/{tenant_id}/workflows/{run_id}` already
+  projects the full run state and its append-only transition log with a stable
+  `event_id`, so the detail needed only a corrected client type and the
+  presentational screen; no backend route was needed. The run `event_id` is
+  `{run_id}:{len(transitions)}` and each transition `event_id` is
+  `{run_id}:{index}` (1-based), so the event log order is derivable from the id
+  alone and no wall clock is trusted.
+- Blockers (unchanged): `frontend/` Q41-Q45 are the path to DoD condition 6;
+  Q8's retrieval, worker and artifact-URL isolation coverage and the condition 2
+  cross-client-retrieval scenario are blocked until those seams exist; Q28 stage
+  8-10 required kinds blocked on the named methodology-owner placement decision;
+  Q16 idempotency keys blocked on a workflow write route and a connector seam;
+  Q3 agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
+  deploy-only scenarios need the Atlas cluster and a chosen backup target.
+- Highest priority ready next item: Q41, the launch readiness screen.
+  Required asset: a launch readiness at a declared route showing the
+  tenant-scoped stage 9 launch QA state, its required checks, exceptions and
+  traffic authorization (SPEC.md sections 4 and 8) over the tenant-scoped stage
+  9 / production-view reads, plus its browser test; checkpoint: none (UI, not a
+  gate); approver: none. Blocked downstream dependency: Q42-Q45. Prerequisite:
+  Q40 (done this cycle).
+
+### Prior cycle (2026-10-03T202445Z)
+
 - Cycle 2026-10-03T202445Z (Ralph cycle, this run): selected item was Q39, the
   approval inbox with exact version diff (SPEC.md sections 3, 4, 8 and 13
   condition 6; queue item Q39). It is the highest priority ready item: its only
@@ -4247,7 +4315,7 @@ stalls:
 | Q37 | Offer and journey editor | ui | Q36 | Done 2026-10-03T202056Z: `frontend/src/features/offer-journey/` (`OfferJourneyEditor.tsx` presentational with the `pinnedMethodRefs`/`releasedAssetKinds` helpers, `OfferJourneyEditorScreen.tsx` parallel tenant-scoped read, route `/offer-and-journey`, `frontend/dod-screens.txt` declares the screen id) over `listOffers`/`listJourneys` (`GET /red/offers?tenant_id=` and `GET /red/journeys?tenant_id=`). Stage 5 shape cites canon 11-12 and routing cites canon 13-14, 21-22. `npm run build` clean (`/offer-and-journey` emitted), `npm test` 9 new passed (32 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 7 remaining screens |
 | Q38 | Build board with dependency view | ui | Q37 | Done 2026-10-03T202254Z: `frontend/src/features/build-board/` (`BuildBoard.tsx` presentational with the `boardStates` lifecycle-order, `buildsInState`, `dependencyRefs` and `blockedBuilds` helpers, `BuildBoardScreen.tsx` tenant-scoped read, route `/build-board`, `frontend/dod-screens.txt` declares the screen id) over `listBuilds` (`GET /red/builds?tenant_id=`). `npm run build` clean (`/build-board` emitted), `npm test` 11 new passed (43 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 6 remaining screens |
 | Q39 | Approval inbox with exact version diff | ui | Q38 | Done 2026-10-03T202445Z: `frontend/src/features/approval-inbox/` (`ApprovalInbox.tsx` presentational with the `approvalHistories`/`priorApproval`/`approvalDiff`/`exactVersion` helpers, `ApprovalInboxScreen.tsx` tenant-scoped read, route `/approval-inbox`, `frontend/dod-screens.txt` declares the screen id) over `listApprovals` (`GET /red/approvals?tenant_id=`). The diff groups the append-only approvals by pinned asset kind and reports each changed field's exact prior and current value against the previous version, with a baseline notice when none exists. `npm run build` clean (`/approval-inbox` emitted), `npm test` 12 new passed (55 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 5 remaining screens |
-| Q40 | Workflow run detail | ui | Q39 | browser test |
+| Q40 | Workflow run detail | ui | Q39 | Done 2026-10-03T202643Z: `frontend/src/features/workflow-run/` (`WorkflowRunDetail.tsx` presentational with the `eventOrdinal`/`orderedTransitions` event-log helpers, `WorkflowRunDetailScreen.tsx` tenant-plus-run read, route `/workflow-run-detail`, `frontend/dod-screens.txt` declares the screen id) over `getWorkflowRun` (`GET /red/clients/{tenant_id}/workflows/{run_id}`). The client `WorkflowRunView` was corrected to the real route projection and gained `WorkflowRunTransition`. `npm run build` clean (`/workflow-run-detail` emitted), `npm test` 10 new passed (65 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 4 remaining screens |
 | Q41 | Launch readiness | ui | Q40 | browser test |
 | Q42 | Performance review | ui | Q41 | browser test |
 | Q43 | Portfolio opportunities | ui | Q42 | browser test |

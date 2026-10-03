@@ -9,3 +9,4 @@ transformation-map /transformation-map
 offer-and-journey-editor /offer-and-journey
 build-board /build-board
 approval-inbox /approval-inbox
+workflow-run-detail /workflow-run-detail

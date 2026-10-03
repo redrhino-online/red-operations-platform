@@ -84,10 +84,38 @@ export interface ClientSummary {
   tenant_id: string;
 }
 
+// One durable workflow run and its stable append-only event log (SPEC.md
+// sections 4, 7 and 8; Q40). Mirrors the polling read `GET
+// /red/clients/{tenant_id}/workflows/{run_id}` in `backend/redops/api/routes.py`.
+// The run pins the exact definition version it started on and reports its
+// canonical status, completed prefix, in-progress step, pending approval and
+// next step. `event_id` is stable for a given run state, and every transition
+// keeps its actor, reason, timestamp, old and new status and correlation id
+// (SPEC.md section 4). The detail screen reads these; the UI recomputes no
+// transition rule and can advance no run.
+export interface WorkflowRunTransition {
+  event_id: string;
+  actor: string;
+  reason: string;
+  occurred_at: string;
+  old_status: string;
+  new_status: string;
+  correlation_id: string;
+}
+
 export interface WorkflowRunView {
   run_id: string;
+  tenant_id: string;
+  definition_id: string;
+  definition_version: string;
+  status: string;
+  completed_steps: string[];
+  in_progress_step: string | null;
+  pending_approval: string | null;
+  failure_reason: string | null;
+  next_step: string | null;
   event_id: string;
-  state: string;
+  transitions: WorkflowRunTransition[];
 }
 
 // One command center card from `GET /red/interventions` (SPEC.md section 7).
