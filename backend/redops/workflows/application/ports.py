@@ -30,6 +30,17 @@ class WorkflowRunStore(abc.ABC):
     def get(self, run_id: str, *, tenant_id: str) -> WorkflowRun | None:
         """Return the tenant's run, or ``None`` if it is absent or foreign."""
 
+    def close(self) -> None:
+        """Release any resource the adapter owns for the caller's request.
+
+        A durable adapter holds a connection; a process-local adapter holds
+        nothing. The default is a no-op, so the lifecycle concern stays with the
+        adapter that needs it rather than leaking into the port's data contract
+        (SPEC.md section 6).
+        """
+
+        return None
+
 
 class WorkflowStepExecutor(abc.ABC):
     """Performs one step's external effect (SPEC.md sections 6 and 7).

@@ -4,6 +4,70 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T185701Z (Ralph cycle, this run): selected item was Q15, the
+  REST `/workflows/{id}` polling read — `GET
+  /red/clients/{tenant_id}/workflows/{run_id}` — the workflow engine's entry
+  point and the named prerequisite for Q32 (`frontend/`, the only failing DoD
+  checkpoint, condition 6; SPEC.md sections 7 and 11). It outranked the
+  alternatives for these reasons. The prior cycle's named next item, a fork
+  `resumer.py` adapter behind the `WorkflowStepExecutor` port, was re-examined
+  and rejected as mis-specified: `vendor/openexecutive/packages/core/openexecutive/workflows/resumer.py`
+  is an 809-line background polling loop bound to the fork's SQLite rows,
+  `WaitForHumanResolution` and artifact delivery, not a per-step executor;
+  adapting it to RED's port would either edit the vendor (violating DoD
+  condition 7) or fabricate a mapping, so RED's `WorkflowStepExecutor` seam is
+  better served by connector adapters (Q16). Q9-Q14 REST resource routes rank
+  below because they need new ClientWorkspace/SourceRecord persistence and the
+  durable workflow store was unwired, so the read route was the smaller real
+  unblocker of the only failing DoD condition. Q24 stage 7 dual approval is
+  already enforced (`_approve_authority_amplifier` drives approve_script ->
+  produce_visuals -> approve_creative, domain-order, in `routes.py`), so it is
+  not open work. Q28 stages 8-10 stay blocked on the named methodology-owner
+  placement decision.
+- Outcome: `backend/redops/api/routes.py` adds `get_workflow_run_store` (the
+  configured durable seam, chosen once from `DATABASE_URL` through
+  `workflow_run_store_from_env`, closed per request) and `GET
+  /red/clients/{tenant_id}/workflows/{run_id}`. The route is the polling read
+  SPEC.md section 7 allows: it resolves the run through the tenant-scoped
+  `WorkflowRunStore` port and returns 404 `WorkflowRunNotFoundError` for a
+  missing or foreign run, so a foreign run is indistinguishable from an absent
+  one (SPEC.md section 9). It projects only the durable aggregate — pinned
+  definition id/version (SPEC.md section 10), status, completed steps,
+  in-progress step, pending approval, failure reason, next step, an append-only
+  stable `event_id` (`{run_id}:{transition_count}`) and the transition log with
+  per-event stable ids, actor, reason, timestamp, old/new status and correlation
+  id (SPEC.md section 4). `WorkflowRunStore` gains a default no-op `close()`.
+- Evidence: `make check` -> 1994 passed, 2 skipped, 680 subtests; pyflakes
+  clean. New `tests/unit/workflows/test_workflow_run_route.py` (4 tests) drives
+  the real FastAPI app against a fresh in-memory store: a running run reports
+  its pinned definition id/version and stable event id; a waiting approval is
+  preserved across the store round-trip with a stable event id; a run is 404 for
+  another tenant; an unknown run is 404. `make done` still fails only [5/6]
+  (`frontend/` missing, Q32); [1/6]-[4/6] pass.
+- New findings: the `workflows/infrastructure` mapper round-trip preserves the
+  append-only transition log, so the stable event id survives a reload (SPEC.md
+  section 11). The workflow engine is still constructed by no production entry
+  point except this read route; a start/approve write route needs a definition
+  registry and a `WorkflowStepExecutor` adapter (Q16), so the frontend "workflow
+  run detail" screen can render a run but nothing in the running platform starts
+  one yet.
+- Blockers: `frontend/` (DoD condition 6, Q32) now has its workflow read route
+  but still needs every section 8 screen, so it stays multi-cycle; Q16
+  idempotency keys blocked on a workflow write route; Q28 stage 8-10 required
+  kinds blocked on the named methodology-owner placement decision; Q9-Q14 need
+  ClientWorkspace/SourceRecord persistence; Q3 agent registration blocked on the
+  ADR 0006 / vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: Q9 REST `/clients` and `/clients/{id}/sources`
+  (dependency Q7 met) to begin the API surface the section 8 screens consume,
+  then Q10-Q14, then the `frontend/` shell Q32 (DoD condition 6); alternatively
+  the workflow start/approve write route once a definition registry and
+  `WorkflowStepExecutor` adapter exist. Required owner input for the pipeline:
+  the stage 8/9/10 canon placement decision; approver for any wired kind: the
+  client designated authority; blocked downstream dependency: the stage 9 gate.
+
+### Prior cycle (2026-10-03T185523Z)
+
 - Cycle 2026-10-03T185523Z (Ralph cycle, this run): selected item was the next
   Q5 workflow-engine slice, the durable PostgreSQL `WorkflowRunStore` adapter
   plus migration (SPEC.md sections 7 and 11; ADR 0003; ADR 0005; implementation
@@ -2358,7 +2422,7 @@ stalls:
 | Q2 | RED LLM adapter logs model, prompt version, usage, trace id | agents | Q1 | adapter contract test. Done 2026-10-03T184310Z: `ForkProviderModelGateway` wraps the fork's `get_provider` behind `ModelGateway`; `LoggingModelGateway` logs tenant/model/prompt version/trace id/context refs/tokens without prompt text; `ModelGatewayRuntimeError` guards a running loop. Verified by `tests/unit/agents/test_llm_gateway.py` (12 tests). Live smoke remains Q4 |
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
 | Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key. Done 2026-10-03T184450Z: `tests/unit/agents/test_live_openrouter_smoke.py` skips unless `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE` are set, then drives one live call through `ForkProviderModelGateway.from_fork_registry()` plus `LoggingModelGateway` and asserts the section 6 attribution; executing it awaits a real key |
-| Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). Fork `workflows/resumer.py` adapter behind the port and REST `/workflows/{id}` (Q15) remain |
+| Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). REST `/workflows/{id}` polling read landed 2026-10-03T185701Z (Q15). The fork `workflows/resumer.py` adapter was reassessed and rejected as mis-specified: the resumer is an 809-line fork polling loop, not a per-step executor, so RED's `WorkflowStepExecutor` seam is served by connector adapters (Q16), not a resumer shim |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
 | Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams |
@@ -2368,7 +2432,7 @@ stalls:
 | Q12 | REST `/approvals`, `/decisions` with exact version approval | api | Q11 | version specific approval |
 | Q13 | REST `/journeys`, `/measurements` | api | Q12 | route tests |
 | Q14 | REST `/opportunities`, `/interventions` | api | Q13 | route tests |
-| Q15 | REST `/workflows/{id}` with SSE or stable id polling | api | Q5, Q14 | stream test |
+| Q15 | REST `/workflows/{id}` with SSE or stable id polling (done 2026-10-03T185701Z; `GET /red/clients/{tenant_id}/workflows/{run_id}`; tenant-scoped polling read returning a stable append-only `event_id` and the transition log; 404 for a missing/foreign run. Tenant is the path authority, matching the stage routes, not the bare `/workflows/{id}`) | api | Q5 | route tests `tests/unit/workflows/test_workflow_run_route.py` (4) |
 | Q16 | Idempotency keys and optimistic version conflicts on mutations | api | Q15 | duplicate delivery one effect; stale update 409 |
 | Q17 | Stage 0 intake route hardened plus workspace and authority (API surface) | pipeline | Q9 | stage 0 gate e2e |
 | Q18 | Stage 1 diagnosis gate assembly from the built assets | pipeline | Q17 | Avatar Locked decision |
@@ -2377,7 +2441,7 @@ stalls:
 | Q21 | Stage 4 IP package gate plus ThirteenTransformations wiring (done 2026-10-03T182806Z; `POST /red/clients/{tenant_id}/stages/4/gate`; stage 4 template now requires the `thirteen-transformations` kind, pinned from the typed `ThirteenTransformations`) | pipeline | Q20 | IP Architecture Locked |
 | Q22 | Stage 5 productize gate API surface (done 2026-10-03T172133Z; `POST /red/clients/{tenant_id}/stages/5/gate`); ProductProgram wiring remains | pipeline | Q21 | Offer Locked |
 | Q23 | Stage 6 message gate plus the content roadmap, crusher and plan wiring (gate API surface done 2026-10-03T172338Z; `POST /red/clients/{tenant_id}/stages/6/gate`; `content-roadmap`, `content-crusher` and `content-plan` wired through `CampaignMessagePackage`, stage 6 now fifteen kinds; content family complete 2026-10-03T183643Z) | pipeline | Q22 | Campaign Message Approved |
-| Q24 | Stage 7 Authority Amplifier dual approval (script before visual) | pipeline | Q23 | script approval then creative acceptance |
+| Q24 | Stage 7 Authority Amplifier dual approval (script before visual) (enforced: `_approve_authority_amplifier` in `routes.py` drives `approve_script` -> `produce_visuals` -> `approve_creative` in domain order, resolving the approved method/message and storing the exact amplifier; `AuthorityAmplifierPolicy` permits `approve_script` only on an approved message and a grounded method. Confirmed complete 2026-10-03T185701Z) | pipeline | Q23 | script approval then creative acceptance, `tests/unit/test_stage_seven_gate_route.py`, `tests/unit/engagement/test_record_stage_seven_gate.py` |
 | Q25 | Stage 8 integrate plus the enrollment and client-process asset and Funnel Complete | pipeline | Q24 | funnel dry run passes |
 | Q26 | Stage 9 QA plus compliance gate kinds | pipeline | Q25 | Launch Approved; Ready for Traffic |
 | Q27 | Stage 10 launch plus baseline plus the METRICS dimension | pipeline | Q26 | Performance Baseline Established |

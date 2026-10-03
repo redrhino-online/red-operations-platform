@@ -239,6 +239,10 @@ from redops.contexts.production.domain.value_objects import (
 from redops.contexts.production.infrastructure.repositories import (
     authority_amplifier_repository_from_env,
 )
+from redops.workflows.application.ports import WorkflowRunStore
+from redops.workflows.infrastructure.repositories import (
+    workflow_run_store_from_env,
+)
 
 router = APIRouter(prefix="/red", tags=["red"])
 
@@ -3001,3 +3005,82 @@ def get_engagement_production_view(
         ) from exc
 
     return _production_view_payload(view)
+
+
+def get_workflow_run_store() -> Iterator[WorkflowRunStore]:
+    """Provide the configured durable workflow run seam to the API (SPEC.md §7).
+
+    SPEC.md section 7 exposes the workflow run as ``/workflows/{id}`` and section
+    11 requires a restarting worker to preserve a waiting workflow, so the run
+    state the route serves must come from the same durable store the worker
+    writes. The dependency owns one adapter for the request and releases any
+    connection it opened when the request ends; the store is chosen once from
+    ``DATABASE_URL``, and a set-but-unusable configuration raises before the
+    route runs, so a deployment cannot mistake a process-local run store for a
+    durable one (SPEC.md section 6).
+    """
+
+    store = workflow_run_store_from_env(os.environ.get("DATABASE_URL"))
+    try:
+        yield store
+    finally:
+        store.close()
+
+
+@router.get("/clients/{tenant_id}/workflows/{run_id}")
+def get_workflow_run(
+    tenant_id: str,
+    run_id: str,
+    store: WorkflowRunStore = Depends(get_workflow_run_store),
+) -> dict[str, Any]:
+    """Serve one client's durable workflow run for polling (SPEC.md section 7).
+
+    SPEC.md section 7 streams workflow status by server sent events or polling
+    with stable event IDs; this route is the polling read. The path tenant, not
+    any request value, is the authoritative client scope, and the store read is
+    tenant scoped (SPEC.md section 9), so another client's run is
+    indistinguishable from a missing one and is served as 404 rather than
+    leaked. Every status change keeps its actor, reason, timestamp, old and new
+    status and correlation id (SPEC.md section 4), and the run pins the exact
+    definition version it started on (SPEC.md section 10); the route computes
+    none of that, it only projects the stored aggregate.
+    """
+
+    run = store.get(run_id, tenant_id=tenant_id)
+    if run is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "WorkflowRunNotFoundError",
+                "message": (
+                    f"no workflow run {run_id!r} for tenant {tenant_id!r}"
+                ),
+            },
+        )
+
+    transitions = run.transitions
+    return {
+        "run_id": run.run_id,
+        "tenant_id": run.tenant_id,
+        "definition_id": run.definition.definition_id,
+        "definition_version": run.definition.version,
+        "status": run.status.value,
+        "completed_steps": list(run.completed_steps),
+        "in_progress_step": run.in_progress_step,
+        "pending_approval": run.pending_approval,
+        "failure_reason": run.failure_reason,
+        "next_step": None if run.next_step is None else run.next_step.name,
+        "event_id": f"{run.run_id}:{len(transitions)}",
+        "transitions": [
+            {
+                "event_id": f"{run.run_id}:{index}",
+                "actor": transition.actor,
+                "reason": transition.reason,
+                "occurred_at": transition.occurred_at.isoformat(),
+                "old_status": transition.old_status.value,
+                "new_status": transition.new_status.value,
+                "correlation_id": transition.correlation_id,
+            }
+            for index, transition in enumerate(transitions, start=1)
+        ],
+    }
