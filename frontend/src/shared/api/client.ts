@@ -116,6 +116,82 @@ export interface InterventionList {
   interventions: InterventionCard[];
 }
 
+// The production-manager view one client engagement (SPEC.md sections 4 and 8;
+// Q34). Mirrors `EngagementProductionViewResponse` in `backend/redops/api/
+// schemas.py`. State, provenance (exact pinned asset versions), dependencies,
+// version history and next action all come from the backend; the UI recomputes
+// none of it and can approve nothing.
+export interface AssetVersion {
+  asset_id: string;
+  version: number;
+}
+
+export interface StageProductionView {
+  stage_number: number;
+  name: string;
+  checkpoint: string;
+  status: string;
+  required_asset_kinds: string[];
+  approved_assets: AssetVersion[];
+  missing_asset_kinds: string[];
+  accountable_role: string;
+  approver_role: string;
+  dependencies: number[];
+  blocking_dependencies: number[];
+  assigned_owner: string | null;
+  recorded_approver: string | null;
+  due_on: string | null;
+  next_action: string;
+  blockers: string[];
+  entered_at: string | null;
+  is_approved: boolean;
+}
+
+export interface PipelineProgress {
+  approved_gates: number;
+  total_gates: number;
+  verified_post_launch_milestones: number;
+  activity_entries: number;
+  verified_progress: number;
+  gates_remaining: number;
+}
+
+export interface MetricMovement {
+  improvement_id: string;
+  before: number;
+  after: number;
+  measured_on: string;
+}
+
+export interface MetricReporting {
+  metric_id: string;
+  tenant_id: string;
+  name: string;
+  funnel_step: string;
+  unit: string;
+  direction: string;
+  value: number;
+  window_start: string;
+  window_end: string;
+  sample_size: number;
+  source: string;
+  recorded_on: string;
+  basis: string;
+  movement: MetricMovement | null;
+}
+
+export interface EngagementProductionView {
+  engagement: string;
+  tenant_id: string;
+  template_version: string;
+  current_stage_number: number | null;
+  next_approval_stage_number: number | null;
+  blocked_stage_numbers: number[];
+  progress: PipelineProgress;
+  stages: StageProductionView[];
+  metric_reporting: MetricReporting[];
+}
+
 // Tenant-scoped reads used by the first screens. Paths match `backend/redops/
 // api/routes.py` (router prefix `/red`).
 export class RedOperationsApi extends RedApiClient {
@@ -142,6 +218,22 @@ export class RedOperationsApi extends RedApiClient {
       engagement,
       on,
     });
+  }
+
+  // The client workspace overview read (SPEC.md sections 4 and 8; Q34). Tenant
+  // and engagement are the path authority and `on` is required by the backend,
+  // which evaluates prerequisite expiry against a fixed instant.
+  getProductionView(
+    tenantId: string,
+    engagement: string,
+    on: string,
+  ): Promise<EngagementProductionView> {
+    return this.get<EngagementProductionView>(
+      `/red/clients/${encodeURIComponent(tenantId)}/engagements/${encodeURIComponent(
+        engagement,
+      )}/production-view`,
+      { on },
+    );
   }
 
   health(): Promise<{ status: string }> {

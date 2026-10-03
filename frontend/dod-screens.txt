@@ -3,3 +3,4 @@
 # `scripts/check_frontend_screens.sh` requires all twelve canonical screen ids
 # before `[5/6]` can pass, so this list grows as Q34-Q44 land.
 portfolio-command-center /command-center
+client-workspace-overview /client-workspace
