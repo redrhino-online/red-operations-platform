@@ -26,11 +26,13 @@ from redops.contexts.governance.domain.entities import (
     ApprovalRequest,
     GateDecision,
     GateLedger,
+    StageRun,
 )
 from redops.contexts.governance.domain.errors import (
     MetricReportingError,
     MetricReportingTenantBoundaryError,
     ProductionViewError,
+    StageRunProjectionError,
 )
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
 from redops.contexts.governance.domain.value_objects import (
@@ -430,6 +432,112 @@ class MetricReportingDimensionTests(unittest.TestCase):
                 ledger_through(11),
                 metric_reporting=(metric_row(), metric_row()),
             )
+
+
+def working_run(
+    stage_number: int = 0,
+    *,
+    owner: str = "run-owner",
+    tenant_id: str = "tenant-3f",
+    engagement: str = "engagement-3f",
+    version: str = VERSION,
+) -> StageRun:
+    run = StageRun(
+        engagement=engagement,
+        stage_number=stage_number,
+        template_version=version,
+        assigned_owner=owner,
+        tenant_id=tenant_id,
+    )
+    run.start(
+        actor=owner,
+        reason="work began",
+        on=TODAY,
+        correlation_id="corr-1",
+    )
+    return run
+
+
+class StageRunProjectionTests(unittest.TestCase):
+    def test_a_working_stage_reports_the_durable_run_owner_status_and_entry(self):
+        ledger = GateLedger(stage_zero_to_ten_template(VERSION))
+        run = working_run(0)
+        result = view(ledger, stage_runs=(run,))
+        stage0 = result.stage_by_number(0)
+
+        self.assertIs(GateState.WORKING, stage0.status)
+        self.assertEqual("run-owner", stage0.assigned_owner)
+        self.assertEqual(TODAY, stage0.entered_at)
+        self.assertIsNone(stage0.recorded_approver)
+
+    def test_a_gate_decision_keeps_the_gate_state_over_the_run(self):
+        ledger = ledger_through(1)
+        run = working_run(0, owner="run-owner")
+        stage0 = view(ledger, stage_runs=(run,)).stage_by_number(0)
+
+        self.assertIs(GateState.APPROVED, stage0.status)
+        self.assertEqual("production-manager", stage0.assigned_owner)
+        self.assertEqual("client-approver-1", stage0.recorded_approver)
+        self.assertEqual(TODAY, stage0.entered_at)
+
+    def test_a_stage_with_neither_run_nor_decision_has_no_owner_or_entry(self):
+        stage0 = view(GateLedger(stage_zero_to_ten_template(VERSION))).stage_by_number(0)
+
+        self.assertIs(GateState.NOT_STARTED, stage0.status)
+        self.assertIsNone(stage0.assigned_owner)
+        self.assertIsNone(stage0.entered_at)
+
+    def test_the_run_status_maps_to_the_gate_state(self):
+        ledger = GateLedger(stage_zero_to_ten_template(VERSION))
+        run = working_run(0, owner="run-owner")
+        run.block(
+            actor="run-owner",
+            reason="prerequisite missing",
+            on=TODAY,
+            correlation_id="corr-2",
+        )
+
+        stage0 = view(ledger, stage_runs=(run,)).stage_by_number(0)
+        self.assertIs(GateState.BLOCKED, stage0.status)
+        self.assertEqual("run-owner", stage0.assigned_owner)
+
+    def test_a_cross_tenant_run_is_refused(self):
+        ledger = GateLedger(stage_zero_to_ten_template(VERSION))
+        run = working_run(0, tenant_id="other-client")
+
+        with self.assertRaises(StageRunProjectionError):
+            view(ledger, stage_runs=(run,))
+
+    def test_a_run_with_no_tenant_is_refused(self):
+        ledger = GateLedger(stage_zero_to_ten_template(VERSION))
+        run = working_run(0, tenant_id="")
+
+        with self.assertRaises(StageRunProjectionError):
+            view(ledger, stage_runs=(run,))
+
+    def test_a_run_for_another_engagement_or_version_is_refused(self):
+        ledger = GateLedger(stage_zero_to_ten_template(VERSION))
+
+        for run in (
+            working_run(0, engagement="other-engagement"),
+            working_run(0, version="2099.1"),
+        ):
+            with self.subTest(run=run):
+                with self.assertRaises(StageRunProjectionError):
+                    view(ledger, stage_runs=(run,))
+
+    def test_a_run_for_an_undefined_stage_is_refused(self):
+        ledger = GateLedger(stage_zero_to_ten_template(VERSION))
+        run = working_run(99)
+
+        with self.assertRaises(StageRunProjectionError):
+            view(ledger, stage_runs=(run,))
+
+    def test_two_runs_for_one_stage_are_refused(self):
+        ledger = GateLedger(stage_zero_to_ten_template(VERSION))
+
+        with self.assertRaises(StageRunProjectionError):
+            view(ledger, stage_runs=(working_run(0), working_run(0)))
 
 
 if __name__ == "__main__":

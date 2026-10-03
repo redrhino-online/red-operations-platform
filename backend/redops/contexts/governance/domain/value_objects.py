@@ -13,11 +13,12 @@ from redops.contexts.governance.domain.errors import (
     MetricReportingError,
     MetricReportingTenantBoundaryError,
     ProductionViewError,
+    StageRunProjectionError,
     VersionlessAssetError,
 )
 
 if TYPE_CHECKING:
-    from redops.contexts.governance.domain.entities import GateLedger
+    from redops.contexts.governance.domain.entities import GateLedger, StageRun
 
 
 class GateState(Enum):
@@ -602,6 +603,7 @@ class StageProductionView:
     next_action: str = ""
     blockers: frozenset[str] = frozenset()
     waiver: Waiver | None = None
+    entered_at: date | None = None
 
     def __post_init__(self) -> None:
         if self.stage_number < 0:
@@ -759,6 +761,7 @@ class EngagementProductionView:
         verified_post_launch_milestones: int = 0,
         activity_entries: int = 0,
         metric_reporting: tuple[MetricReportingView, ...] = (),
+        stage_runs: tuple["StageRun", ...] = (),
     ) -> "EngagementProductionView":
         """Derive the whole production view from a template and gate ledger.
 
@@ -773,10 +776,57 @@ class EngagementProductionView:
         activity counts and the typed observed metric rows are supplied by the
         caller because the Measurement and Operations contexts own them; the view
         never infers or fabricates them.
+
+        The durable ``StageRun`` records are supplied by the caller (loaded
+        through the ``StageRunRepository`` port) because Governance never reads
+        its own store in the domain. A run for this engagement and template
+        version supplies the assigned owner, status and entered-at for a stage
+        whose gate has not yet been decided; once a ``GateDecision`` exists the
+        gate state remains authoritative. A run from another tenant, engagement
+        or template version, one for an undefined stage, or a second run for one
+        stage is refused rather than rendered as this engagement's progress.
         """
+        expected_stage_numbers = {
+            definition.stage_number for definition in ledger.template.stages
+        }
+        runs_by_stage: dict[int, StageRun] = {}
+        for run in stage_runs:
+            if run.tenant_id != tenant_id:
+                raise StageRunProjectionError(
+                    f"stage run for stage {run.stage_number} belongs to tenant "
+                    f"{run.tenant_id!r}, not workspace tenant {tenant_id!r}"
+                )
+            if run.engagement != engagement:
+                raise StageRunProjectionError(
+                    f"stage run for stage {run.stage_number} belongs to "
+                    f"engagement {run.engagement!r}, not {engagement!r}"
+                )
+            if run.template_version != ledger.template.version:
+                raise StageRunProjectionError(
+                    f"stage run for stage {run.stage_number} carries template "
+                    f"version {run.template_version!r}, not "
+                    f"{ledger.template.version!r}"
+                )
+            if run.stage_number not in expected_stage_numbers:
+                raise StageRunProjectionError(
+                    f"stage run targets stage {run.stage_number}, which the "
+                    "template does not define"
+                )
+            if run.stage_number in runs_by_stage:
+                raise StageRunProjectionError(
+                    f"production view received two stage runs for stage "
+                    f"{run.stage_number}"
+                )
+            runs_by_stage[run.stage_number] = run
         states = ledger.dependency_states(on=on)
         stages = tuple(
-            _stage_production_view(ledger, definition, states, on)
+            _stage_production_view(
+                ledger,
+                definition,
+                states,
+                on,
+                runs_by_stage.get(definition.stage_number),
+            )
             for definition in ledger.template.stages
         )
         progress = PipelineProgress.from_ledger(
@@ -878,13 +928,34 @@ class EngagementProductionView:
         )
 
 
+_RUN_GATE_STATE: Mapping[StageStatus, GateState] = {
+    StageStatus.NOT_STARTED: GateState.NOT_STARTED,
+    StageStatus.WORKING: GateState.WORKING,
+    StageStatus.IN_REVIEW: GateState.IN_REVIEW,
+    StageStatus.COMPLETE: GateState.APPROVED,
+    StageStatus.CHANGES_REQUIRED: GateState.CHANGES_REQUIRED,
+    StageStatus.BLOCKED: GateState.BLOCKED,
+    StageStatus.WAIVED: GateState.WAIVED,
+    StageStatus.SUPERSEDED: GateState.SUPERSEDED,
+}
+
+
 def _stage_production_view(
     ledger: "GateLedger",
     definition: StageDefinition,
     states: "Mapping[int, GateState]",
     on: date,
+    run: "StageRun | None" = None,
 ) -> StageProductionView:
-    """Build one ``StageProductionView`` from the template and latest decision."""
+    """Build one ``StageProductionView`` from the template and latest decision.
+
+    The durable gate state is authoritative once a decision exists for the
+    stage; a persisted ``StageRun`` fills the gap for a stage that has none, so
+    the view can report an assigned owner, a working or blocked state and the
+    instant the stage was entered before its gate is decided (SPEC.md sections 3
+    and 4). A run that carries no tenant, or one from another engagement or
+    template version, is refused by the caller rather than merged here.
+    """
     latest = ledger.decision_for(definition.stage_number)
     if latest is None:
         approved: frozenset[AssetVersionRef] = frozenset()
@@ -904,21 +975,30 @@ def _stage_production_view(
         for dependency in definition.dependencies
         if not ledger.has_passing_decision(dependency, on=on)
     )
+    status = states[definition.stage_number]
+    if latest is None and run is not None:
+        status = _RUN_GATE_STATE[run.status]
+    assigned_owner = (
+        latest.assigned_owner
+        if latest is not None
+        else (run.assigned_owner if run is not None else None)
+    )
     return StageProductionView(
         stage_number=definition.stage_number,
         name=definition.name,
         checkpoint=definition.checkpoint,
-        status=states[definition.stage_number],
+        status=status,
         required_asset_kinds=definition.required_asset_kinds,
         approved_assets=approved,
         accountable_role=definition.accountable_role,
         approver_role=definition.approver_role,
         dependencies=definition.dependencies,
         blocking_dependencies=blocking,
-        assigned_owner=latest.assigned_owner if latest is not None else None,
+        assigned_owner=assigned_owner,
         recorded_approver=latest.reviewer if latest is not None else None,
         due_on=latest.due_on if latest is not None else None,
         next_action=latest.next_action if latest is not None else "",
         blockers=latest.blockers if latest is not None else frozenset(),
         waiver=waiver,
+        entered_at=run.entered_at if run is not None else None,
     )

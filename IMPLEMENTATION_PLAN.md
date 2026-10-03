@@ -4,65 +4,63 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03 (canon integration, planning only): the licensed canon gained a
-  sales process and training block (files 35-49: the six part enrollment process
-  Frame, Discover Problems, Prescription, Application, Invitation plus the
-  Objection Crusher; the five checkpoints intent, commitment, value, confidence,
-  desire; pre-call preparation and mindset; the three strategy-session models;
-  the funnel calculator). Folded it into the reference model: SPEC.md section
-  12.3 now cites files 35-49, section 12.5 registers the fuller enrollment asset
-  and a new client process design candidate, section 12.6 records that the sales
-  block is supplied while the email/follow-up module is still absent, and new
-  section 12.7 defines the RED process design service (RED helps each client
-  author their own sales process in their voice). No code change this cycle. The
-  next ready item is the pure-domain client process artifact (or the
-  `EnrollmentPlan` reconciliation) so a client authored process becomes a
-  versioned, gated asset rather than prose.
-- Cycle 2026-10-03 (Ralph cycle 2026-10-03T144637Z): selected item was the
-  durable `StageRun` store named last cycle. `StageRun` is a SPEC.md section 3
-  core aggregate, but the stage 0 route rebuilt one from each request and the
-  gate ledger cannot report a Working stage's assigned owner or the instant it
-  was entered, so approved-gate progress was durable while a stage's own
-  progress was not. It outranked the migration deployment step (that step is a
-  separate GitOps chart not present in this repository) and any downstream view.
-- Outcome: added the tenant-scoped `StageRunRepository` port
-  (`governance/application/ports.py`), the in-memory reference and PostgreSQL
-  adapters plus `stage_run_repository_from_env` (`infrastructure/repositories.py`),
-  the `stage_run_to_payload`/`stage_run_from_payload` round trip
-  (`infrastructure/mappers.py`), migration `0002_stage_runs`, and a
-  `CrossTenantStageRunError` for unscoped reads/writes. `StageRun` gained a
-  validated `tenant_id` (default `""`, mirroring `GateDecision`) and a
-  `restore_history` seam so a reloaded run reports its audit log without
-  replaying the state machine. The stage 0 route now loads-or-creates the run
-  through a second overridable dependency, records the Working activity, and
-  upserts the completed run after the durable decision, so owner, status,
-  entered/exited timestamps, pinned decision and transitions survive a restart.
-- Evidence: `tests/unit/governance/test_stage_run_repository.py` (8, in-memory
-  port contract) all pass; `tests/unit/governance/test_gate_ledger_postgres.py`
-  extended with a `PostgresStageRunRepositoryTests` class (4) — 12 passed
-  against `redop-dev-postgres-1` via
-  `/tmp/opencode/redops-db-venv`; `tests/unit/shared/test_migrate.py` updated to
-  assert head `0002_stage_runs` and the new table, 3 passed; route test asserts
-  the persisted `COMPLETE` run (5 passed) and app smoke covers the new
-  dependency (10 passed combined); domain suite 1637 run / 15 skipped;
-  `pyflakes backend/redops tests` clean.
-- New findings: once a durable run is `COMPLETE`, a repeated stage 0 gate POST
-  now returns 422 (`StageRunNotCompletableError`) instead of recording a second
-  superseding decision; re-approval after a substantive change needs an explicit
-  run supersede step or a request idempotency key. The production view still
-  derives `assigned_owner` only from a decision, so a Working stage with no
-  decision still shows no owner even though the run now records one.
-- Blockers: Tier 2 facts still hold. The deployment migration step needs the
-  separate GitOps chart to run `python -m redops.shared.persistence.migrate`
-  before the API serves (not in this repository); RLS remains WHERE-clause only
-  (ADR 0004); no request idempotency key on the gate route.
-- Highest priority ready next item: project the durable `StageRun` into the
-  production view so a Working stage reports its persisted assigned owner,
-  status and entered-at from the run rather than only from a gate decision (a
-  query use case loads the engagement's runs through the `StageRunRepository`
-  port and passes them to `_stage_production_view`). Prerequisites: the port and
-  adapters (done), the existing `StageRun` value object and `StageProductionView`
-  tests.
+- Cycle 2026-10-03T155456Z (Ralph cycle, this run): selected item was to project
+  the durable `StageRun` into the production view. SPEC.md section 3 makes
+  `StageRun` the stage-progress aggregate (assigned owner, status, entered and
+  exited at) and section 4 requires the production view to report who is
+  accountable and each stage's status; the prior cycle made the run durable but
+  the view still read owner and status only from a `GateDecision`, so a Working
+  or Blocked stage with no decision rendered as not-started with no owner. It
+  outranked the application query use case and any HTTP surface because those
+  depend on this pure read model, and it outranked the `ClientProcess` canon-gap
+  slice because gate integrity, accountability and verified progress are the
+  pipeline backbone.
+- Outcome: `StageProductionView` gained `entered_at`; `_stage_production_view`
+  now accepts an optional `StageRun` and uses the run's `assigned_owner`, its
+  status mapped `StageStatus` to `GateState` (COMPLETE to APPROVED) and its
+  `entered_at` when no gate decision exists, while the gate state stays
+  authoritative once a `GateDecision` is recorded. `EngagementProductionView
+  .from_ledger` gained a `stage_runs` tuple and refuses, with a new
+  `StageRunProjectionError`, a run from another tenant, engagement or template
+  version, a run for a stage the template does not define, or a second run for
+  one stage.
+- Evidence: `tests/unit/governance/test_production_view.py` new
+  `StageRunProjectionTests` (9) pass; domain suite 1646 run / 15 skipped
+  (unittest on py3.10); `pyflakes backend/redops tests` clean. The harness
+  `make check` already passed this cycle (1646 passed, 1 skipped) before the
+  item; the item adds no failing gate.
+- New findings: no production caller of `EngagementProductionView.from_ledger`
+  exists yet — the read model is exercised only by tests and the Operations
+  policies; `StageRunRepository.load` reads one stage at a time, so an
+  engagement-wide query must loop the template's stages.
+- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate
+  route; RLS remains WHERE-clause only (ADR 0004); the migration deployment
+  step needs the separate GitOps chart (not in this repository).
+- Highest priority ready next item: add the production-view query use case in
+  the application layer — a handler that loads each stage's run through
+  `StageRunRepository.load(template_version, engagement, stage_number,
+  tenant_id)`, passes the tuple plus the ledger to
+  `EngagementProductionView.from_ledger`, and is then exposed by a read route.
+  Prerequisites: this cycle's domain projection (done) and the ledger and stage
+  run repository ports (done). If a methodology-owner decision is preferred
+  instead, the `ClientProcess` design artifact from the canon gap register is
+  the alternative.
+
+### Prior cycle (2026-10-03T144637Z)
+
+- Built the durable tenant-scoped `StageRunRepository` port, in-memory and
+  PostgreSQL adapters, `stage_run_repository_from_env`, the payload round trip,
+  migration `0002_stage_runs` and `CrossTenantStageRunError`; `StageRun` gained a
+  validated `tenant_id` and a `restore_history` seam. The stage 0 route now
+  loads-or-creates the run through a second overridable dependency, records the
+  Working activity and upserts the completed run after the durable decision.
+  Verified by 8 in-memory port tests, 4 PostgreSQL adapter tests, migration
+  assertions and the route test. Known follow-up from that cycle: once the run is
+  COMPLETE a repeated stage 0 gate POST returns 422 (`StageRunNotCompletableError`)
+  and needs an explicit supersede or an idempotency key; this cycle's view
+  projection is the follow-up it named.
+- Earlier planning cycle folded canon files 35-49 (enrollment and sales block)
+  into SPEC.md sections 12.3, 12.5, 12.6 and 12.7; no code change then.
 
 ### Standing decisions (unchanged this cycle)
 

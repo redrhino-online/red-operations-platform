@@ -144,6 +144,18 @@ class ProductionViewError(GovernanceError, ValueError):
     """
 
 
+class StageRunProjectionError(ProductionViewError):
+    """A StageRun was projected into the production view for the wrong scope.
+
+    SPEC.md sections 3 and 4 require the production view to report every stage's
+    assigned work owner, status and entry from the durable records for this
+    engagement. A run that belongs to another client, engagement or template
+    version, or that pins a stage the template does not define, cannot be
+    rendered as this engagement's progress, so it is refused rather than merged
+    into the view.
+    """
+
+
 class MetricReportingError(ProductionViewError):
     """A METRICS reporting row violates the production-view invariant.
 
