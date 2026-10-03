@@ -64,6 +64,9 @@ class StageEightGateRouteTests(unittest.TestCase):
         cls.method_dependency = staticmethod(
             StageSevenGateRouteTests.method_dependency
         )
+        cls.offer_dependency = staticmethod(
+            StageSevenGateRouteTests.offer_dependency
+        )
         cls.repository_class = staticmethod(
             StageSevenGateRouteTests.repository_class
         )
@@ -72,6 +75,9 @@ class StageEightGateRouteTests(unittest.TestCase):
         )
         cls.method_repository_class = staticmethod(
             StageSevenGateRouteTests.method_repository_class
+        )
+        cls.offer_repository_class = staticmethod(
+            StageSevenGateRouteTests.offer_repository_class
         )
         cls.funnel_kinds = CANONICAL_FUNNEL_KINDS
 
@@ -82,12 +88,16 @@ class StageEightGateRouteTests(unittest.TestCase):
         self.repository = self.repository_class()
         self.run_repository = self.run_repository_class()
         self.method_repository = self.method_repository_class()
+        self.offer_repository = self.offer_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
         )
         self.app.dependency_overrides[self.method_dependency] = (
             lambda: self.method_repository
+        )
+        self.app.dependency_overrides[self.offer_dependency] = (
+            lambda: self.offer_repository
         )
         self.client = TestClient(self.app)
 

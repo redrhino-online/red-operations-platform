@@ -4,7 +4,70 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T175228Z (Ralph cycle, this run): selected item was the
+- Cycle 2026-10-03T175505Z (Ralph cycle, this run): selected item was the durable
+  `OfferVersionRepository` for the Commercial context (port, mapper, migration and
+  PostgreSQL adapter) plus the resolve-not-restate rule for the stage 6 to 10
+  gates, the exact next item the prior cycle named (SPEC.md sections 3, 4, 6 and
+  9; queue Q6). The stage 6 to 10 routes re-stated the production ready stage 5
+  offer from the request body, so a later gate could silently declare a different
+  offer after the stage 5 "Offer Locked" checkpoint. It outranked the Next.js
+  `frontend/` shell (DoD 6, blocked on the workflow engine Q5 via Q15) and the
+  larger required-kind wiring (Q28, which changes every stage's asset package and
+  route). The loop prioritizes exact approved asset versions and persistence over
+  downstream features.
+- Outcome: new Commercial application port `OfferVersionRepository`
+  (`backend/redops/contexts/commercial/application/ports.py`); the Commercial
+  infrastructure layer is split into `mappers.py` and `repositories.py`.
+  `offer_to_payload`/`offer_from_payload` round-trip the full production ready
+  offer (state, pinned `MethodReference` tuple and the complete stage 5
+  `DeliverySpecification` including the locked Signature Solution, serialised via
+  new public `signature_solution_to_payload`/`..._from_payload` helpers in the
+  Method mapper). `InMemoryOfferVersionRepository` and
+  `PostgresOfferVersionRepository` refuse a non-production-ready offer
+  (`OfferReadinessError`), a same-id different-body re-statement
+  (`OfferVersionConflictError`) and a blank tenant
+  (`OfferVersionTenantBoundaryError`). Migration `0004_offer_versions` creates
+  `offer_versions(id, tenant_id NOT NULL, offer_id, offer JSONB, recorded_at,
+  UNIQUE(tenant_id, offer_id))`. `api/routes.py::get_offer_version_repository` is
+  an env-selected generator like the method store, and
+  `_approve_method_offer_message` now resolves the offer: the first gate stores
+  the approved candidate, a later gate reuses the stored offer, a different
+  same-id body is refused (422).
+- Evidence: `make check` -> 1820 passed, 1 skipped, 648 subtests; pyflakes clean.
+  New `tests/unit/commercial/test_offer_version_repository.py` (9 plus mapper
+  tests) and `test_offer_version_postgres.py` (8, against the compose DB,
+  exercising the real migration), a stage 6 re-statement refusal test in
+  `tests/unit/test_stage_six_gate_route.py`, an app-smoke offer-dep default test,
+  and `tests/unit/shared/test_migrate.py` head now `0004_offer_versions`. The
+  stage 7 to 10 route tests thread the offer dep override. `make done` clears
+  [1/6]-[4/6] and still fails at [5/6] (`frontend/` missing).
+- New findings: the durable offer store now satisfies DoD condition 4 for
+  `OfferVersion`; the stage 5 offer is tenant-scoped, immutable and shared across
+  processes, and stage 6 to 10 ground on it. `CampaignMessage`, the Authority
+  Amplifier, the funnel and launch QA are still re-stated from the request (no
+  store), so the resolve-not-restate rule for the stage 6 message remains open.
+  The offer store keys on `(tenant, offer_id)` because `OfferVersion` carries no
+  separate version field; a change is a new revision with a new id.
+- Blockers: `frontend/` (DoD condition 6, Q32) is blocked on the workflow engine
+  Q5 via Q15; request idempotency (Q16) blocked on the same; RLS is a WHERE clause
+  only (ADR 0004); no durable message, funnel or launch-QA store; the condition 3
+  retrieval, background worker and artifact-URL layers are unbuilt; the remaining
+  canon gap register entries need named-owner decisions.
+- Highest priority ready next item: apply the same resolve-not-restate rule to the
+  stage 6 `CampaignMessage` -- a durable message store (port, mapper, migration and
+  adapter) so the stage 7 to 10 gates ground on the exact approved stage 6 message
+  instead of a re-stated request body (SPEC.md sections 3, 4; DoD condition 1).
+  Stage 6 "Message"; required asset: the approved `CampaignMessage` (gate
+  "Campaign Message Approved"; approver: the client designated authority);
+  blocked downstream dependency: the stage 7 Authority Amplifier dual approval.
+  Prerequisite: none beyond the method and offer stores now in place. Alternative
+  gate-integrity item: wire the implemented canon assets as required gate kinds
+  (Q28) -- larger, changes the stage asset packages and routes. Canon gap register
+  unchanged this cycle; no new gap identified.
+
+### Prior cycle (2026-10-03T175228Z)
+
+- Cycle 2026-10-03T175228Z (Ralph cycle): selected item was the
   durable PostgreSQL `MethodVersionRepository` plus mapper, migration and
   factory, the exact next item the prior cycle named (SPEC.md sections 3, 4, 6
   and 9; queue Q6). The prior cycle wired the resolve-not-restate rule but held

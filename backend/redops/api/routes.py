@@ -38,11 +38,18 @@ from redops.api.schemas import (
     RecordStageTwoGateRequest,
     RecordStageZeroGateRequest,
 )
+from redops.contexts.commercial.application.ports import OfferVersionRepository
 from redops.contexts.commercial.domain.entities import (
     CampaignMessage,
     OfferVersion,
 )
-from redops.contexts.commercial.domain.errors import CommercialError
+from redops.contexts.commercial.domain.errors import (
+    CommercialError,
+    OfferVersionConflictError,
+)
+from redops.contexts.commercial.infrastructure.repositories import (
+    offer_version_repository_from_env,
+)
 from redops.contexts.commercial.domain.value_objects import (
     AvatarProfile,
     BusinessSnapshot,
@@ -242,6 +249,30 @@ def get_method_version_repository() -> Iterator[MethodVersionRepository]:
         repository.close()
 
 
+def get_offer_version_repository() -> Iterator[OfferVersionRepository]:
+    """Provide the production ready offer seam to the API (SPEC.md section 6).
+
+    SPEC.md section 3 pins exact approved asset versions and intended use at a
+    passing gate, and SPEC.md section 4 keeps the approved version identifiable,
+    so the stage 6 to 10 gates must resolve the production ready stage 5 offer a
+    prior gate pinned rather than trust a repeated request body. The dependency
+    owns one adapter for the request and releases any connection it opened when
+    the request ends, so the resolved offer is read from the durable store and
+    shared across the API and worker processes. The store is chosen once from
+    ``DATABASE_URL``; a request cannot silently downgrade to a process-local
+    offer store, because a set-but-unusable configuration raises before the route
+    runs.
+    """
+
+    repository = offer_version_repository_from_env(
+        os.environ.get("DATABASE_URL")
+    )
+    try:
+        yield repository
+    finally:
+        repository.close()
+
+
 def _approve_method_offer_message(
     tenant_id: str,
     *,
@@ -249,19 +280,22 @@ def _approve_method_offer_message(
     offer_body: OfferVersionInput,
     message_body: CampaignMessageInput,
     method_repository: MethodVersionRepository,
+    offer_repository: OfferVersionRepository,
 ) -> tuple[MethodVersion, MethodReference, OfferVersion, CampaignMessage]:
     """Rebuild the approved method, production ready offer and approved message.
 
     SPEC.md section 3: production requires approved dependencies, and the stage 6
     and stage 7 gates both ground on the locked stage 4 Signature Solution, the
     approved method and the production ready stage 5 offer (stage 7 additionally
-    grounds on the approved stage 6 message). No ``MethodVersion``, offer or
-    message store is exposed over the API yet, so the caller supplies the approved
-    content and its approval metadata and the domain re-proves every dependency
-    relation -- the method's approval, the offer's production readiness and the
-    message's congruence with both -- rather than the transport layer asserting
-    it. Sharing this builder keeps the stage 6 and stage 7 routes from drifting in
-    how they re-state those upstream dependencies.
+    grounds on the approved stage 6 message). The approved method and the
+    production ready offer are resolved from their stores by their exact identity
+    rather than trusted from the repeated request body: the first gate stores the
+    approved candidate, a later gate reuses the stored version, and a same-identity
+    but different body is refused (``MethodVersionConflictError`` or
+    ``OfferVersionConflictError``). The caller still supplies the message, whose
+    congruence with the resolved method and offer the domain re-proves rather than
+    the transport layer asserting it. Sharing this builder keeps the stage 6 and
+    stage 7 routes from drifting in how they resolve those upstream dependencies.
     """
 
     solution = SignatureSolution(
@@ -395,7 +429,7 @@ def _approve_method_offer_message(
         eligibility=offer_body.delivery.eligibility,
         offer_stack=tuple(offer_body.delivery.offer_stack),
     )
-    offer = OfferVersion(
+    candidate_offer = OfferVersion(
         offer_id=offer_body.offer_id,
         tenant_id=tenant_id,
         audience=offer_body.audience,
@@ -406,6 +440,18 @@ def _approve_method_offer_message(
         owner=offer_body.owner,
         delivery_specification=delivery,
     ).require_production_ready((method,))
+    stored_offer = offer_repository.get(tenant_id, offer_body.offer_id)
+    if stored_offer is None:
+        offer_repository.save(candidate_offer)
+        offer = candidate_offer
+    elif stored_offer == candidate_offer:
+        offer = stored_offer
+    else:
+        raise OfferVersionConflictError(
+            f"production ready offer {offer_body.offer_id!r} was previously "
+            f"pinned for tenant {tenant_id!r} with different content; the stage "
+            "gate must reuse the exact stage 5 offer, not re-state it"
+        )
     message = CampaignMessage(
         message_id=message_body.message_id,
         tenant_id=tenant_id,
@@ -1670,6 +1716,9 @@ def record_stage_six_gate(
     method_repository: MethodVersionRepository = Depends(
         get_method_version_repository
     ),
+    offer_repository: OfferVersionRepository = Depends(
+        get_offer_version_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 6 "Campaign Message Approved" gate through the use case.
 
@@ -1683,9 +1732,9 @@ def record_stage_six_gate(
     and upserted through the ``StageRunRepository`` port in the same operation, so
     its assigned owner, status and timestamps stay durable alongside the decision.
 
-    The route re-states the approved method and the production ready stage 5 offer
-    from the request because no ``MethodVersion`` or offer store is exposed over
-    the API yet; the reviewed message is then approved against them so the
+    The route resolves the approved method and the production ready stage 5 offer
+    from their stores by their exact identity instead of trusting the repeated
+    request body; the reviewed message is then approved against them so the
     "Campaign Message Approved" congruence (avatar, currency, problem, promise,
     method, product and CTA agree) is proven by the domain, not asserted. Every
     integrity rule -- canonical kinds, exact versions, owner/approver authority,
@@ -1712,6 +1761,7 @@ def record_stage_six_gate(
             offer_body=body.offer,
             message_body=body.message,
             method_repository=method_repository,
+            offer_repository=offer_repository,
         )
         package = CampaignMessagePackage(
             package_id=body.campaign_message_package_id,
@@ -1797,6 +1847,9 @@ def record_stage_seven_gate(
     method_repository: MethodVersionRepository = Depends(
         get_method_version_repository
     ),
+    offer_repository: OfferVersionRepository = Depends(
+        get_offer_version_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 7 "Authority Amplifier Approved" gate through the use case.
 
@@ -1817,9 +1870,9 @@ def record_stage_seven_gate(
     only permits when the message is approved, the method is an approved
     dependency and every proof claim is a known, directly sourced method claim),
     then ``produce_visuals``, then ``approve_creative`` -- so the canonical order is
-    enforced by the domain, not asserted. The route re-states the approved method,
-    production ready offer and approved stage 6 message because no store is
-    exposed over the API yet; every integrity rule -- the canonical script order,
+    enforced by the domain, not asserted. The route resolves the approved method
+    and production ready offer from their stores by exact identity instead of
+    trusting the repeated request; every integrity rule -- the canonical script order,
     grounded proof, the approval sequence, the canonical kinds, exact versions,
     owner/approver authority and the tenant boundary -- stays enforced by the
     domain, and a rejection is a named 422 and never a partial write. The path
@@ -1842,6 +1895,7 @@ def record_stage_seven_gate(
             offer_body=body.offer,
             message_body=body.message,
             method_repository=method_repository,
+            offer_repository=offer_repository,
         )
         amplifier = _approve_authority_amplifier(
             tenant_id,
@@ -1935,6 +1989,9 @@ def record_stage_eight_gate(
     method_repository: MethodVersionRepository = Depends(
         get_method_version_repository
     ),
+    offer_repository: OfferVersionRepository = Depends(
+        get_offer_version_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 8 "Funnel Complete" gate through the use case.
 
@@ -1954,9 +2011,10 @@ def record_stage_eight_gate(
     rebuilt approved stage 7 amplifier and drives ``mark_funnel_complete`` with the
     prospect path dry run, so the ``FunnelCompletionPolicy`` -- not the transport
     layer -- decides whether the thirteen canonical kinds may be pinned as passing
-    evidence. The route re-states the approved method, production ready offer,
-    approved stage 6 message and approved amplifier because no store is exposed
-    over the API yet; every integrity rule -- the funnel's own completion, the
+    evidence. The route resolves the approved method and production ready offer
+    from their stores by exact identity, and re-states the approved stage 6
+    message and approved amplifier because those stores are not exposed over the
+    API yet; every integrity rule -- the funnel's own completion, the
     grounded stage 7 dependency, the canonical kinds, exact versions,
     owner/approver authority and the tenant boundary -- stays enforced by the
     domain, and a rejection is a named 422 and never a partial write. The path
@@ -1979,6 +2037,7 @@ def record_stage_eight_gate(
             offer_body=body.offer,
             message_body=body.message,
             method_repository=method_repository,
+            offer_repository=offer_repository,
         )
         amplifier = _approve_authority_amplifier(
             tenant_id,
@@ -2076,6 +2135,9 @@ def record_stage_nine_gate(
     method_repository: MethodVersionRepository = Depends(
         get_method_version_repository
     ),
+    offer_repository: OfferVersionRepository = Depends(
+        get_offer_version_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 9 "Launch Approved" gate through the use case.
 
@@ -2095,9 +2157,10 @@ def record_stage_nine_gate(
     on the rebuilt complete stage 8 funnel and drives ``authorize_traffic``, so the
     ``LaunchApprovedPolicy`` and ``ComplianceRequiredPolicy`` -- not the transport
     layer -- decide whether the sixteen canonical kinds may be pinned as passing
-    evidence. The route re-states the approved method, production ready offer,
-    approved stage 6 message, approved stage 7 amplifier and stage 8 funnel because
-    no store is exposed over the API yet; every integrity rule -- the complete
+    evidence. The route resolves the approved method and production ready offer
+    from their stores by exact identity, and re-states the approved stage 6
+    message, approved stage 7 amplifier and stage 8 funnel because those stores
+    are not exposed over the API yet; every integrity rule -- the complete
     same-tenant check set, the critical path outcomes, the compliance package, the
     grounded stage 8 dependency, the canonical kinds, exact versions,
     owner/approver authority and the tenant boundary -- stays enforced by the
@@ -2121,6 +2184,7 @@ def record_stage_nine_gate(
             offer_body=body.offer,
             message_body=body.message,
             method_repository=method_repository,
+            offer_repository=offer_repository,
         )
         amplifier = _approve_authority_amplifier(
             tenant_id,
@@ -2219,6 +2283,9 @@ def record_stage_ten_gate(
     method_repository: MethodVersionRepository = Depends(
         get_method_version_repository
     ),
+    offer_repository: OfferVersionRepository = Depends(
+        get_offer_version_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 10 "Performance Baseline Established" gate.
 
@@ -2240,9 +2307,11 @@ def record_stage_ten_gate(
     34 per SPEC.md section 12.3). The route rebuilds the reviewed baseline on the
     rebuilt ready-for-traffic stage 9 launch QA and drives ``establish``, so the
     ``PerformanceBaselinePolicy`` -- not the transport layer -- decides whether the
-    twelve canonical kinds may be pinned as passing evidence. The route re-states
-    the approved stages 6-9 assets because no store is exposed over the API yet;
-    every integrity rule -- the grounded stage 9 dependency, the distinct
+    twelve canonical kinds may be pinned as passing evidence. The route resolves
+    the approved method and production ready offer from their stores by exact
+    identity, and re-states the approved stages 6-9 assets because those stores
+    are not exposed over the API yet; every integrity rule -- the grounded stage
+    9 dependency, the distinct
     milestones, the observed-first-traffic rule, the canonical kinds, exact
     versions, owner/approver authority and the tenant boundary -- stays enforced by
     the domain, and a rejection is a named 422 and never a partial write. The path
@@ -2265,6 +2334,7 @@ def record_stage_ten_gate(
             offer_body=body.offer,
             message_body=body.message,
             method_repository=method_repository,
+            offer_repository=offer_repository,
         )
         amplifier = _approve_authority_amplifier(
             tenant_id,

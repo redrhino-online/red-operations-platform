@@ -62,6 +62,9 @@ class StageSevenGateRouteTests(unittest.TestCase):
         cls.method_dependency = staticmethod(
             StageSixGateRouteTests.method_dependency
         )
+        cls.offer_dependency = staticmethod(
+            StageSixGateRouteTests.offer_dependency
+        )
         cls.repository_class = staticmethod(
             StageSixGateRouteTests.repository_class
         )
@@ -70,6 +73,9 @@ class StageSevenGateRouteTests(unittest.TestCase):
         )
         cls.method_repository_class = staticmethod(
             StageSixGateRouteTests.method_repository_class
+        )
+        cls.offer_repository_class = staticmethod(
+            StageSixGateRouteTests.offer_repository_class
         )
         cls.amplifier_kinds = CANONICAL_AMPLIFIER_KINDS
 
@@ -80,12 +86,16 @@ class StageSevenGateRouteTests(unittest.TestCase):
         self.repository = self.repository_class()
         self.run_repository = self.run_repository_class()
         self.method_repository = self.method_repository_class()
+        self.offer_repository = self.offer_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
         )
         self.app.dependency_overrides[self.method_dependency] = (
             lambda: self.method_repository
+        )
+        self.app.dependency_overrides[self.offer_dependency] = (
+            lambda: self.offer_repository
         )
         self.client = TestClient(self.app)
 

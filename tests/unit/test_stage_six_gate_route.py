@@ -44,6 +44,7 @@ class StageSixGateRouteTests(unittest.TestCase):
             from redops.api.routes import (
                 get_gate_ledger_repository,
                 get_method_version_repository,
+                get_offer_version_repository,
                 get_stage_run_repository,
             )
             from redops.contexts.commercial.domain.value_objects import (
@@ -56,6 +57,9 @@ class StageSixGateRouteTests(unittest.TestCase):
             )
             from redops.contexts.engagement.domain.value_objects import (
                 CANONICAL_INTAKE_KINDS,
+            )
+            from redops.contexts.commercial.infrastructure.repositories import (
+                InMemoryOfferVersionRepository,
             )
             from redops.contexts.governance.infrastructure.repositories import (
                 InMemoryGateLedgerRepository,
@@ -73,10 +77,14 @@ class StageSixGateRouteTests(unittest.TestCase):
         cls.dependency = staticmethod(get_gate_ledger_repository)
         cls.run_dependency = staticmethod(get_stage_run_repository)
         cls.method_dependency = staticmethod(get_method_version_repository)
+        cls.offer_dependency = staticmethod(get_offer_version_repository)
         cls.repository_class = staticmethod(InMemoryGateLedgerRepository)
         cls.run_repository_class = staticmethod(InMemoryStageRunRepository)
         cls.method_repository_class = staticmethod(
             InMemoryMethodVersionRepository
+        )
+        cls.offer_repository_class = staticmethod(
+            InMemoryOfferVersionRepository
         )
         cls.intake_kinds = CANONICAL_INTAKE_KINDS
         cls.diagnosis_kinds = CANONICAL_DIAGNOSIS_KINDS
@@ -91,12 +99,16 @@ class StageSixGateRouteTests(unittest.TestCase):
         self.repository = self.repository_class()
         self.run_repository = self.run_repository_class()
         self.method_repository = self.method_repository_class()
+        self.offer_repository = self.offer_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
         )
         self.app.dependency_overrides[self.method_dependency] = (
             lambda: self.method_repository
+        )
+        self.app.dependency_overrides[self.offer_dependency] = (
+            lambda: self.offer_repository
         )
         self.client = self.test_client(self.app)
 
@@ -740,6 +752,26 @@ class StageSixGateRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(
             response.json()["detail"]["error"], "MethodVersionConflictError"
+        )
+
+    def test_re_stating_the_approved_offer_with_different_content_is_refused(
+        self,
+    ) -> None:
+        self.seed_stage_five()
+        self.assertEqual(
+            self.client.post(self.url(), json=self.payload()).status_code, 201
+        )
+
+        tampered = self._offer()
+        tampered["promise"] = "a different promise"
+
+        response = self.client.post(
+            self.url(), json=self.payload(offer=tampered)
+        )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"], "OfferVersionConflictError"
         )
 
 

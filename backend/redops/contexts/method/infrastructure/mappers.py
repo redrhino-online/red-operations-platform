@@ -197,6 +197,26 @@ def _solution_from_payload(payload: Mapping[str, Any]) -> SignatureSolution:
     )
 
 
+def signature_solution_to_payload(solution: SignatureSolution) -> dict[str, Any]:
+    """Public wrapper for a Signature Solution payload, reused by other contexts.
+
+    The stage 5 ``DeliverySpecification`` in the Commercial context is grounded
+    on the locked stage 4 Signature Solution, so the offer mapper reuses this
+    exact serialisation rather than inventing a second shape that could drift
+    (SPEC.md section 3: every tenant resource pins an exact approved version).
+    """
+
+    return _solution_to_payload(solution)
+
+
+def signature_solution_from_payload(
+    payload: Mapping[str, Any],
+) -> SignatureSolution:
+    """Rebuild a Signature Solution through its aggregate invariants."""
+
+    return _solution_from_payload(payload)
+
+
 def _approval_to_payload(approval: MethodApproval) -> dict[str, Any]:
     return {
         "version": str(approval.version),

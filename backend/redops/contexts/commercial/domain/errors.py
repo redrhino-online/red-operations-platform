@@ -266,6 +266,27 @@ class OfferTenantBoundaryError(CommercialError):
     """
 
 
+class OfferVersionConflictError(CommercialError):
+    """An approved offer was re-stated under the same id with different content.
+
+    SPEC.md sections 3 and 4: a passing gate pins the exact approved asset
+    version, and a later gate resolves that version rather than re-declaring it.
+    An approved offer is immutable under its offer id: a change must be a new
+    revision with its own identity, so a same-id request body that differs cannot
+    silently replace the offer a prior gate grounded on.
+    """
+
+
+class OfferVersionTenantBoundaryError(CommercialError):
+    """A production ready offer was stored or resolved without a client scope.
+
+    SPEC.md sections 3 and 9 make ``tenant_id`` on every tenant resource and
+    query a hard invariant. An approved offer is a client resource, so reading or
+    writing one without a non-blank tenant would leak across clients or create an
+    orphaned record.
+    """
+
+
 class InvalidCampaignMessagePackageError(CommercialError, ValueError):
     """A stage 6 reviewed asset package was built without identity or version.
 
