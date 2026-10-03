@@ -656,3 +656,38 @@ class InvisibleOptInObservationError(MeasurementError):
     as one.
     """
 
+
+class InvalidBannerAdError(MeasurementError, ValueError):
+    """A banner-ad reference leaves a required field unspecified.
+
+    SPEC.md section 12.5 records the canon's banner-ad specs and swipe file (canon
+    file 33) as the remaining retargeting-system candidate. A dimension carries its
+    pixel sides, and a reference names its channel, its required sizes and a
+    swipe-copy note; a library names its owner and at least one reference. An
+    artifact missing its identity, carrying a non-positive or non-integer side, no
+    dimensions or a duplicate dimension cannot be a traceable stage 8/10 reference.
+    """
+
+
+class BannerAdCanonSpecError(MeasurementError):
+    """A banner-ad reference omits a size the canon names for its channel.
+
+    Canon file 33 supplies "banner ad specs and guidelines... specifically for
+    Google's banner ad specs", and canon file 34 names the two most common display
+    sizes it runs ("the 3 by 250 and the 728") and the Facebook/Perfect Audience ad
+    image ("600 by 315"). A reference for a channel the canon sizes must declare
+    those sizes, so a creative brief cannot silently target a medium without its
+    canonical dimensions. A channel the canon does not size (Twitter) is left to
+    the caller and recorded as a gap rather than invented.
+    """
+
+
+class BannerAdObservationError(MeasurementError):
+    """A banner-ad reference library was projected as an observed result.
+
+    SPEC.md section 3, Measurement invariant keeps observations distinct from
+    conclusions. The library is a static reference of required dimensions and swipe
+    notes, not the ad performance it later informs, so it is never an observation
+    and cannot be represented as one.
+    """
+

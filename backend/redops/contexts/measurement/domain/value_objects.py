@@ -32,11 +32,14 @@ from redops.contexts.governance.domain.value_objects import (
     MetricReportingView,
 )
 from redops.contexts.measurement.domain.errors import (
+    BannerAdCanonSpecError,
+    BannerAdObservationError,
     FunnelForecastObservationError,
     FunnelMetricRoleError,
     FunnelTenantBoundaryError,
     ImprovementObservationError,
     ImprovementResultWindowOpenError,
+    InvalidBannerAdError,
     InvalidFunnelFigureError,
     InvalidFunnelForecastError,
     InvalidImprovementError,
@@ -2326,4 +2329,258 @@ class InvisibleOptInOffer:
             f"invisible opt-in offer {claim_id!r} is a plan of a segment, a lead "
             "magnet, a channel and an audience it advances, not an observed "
             "result, and cannot be recorded as an observation"
+        )
+
+
+@dataclass(frozen=True)
+class BannerDimension:
+    """A banner ad's pixel size (canon files 33, 34).
+
+    The canon's banner ad specs name each ad by its pixel dimensions, and the
+    operator uploads one ad per size because the ad network "serves whichever size
+    fits" (canon file 34: "each ad has to have its own size" and "you upload any one
+    of these sizes"). A dimension is a positive integer width and height, so a
+    reference cannot carry an unbounded or non-numeric size.
+    """
+
+    width: int
+    height: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("banner width", self.width),
+            ("banner height", self.height),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise InvalidBannerAdError(f"a {label} must be an integer")
+            if value < 1:
+                raise InvalidBannerAdError(
+                    f"a {label} must be positive pixels"
+                )
+
+    @property
+    def label(self) -> str:
+        """The conventional ``WIDTHxHEIGHT`` ad size label."""
+        return f"{self.width}x{self.height}"
+
+
+CANON_DISPLAY_BANNER_DIMENSIONS: tuple[BannerDimension, ...] = (
+    BannerDimension(300, 250),
+    BannerDimension(728, 90),
+)
+"""The display banner sizes the canon names as its baseline (canon file 34).
+
+Canon file 34: "I only use the two most common sizes, which is the 3 by 250 and
+the 728. You know, this long banner and then square one." The medium rectangle
+and leaderboard are the canon's declared starting set; larger sizes are an
+acknowledged improvement ("if you're for the same price, you can get like such
+huge presence by going with the bigger sizes").
+"""
+
+CANON_FACEBOOK_AD_DIMENSION: BannerDimension = BannerDimension(600, 315)
+"""The Facebook/Perfect Audience ad image size the canon uses (canon file 34).
+
+Canon file 34 creates the Facebook retargeting ad with the image "600 by 315".
+The same 600x315 image is what the canon reuses across its Facebook newsfeed and
+right-rail placements, so both Facebook channels require it.
+"""
+
+CANON_BANNER_DIMENSIONS: dict[RetargetingChannel, tuple[BannerDimension, ...]] = {
+    RetargetingChannel.FACEBOOK_NEWSFEED: (CANON_FACEBOOK_AD_DIMENSION,),
+    RetargetingChannel.FACEBOOK_RIGHT_RAIL: (CANON_FACEBOOK_AD_DIMENSION,),
+    RetargetingChannel.GOOGLE_DISPLAY: CANON_DISPLAY_BANNER_DIMENSIONS,
+}
+"""The canon-named dimensions per channel (canon files 33, 34).
+
+Google Display and both Facebook placements are sized by the canon. Twitter is a
+retargeting channel the canon names (canon file 33) but does not size in the
+supplied material, so it is deliberately absent and recorded as a gap rather than
+invented; a reference for it is left to the caller.
+"""
+
+
+@dataclass(frozen=True)
+class BannerAdReference:
+    """A channel's banner spec and swipe-copy note (SPEC.md 12.5; canon 33, 34).
+
+    Canon file 33 supplies a "banner ad specs and guidelines" reference and
+    banner/sidebar swipe files of ads collected from competitors "to give you some
+    inspiration", and canon file 34 warns against copying them verbatim ("just
+    reverse engineered... to start with, you'd probably crush it" is advice to
+    learn, not to clone). The reference records the channel, the dimensions the
+    creative must be produced at, and a swipe note describing the observed ads that
+    inform the next creative. It generates no creative itself and names no spend.
+    """
+
+    reference_id: str
+    channel: RetargetingChannel
+    dimensions: tuple[BannerDimension, ...]
+    swipe_note: str
+
+    def __post_init__(self) -> None:
+        if not self.reference_id or not self.reference_id.strip():
+            raise InvalidBannerAdError("a banner reference id is required")
+        if not isinstance(self.channel, RetargetingChannel):
+            raise InvalidBannerAdError(
+                "a banner reference requires a named retargeting channel"
+            )
+        if not isinstance(self.dimensions, tuple) or not self.dimensions:
+            raise InvalidBannerAdError(
+                "a banner reference must declare at least one pixel dimension; a "
+                "banner at no size cannot be produced"
+            )
+        seen: set[tuple[int, int]] = set()
+        for size in self.dimensions:
+            if not isinstance(size, BannerDimension):
+                raise InvalidBannerAdError(
+                    "a banner reference dimension must be a typed BannerDimension, "
+                    "not a free-text size label"
+                )
+            key = (size.width, size.height)
+            if key in seen:
+                raise InvalidBannerAdError(
+                    f"a banner reference repeats the {size.label} size; each "
+                    "declared size must be distinct"
+                )
+            seen.add(key)
+        if not self.swipe_note or not self.swipe_note.strip():
+            raise InvalidBannerAdError(
+                "a banner reference requires a swipe-copy note describing the "
+                "observed ads that inform the creative (canon file 33)"
+            )
+
+    @property
+    def labels(self) -> tuple[str, ...]:
+        """The declared sizes as ``WIDTHxHEIGHT`` labels, in declared order."""
+        return tuple(size.label for size in self.dimensions)
+
+
+class BannerAdReferencePolicy:
+    """Enforces the canon-named dimensions for a banner reference (canon 34).
+
+    A reference for a channel the canon sizes must declare those sizes, so a
+    creative brief cannot target Google Display or a Facebook placement without the
+    canon's baseline dimensions. A channel the canon does not size is left to the
+    caller and recorded as a gap rather than invented (SPEC.md section 12.4). The
+    policy never generates creative or authorizes spend; that remains a named human
+    decision (SPEC.md sections 4 and 9).
+    """
+
+    @staticmethod
+    def require_canon_sizes(reference: BannerAdReference) -> None:
+        if not isinstance(reference, BannerAdReference):
+            raise InvalidBannerAdError(
+                "the canon-size check requires a typed banner reference"
+            )
+        expected = CANON_BANNER_DIMENSIONS.get(reference.channel)
+        if expected is None:
+            return
+        declared = set(reference.dimensions)
+        missing = tuple(size for size in expected if size not in declared)
+        if missing:
+            labels = ", ".join(size.label for size in missing)
+            raise BannerAdCanonSpecError(
+                f"banner reference {reference.reference_id!r} for channel "
+                f"{reference.channel.value!r} omits the canon size(s) {labels}; the "
+                "canon names the sizes this medium must be produced at (canon file "
+                "34)"
+            )
+
+
+@dataclass(frozen=True)
+class BannerAdReferenceLibrary:
+    """The canon's banner-ad spec and swipe library (SPEC.md 12.5; canon 33, 34).
+
+    SPEC.md section 12.5 records the canon's banner-ad specs and swipe file as the
+    remaining retargeting-system candidate, and section 4 keeps external spend and
+    publishing behind a named human authorization. The library is a tenant-scoped,
+    owner-bound static reference of per-channel dimensions and swipe notes that a
+    stage 8 funnel integration or stage 10 campaign can consult before producing
+    creative. It reports the canon channels it does not yet cover so the gap stays
+    visible.
+
+    The library is a reference, not a gate kind and not an authorization to spend:
+    producing or publishing the creative and any payment remain named human
+    decisions (SPEC.md sections 4 and 9). It is never an observed result; the ad
+    performance it later informs is a separate observation (SPEC.md section 3).
+    """
+
+    library_id: str
+    tenant_id: str
+    owner: str
+    references: tuple[BannerAdReference, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("banner reference library id", self.library_id),
+            ("banner reference library tenant id", self.tenant_id),
+            ("banner reference library owner", self.owner),
+        ):
+            if not value or not value.strip():
+                raise InvalidBannerAdError(f"{label} is required")
+        if not isinstance(self.references, tuple) or not self.references:
+            raise InvalidBannerAdError(
+                "a banner reference library must declare at least one typed "
+                "reference; an empty library documents no medium"
+            )
+        seen: set[RetargetingChannel] = set()
+        for reference in self.references:
+            if not isinstance(reference, BannerAdReference):
+                raise InvalidBannerAdError(
+                    "a banner reference library entry must be a typed banner "
+                    "reference, not a free-text spec"
+                )
+            if reference.channel in seen:
+                raise InvalidBannerAdError(
+                    f"a banner reference library repeats channel "
+                    f"{reference.channel.value!r}; each channel is documented once"
+                )
+            seen.add(reference.channel)
+
+    @property
+    def channels(self) -> tuple[RetargetingChannel, ...]:
+        """The channels the library documents, in declared order."""
+        return tuple(reference.channel for reference in self.references)
+
+    def covers(self, channel: RetargetingChannel) -> bool:
+        """Whether the library documents a channel."""
+        return any(reference.channel is channel for reference in self.references)
+
+    def specification_for(
+        self, channel: RetargetingChannel
+    ) -> BannerAdReference | None:
+        """The reference for a channel, or ``None`` if it is not documented."""
+        for reference in self.references:
+            if reference.channel is channel:
+                return reference
+        return None
+
+    def missing_canon_channels(self) -> tuple[RetargetingChannel, ...]:
+        """The canon-sized channels this library does not yet document."""
+        return tuple(
+            channel
+            for channel in CANON_BANNER_DIMENSIONS
+            if not self.covers(channel)
+        )
+
+    @property
+    def is_canon_complete(self) -> bool:
+        """Whether every canon-sized channel is documented."""
+        return not self.missing_canon_channels()
+
+    @property
+    def is_reference(self) -> bool:
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a banner reference library as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The library
+        is a static reference of required dimensions and swipe notes, not the ad
+        performance it later informs, so it is never an observation.
+        """
+        raise BannerAdObservationError(
+            f"banner reference library {claim_id!r} is a reference of dimensions "
+            "and swipe notes, not an observed result, and cannot be recorded as an "
+            "observation"
         )
