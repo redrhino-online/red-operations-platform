@@ -10,7 +10,7 @@
 #   launch-blocked-on-failed-path gitops-revert-restores
 #   backup-restores-approval-trail
 #
-# A scenario is "covered" only when an existing test exercises it. Three
+# A scenario is "covered" only when an existing test exercises it. Two
 # scenarios have no test yet, so condition 2 (a green section 11 acceptance
 # suite) is unmet and the DoD gate keeps failing until the named seams and the
 # deployment exist.
@@ -20,7 +20,7 @@ known-requires-source tests/unit/knowledge/test_claim.py
 unauthorized-approval-rejected tests/security/test_cross_tenant_isolation.py
 method-change-identifies-dependents tests/unit/method/test_method_impact.py
 worker-restart-preserves-waiting tests/unit/workflows/test_workflow_resume.py
-duplicate-delivery-one-effect uncovered no connector idempotency seam yet (Q16)
+duplicate-delivery-one-effect tests/unit/execution/test_connector_idempotency.py
 cross-client-retrieval-empty tests/security/test_retrieval_isolation.py
 launch-blocked-on-failed-path tests/unit/execution/test_launch_qa.py
 gitops-revert-restores uncovered deploy-gated; needs the Atlas recovery drill (Q49)

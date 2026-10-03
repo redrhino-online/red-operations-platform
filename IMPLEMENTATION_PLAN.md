@@ -4,6 +4,78 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T204037Z (Ralph cycle, this run): selected item was the
+  idempotency-keyed Execution connector seam (Q16 connector half, SPEC.md
+  sections 6, 7, 9 and 11; DoD condition 2). It is the highest priority ready
+  item: it closes the `duplicate-delivery-one-effect` section 11 scenario, the
+  last non-deploy blocker on condition 2, and its only dependency Q15 is done.
+  It outranks alternatives: condition 2's two remaining scenarios
+  (`gitops-revert-restores`, `backup-restores-approval-trail`) are deploy-gated
+  on Q49 and a chosen backup target; the condition 3 worker and artifact-URL
+  layers need a worker entry point (ADR 0005 is a proposed topology) and an
+  artifact-serving route, neither of which exists; Q28 stage 8-10 required kinds
+  remain blocked on the named methodology-owner placement decision; Q3/Q4 need
+  the ADR 0006 resolution and a live key; Q47-Q50 need the Atlas cluster. The
+  canon gap register has no ready pipeline item: its remaining entries are
+  implemented or are candidate pipeline additions awaiting a named-owner
+  decision, so no canon-covered method artifact outranks this gate work.
+- Outcome: new Execution `ConnectorPort`, `ConnectorTransport` and
+  `ExternalOperationStore` ports in `.../application/ports.py`; pure-domain
+  `ConnectorEffect` and `ExternalOperation` in `.../domain/connector.py`; named
+  errors `ConnectorError`, `InvalidConnectorEffectError`,
+  `ConnectorIdempotencyConflictError` and `ConnectorTenantBoundaryError` in
+  `.../domain/errors.py`; and the replay-safe `IdempotentConnector` adapter plus
+  `InMemoryExternalOperationStore` and `RecordingConnectorTransport` in
+  `.../infrastructure/connectors.py`. The store is append-only per
+  `(tenant_id, idempotency_key)`: a repeat of the same effect returns the
+  recorded operation without a second send, and a reused key with different
+  content or a different connector is refused rather than silently suppressed.
+  `tests/acceptance/covered-scenarios.txt` now maps
+  `duplicate-delivery-one-effect` to the new test. No route, gate rule,
+  approval authority, store contract or pipeline stage changed; the vendored
+  OpenExecutive is untouched.
+- Evidence: `tests/unit/execution/test_connector_idempotency.py` (10 tests)
+  proves a first delivery sends once and records one operation, a duplicate
+  delivery creates one external operation (the transport is not called again),
+  a reused key with changed content or a different connector raises the conflict
+  with no second send, the key is scoped per client, and a blank tenant or
+  idempotency key is refused. `make check` -> 2288 passed, 2 skipped, 706
+  subtests passed (was 2278; +10). `check_acceptance_coverage.sh
+  tests/acceptance` still exits 1, now naming only `gitops-revert-restores` and
+  `backup-restores-approval-trail`. `make done` still stops at `[2/6]` condition
+  2 (now only the two deploy-gated scenarios). `test_acceptance_coverage_check`
+  honesty test updated to the new missing set.
+- New findings: the `WorkflowStepExecutor` port already documented an
+  idempotency requirement but had no adapter; the connector seam now supplies
+  the replay-safe outbound effect the executor was written to need
+  (`workflow-run-engine` memory). The connector's guarantee is only
+  process-local today: an in-memory store does not survive a restart, so the
+  duplicate-delivery rule is not yet durable. Q16's optimistic-version-conflict
+  half (stale update 409) is also not built; no mutation route carries an
+  optimistic version check yet, so it has no ready consumer.
+- Blockers (unchanged head): condition 2 is the `make done` head blocker and its
+  remaining two scenarios need the Atlas cluster and a chosen backup target
+  (Q49). Condition 3 needs the worker and artifact-URL layers. Q28 stage 8-10
+  required kinds blocked on the named methodology-owner placement decision; Q3
+  agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q47-Q50
+  need the Atlas cluster.
+- Highest priority ready next item: the durable PostgreSQL
+  `ExternalOperationStore` adapter plus migration (Q16 completion, SPEC.md
+  sections 6, 7, 9 and 11; DoD condition 4 and condition 2's worker-restart
+  integrity). Required asset: a `PostgresExternalOperationStore` implementing
+  the port with a unique `(tenant_id, idempotency_key)` constraint and migration
+  `0018_external_operations`, so an already-recorded external operation cannot
+  be re-sent after a process restart (SPEC.md section 11 duplicate delivery
+  across restarts, SPEC.md section 9 tenant scoping). Checkpoint: none (seam,
+  not a gate); approver: none. Blocked downstream dependency: none directly; it
+  hardens condition 2's duplicate-delivery and worker-restart guarantees once a
+  worker exists. Prerequisite: this cycle's connector seam (done). Alternative
+  ready item: the condition 3 worker isolation layer, which needs a worker entry
+  point (ADR 0005 proposed), larger than the durable store.
+
+### Prior cycle (2026-10-03T203755Z)
+
 - Cycle 2026-10-03T203755Z (Ralph cycle, this run): selected item was the
   Knowledge retrieval port and its tenant-scoped isolation test (Q8, SPEC.md
   sections 3, 5, 6, 9 and 13 conditions 2 and 3). It is the highest priority
@@ -4646,7 +4718,7 @@ stalls:
 | Q13 | REST `/journeys`, `/measurements` (`/measurements` done 2026-10-03T193641Z; `GET /red/measurements` and `POST /red/measurements` over the new durable Measurement `MeasurementRegistry` (metric definitions + observations), in-memory and PostgreSQL adapters and migration `0014_measurements`; tenant required, append-only, an observation pins its exact metric version and a same-key re-statement is a 409. `/journeys` advanced 2026-10-03T194013Z: the SPEC.md section 3 `JourneyRelease` core aggregate now exists (pure domain, invariant "launch needs signed readiness and authorized release", grounded on a same-tenant ready-for-traffic `LaunchQA` whose `TrafficAuthorization` names the designated authority); `/journeys` done 2026-10-03T194326Z: new Execution `JourneyReleaseRepository` port (get/list/save/close) with in-memory and PostgreSQL adapters, migration `0015_journey_releases`, and tenant-scoped `GET`/`POST /red/journeys` grounded on the durable stage 9 launch QA by exact id; append-only, a same-id re-statement is a 409. Tests `tests/unit/execution/test_journey_release_repository.py` (7), `test_journeys_route.py` (7), `test_journey_release_postgres.py` (4)) | api | Q12 | route tests |
 | Q14 | REST `/opportunities`, `/interventions` (`/interventions` done 2026-10-03T194645Z: tenant-scoped `GET /red/interventions` ranks the command center cards for a client engagement from the Governance production view and `POST /red/interventions/dismiss` records a durable operator dismissal; new Operation `InterventionDismissal` value object and `InterventionDismissalRepository` port with in-memory and PostgreSQL adapters and migration `0016_intervention_dismissals`; the cards are derived on read, only the dismissal is stored, a same-key re-statement is a 409. Tests `tests/unit/operations/test_intervention_dismissal.py`, `test_intervention_dismissal_repository.py`, `test_intervention_dismissal_postgres.py`, `test_interventions_route.py`. `/opportunities` done 2026-10-03T195052Z: tenant-scoped `GET /red/opportunities` and `POST /red/opportunities` over the new Portfolio `Opportunity` value object and `OpportunityRepository` port with in-memory and PostgreSQL adapters and migration `0017_opportunities`; an opportunity is a proposal grounded on an exact same-tenant `StageAssetVersion`, stays `proposed` and refuses an approved state, append-only, a same-id re-statement is a 409. Tests `tests/unit/portfolio/test_opportunity.py`, `test_opportunity_repository.py`, `test_opportunities_route.py`, `test_opportunity_postgres.py`. Q14 complete) | api | Q13 | route tests |
 | Q15 | REST `/workflows/{id}` with SSE or stable id polling (done 2026-10-03T185701Z; `GET /red/clients/{tenant_id}/workflows/{run_id}`; tenant-scoped polling read returning a stable append-only `event_id` and the transition log; 404 for a missing/foreign run. Tenant is the path authority, matching the stage routes, not the bare `/workflows/{id}`) | api | Q5 | route tests `tests/unit/workflows/test_workflow_run_route.py` (4) |
-| Q16 | Idempotency keys and optimistic version conflicts on mutations | api | Q15 | duplicate delivery one effect; stale update 409 |
+| Q16 | Idempotency keys and optimistic version conflicts on mutations | api | Q15 | duplicate delivery one effect; stale update 409. Connector half done 2026-10-03T204037Z: Execution `ConnectorPort`/`ConnectorTransport`/`ExternalOperationStore` ports, pure-domain `ConnectorEffect`/`ExternalOperation`, and the replay-safe `IdempotentConnector` adapter (`.../infrastructure/connectors.py`) with the `duplicate-delivery-one-effect` acceptance test `tests/unit/execution/test_connector_idempotency.py` (10 tests); a duplicate effect resolves to one recorded external operation and a reused key with different content is refused. Remaining: the optimistic-version-conflict half (stale update 409) has no mutation route carrying a version yet, and the operation store is process-local (durable adapter pending) |
 | Q17 | Stage 0 intake route hardened plus workspace and authority (API surface) (done 2026-10-03T190410Z; `RecordStageZeroGateRequest` no longer carries `authorities`; `record_stage_zero_gate` resolves the persisted `ClientWorkspace` and its authority registry through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_zero_gate_route.py` (7) and helper `tests/unit/workspace_fixture.py`) | pipeline | Q9 | stage 0 gate e2e |
 | Q18 | Stage 1 diagnosis gate assembly from the built assets (done 2026-10-03T190852Z; `RecordStageOneGateRequest` no longer carries `authorities`; `record_stage_one_gate` resolves the persisted `ClientWorkspace` through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_one_gate_route.py` (7) and the reused stage 1 payload in `tests/unit/test_stage_six_gate_route.py` drop the field) | pipeline | Q17 | Avatar Locked decision |
 | Q19 | Stage 2 currency gate assembly plus extension of the Q17/Q18 persisted-workspace/authority hardening (done 2026-10-03T191057Z; `RecordStageTwoGateRequest` no longer carries `authorities`; `record_stage_two_gate` resolves the persisted `ClientWorkspace` through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_two_gate_route.py` (9) and the reused stage 2 payload in `tests/unit/test_stage_six_gate_route.py` drop the field) | pipeline | Q8, Q18 | Currency Locked decision |
@@ -4661,7 +4733,7 @@ stalls:
 | Q28 | Apply the required-kind policy: wire each canon asset as a required kind | pipeline | Q27 | stage templates updated; gate integrity tests. Stage 1 `awareness-map` wired from the typed `MarketAwarenessMap` 2026-10-03T181228Z; `audience-reach-estimate` and `target-market-match` and stages 2-10 remain. Stage 9     `compliance-package` wired from the reviewed `CompliancePackage` 2026-10-03T182015Z; stage 5 `product-program` wired from the typed `ProductProgram` 2026-10-03T182409Z (stage 5 now thirteen kinds); stage 4 `thirteen-transformations` wired from the typed `ThirteenTransformations` 2026-10-03T182806Z (stage 4 now thirteen kinds); stage 6 `content-roadmap` wired from the typed `ContentRoadmap` 2026-10-03T183151Z (thirteen kinds); stage 6 `content-crusher` wired from the typed `ContentCrusher` 2026-10-03T183447Z (fourteen kinds); stage 6 `content-plan` wired from the typed `ContentPlan` 2026-10-03T183643Z (fifteen kinds, stage 6 content family complete); stage 7 is canon-covered by the `AuthorityAmplifierPackage`, and stages 8-10 now await the named methodology-owner placement decision for `EnrollmentPlan`, `ClientProcess`, `SwimlanesPlan` and the post-stage-10 assets |
 | Q29 | Method change impact assessment emits the dependent review queue | pipeline | Q21 | a change identifies its dependents |
 | Q30 | Stage 0-10 API e2e with deterministic agents | e2e | Q27 | DoD 1: one client intake to baseline |
-| Q31 | Section 11 acceptance suite (SPEC.md section 11) | e2e | Q30 | DoD 2. Condition 2 gate added 2026-10-03T200006Z: `scripts/check_acceptance_coverage.sh` requires all ten canonical scenarios declared in `tests/acceptance/covered-scenarios.txt`, each covered scenario pointing at a test file that exists with at least one test, so condition 2 cannot pass without the suite. Covered today: source-attribution, known-requires-source, unauthorized-approval-rejected, method-change-identifies-dependents, worker-restart-preserves-waiting, launch-blocked-on-failed-path, cross-client-retrieval-empty. Uncovered and keeping the gate red: duplicate-delivery-one-effect (needs a connector idempotency seam, Q16), gitops-revert-restores and backup-restores-approval-trail (deploy-only, Q49 and a chosen backup target) |
+| Q31 | Section 11 acceptance suite (SPEC.md section 11) | e2e | Q30 | DoD 2. Condition 2 gate added 2026-10-03T200006Z: `scripts/check_acceptance_coverage.sh` requires all ten canonical scenarios declared in `tests/acceptance/covered-scenarios.txt`, each covered scenario pointing at a test file that exists with at least one test, so condition 2 cannot pass without the suite. Covered today: source-attribution, known-requires-source, unauthorized-approval-rejected, method-change-identifies-dependents, worker-restart-preserves-waiting, launch-blocked-on-failed-path, cross-client-retrieval-empty, duplicate-delivery-one-effect. Uncovered and keeping the gate red: gitops-revert-restores and backup-restores-approval-trail (deploy-only, Q49 and a chosen backup target) |
 | Q32 | Next.js shell in `frontend/` plus RED theme plus API client | ui | Q15 | builds; health route. Done 2026-10-03T200524Z: `frontend/` Next.js 16 / React 19 / TypeScript app (`package.json`, `next.config.ts` `output: standalone`, RED `globals.css` palette, `layout.tsx` shell, `page.tsx` surface list, `health/route.ts` liveness, tenant-scoped `shared/api/client.ts` over `/red`); `npm run build` clean, `/health` -> `{"status":"ok"}`, `/` -> 200. No section 8 screen or `dod-screens.txt` yet, so the condition 6 gate stays honestly red |
 | Q33 | Command center screen | ui | Q32 | Done 2026-10-03T201337Z: `frontend/src/features/command-center/` (`CommandCenter.tsx` presentational, `CommandCenterScreen.tsx` tenant-scoped read, route `/command-center`, `frontend/dod-screens.txt` declares the screen id) over `listInterventions`; Vitest+jsdom browser runner (`vitest.config.ts`, `npm test` -> `vitest run`). `npm run build` clean, `npm test` 5 passed, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 11 remaining screens |
 | Q34 | Client workspace overview | ui | Q33 | Done 2026-10-03T201508Z: `frontend/src/features/client-workspace/` (`ClientWorkspaceOverview.tsx` presentational, `ClientWorkspaceOverviewScreen.tsx` tenant/engagement/date read, route `/client-workspace`, `frontend/dod-screens.txt` declares the screen id) over `getProductionView` (`GET /red/clients/{tenant}/engagements/{engagement}/production-view?on=`). `npm run build` clean, `npm test` 5 new passed (10 total), `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 10 remaining screens |

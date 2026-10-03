@@ -526,3 +526,40 @@ class JourneyReleaseVersionTenantBoundaryError(JourneyReleaseError):
     without a client would either leak across clients or create an orphaned
     record.
     """
+
+
+class ConnectorError(ExecutionError):
+    """Base class for outbound connector rule violations."""
+
+
+class InvalidConnectorEffectError(ConnectorError, ValueError):
+    """A ConnectorEffect or ExternalOperation violates an invariant.
+
+    SPEC.md section 6 calls connectors "outbound adapters with explicit scopes
+    and replay safe operations", and SPEC.md section 7 requires a request
+    identity and idempotency key on every mutation where a retry matters. An
+    effect must therefore name its client, idempotency key, connector, target and
+    exact content digest, and a recorded operation must name its external
+    reference. A blank field cannot be represented as a replay-safe effect.
+    """
+
+
+class ConnectorIdempotencyConflictError(ConnectorError):
+    """An idempotency key was reused with different content.
+
+    SPEC.md section 11 requires "duplicate delivery creates one external
+    operation". A repeat of the *same* effect must resolve to the one recorded
+    operation, but a reused key that carries different content is a different
+    operation that would silently be suppressed, so the connector refuses it
+    rather than sending a second external effect under a key already spent.
+    """
+
+
+class ConnectorTenantBoundaryError(ConnectorError):
+    """A connector effect or operation was used without a client scope.
+
+    SPEC.md sections 3 and 9 make an outbound operation a client resource that
+    must carry its tenant on every command and query, so delivering or resolving
+    one without a client would either leak across clients or create an orphaned
+    operation.
+    """
