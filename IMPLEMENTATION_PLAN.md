@@ -4,7 +4,60 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T173254Z (Ralph cycle, this run): selected item was the HTTP
+- Cycle 2026-10-03T173449Z (Ralph cycle, this run): selected item was the
+  `tests/e2e` stage 0-10 suite that drives one client from intake to
+  "Performance Baseline Established" through the REST API -- SPEC.md section 13
+  definition-of-done condition 1 and the next highest priority ready item named
+  by the prior cycle. The prior cycle had completed the canonical 0-10 gate write
+  surface, so the only remaining `make done` failure gate integrity work could
+  address was the missing e2e proof. It outranked the `ClientProcess` canon gap
+  (a methodology-owner decision) and a durable `MethodVersion`/offer store (a
+  larger integrity item), because condition 1 is the machine-checkable stop
+  condition and the pipeline backbone proof.
+- Outcome: new `tests/e2e/test_stage_zero_to_ten_e2e.py` (plus the
+  `tests/e2e/__init__.py` package marker). It drives the real FastAPI app over
+  HTTP: seeds stages 0 through 9 through their own routes via the stage 10 route
+  test's shared payload chain, records stage 10 through
+  `RecordStageTenGateHandler`, then reads the production-manager view back
+  through `GetEngagementProductionViewHandler` and inspects the tenant-scoped
+  `GateLedger`. It asserts all 11 stages are approved with no missing asset
+  kinds, the production view reports 11 approved gates / 0 remaining and no
+  current or next-approval stage (post-launch measurement, not completion), and
+  every one of the eleven durable gate decisions pins a non-empty exact-version
+  (version 1) asset set whose asset approvals are all approved. The stage 0-9
+  payload builders are reused from `tests/unit/test_stage_ten_gate_route.py`
+  (itself chained through the earlier stage route tests) so the e2e cannot drift
+  from the pipelined upstream content. The HTTP boundary, application handlers,
+  domain policies and tenant-scoped repository ports are real; only the outer
+  infrastructure adapters are the in-memory reference implementations, so the
+  suite is deterministic and database-free (the durable PostgreSQL adapter stays
+  covered by `tests/unit/governance/test_gate_ledger_postgres.py`, DoD 4).
+- Evidence: `uv run pytest tests/e2e -q` -> 1 passed. `make check` green: 1724
+  passed, 1 skipped, 632 subtests; pyflakes clean. `make done` now clears step
+  [2/6] and fails at step [3/6] (`tests/security` absent). The prior `make done`
+  failed at [2/6].
+- New findings: the e2e could reuse the unit route-test payload chain without a
+  new shared module, confirming the existing DRY convention scales to the API
+  level. The e2e proves gate integrity over the whole 0-10 surface, not just the
+  final gate. The API-boundary integrity limitation is unchanged: the caller
+  supplies upstream approval metadata because no durable read model is exposed.
+- Blockers: Tier 2 facts unchanged; `tests/security` cross-tenant suite (DoD 3)
+  is now the only remaining test-suite blocker, followed by the absent
+  `frontend/` (DoD 5), the migration deployment step and Atlas health (DoD 9);
+  request idempotency, RLS WHERE-clause-only (ADR 0004) and no durable
+  MethodVersion/offer/funnel/QA store remain.
+- Highest priority ready next item: the `tests/security` cross-tenant suite
+  (SPEC.md sections 9 and 13 condition 3), the next `make done` failure: at
+  minimum the API layer over the stage gate and production-view routes and the
+  retrieval layer, with worker and artifact-URL coverage added as those seams
+  exist. Prerequisites: the 0-10 route surface and the production-view read route
+  (both done). Alternative: the `ClientProcess` design artifact from the canon
+  gap register, if a methodology-owner decision is preferred; or a durable
+  `MethodVersion`/offer store so the gates stop re-stating upstream approvals.
+
+### Prior cycle (2026-10-03T173254Z)
+
+- Cycle 2026-10-03T173254Z: selected item was the HTTP
   route that exposes the stage 10 "Performance Baseline Established" gate. The
   prior cycle named it the highest priority ready next item: the
   `StageTenGateAssembler` / `StageTenGateRecorder`, the
