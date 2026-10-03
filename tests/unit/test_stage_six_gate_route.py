@@ -385,7 +385,6 @@ class StageSixGateRouteTests(unittest.TestCase):
     def stage_three_payload(self):
         return {
             "workspace_id": "ws-3f",
-            "authorities": self._authorities(),
             "diagnostic_package_id": "diagnostic-model-3f",
             "model": {
                 "model_id": "diagnostic-model-3f",

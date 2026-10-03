@@ -359,18 +359,18 @@ class DiagnosticModelInput(BaseModel):
 class RecordStageThreeGateRequest(BaseModel):
     """The stage 3 "Diagnostic Model Approved" gate request (SPEC.md section 4).
 
-    The caller supplies the reviewed model values, the workspace authority
-    registry and the decision metadata. The route builds the canonical gate from
-    these through the use case; it deliberately accepts no pre-built gate, so
-    approver authority and exact-version evidence cannot be bypassed. Stage 3
-    depends on a passing stage 2 decision already in the ledger. The model
-    carries no claims: the "Diagnostic Model Approved" checkpoint turns on
-    adjacent-level observable distinguishability, which the domain enforces,
-    rather than external customer evidence.
+    The caller supplies the reviewed model values and the decision metadata; the
+    authority registry is resolved from the durable workspace store, never the
+    body. The route builds the canonical gate from these through the use case; it
+    deliberately accepts no pre-built gate, so approver authority and
+    exact-version evidence cannot be bypassed. Stage 3 depends on a passing
+    stage 2 decision already in the ledger. The model carries no claims: the
+    "Diagnostic Model Approved" checkpoint turns on adjacent-level observable
+    distinguishability, which the domain enforces, rather than external customer
+    evidence.
     """
 
     workspace_id: str
-    authorities: list[ClientAuthorityInput]
     diagnostic_package_id: str
     model: DiagnosticModelInput
     stage_owner: str
