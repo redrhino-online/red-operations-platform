@@ -488,17 +488,50 @@ class StageFiveGateRouteTests(unittest.TestCase):
             "offer_stack": ["diagnostic offer", "core program"],
         }
 
+    def _program(self):
+        step_names = [
+            "Extract the diagnosis",
+            "Draft the map",
+            "Name the phases",
+            "Write the steps",
+            "Bind the inputs",
+            "Define the actions",
+            "Pin the outputs",
+            "Write the narrative",
+            "Draw the visual",
+        ]
+        return {
+            "program_id": "program-3f",
+            "version": 1,
+            "owner": "red-offer-owner",
+            "model": "group_consulting",
+            "pricing_basis": "outcome_value",
+            "duration_weeks": 9,
+            "cadence": "monday_training_thursday_coaching",
+            "modules": [
+                {
+                    "module_id": f"module-{index + 1}",
+                    "signature_step": name,
+                    "position": index + 1,
+                    "outcome": f"the client reaches {name}",
+                    "deliverable": f"the {name} worksheet",
+                }
+                for index, name in enumerate(step_names)
+            ],
+        }
+
     def payload(self, **overrides):
         body = {
             "workspace_id": "ws-3f",
             "authorities": self._authorities(),
             "offer_package_id": "offer-3f",
             "delivery": self._delivery(),
+            "product_program": self._program(),
             "stage_owner": OWNER,
             "approver": APPROVER,
             "proposed_by": OWNER,
             "scope": SCOPE,
-            "checkpoint_evidence": "all twelve stage 5 assets reviewed",
+            "checkpoint_evidence": "all thirteen stage 5 assets reviewed",
             "rationale": "every method step is delivered and owned",
             "assigned_owner": OWNER,
             "due_on": DUE,

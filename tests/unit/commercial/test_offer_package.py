@@ -34,7 +34,7 @@ from redops.contexts.governance.domain.templates import stage_zero_to_ten_templa
 from redops.contexts.method.domain.entities import SignatureSolution
 
 from ..method.fixtures import signature_solution
-from .fixtures import TENANT, delivery_specification
+from .fixtures import TENANT, delivery_specification, product_program
 
 OTHER_TENANT = "client-other"
 
@@ -50,36 +50,53 @@ def package(**overrides) -> OfferPackage:
         "tenant_id": TENANT,
         "delivery": delivery_specification(),
         "delivery_version": 1,
+        "product_program": product_program(),
+        "product_program_version": 1,
     }
     values.update(overrides)
     return OfferPackage(**values)
 
 
 class OfferPackageProjectionTests(unittest.TestCase):
-    def test_the_package_projects_all_twelve_canonical_stage_five_kinds(self):
+    def test_the_package_projects_all_thirteen_canonical_stage_five_kinds(self):
         assets = package().stage_asset_versions()
 
         kinds = {asset.kind for asset in assets}
         self.assertEqual(frozenset(CANONICAL_OFFER_KINDS), kinds)
-        self.assertEqual(12, len(assets))
+        self.assertEqual(13, len(assets))
 
     def test_the_canonical_kinds_match_the_template_stage_five_package(self):
         template_kinds = stage_zero_to_ten_template().required_asset_kinds(5)
 
         self.assertEqual(template_kinds, frozenset(CANONICAL_OFFER_KINDS))
 
-    def test_every_kind_pins_the_reviewed_delivery_at_its_exact_version(self):
-        assets = package(delivery_version=4).stage_asset_versions()
+    def test_every_kind_pins_the_reviewed_asset_at_its_exact_version(self):
+        assets = package(
+            delivery_version=4, product_program_version=4
+        ).stage_asset_versions()
 
-        self.assertEqual(12, len(assets))
+        self.assertEqual(13, len(assets))
         for asset in assets:
             self.assertEqual(4, asset.version)
 
-    def test_each_kind_pins_the_reviewed_delivery_identity(self):
+    def test_the_delivery_kinds_pin_the_reviewed_delivery_identity(self):
         assets = package().stage_asset_versions()
 
-        for asset in assets:
+        delivery_assets = [
+            asset for asset in assets if asset.kind != "product-program"
+        ]
+        self.assertEqual(12, len(delivery_assets))
+        for asset in delivery_assets:
             self.assertEqual("delivery-3f", asset.asset_id)
+
+    def test_the_product_program_kind_pins_the_reviewed_program_identity(self):
+        assets = package().stage_asset_versions()
+
+        program_assets = [
+            asset for asset in assets if asset.kind == "product-program"
+        ]
+        self.assertEqual(1, len(program_assets))
+        self.assertEqual("program-3f", program_assets[0].asset_id)
 
     def test_the_projected_evidence_is_tenant_scoped(self):
         for asset in package().stage_asset_versions():
@@ -101,6 +118,14 @@ class OfferPackageBoundaryTests(unittest.TestCase):
         with self.assertRaises(OfferTenantBoundaryError):
             package(delivery=other_tenant_delivery())
 
+    def test_a_cross_tenant_product_program_is_refused(self):
+        with self.assertRaises(OfferTenantBoundaryError):
+            package(
+                product_program=product_program(
+                    signature_solution(tenant_id=OTHER_TENANT)
+                )
+            )
+
     def test_a_blank_package_identity_is_refused(self):
         for override in ({"package_id": ""}, {"tenant_id": "   "}):
             with self.subTest(override=override):
@@ -109,6 +134,15 @@ class OfferPackageBoundaryTests(unittest.TestCase):
 
     def test_a_versionless_reviewed_delivery_is_refused(self):
         for override in ({"delivery_version": 0}, {"delivery_version": -1}):
+            with self.subTest(override=override):
+                with self.assertRaises(InvalidOfferPackageError):
+                    package(**override)
+
+    def test_a_versionless_product_program_is_refused(self):
+        for override in (
+            {"product_program_version": 0},
+            {"product_program_version": -1},
+        ):
             with self.subTest(override=override):
                 with self.assertRaises(InvalidOfferPackageError):
                     package(**override)

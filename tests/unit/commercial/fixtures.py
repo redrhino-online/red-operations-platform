@@ -13,6 +13,11 @@ from redops.contexts.commercial.domain.entities import CampaignMessage, OfferVer
 from redops.contexts.commercial.domain.value_objects import (
     DeliverySpecification,
     MethodReference,
+    ProductMatrixModel,
+    ProductModule,
+    ProductProgram,
+    ProgramCadence,
+    ProgramPricingBasis,
     StepDelivery,
 )
 from redops.contexts.method.domain.entities import MethodVersion, SignatureSolution
@@ -72,6 +77,36 @@ def delivery_specification(**overrides) -> DeliverySpecification:
     }
     values.update(overrides)
     return DeliverySpecification(**values)
+
+
+def product_program(
+    solution: SignatureSolution | None = None, **overrides
+) -> ProductProgram:
+    solution = solution or signature_solution()
+    modules = tuple(
+        ProductModule(
+            module_id=f"module-{index + 1}",
+            tenant_id=solution.tenant_id,
+            signature_step=step.name,
+            position=index + 1,
+            outcome=f"the client reaches {step.name}",
+            deliverable=f"the {step.name} worksheet",
+        )
+        for index, step in enumerate(solution.steps)
+    )
+    values = {
+        "program_id": "program-3f",
+        "tenant_id": solution.tenant_id,
+        "owner": "red-offer-owner",
+        "method": solution,
+        "model": ProductMatrixModel.GROUP_CONSULTING,
+        "pricing_basis": ProgramPricingBasis.OUTCOME_VALUE,
+        "duration_weeks": 9,
+        "cadence": ProgramCadence.MONDAY_TRAINING_THURSDAY_COACHING,
+        "modules": modules,
+    }
+    values.update(overrides)
+    return ProductProgram(**values)
 
 
 def approved_method(

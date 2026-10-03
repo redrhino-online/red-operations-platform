@@ -1226,6 +1226,8 @@ class SignaturePackage:
         )
 
 
+PRODUCT_PROGRAM_KIND = "product-program"
+
 CANONICAL_OFFER_KINDS: tuple[str, ...] = (
     "delivery-model",
     "duration",
@@ -1239,12 +1241,13 @@ CANONICAL_OFFER_KINDS: tuple[str, ...] = (
     "guarantee-decision",
     "eligibility",
     "offer-stack",
+    PRODUCT_PROGRAM_KIND,
 )
 
 
 @dataclass(frozen=True)
 class OfferPackage:
-    """The reviewed stage 5 delivery, projected to the twelve canonical gate kinds.
+    """The reviewed stage 5 delivery, projected to the canonical gate kinds.
 
     SPEC.md section 4, stage 5 "Productize" and its "Offer Locked" checkpoint: a
     stage is complete only when its required assets exist, pass the checkpoint
@@ -1267,16 +1270,27 @@ class OfferPackage:
     outcome rather than time and materials, and stating eligibility, guarantee
     and support terms. ``DeliverySpecification`` already enforces that coherent
     shape and its dependency on the locked stage 4 method at construction, so
-    each canonical kind is projected from the single reviewed delivery at one
+    each delivery kind is projected from the single reviewed delivery at one
     positive integer version, and a blank identity, a versionless delivery or a
     cross-tenant delivery is refused rather than silently pinned (SPEC.md
     sections 3 and 4).
+
+    SPEC.md sections 4 and 12.5 (owner decision 2026-10-03) make a canon-informed
+    asset already implemented in a bounded context a required asset kind of its
+    target stage gate, so the typed ``ProductProgram`` (canon files 11 and 12) is
+    carried and projected as the ``product-program`` kind. Requiring the typed
+    program, rather than the delivery's free-text delivery model and pricing,
+    makes the "Offer Locked" gate reject a stage 5 package whose product matrix
+    model, outcome pricing basis, six-to-twelve week structure or per-step module
+    set is an untyped note.
     """
 
     package_id: str
     tenant_id: str
     delivery: DeliverySpecification
     delivery_version: int
+    product_program: "ProductProgram"
+    product_program_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -1295,14 +1309,32 @@ class OfferPackage:
                 "the delivery specification version must be a positive integer so "
                 "the stage 5 gate can pin the reviewed asset at an exact version"
             )
+        if not isinstance(self.product_program, ProductProgram):
+            raise InvalidOfferPackageError(
+                "stage 5 product program must be a typed reviewed asset"
+            )
+        if self.product_program.tenant_id != self.tenant_id:
+            raise OfferTenantBoundaryError(
+                f"stage 5 product program {self.product_program.program_id!r} "
+                f"belongs to tenant {self.product_program.tenant_id!r}, not "
+                f"package tenant {self.tenant_id!r}"
+            )
+        if (
+            not isinstance(self.product_program_version, int)
+            or self.product_program_version < 1
+        ):
+            raise InvalidOfferPackageError(
+                "the product program version must be a positive integer so the "
+                "stage 5 gate can pin the reviewed asset at an exact version"
+            )
 
     @property
     def kinds(self) -> frozenset[str]:
-        """The canonical kinds the reviewed stage 5 delivery projects onto."""
+        """The canonical kinds the reviewed stage 5 assets project onto."""
         return frozenset(CANONICAL_OFFER_KINDS)
 
     def missing_kinds(self) -> tuple[str, ...]:
-        """Canonical stage 5 kinds not covered by the projected delivery."""
+        """Canonical stage 5 kinds not covered by the projected assets."""
         covered = {asset.kind for asset in self.stage_asset_versions()}
         return tuple(
             kind for kind in CANONICAL_OFFER_KINDS if kind not in covered
@@ -1313,22 +1345,32 @@ class OfferPackage:
         return not self.missing_kinds()
 
     def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
-        """Project the reviewed stage 5 delivery onto exact governance evidence.
+        """Project the reviewed stage 5 assets onto exact governance evidence.
 
-        Every canonical kind belongs to the same reviewed
-        ``DeliverySpecification``, so each is pinned to that delivery's identity
-        at its exact version. Governance still pins each projection for the
-        workspace tenant, so a cross-client delivery is refused rather than
-        silently authorized (SPEC.md sections 3, 4 and 11).
+        The delivery kinds belong to the single reviewed ``DeliverySpecification``
+        and are pinned to its identity at its exact version; the
+        ``product-program`` kind belongs to the typed ``ProductProgram`` and is
+        pinned to the program's own identity at its exact version. Governance
+        still pins each projection for the workspace tenant, so a cross-client
+        delivery or program is refused rather than silently authorized (SPEC.md
+        sections 3, 4 and 11).
         """
-        return tuple(
-            StageAssetVersion(
-                asset_id=self.delivery.delivery_id,
-                tenant_id=self.tenant_id,
-                kind=kind,
-                version=self.delivery_version,
-            )
-            for kind in CANONICAL_OFFER_KINDS
+        delivery_kinds = tuple(
+            kind for kind in CANONICAL_OFFER_KINDS if kind != PRODUCT_PROGRAM_KIND
+        )
+        return (
+            *(
+                StageAssetVersion(
+                    asset_id=self.delivery.delivery_id,
+                    tenant_id=self.tenant_id,
+                    kind=kind,
+                    version=self.delivery_version,
+                )
+                for kind in delivery_kinds
+            ),
+            self.product_program.as_stage_asset(
+                version=self.product_program_version
+            ),
         )
 
 
@@ -2842,10 +2884,12 @@ class ProductProgram:
     that packs more weekly modules than it has weeks cannot be represented as a
     productized offer.
 
-    It is a stage 5 planning asset, not a new required gate kind (a
-    methodology-owner decision, SPEC.md section 12.5). It does not authorize
-    spending, publishing or client commitments (SPEC.md sections 4 and 9) and it
-    is never an observation (SPEC.md section 3).
+    It is a stage 5 required gate asset: per the owner decision in SPEC.md
+    section 12.5 (2026-10-03), a canon-informed asset already implemented becomes
+    a required kind of its target stage gate, so ``OfferPackage`` carries and
+    projects it as the ``product-program`` kind. It does not authorize spending,
+    publishing or client commitments (SPEC.md sections 4 and 9) and it is never an
+    observation (SPEC.md section 3).
     """
 
     program_id: str
@@ -2997,6 +3041,28 @@ class ProductProgram:
     def is_plan(self) -> bool:
         """A product program is a plan, not activity or an observed result."""
         return True
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the program onto exact ``product-program`` gate evidence.
+
+        SPEC.md sections 4 and 12.5 (owner decision 2026-10-03): a canon-informed
+        asset already implemented in a bounded context becomes a required asset
+        kind of its target stage gate, so the stage 5 "Offer Locked" gate pins the
+        typed product program (canon files 11 and 12) as one exact
+        ``StageAssetVersion``. A versionless projection is refused rather than
+        silently pinned (SPEC.md sections 3 and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidProductProgramError(
+                "the product program version must be a positive integer so the "
+                "stage 5 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.program_id,
+            tenant_id=self.tenant_id,
+            kind=PRODUCT_PROGRAM_KIND,
+            version=version,
+        )
 
     def as_observation(self, *, claim_id: str) -> None:
         """Refuse to represent a product program as an observed result.

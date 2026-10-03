@@ -178,6 +178,7 @@ def stage_zero_to_ten_template(
                         "guarantee-decision",
                         "eligibility",
                         "offer-stack",
+                        "product-program",
                     }
                 ),
             ),

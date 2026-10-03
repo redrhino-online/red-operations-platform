@@ -780,7 +780,8 @@ class StageFiveGateAssembler:
     77) projects the single reviewed ``DeliverySpecification`` -- the delivery
     model, duration, modules, responsibilities, support cadence, stage
     deliverables, outcome measures, pricing and payments, scope, guarantee
-    decision, eligibility and offer stack -- onto the twelve canonical stage 5
+    decision, eligibility and offer stack -- plus the typed ``ProductProgram`` as
+    the ``product-program`` kind onto the thirteen canonical stage 5
     asset kinds as exact ``StageAssetVersion`` evidence, and the canon maps stage 5
     to files 11 and 12 (SPEC.md section 12.3).
 

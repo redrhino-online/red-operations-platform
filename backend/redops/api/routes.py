@@ -75,6 +75,11 @@ from redops.contexts.commercial.domain.value_objects import (
     OfferFunnelAudit,
     OfferPackage,
     PositioningDecision,
+    ProductMatrixModel,
+    ProductModule,
+    ProductProgram,
+    ProgramCadence,
+    ProgramPricingBasis,
     ResearchPlatform,
     SignaturePackage,
     StepDelivery,
@@ -1805,9 +1810,10 @@ def record_stage_five_gate(
     alongside the decision. Every integrity rule -- canonical kinds, exact
     versions, owner/approver authority, the delivery model grounded on the locked
     stage 4 method, one delivery per named method step with an action, actor,
-    deliverable, timing and measure and the tenant boundary -- is enforced by the
-    domain; a rejection is a named 422 and never a partial write. The path tenant,
-    not the body, is the authoritative client scope. Stage 5 carries no claims:
+    deliverable, timing and measure, the typed product program (canon files 11 and
+    12) and the tenant boundary -- is enforced by the domain; a rejection is a
+    named 422 and never a partial write. The path tenant, not the body, is the
+    authoritative client scope. Stage 5 carries no claims:
     the checkpoint turns on the delivered offer's completeness against the locked
     method, not external customer evidence.
     """
@@ -1889,6 +1895,30 @@ def record_stage_five_gate(
                 offer_stack=tuple(body.delivery.offer_stack),
             ),
             delivery_version=body.delivery.version,
+            product_program=ProductProgram(
+                program_id=body.product_program.program_id,
+                tenant_id=tenant_id,
+                owner=body.product_program.owner,
+                method=solution,
+                model=ProductMatrixModel(body.product_program.model),
+                pricing_basis=ProgramPricingBasis(
+                    body.product_program.pricing_basis
+                ),
+                duration_weeks=body.product_program.duration_weeks,
+                cadence=ProgramCadence(body.product_program.cadence),
+                modules=tuple(
+                    ProductModule(
+                        module_id=module.module_id,
+                        tenant_id=tenant_id,
+                        signature_step=module.signature_step,
+                        position=module.position,
+                        outcome=module.outcome,
+                        deliverable=module.deliverable,
+                    )
+                    for module in body.product_program.modules
+                ),
+            ),
+            product_program_version=body.product_program.version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 5, tenant_id

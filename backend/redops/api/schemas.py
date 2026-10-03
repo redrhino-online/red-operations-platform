@@ -507,23 +507,64 @@ class DeliverySpecificationInput(BaseModel):
     offer_stack: list[str]
 
 
+class ProductModuleInput(BaseModel):
+    """One stage 5 product program module for a named method step (canon 11, 12).
+
+    The canon's Perfect Product training breaks the signature solution into one
+    module per step, each naming the outcome it produces and the deliverable it
+    leaves with the client (SPEC.md section 12.3). The domain refuses a module
+    that leaves its step, outcome or deliverable unstated, so the transport layer
+    only carries the values.
+    """
+
+    module_id: str
+    signature_step: str
+    position: int
+    outcome: str
+    deliverable: str
+
+
+class ProductProgramInput(BaseModel):
+    """The reviewed stage 5 product program and its exact version (canon 11, 12).
+
+    SPEC.md sections 4 and 12.5 make the canon-informed ``ProductProgram`` a
+    required stage 5 asset. The program chooses one of the canon's seven product
+    matrix models, prices on outcomes rather than time and materials, runs six to
+    twelve weeks on the Monday and Thursday cadence, and delivers each named
+    signature solution step as one module. The domain enforces every rule and the
+    grounding on the same stage 5 signature solution, so the transport layer only
+    carries the values and the exact version.
+    """
+
+    program_id: str
+    version: int
+    owner: str
+    model: str
+    pricing_basis: str
+    duration_weeks: int
+    cadence: str
+    modules: list[ProductModuleInput]
+
+
 class RecordStageFiveGateRequest(BaseModel):
     """The stage 5 "Offer Locked" gate request (SPEC.md section 4).
 
-    The caller supplies the reviewed delivery values, the workspace authority
-    registry and the decision metadata. The route builds the canonical gate from
-    these through the use case; it deliberately accepts no pre-built gate, so
-    approver authority and exact-version evidence cannot be bypassed. Stage 5
-    depends on a passing stage 4 decision already in the ledger. The delivery
-    carries no claims: the "Offer Locked" checkpoint turns on every method step
-    carrying an action, actor, deliverable, timing and measure, which the domain
-    enforces at construction, rather than external customer evidence.
+    The caller supplies the reviewed delivery values, the reviewed product
+    program, the workspace authority registry and the decision metadata. The
+    route builds the canonical gate from these through the use case; it
+    deliberately accepts no pre-built gate, so approver authority and
+    exact-version evidence cannot be bypassed. Stage 5 depends on a passing stage
+    4 decision already in the ledger. The delivery carries no claims: the "Offer
+    Locked" checkpoint turns on every method step carrying an action, actor,
+    deliverable, timing and measure and on the typed product program, which the
+    domain enforces at construction, rather than external customer evidence.
     """
 
     workspace_id: str
     authorities: list[ClientAuthorityInput]
     offer_package_id: str
     delivery: DeliverySpecificationInput
+    product_program: ProductProgramInput
     stage_owner: str
     approver: str
     scope: str

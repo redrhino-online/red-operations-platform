@@ -10,7 +10,7 @@ client-designated authority and an agent cannot confer human approval upon
 itself; every output has an owner and a source.
 
 Cycle 77 added the Commercial ``OfferPackage`` bridge that projects the single
-reviewed stage 5 ``DeliverySpecification`` onto the twelve canonical stage 5 asset
+reviewed stage 5 ``DeliverySpecification`` onto the thirteen canonical stage 5 asset
 kinds as exact ``StageAssetVersion`` evidence, so a canonical stage 5 gate can now
 be assembled. This cycle wires the stage 5 "Offer Locked" gate end to end,
 mirroring the stage 4 path: a pure Engagement assembler validates the reviewed
@@ -68,7 +68,7 @@ from redops.contexts.governance.domain.value_objects import (
     PipelineProgress,
 )
 
-from ..commercial.fixtures import delivery_specification
+from ..commercial.fixtures import delivery_specification, product_program
 from ..method.fixtures import signature_solution
 
 ON = date(2026, 10, 3)
@@ -103,6 +103,10 @@ def package(*, tenant_id: str = TENANT, **overrides) -> OfferPackage:
         "tenant_id": tenant_id,
         "delivery": delivery,
         "delivery_version": 1,
+        "product_program": product_program(
+            signature_solution(tenant_id)
+        ),
+        "product_program_version": 1,
     }
     values.update(overrides)
     return OfferPackage(**values)
@@ -198,13 +202,15 @@ class StageFiveGateAssemblerTests(unittest.TestCase):
             self.template.required_asset_kinds(5),
             {ref.asset_id for ref in gate.required_assets},
         )
-        self.assertEqual(12, len(gate.required_assets))
+        self.assertEqual(13, len(gate.required_assets))
 
-    def test_the_gate_pins_the_exact_version_the_reviewed_delivery_carries(self):
-        gate = self.assemble(package_=package(delivery_version=5))
+    def test_the_gate_pins_the_exact_version_each_reviewed_asset_carries(self):
+        gate = self.assemble(
+            package_=package(delivery_version=5, product_program_version=5)
+        )
 
         versions = {ref.asset_id: ref.version for ref in gate.required_assets}
-        self.assertEqual(12, len(versions))
+        self.assertEqual(13, len(versions))
         for kind, version in versions.items():
             self.assertEqual(5, version, msg=kind)
 
@@ -266,7 +272,7 @@ class StageFiveGateRecorderTests(unittest.TestCase):
             ledger=ledger,
             scope=overrides.pop("scope", SCOPE_FIVE),
             checkpoint_evidence=overrides.pop(
-                "checkpoint_evidence", "all twelve stage 5 kinds reviewed"
+                "checkpoint_evidence", "all thirteen stage 5 kinds reviewed"
             ),
             rationale=overrides.pop("rationale", "every method step is delivered"),
             assigned_owner=overrides.pop("assigned_owner", OWNER),
@@ -293,7 +299,7 @@ class StageFiveGateRecorderTests(unittest.TestCase):
 
         decision = self.record(self.assembled_gate(), ledger)
 
-        self.assertEqual(12, len(decision.asset_approvals))
+        self.assertEqual(13, len(decision.asset_approvals))
         for request in decision.asset_approvals:
             self.assertEqual(SCOPE_FIVE, request.scope)
             self.assertEqual(APPROVER, request.approver)
@@ -373,7 +379,7 @@ class RecordStageFiveGateHandlerTests(unittest.TestCase):
             "approver": APPROVER,
             "proposed_by": OWNER,
             "scope": SCOPE_FIVE,
-            "checkpoint_evidence": "all twelve stage 5 kinds reviewed",
+            "checkpoint_evidence": "all thirteen stage 5 kinds reviewed",
             "rationale": "every method step is delivered",
             "assigned_owner": OWNER,
             "due_on": DUE,

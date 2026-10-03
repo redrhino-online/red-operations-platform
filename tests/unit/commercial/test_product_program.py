@@ -22,10 +22,10 @@ files 11 and 12, the Perfect Product training and examples):
   training and on Thursday I'm going to offer coaching" (canon file 12), so the
   program cannot pack more weekly modules than it has weeks.
 
-The program is a stage 5 planning asset, not a new required gate kind (a
-methodology-owner decision, SPEC.md section 12.5). It does not authorize
-spending, publishing or client commitments (SPEC.md sections 4 and 9) and it is
-never an observation (SPEC.md section 3).
+The program is a stage 5 required gate asset (owner decision 2026-10-03,
+SPEC.md section 12.5): it projects to the `product-program` kind. It does not
+authorize spending, publishing or client commitments (SPEC.md sections 4 and 9)
+and it is never an observation (SPEC.md section 3).
 """
 
 import unittest
@@ -249,6 +249,20 @@ class ProductProgramTests(unittest.TestCase):
     def test_program_is_never_an_observation(self) -> None:
         with self.assertRaises(ProductProgramObservationError):
             product_program().as_observation(claim_id="claim-1")
+
+    def test_program_projects_exact_product_program_gate_evidence(self) -> None:
+        asset = product_program().as_stage_asset(version=3)
+
+        self.assertEqual("product-program", asset.kind)
+        self.assertEqual("program-3f", asset.asset_id)
+        self.assertEqual(TENANT, asset.tenant_id)
+        self.assertEqual(3, asset.version)
+
+    def test_program_refuses_a_versionless_gate_projection(self) -> None:
+        for version in (0, -1):
+            with self.subTest(version=version):
+                with self.assertRaises(InvalidProductProgramError):
+                    product_program().as_stage_asset(version=version)
 
 
 if __name__ == "__main__":
