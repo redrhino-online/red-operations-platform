@@ -21,8 +21,10 @@ from redops.contexts.execution.domain.errors import (
     InvalidLaunchQAError,
     InvalidLaunchQAPackageError,
     InvalidPerformanceBaselineError,
+    InvalidPerformanceBaselinePackageError,
     InvalidPerformanceClaimError,
     LaunchQAPackageTenantBoundaryError,
+    PerformanceBaselinePackageTenantBoundaryError,
 )
 from redops.contexts.governance.domain.value_objects import StageAssetVersion
 
@@ -30,6 +32,7 @@ if TYPE_CHECKING:
     from redops.contexts.execution.domain.entities import (
         FunnelIntegration,
         LaunchQA,
+        PerformanceBaseline,
     )
 
 
@@ -745,6 +748,125 @@ class LaunchAssetPackage:
                 raise InvalidPerformanceBaselineError(
                     f"stage 10 asset package {label} is required"
                 )
+
+
+CANONICAL_BASELINE_KINDS: tuple[str, ...] = (
+    "live-campaign",
+    "spend-records",
+    "lead-records",
+    "conversion-measures",
+    "engagement-measures",
+    "applications",
+    "bookings",
+    "shows",
+    "closes",
+    "acquisition-cost",
+    "attribution",
+    "issue-log",
+)
+
+
+@dataclass(frozen=True)
+class PerformanceBaselinePackage:
+    """The reviewed stage 10 baseline, projected to the twelve canonical gate kinds.
+
+    SPEC.md section 4, stage 10 "Launch" and its "Performance Baseline
+    Established" checkpoint: a stage is complete only when its required assets
+    exist, pass the checkpoint and receive approval for downstream use, and a
+    passing gate pins the exact evidence. The required asset package is the live
+    campaign, spend and lead records, conversion and engagement measures,
+    applications, bookings, shows, closes, acquisition cost, attribution and issue
+    log. The Execution context reviews that as one rich ``PerformanceBaseline``
+    (the twelve assets belong to the same launch, grounded on the ready-for-traffic
+    stage 9 launch QA and an observed first qualified traffic milestone); this
+    package is the bridge to the governance gate, which pins one exact
+    ``StageAssetVersion`` per canonical kind.
+
+    The canon (SPEC.md section 12.3: stage 10 uses canon files 22, 23, 29-31, 33
+    and 34) describes the Metrics Matrix and the Mastery Advertising Metrics
+    Dashboard (annual customer value, cost per lead, cost per strategy session,
+    customer acquisition cost and return on ad spend), the Content Blitz
+    produce/publish/promote/syndicate sequence and the Retargeting Roadmap.
+    ``PerformanceBaseline`` already enforces the same-tenant stage 9 authorization,
+    the distinct observed milestones and the pending-not-omitted rule at
+    construction and establishment, so each canonical kind is projected from the
+    single reviewed baseline at one positive integer version.
+
+    A ``PerformanceBaseline`` only owns its launch evidence once ``establish``
+    passes the checkpoint, so this package refuses a baseline that has not reached
+    ``PerformanceBaselineState.ESTABLISHED``: twelve kinds cannot be pinned as this
+    client's evidence without a launch whose first qualified traffic was actually
+    observed (SPEC.md section 4). It also refuses a blank identity, a versionless
+    baseline or a cross-tenant baseline rather than silently pinning inexact or
+    foreign evidence (SPEC.md sections 3 and 4).
+    """
+
+    package_id: str
+    tenant_id: str
+    baseline: "PerformanceBaseline"
+    baseline_version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("performance baseline package id", self.package_id),
+            ("performance baseline package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidPerformanceBaselinePackageError(
+                    f"{label} is required"
+                )
+        if self.baseline.tenant_id != self.tenant_id:
+            raise PerformanceBaselinePackageTenantBoundaryError(
+                f"stage 10 baseline {self.baseline.baseline_id!r} belongs to "
+                f"tenant {self.baseline.tenant_id!r}, not package tenant "
+                f"{self.tenant_id!r}"
+            )
+        if not isinstance(self.baseline_version, int) or self.baseline_version < 1:
+            raise InvalidPerformanceBaselinePackageError(
+                "the performance baseline version must be a positive integer so "
+                "the stage 10 gate can pin the reviewed asset at an exact version"
+            )
+        if not self.baseline.is_established:
+            raise InvalidPerformanceBaselinePackageError(
+                f"stage 10 baseline {self.baseline.baseline_id!r} has not passed "
+                "Performance Baseline Established, so its twelve asset kinds "
+                "cannot be pinned as exact evidence"
+            )
+
+    @property
+    def kinds(self) -> frozenset[str]:
+        """The canonical kinds the reviewed stage 10 baseline projects onto."""
+        return frozenset(CANONICAL_BASELINE_KINDS)
+
+    def missing_kinds(self) -> tuple[str, ...]:
+        """Canonical stage 10 kinds not covered by the projected baseline."""
+        covered = {asset.kind for asset in self.stage_asset_versions()}
+        return tuple(
+            kind for kind in CANONICAL_BASELINE_KINDS if kind not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_kinds()
+
+    def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
+        """Project the reviewed stage 10 baseline onto exact governance evidence.
+
+        Every canonical kind belongs to the same reviewed ``PerformanceBaseline``,
+        so each is pinned to that baseline's identity at its exact version.
+        Governance still pins each projection for the workspace tenant, so a
+        cross-client baseline is refused rather than silently authorized (SPEC.md
+        sections 3, 4 and 11).
+        """
+        return tuple(
+            StageAssetVersion(
+                asset_id=self.baseline.baseline_id,
+                tenant_id=self.tenant_id,
+                kind=kind,
+                version=self.baseline_version,
+            )
+            for kind in CANONICAL_BASELINE_KINDS
+        )
 
 
 class PerformanceBaselineState(Enum):

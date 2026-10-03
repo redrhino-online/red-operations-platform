@@ -4,45 +4,45 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T04:55:36Z (Ralph cycle 86).
-- Selected item: wire the stage 9 "Launch Approved" `GateDecision` end to end
-  with `StageNineGateAssembler`, `StageNineGateRecorder`,
-  `RecordStageNineGateCommand` and `RecordStageNineGateHandler`, plus named
-  errors `NotStageNineGateError` and `StageRunNotStageNineError`, binding the
-  reviewed `LaunchQAPackage` to the workspace tenant and the workspace authority
-  registry (canon 01, 08, 21, 22, 24). Cycle 85 closed the stage 9 asset bridge,
-  so this is the next unblocked pipeline step; the plan named this wiring as the
-  highest priority ready next item, and it is the smallest change that lets the
-  stage 9 "Launch Approved" gate close and unblocks stage 10. This outranks the
-  stage 10 reviewed-asset bridge (which needs stage 9 closed first), the stage 10
-  gate wiring, and the production-manager view and `PipelineProgress` reads
-  (which only read the ledger these gates write).
+- Cycle timestamp: 2026-10-03T04:56:52Z (Ralph cycle 87).
+- Selected item: build the Execution stage 10 reviewed-asset bridge
+  `PerformanceBaselinePackage` with named errors
+  `InvalidPerformanceBaselinePackageError` and
+  `PerformanceBaselinePackageTenantBoundaryError`, projecting the reviewed stage
+  10 `PerformanceBaseline` onto the twelve canonical stage 10 kinds as exact
+  `StageAssetVersion` evidence (canon 22, 23, 29-31, 33, 34). Cycle 86 closed the
+  stage 9 gate, and the plan named this bridge as the highest priority ready next
+  item; it is the smallest change that makes the stage 10 "Performance Baseline
+  Established" gate assembleable and unblocks the stage 10 gate wiring. This
+  outranks the stage 10 `GateDecision` wiring (which needs this bridge first) and
+  the production-manager view and `PipelineProgress` reads (which only read the
+  ledger these gates write).
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: 22 new behavioral tests in
-  `tests/unit/engagement/test_record_stage_nine_gate.py`, mirroring the stage 8
-  path: the reviewed `LaunchQAPackage` assembles the canonical stage 9 gate at
-  its exact sixteen kinds and pinned version, the recorder issues one
-  exact-version approval per kind and writes the immutable `GateDecision`, and
-  the use case chains assembly and recording and closes the stage 9 `StageRun`.
-  The path refuses a cross-tenant package, a non-stage-9 gate, an unauthorized
-  or absent approver, a gate without an author, a self-approval, an unauthorized
-  assigned owner, a run for another stage or template version, and a not
-  completable run, and stage 9 cannot pass while stage 8 is unapproved.
-  Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
-  'test_*.py'` reports 897 passed, up from 875. `python3 -m pyflakes` on the
-  changed modules and test file is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the stage 9 bridge package already refuses a QA that has not
-  passed "Launch Approved", so the assembler needs no separate readiness guard
-  and only checks the workspace tenant, exactly as the stage 8 path does. The
-  stage 9 gate is the first to close the eleven-stage 0 through 10 chain in
-  sequence; after this cycle the ledger can hold passing decisions for every
-  stage from 0 through 9, leaving only stage 10. The canon gap for the compliance
-  suite (files 21, 34) stays open: stage 9's `qa-*` and client-approval kinds
-  partially represent it but the GDPR/disclaimer/privacy/terms artifacts are
-  still not required kinds, so that register entry remains a named-owner
-  decision. The "thirteen transformations" gap (files 09, 10) and the stage 8
-  retargeting/tracking candidate remain open and unchanged. All prior tests still
-  pass.
+- Evidence: 12 new behavioral tests in
+  `tests/unit/execution/test_performance_baseline_package.py`, mirroring the stage
+  1 through 9 bridges: the reviewed stage 10 baseline projects onto all twelve
+  canonical kinds matching the template's stage 10 required package at its exact
+  version and tenant, a `CANONICAL_BASELINE_KINDS` tuple mirrors the template,
+  and the package refuses a cross-tenant baseline, a blank identity, a versionless
+  baseline, a draft baseline and a review-required baseline. Running
+  `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
+  reports 909 passed, up from 897. `python3 -m pyflakes` on the changed modules
+  and test file is clean. `ruff` and `mypy` remain uninstalled.
+- New findings: the `PerformanceBaseline` aggregate already refuses a
+  cross-tenant stage 9 QA and cross-tenant milestone observations at construction
+  and only reaches `PerformanceBaselineState.ESTABLISHED` through `establish`, so
+  the bridge needs no separate readiness guard beyond `is_established` and wraps
+  the twelve `LaunchAssetPackage` fields one-to-one. The stage 10 bridge names its
+  kinds `CANONICAL_BASELINE_KINDS` rather than reusing the stage 9
+  `CANONICAL_LAUNCH_KINDS`, since the two stages have different canonical
+  packages. The canon gap for the compliance suite (files 21, 34) stays open:
+  stage 9's `qa-*` and client-approval kinds partially represent it but the
+  GDPR/disclaimer/privacy/terms artifacts are still not required kinds. The
+  advertising/forecast dashboard gap (files 22, 23, 24) and the audience/content
+  flywheel and retargeting gaps (files 25-31, 33, 34) remain open candidates; the
+  stage 10 `attribution` and `acquisition-cost` kinds partially represent the
+  dashboard metrics but the forecast model and bid rules are not required kinds.
+  All prior tests still pass.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -50,29 +50,38 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Durable persistence of any
   `GateDecision`, `StageRun`, retained waiver decision or blocker still depends on
   the storage ADR; no real client approver identity may be invented. A stage 10
-  reviewed-asset bridge and stage 10 `GateDecision` wiring do not yet exist, and
-  per-kind stage 9 through 10 asset content schemas remain prose and shapes rather
-  than typed value objects. No fork or cluster facts invented; no `docs/`, fork
-  checkout, `kubectl`, `helm`, or `argocd` present.
-- Highest priority ready next item: build the Execution stage 10
-  reviewed-asset bridge (`PerformanceBaselinePackage` or equivalent) projecting
-  the reviewed stage 10 `PerformanceBaseline` onto the twelve canonical stage 10
-  kinds as exact `StageAssetVersion` evidence, then wire the stage 10
-  "Performance Baseline Established" `GateDecision`. Cycle 85 and 86 proved the
-  bridge-then-wire pattern for twelve prior stages; the stage 10 aggregate and
-  its policy already exist, so the smallest next increment is the bridge, which
-  makes the stage 10 gate assembleable. Pipeline mapping: stage 10, required
+  `GateDecision` wiring does not yet exist, and per-kind stage 9 through 10 asset
+  content schemas remain prose and shapes rather than typed value objects. No fork
+  or cluster facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or
+  `argocd` present.
+- Highest priority ready next item: wire the stage 10 "Performance Baseline
+  Established" `GateDecision` end to end with a `StageTenGateAssembler`,
+  `StageTenGateRecorder`, `RecordStageTenGateCommand` and
+  `RecordStageTenGateHandler`, plus named errors for a non-stage-10 gate and a run
+  that is not stage 10, binding the reviewed `PerformanceBaselinePackage` to the
+  workspace tenant and the workspace authority registry and closing the stage 10
+  `StageRun` (canon 22, 23, 29-31, 33, 34). This cycle proved the bridge-then-wire
+  pattern for twelve prior stages and this bridge makes the stage 10 gate
+  assembleable; the stage 10 aggregate and its policy already exist, so the
+  smallest next increment is the wiring. Pipeline mapping: stage 10, required
   asset the reviewed stage 10 performance baseline, checkpoint "Performance
   Baseline Established", gate requires the ready-for-traffic stage 9 launch QA
   plus an observed first-qualified-traffic milestone with later milestones
   pending, approver the workspace's client-designated authority, downstream
   dependency the engagement's post-launch optimization and measured milestone
   reporting. This outranks the production-manager view reads.
-- Deferred cross-context items: the stage 10 reviewed-asset bridge and the
-  stage 10 `GateDecision` wiring (the bridge is now the ready next item);
-  per-kind stage 9 through 10 asset content schemas; a stage-parameterized gate
-  recorder/handler refactor now that eleven identical shapes are proven; and all
-  persistence, blocked on the storage ADR.
+- Deferred cross-context items: the stage 10 `GateDecision` wiring (now the ready
+  next item); per-kind stage 9 through 10 asset content schemas; a
+  stage-parameterized gate recorder/handler refactor now that twelve identical
+  shapes are proven; and all persistence, blocked on the storage ADR.
+  [DONE 2026-10-03 (Ralph cycle 87): built the Execution
+  `PerformanceBaselinePackage` bridge (canon-informed, SPEC.md section 12.3 stage
+  10 files 22, 23, 29-31, 33, 34), projecting the reviewed stage 10
+  `PerformanceBaseline` onto the twelve canonical stage 10 kinds as exact
+  `StageAssetVersion` evidence with a `CANONICAL_BASELINE_KINDS` tuple and
+  refusing a baseline that has not passed Performance Baseline Established;
+  verified by `tests/unit/execution/test_performance_baseline_package.py` (12
+  tests), so the stage 10 gate is now assembleable.]
   [DONE 2026-10-03 (Ralph cycle 86): wired the stage 9 "Launch Approved"
   `GateDecision` end to end with `StageNineGateAssembler`,
   `StageNineGateRecorder`, `RecordStageNineGateCommand` and

@@ -114,3 +114,30 @@ class InvalidPerformanceClaimError(PerformanceClaimError, ValueError):
 
 class PerformanceClaimSupportError(PerformanceClaimError):
     """A causal claim lacks an established baseline or an adequate sample."""
+
+
+class InvalidPerformanceBaselinePackageError(
+    PerformanceBaselineError, ValueError
+):
+    """A stage 10 reviewed asset package lacks identity, version or establishment.
+
+    SPEC.md sections 3 and 4: a passing stage 10 gate pins the exact evidence and
+    intended downstream use, so the reviewed stage 10 ``PerformanceBaseline`` is
+    projected onto the twelve canonical asset kinds with a positive integer
+    version. A package that leaves its identity or the baseline version unspecified
+    cannot be represented as exact gate evidence. The same error is raised when the
+    baseline has not passed "Performance Baseline Established", because its twelve
+    kinds would then be pinned without an observed first qualified traffic
+    milestone to own them (a missing asset prevents gate completion and a waiver
+    never makes an absent asset appear present).
+    """
+
+
+class PerformanceBaselinePackageTenantBoundaryError(PerformanceBaselineError):
+    """A stage 10 reviewed asset package mixed in a baseline from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client, so the
+    ``PerformanceBaseline`` projected onto a workspace's stage 10 gate package must
+    belong to that workspace's tenant. A cross-tenant stage 10 baseline cannot be
+    pinned as this client's gate evidence.
+    """
