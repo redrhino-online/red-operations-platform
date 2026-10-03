@@ -7,11 +7,13 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from redops.contexts.commercial.domain.errors import (
+    CampaignMessageTenantBoundaryError,
     CurrencyTenantBoundaryError,
     DiagnosisTenantBoundaryError,
     DiagnosticTenantBoundaryError,
     InvalidAvatarProfileError,
     InvalidBusinessSnapshotError,
+    InvalidCampaignMessagePackageError,
     InvalidCurrencyInventoryError,
     InvalidCurrencyPackageError,
     InvalidDeliverySpecificationError,
@@ -35,7 +37,10 @@ from redops.contexts.method.domain.value_objects import (
 )
 
 if TYPE_CHECKING:
-    from redops.contexts.commercial.domain.entities import OfferVersion
+    from redops.contexts.commercial.domain.entities import (
+        CampaignMessage,
+        OfferVersion,
+    )
 
 
 class OfferState(Enum):
@@ -1126,4 +1131,107 @@ class OfferPackage:
                 version=self.delivery_version,
             )
             for kind in CANONICAL_OFFER_KINDS
+        )
+
+
+CANONICAL_MESSAGE_KINDS: tuple[str, ...] = (
+    "promise",
+    "problem-hierarchy",
+    "desired-outcome",
+    "proof-objections",
+    "story",
+    "method-explanation",
+    "cta",
+    "lead-magnet",
+    "hook",
+    "angles",
+    "landing-message",
+    "authority-amplifier-outline",
+)
+
+
+@dataclass(frozen=True)
+class CampaignMessagePackage:
+    """The reviewed stage 6 message, projected to the twelve canonical gate kinds.
+
+    SPEC.md section 4, stage 6 "Message" and its "Campaign Message Approved"
+    checkpoint: a stage is complete only when its required assets exist, pass the
+    checkpoint and receive approval for downstream use, and a passing gate pins the
+    exact evidence. The required asset package is the promise, problem hierarchy,
+    desired outcome, proof and objections, story, method explanation, CTA, lead
+    magnet, hook, angles, landing message and Authority Amplifier outline. The
+    Commercial context reviews that as one rich ``CampaignMessage`` (all of those
+    fields are attributes of the same approved message, grounded on the approved
+    stage 5 offer and congruent on avatar, currency, problem, promise, method,
+    product and CTA); this package is the bridge to the governance gate, which
+    pins one exact ``StageAssetVersion`` per canonical kind.
+
+    The canon (SPEC.md section 12.3: stage 6 uses canon files 06, 15, 24 and
+    25-28) requires reusing the Million Dollar Message in copy, the 5P messaging
+    frame, the Authority Amplifier script as the universal content framework, and
+    a Content Roadmap and Content Crusher. ``CampaignMessage`` already enforces
+    that coherent shape and its dependency on the approved stage 5 offer at
+    construction, so each canonical kind is projected from the single reviewed
+    message at one positive integer version, and a blank identity, a versionless
+    message or a cross-tenant message is refused rather than silently pinned
+    (SPEC.md sections 3 and 4).
+    """
+
+    package_id: str
+    tenant_id: str
+    message: "CampaignMessage"
+    message_version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("campaign message package id", self.package_id),
+            ("campaign message package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidCampaignMessagePackageError(f"{label} is required")
+        if self.message.tenant_id != self.tenant_id:
+            raise CampaignMessageTenantBoundaryError(
+                f"stage 6 message {self.message.message_id!r} belongs to tenant "
+                f"{self.message.tenant_id!r}, not package tenant"
+                f" {self.tenant_id!r}"
+            )
+        if not isinstance(self.message_version, int) or self.message_version < 1:
+            raise InvalidCampaignMessagePackageError(
+                "the campaign message version must be a positive integer so the "
+                "stage 6 gate can pin the reviewed asset at an exact version"
+            )
+
+    @property
+    def kinds(self) -> frozenset[str]:
+        """The canonical kinds the reviewed stage 6 message projects onto."""
+        return frozenset(CANONICAL_MESSAGE_KINDS)
+
+    def missing_kinds(self) -> tuple[str, ...]:
+        """Canonical stage 6 kinds not covered by the projected message."""
+        covered = {asset.kind for asset in self.stage_asset_versions()}
+        return tuple(
+            kind for kind in CANONICAL_MESSAGE_KINDS if kind not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_kinds()
+
+    def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
+        """Project the reviewed stage 6 message onto exact governance evidence.
+
+        Every canonical kind belongs to the same reviewed ``CampaignMessage``, so
+        each is pinned to that message's identity at its exact version. Governance
+        still pins each projection for the workspace tenant, so a cross-client
+        message is refused rather than silently authorized (SPEC.md sections 3, 4
+        and 11).
+        """
+        return tuple(
+            StageAssetVersion(
+                asset_id=self.message.message_id,
+                tenant_id=self.tenant_id,
+                kind=kind,
+                version=self.message_version,
+            )
+            for kind in CANONICAL_MESSAGE_KINDS
         )

@@ -265,3 +265,24 @@ class OfferTenantBoundaryError(CommercialError):
     cannot be pinned as this client's gate evidence.
     """
 
+
+class InvalidCampaignMessagePackageError(CommercialError, ValueError):
+    """A stage 6 reviewed asset package was built without identity or version.
+
+    SPEC.md sections 3 and 4: a passing stage 6 gate pins the exact evidence and
+    intended downstream use, so the reviewed stage 6 ``CampaignMessage`` is
+    projected onto the twelve canonical asset kinds with a positive integer
+    version. A package that leaves its identity or the message version
+    unspecified cannot be represented as exact gate evidence.
+    """
+
+
+class CampaignMessageTenantBoundaryError(CommercialError):
+    """A stage 6 reviewed asset package mixed in a message from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client, so the
+    ``CampaignMessage`` projected onto a workspace's stage 6 gate package must
+    belong to that workspace's tenant. A cross-tenant stage 6 message cannot be
+    pinned as this client's gate evidence.
+    """
+
