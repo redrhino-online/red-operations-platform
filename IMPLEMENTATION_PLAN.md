@@ -4,7 +4,69 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T195801Z (Ralph cycle, this run): selected item was hardening
+- Cycle 2026-10-03T200006Z (Ralph cycle, this run): selected item was hardening
+  the prototype definition-of-done gate so DoD condition 2 (the section 11
+  acceptance suite) can no longer pass unverified. `scripts/check_definition_of_
+  done.sh` `[2/6]` ran only `tests/e2e` (condition 1); condition 2 ("the section
+  11 acceptance scenarios pass; the acceptance suite is green", SPEC.md section
+  13) had no suite and no gate check, so once conditions 3, 5, 6 and 9 were met
+  `make done` could have turned green with no section 11 acceptance suite. It is
+  the same class of false stop condition the prior two cycles closed for `[3/6]`
+  and `[5/6]`, and it outranks starting Q32: Q32-Q45 are downstream dashboards,
+  and the task prioritizes missing gate integrity over downstream features. No
+  ready method-artifact or stage-gate item remained: Q28 stage 8-10 required
+  kinds are blocked on the named methodology-owner placement decision, Q29
+  (method change impact) is domain-complete and tested, Q16 is blocked on a
+  workflow write route, Q3/Q4 are blocked on the ADR 0006 tension and a live key,
+  and Q8's remaining retrieval, worker and artifact-URL layers have no seam yet.
+- Outcome: new standalone `scripts/check_acceptance_coverage.sh` enforces
+  condition 2 against a data-driven contract. `tests/acceptance/covered-
+  scenarios.txt` declares each of the ten canonical SPEC.md section 11 scenarios
+  as `<scenario-id> <test-file>` (repo-root relative) or `<scenario-id> uncovered
+  <reason>`; every canonical id must be declared exactly once, each covered file
+  must exist and contain at least one test, and any scenario still `uncovered` is
+  a named failure that lists every uncovered scenario with its reason. `[2/6]`
+  now runs it after the e2e suite; the gate fails honestly today (four scenarios
+  uncovered), so a green condition 2 requires real tests for duplicate delivery,
+  cross-client retrieval, the GitOps revert and the backup restore. No product
+  authority, gate decision or pipeline stage changed.
+- Evidence: `make check` -> 2247 passed, 2 skipped, 704 subtests; pyflakes clean.
+  New `tests/unit/shared/test_acceptance_coverage_check.py` (10 tests) covers a
+  complete suite passing, a missing directory, a missing manifest, an uncovered
+  scenario, an undeclared scenario, an unknown scenario, a duplicate scenario, a
+  declared file that is missing, a declared file with no test, and the real suite
+  failing with the four uncovered scenarios named. `make done` now fails at
+  `[2/6]` with "the section 11 acceptance suite is not covered; condition 2 is
+  unmet" after `[1/6]` and the condition 1 e2e pass.
+- New findings: condition 2 was the third approximated DoD condition. The ten
+  section 11 scenarios are declared by the suite, not hard-coded by the gate
+  check, so a future cycle adds coverage without editing the gate. Four scenarios
+  are genuinely uncovered: cross-client retrieval is the same missing retrieval
+  seam condition 3 needs, duplicate delivery needs a connector idempotency seam
+  (Q16), and the GitOps revert and backup restore are deploy-only (Q49). The
+  condition cannot pass until those exist, which is correct: condition 2 is
+  unmet, not merely under-tested.
+- Blockers (unchanged): `frontend/` screens Q32-Q45 are the path to `make done`
+  condition 6; Q8's retrieval, worker and artifact-URL isolation coverage and the
+  condition 2 cross-client-retrieval scenario are blocked until the retrieval,
+  worker and artifact-serving seams exist; Q28 stage 8-10 required kinds blocked
+  on the named methodology-owner placement decision; Q16 idempotency keys (and
+  the condition 2 duplicate-delivery scenario) blocked on a workflow write route
+  and a connector seam; Q3 agent registration blocked on the ADR 0006 /
+  vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's deploy-only scenarios (GitOps revert,
+  backup restore) need the Atlas cluster and a chosen backup target.
+- Highest priority ready next item: Q32, the Next.js shell in `frontend/` plus
+  the RED theme and API client, now safe to start because `make done` cannot pass
+  on a screens-less shell (`[5/6]`) or an API-only security suite (`[3/6]`) or a
+  suite-less condition 2 (`[2/6]`). Required asset: the Next.js app shell that
+  consumes the complete SPEC.md section 7 REST surface; checkpoint: none (UI, not
+  a gate); approver: none. Blocked downstream dependency: Q33-Q45. The stage 0-10
+  e2e Q30 is already green.
+
+### Prior cycle (2026-10-03T195801Z)
+
+- Cycle 2026-10-03T195801Z (Ralph cycle): selected item was hardening
   the prototype definition-of-done gate so DoD `[3/6]` can no longer pass on an
   API-only security suite. `scripts/check_definition_of_done.sh` `[3/6]` ran
   `pytest tests/security`, and the suite covers only the API layer, so condition
@@ -3558,7 +3620,7 @@ stalls:
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). REST `/workflows/{id}` polling read landed 2026-10-03T185701Z (Q15). The fork `workflows/resumer.py` adapter was reassessed and rejected as mis-specified: the resumer is an 809-line fork polling loop, not a per-step executor, so RED's `WorkflowStepExecutor` seam is served by connector adapters (Q16), not a resumer shim |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z). The stage 0 `ClientWorkspace` and the knowledge `SourceRecord` stores completed with Q9 2026-10-03T190017Z (`0010_client_workspaces`, `0011_source_records`); the Production `BuildObject` store completed with Q11 2026-10-03T193035Z (`0013_build_objects`, which also added the required `tenant_id` the aggregate lacked) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
-| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams. The condition 3 gate now enforces coverage: `tests/security/covered-layers.txt` declares each covered layer and `scripts/check_security_coverage.sh` (called by DoD `[3/6]`) refuses a suite that does not declare `api`, `retrieval`, `worker` and `artifact-url` with a test each (2026-10-03T195801Z), so condition 3 cannot pass on an API-only suite |
+| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams. The condition 3 gate now enforces coverage: `tests/security/covered-layers.txt` declares each covered layer and `scripts/check_security_coverage.sh` (called by DoD `[3/6]`) refuses a suite that does not declare `api`, `retrieval`, `worker` and `artifact-url` with a test each (2026-10-03T195801Z), so condition 3 cannot pass on an API-only suite. Condition 2's cross-client-retrieval scenario shares the missing retrieval seam and is declared uncovered in `tests/acceptance/covered-scenarios.txt` (2026-10-03T200006Z) |
 | Q9 | REST `/clients` and `/clients/{id}/sources` (done 2026-10-03T190017Z; `GET /red/clients?tenant_id=&limit=&offset=` and `POST /red/clients`, `GET`/`POST /red/clients/{tenant_id}/sources`; durable `ClientWorkspaceStore` and `SourceRecordStore` ports with in-memory and PostgreSQL adapters and migrations `0010_client_workspaces`/`0011_source_records`; tenant is a required query parameter, an unscoped read/write or a rewritten source is refused) | api | Q7 | route tests `tests/unit/engagement/test_clients_route.py` (8), adapter tests `tests/unit/engagement/test_client_workspace_store.py` and `tests/unit/knowledge/test_source_record_store.py` |
 | Q10 | REST `/claims`, `/methods` (done 2026-10-03T192641Z; `GET`/`POST /red/claims` and `GET /red/methods`, tenant required on GET and path/body-scoped to the tenant; new durable Knowledge `ClaimStore` port with in-memory and PostgreSQL adapters and migration `0012_claims`; the claim create route verifies every citation against the same tenant's stored immutable `SourceRecord` by id and checksum, and the claim store refuses a same-id non-append-only re-statement; `MethodVersionRepository.list` added so `/methods` is a tenant-scoped paginated read of approved methods, left read-only because approval is gate-owned. Tests `tests/unit/knowledge/test_claim_store.py`, `tests/unit/knowledge/test_claims_route.py`, `tests/unit/method/test_methods_route.py`) | api | Q9 | route tests |
 | Q11 | REST `/offers`, `/builds` (done 2026-10-03T193035Z; `GET /red/offers` and `GET`/`POST /red/builds`, tenant required on every read and carried on the create body; `BuildObject` now requires a `tenant_id` (SPEC.md sections 3 and 9); new Production `BuildObjectRepository` port with in-memory and PostgreSQL adapters and migration `0013_build_objects` (upsert per `(tenant_id, build_id)`); `/offers` is a tenant-scoped paginated read over the existing offer store, left read-only because production readiness is gate-owned; `/builds` list is tenant-scoped and paginated and create records an Identified proposal. Tests `tests/unit/commercial/test_offers_route.py`, `tests/unit/production/test_build_object_store.py`, `tests/unit/production/test_builds_route.py`, `tests/unit/production/test_build_object_postgres.py`) | api | Q10 | route tests |
@@ -3581,7 +3643,7 @@ stalls:
 | Q28 | Apply the required-kind policy: wire each canon asset as a required kind | pipeline | Q27 | stage templates updated; gate integrity tests. Stage 1 `awareness-map` wired from the typed `MarketAwarenessMap` 2026-10-03T181228Z; `audience-reach-estimate` and `target-market-match` and stages 2-10 remain. Stage 9     `compliance-package` wired from the reviewed `CompliancePackage` 2026-10-03T182015Z; stage 5 `product-program` wired from the typed `ProductProgram` 2026-10-03T182409Z (stage 5 now thirteen kinds); stage 4 `thirteen-transformations` wired from the typed `ThirteenTransformations` 2026-10-03T182806Z (stage 4 now thirteen kinds); stage 6 `content-roadmap` wired from the typed `ContentRoadmap` 2026-10-03T183151Z (thirteen kinds); stage 6 `content-crusher` wired from the typed `ContentCrusher` 2026-10-03T183447Z (fourteen kinds); stage 6 `content-plan` wired from the typed `ContentPlan` 2026-10-03T183643Z (fifteen kinds, stage 6 content family complete); stage 7 is canon-covered by the `AuthorityAmplifierPackage`, and stages 8-10 now await the named methodology-owner placement decision for `EnrollmentPlan`, `ClientProcess`, `SwimlanesPlan` and the post-stage-10 assets |
 | Q29 | Method change impact assessment emits the dependent review queue | pipeline | Q21 | a change identifies its dependents |
 | Q30 | Stage 0-10 API e2e with deterministic agents | e2e | Q27 | DoD 1: one client intake to baseline |
-| Q31 | Section 11 acceptance suite | e2e | Q30 | DoD 2 |
+| Q31 | Section 11 acceptance suite (SPEC.md section 11) | e2e | Q30 | DoD 2. Condition 2 gate added 2026-10-03T200006Z: `scripts/check_acceptance_coverage.sh` requires all ten canonical scenarios declared in `tests/acceptance/covered-scenarios.txt`, each covered scenario pointing at a test file that exists with at least one test, so condition 2 cannot pass without the suite. Covered today: source-attribution, known-requires-source, unauthorized-approval-rejected, method-change-identifies-dependents, worker-restart-preserves-waiting, launch-blocked-on-failed-path. Uncovered and keeping the gate red: duplicate-delivery-one-effect (needs a connector idempotency seam, Q16), cross-client-retrieval-empty (needs the retrieval port, Q8), gitops-revert-restores and backup-restores-approval-trail (deploy-only, Q49 and a chosen backup target) |
 | Q32 | Next.js shell in `frontend/` plus RED theme plus API client | ui | Q15 | builds; health route |
 | Q33 | Command center screen | ui | Q32 | browser test; shows blockers and owners |
 | Q34 | Client workspace overview | ui | Q33 | browser test |

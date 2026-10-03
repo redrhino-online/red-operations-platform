@@ -13,8 +13,10 @@ fail() { printf 'DONE-GATE FAIL: %s\n' "$*" >&2; exit 1; }
 printf '\n[1/6] per-cycle checks (make check: pytest + pyflakes, with Postgres)\n'
 make check
 
-printf '\n[2/6] stage 0-10 API e2e (one client, intake to Performance Baseline)\n'
+printf '\n[2/6] stage 0-10 API e2e (condition 1) and section 11 acceptance suite (condition 2)\n'
 uv run pytest tests/e2e -q || fail "the stage 0-10 e2e suite is missing or failing"
+./scripts/check_acceptance_coverage.sh tests/acceptance \
+  || fail "the section 11 acceptance suite is not covered; condition 2 is unmet"
 
 printf '\n[3/6] cross-tenant security suite (API, retrieval, worker, artifact URL)\n'
 ./scripts/check_security_coverage.sh tests/security \
