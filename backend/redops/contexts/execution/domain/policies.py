@@ -18,6 +18,7 @@ from redops.contexts.execution.domain.entities import (
     PerformanceBaseline,
 )
 from redops.contexts.execution.domain.errors import (
+    ClientProcessDependencyError,
     ComplianceTenantBoundaryError,
     EnrollmentDependencyError,
     ExpiredComplianceWaiverError,
@@ -45,6 +46,7 @@ from redops.contexts.execution.domain.value_objects import (
     ProspectPathDryRun,
     TrafficAuthorization,
 )
+from redops.contexts.execution.domain.client_process import ClientProcess
 from redops.contexts.execution.domain.enrollment import EnrollmentPlan
 from redops.contexts.execution.domain.swimlanes import SwimlanesPlan
 
@@ -403,4 +405,28 @@ class EnrollmentReadinessPolicy:
             raise EnrollmentDependencyError(
                 f"enrollment plan {plan.plan_id!r} cannot run before its stage 8 "
                 f"funnel {plan.funnel.integration_id!r} has passed Funnel Complete"
+            )
+
+
+class ClientProcessReadinessPolicy:
+    """Refuses a client process whose stage 5 program does not deliver the method.
+
+    SPEC.md section 12.7 grounds the client's process on the client's own stage 2
+    currency, stage 3 model, stage 4 Signature Solution and stage 5 product
+    roadmap, and the canon has the client enroll prospects into that program
+    (canon files 35-45). Running the process before the program delivers every
+    Signature Solution step would enroll prospects into a program that cannot
+    deliver the method the process teaches, so the policy refuses it rather than
+    letting an incomplete program authorize a client conversion. It does not
+    authorize spend, payment or external commitment (SPEC.md sections 4 and 9).
+    """
+
+    def require(self, process: ClientProcess) -> None:
+        missing = process.program.missing_steps
+        if missing:
+            names = ", ".join(missing)
+            raise ClientProcessDependencyError(
+                f"client process {process.process_id!r} cannot run before its "
+                f"stage 5 program {process.program.program_id!r} delivers every "
+                f"Signature Solution step; missing: {names}"
             )

@@ -337,3 +337,59 @@ class SwimlanesObservationError(SwimlanesError):
     describes the recovery moves that will run, while any measured movement stays
     a separate observation, so a plan is never an observation.
     """
+
+
+class ClientProcessError(ExecutionError):
+    """Base class for the client-authored enrollment process rule violations."""
+
+
+class InvalidClientProcessError(ClientProcessError, ValueError):
+    """A client process value object or the process violates an invariant.
+
+    SPEC.md section 12.7 makes the client-authored enrollment process a versioned
+    artifact whose required shape is fixed by the supplied canon: the six part
+    enrollment process in order (frame, discover problems, prescription,
+    application, invitation, plus the objection crusher), the five pass-or-fail
+    checkpoints (intent, commitment, value, confidence, desire) each with the
+    client's own question, the acceptance and rejection criteria, the common
+    objection answers, the chosen strategy-session model, the price floor, the
+    pre-call homework, the booking window and the no-show rules. A blank identity
+    or owner, a missing or untyped field, a duplicate question, checkpoint,
+    criterion or objection, a price floor that is not positive, or a process that
+    does not carry exactly the canon parts and checkpoints in order cannot be
+    represented as a client process.
+    """
+
+
+class ClientProcessDependencyError(ClientProcessError):
+    """A client process was not grounded on a typed, complete upstream asset.
+
+    SPEC.md section 12.7 grounds the client's process on the client's own
+    approved stage 2 currency, stage 3 model, stage 4 Signature Solution and stage
+    5 product roadmap (canon files 35-49). A process must therefore be grounded on
+    typed same-tenant values, and ``ClientProcessReadinessPolicy`` refuses to treat
+    a process as ready when its stage 5 program does not yet deliver every stage 4
+    method step, because a client cannot enroll prospects into a program that does
+    not deliver the client's own method.
+    """
+
+
+class ClientProcessTenantBoundaryError(ClientProcessError):
+    """A client process mixed in a currency, model, method or program from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. The
+    client process belongs to the tenant of the stage 2 currency, stage 3 model,
+    stage 4 method and stage 5 program it is grounded on, so it cannot cross a
+    tenant boundary.
+    """
+
+
+class ClientProcessObservationError(ClientProcessError):
+    """A client process was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The process
+    describes the enrollment conversation the client will run and the terms it
+    will offer, while any enrolled prospect, collected payment or measured
+    movement stays a separate observed or authorized record, so the process is
+    never an observation.
+    """
