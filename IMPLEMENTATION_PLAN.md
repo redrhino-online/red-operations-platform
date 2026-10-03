@@ -4,88 +4,73 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T06:00:33Z (Ralph cycle 121).
-- Selected item: build the canon's ten-second-view audience building campaign
-  (canon file 30) as a stage 10 Measurement planning asset over the same-tenant
-  avatar and the existing retargeting substrate. It was the named highest
-  priority ready next item after cycle 120. It outranks the retargeting
-  delivery remainder (the invisible opt-in offer and the banner-ad spec and
-  swipe file, canon 33 and 34) and the bounded wiring follow-ups (awareness map,
-  matchmaker, funnel finder, transformations, umbrella, swimlanes, enrollment
-  and content syndication into their gates or views), because it completes the
-  audience-building and content flywheel gap's named delivery scope while the
-  others are a tactical asset library with a narrower pipeline effect or each
-  need a methodology-owner decision on a required kind.
+- Cycle timestamp: 2026-10-03T06:03:24Z (Ralph cycle 122).
+- Selected item: build the canon's invisible opt-in offer (canon file 34) as a
+  stage 8/10 Measurement planning asset over the same-tenant `ConversionGoal`
+  and `RetargetingAudience` substrate. It was the named highest priority ready
+  next item after cycle 121 (SPEC.md section 12.5 retargeting-system candidate).
+  It outranks the remaining banner-ad spec and swipe file (canon 33), which is a
+  static reference library with a narrower pipeline effect, and the bounded
+  wiring follow-ups (awareness map, matchmaker, funnel finder, transformations,
+  umbrella, swimlanes, enrollment, content syndication and this offer into their
+  gates or views), each of which needs a methodology-owner decision on a required
+  kind. It closes the named remaining delivery scope of the retargeting-system
+  canon gap.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: the canon top-of-funnel audience campaign now lives in the
-  Measurement bounded context as the pure value objects
-  `AudienceBuildingObjective`, `VideoViewWindow`, `InterestTargeting` and
-  `VideoViewAudienceCampaign`, the constants `MIN_VIDEO_VIEW_SECONDS` and
-  `MAX_VIDEO_VIEW_RETENTION_DAYS`, the named errors
-  `InvalidVideoViewAudienceError`, `VideoViewAudienceDependencyError`,
-  `VideoViewAudienceObjectiveError`, `VideoViewAudienceWindowError`,
-  `VideoViewAudienceTenantBoundaryError`, `VideoViewAudienceBudgetError`,
-  `VideoViewAudienceTargetCostError` and `VideoViewAudienceObservationError`,
-  and `VideoViewAudiencePolicy`. The campaign binds a named owner to a
-  `VIDEO_VIEWS` objective (refusing leads, conversions and page post engagement;
-  canon file 30), a same-tenant ``AvatarProfile`` interest stack of at least two
-  distinct interests (canon file 30's interest stacking), a `VideoViewWindow`
-  of at least a ten-second view retained at most thirty days (canon file 30's
-  catch-all, with a `canon()` classmethod and `uses_canon_catch_all`), a typed
-  positive `DailyPromotionBudget` (the canon's low starting spend, reusing the
-  canon-30/31 budget value object), a caller-supplied positive Decimal target
-  cost per ten-second view (the canon's rough under-twenty-cents metric), a
-  same-tenant `TrackingCode` and at least one existing `RetargetingAudience` it
-  builds for on the same tracking code, reporting the funnel steps it warms via
-  `retargeting_steps` and `builds_for`. It refuses a blank identity, an untyped
-  or cross-tenant dependency, a list on another tracking code, a weaker or
-  over-thirty-day window and a non-positive target cost, and is never an
-  observation; `VideoViewAudiencePolicy.require_low_daily_budget` and
-  `require_target_cost_below` refuse a starting budget or target cost above the
-  caller's viability ceiling. It is a stage 10 planning asset, not a required
-  gate kind (a methodology-owner decision, SPEC.md section 12.5). New behavioral
-  coverage: 35 tests in `tests/unit/measurement/test_video_view_audience.py`.
-  Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
-  'test_*.py'` reports 1457 passed, up from 1422. `python3 -m pyflakes
-  backend/redops tests` is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the audience campaign composes from the existing substrate
-  rather than duplicating the step-based lists: it reuses the Commercial
-  `AvatarProfile` and `DailyPromotionBudget` and the Measurement `TrackingCode`
-  and `RetargetingAudience`, and reports the retargeting lists it warms instead
-  of inventing a new list type, which keeps the context dependency one-way
-  (commercial does not import measurement). The canon's window is a bound, not a
-  fixed value -- it allows a stricter view or shorter lookback -- so the window
-  refuses only a view below ten seconds or a lookback above thirty days. The
-  content measurement loop (the observed audience size and cost per view) remains
-  a separate stage 10 observation and is not representable as part of this
-  planning asset.
+- Evidence: the canon's invisible opt-in offer now lives in the Measurement
+  bounded context as the pure value objects `LeadMagnetAsset`,
+  `NonConvertedSegment` and `InvisibleOptInOffer`, the named errors
+  `InvalidInvisibleOptInError`, `InvisibleOptInDependencyError`,
+  `InvisibleOptInContactGateError`, `InvisibleOptInStepError`,
+  `InvisibleOptInTenantBoundaryError` and `InvisibleOptInObservationError`. The
+  offer binds a named owner to a same-tenant `NonConvertedSegment` (the funnel
+  step and page the prospect stalled on plus the `ConversionGoal` they did not
+  achieve; canon file 34: "if they hit that landing page and don't opt in"), a
+  same-tenant contact-free `LeadMagnetAsset` (canon file 34: "give them the cheat
+  sheet without requiring an opt in"), a typed `RetargetingChannel`, and the
+  existing same-tenant `RetargetingAudience` it advances on the segment's tracking
+  code, exposing `delivers_without_contact`. It refuses a blank identity, an
+  untyped or cross-tenant dependency, a contact-gated lead magnet, an audience
+  built on another tracking code and an audience still on the stalled step (canon
+  file 34: push them "all the way down the funnel"), and is never an observation.
+  New behavioral coverage: 26 tests in
+  `tests/unit/measurement/test_invisible_opt_in.py`. Running `PYTHONPATH=backend
+  python3 -m unittest discover -s tests -p 'test_*.py'` reports 1483 passed, up
+  from 1457. `python3 -m pyflakes backend/redops tests` is clean. `ruff` and
+  `mypy` remain uninstalled.
+- New findings: the canon's invisible opt-in is a distinct segment inversion of
+  the existing retargeting list substrate: a `RetargetingAudience` segments people
+  who achieved a goal, while the invisible opt-in recovers people who did NOT, so
+  a dedicated `NonConvertedSegment` typed on the unachieved goal is required
+  rather than reusing `RetargetingAudience` with its required `achieved_goal`. The
+  offer reuses the existing `RetargetingChannel`, `ConversionGoal` and
+  `TrackingCode` and advances an existing `RetargetingAudience`, so the context
+  dependency stays one-way and no step-based list is duplicated. The canon's
+  Perfect Audience include/exclude list mechanics and its DMA and day-parting
+  targeting are delivery concerns of the ad platform, not modeled here. The
+  measured opt-in or engagement the offer later produces remains a separate stage
+  10 observation.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant model
   given slot-based single-active-client isolation, the lifecycle transition graph
   assumed in cycle 56, scheduler/worker topology, the client-designated approver
   identities, and pilot metric targets. Persistence and the Operations delivery
   adapter still depend on the storage ADR; the stage 9 compliance projection and
-  this campaign's placement in a required stage 10 kind still need a named-owner
-  decision; any spend or traffic authorization remains a human decision (SPEC.md
+  this offer's placement in a required stage 8/10 kind still need a named-owner
+  decision; any spend or send authorization remains a human decision (SPEC.md
   sections 4 and 9).
-- Highest priority ready next item: build the canon's invisible opt-in offer
-  (canon file 34) as a stage 8/10 planning asset over the same-tenant
-  `RetargetingAudience` and offer substrate, so the offer names the
-  non-converted visitor segment it recovers (a prospect who reached the opt-in
-  page but did not convert), the lead magnet asset it delivers without requiring
-  contact information, the typed channel it runs on and the retargeting audience
-  it moves, binds a named owner and refuses a contact-gated delivery or a
-  cross-tenant segment. SPEC.md section 12.5 records the invisible opt-in as the
-  remaining retargeting-system candidate (canon files 33 and 34; canon file 34:
-  "I'll retarget them and give them the cheat sheet without requiring an opt in"
-  and "push them all the way down the funnel without ever needing an email
-  address") and section 4 keeps any resulting send or spend behind human
-  authorization. Prerequisite: read canon file 34 before shaping, ground it on
-  the existing `RetargetingAudience`/`RetargetingCampaign` substrate rather than
-  duplicating the step-based lists, keep it a planning asset rather than a
-  required gate kind, and record that the send and any spend remain human
-  decisions. The banner-ad spec and swipe file (canon 33) remain a static
-  reference library after that.
+- Highest priority ready next item: build the canon's banner-ad spec and swipe
+  file (canon file 33) as a static stage 8/10 reference library over the existing
+  `RetargetingChannel` substrate, so the reference names each channel's required
+  banner dimensions and a swipe-copy note without generating creative or
+  authorizing spend. This is the last remaining named scope of the
+  retargeting-system canon gap (SPEC.md section 12.5). Prerequisite: read canon
+  file 33 before shaping, keep it a planning/reference asset rather than a
+  required gate kind, record that any ad spend remains a human decision, and note
+  that canon file 34's ad-creative discussion of multiple sizes and the
+  5P-plus-promotion messaging informs it. After that, the bounded wiring
+  follow-ups into the production view, command center or a required gate kind
+  remain methodology-owner decisions.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; a stage-parameterized gate recorder/handler refactor;
@@ -94,6 +79,22 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   awareness/matcher/finder, enrollment and content syndication plans into the
   production view, the command center or a required gate kind (methodology-owner
   decisions); and all persistence.
+  [DONE 2026-10-03 (Ralph cycle 122): built the canon's invisible opt-in offer as
+  the pure Measurement `InvisibleOptInOffer` (`LeadMagnetAsset`,
+  `NonConvertedSegment`), which binds a named owner to a same-tenant
+  non-converted segment (the funnel step and page the prospect stalled on plus the
+  `ConversionGoal` they did not achieve), a same-tenant contact-free
+  `LeadMagnetAsset`, a typed `RetargetingChannel` and the existing same-tenant
+  `RetargetingAudience` it advances on the segment's tracking code; it refuses a
+  blank identity, an untyped or cross-tenant dependency, a contact-gated lead
+  magnet, an audience on another tracking code and an audience still on the
+  stalled step, exposes `delivers_without_contact`, and is never an observation
+  (SPEC.md section 12.5; canon file 34: "give them the cheat sheet without
+  requiring an opt in" and push them "all the way down the funnel without ever
+  needing an email address"); verified by
+  `tests/unit/measurement/test_invisible_opt_in.py` (26 tests, full suite 1483
+  passed). It is a stage 8/10 planning asset, not a required gate kind (a
+  methodology-owner decision), and any send or spend remains a human decision.]
   [DONE 2026-10-03 (Ralph cycle 121): built the canon's ten-second-view audience
   building campaign as the pure Measurement `VideoViewAudienceCampaign`
   (`AudienceBuildingObjective`, `VideoViewWindow`, `InterestTargeting`,
@@ -684,7 +685,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 - Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: implemented 2026-10-03 (Ralph cycle 111) as the Commercial Design `NurturePlan` (`NurtureAudienceState`, `NurtureModality`, `NurtureMessage`, `NurtureSequence`), which grounds each message on a step of a same-tenant stage 4 `SignatureSolution`, uses the 5P modality (ping is the one-question survey), re-engages non-openers with distinct headlines and binds the sequences to a named owner. SPEC.md section 12.6 warns the dedicated email/follow-up module is absent from the supplied canon, so the shape is extracted from the covered files and recorded as a documented gap; wiring it into a required stage kind remains a named-owner decision.
 - Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93 built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate. Cycle 106 completed that slice: the METRICS dimension now reports each registered metric's newest observed figure and a measured movement via `metric_reporting_views`. Cycle 107 built the canon's forecast equation (`FunnelMetricRole`, `FunnelFigure`, `FunnelEconomics`, `FunnelForecast`, `funnel_figure`) so the metrics matrix unit economics exist before real data and a forecast stays distinct from an observed result.   Cycle 108 built the canon's scaling rule (`LearningPhase`, `ScalingAction`, `ScalingRecommendation`, `AdScalingPolicy`), so the dashboard can now turn an observed cost per lead into an owner-approved scale, hold, bid-up-the-funnel or pause-and-review recommendation. Cycle 109 built the canon's split-test logging (`SplitTestMode`, `SplitTestChange`, `SplitTest`), so a stage 10 optimization logs the one variable it changes (bound to the approved improvement's lever) before reading the result. This candidate is now fully implemented; no remaining scope.
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: partially implemented 2026-10-03 (Ralph cycle 115) as the Commercial Design `ContentRoadmap` (`ContentBeat`, `ContentChannel`, `ContentTopic`, `ContentDistributionPolicy`), which maps each step of a same-tenant stage 4 `SignatureSolution` to content topics that follow the Authority Amplifier beat order and reach the canon's minimum blog, YouTube and Facebook channels, binds a named owner and reports the steps it covers and misses. Implemented 2026-10-03 (Ralph cycle 120) for the syndication and recycling schedule as the Commercial Design `ContentSyndicationPlan` (`SyndicationChannel`, `SyndicationCadence`, `RecycledFormat`, `ChannelSyndication`, `DailyPromotionBudget`, `TopicSyndication`), which distributes a same-tenant `ContentRoadmap` by syndicating each planned topic to at least one typed channel on a per-channel cadence, promoting it on a positive dollar-a-day Decimal budget and recycling it into typed derivative formats, binds a named owner and reports the topics it does not yet syndicate, with `ContentSyndicationPolicy.require_multichannel` and `require_owned_reach` refusing a single-channel or borrowed-only distribution (canon file 31). Implemented 2026-10-03 (Ralph cycle 121) for the ten-second-view audience building campaign as the Measurement `VideoViewAudienceCampaign` (`AudienceBuildingObjective`, `VideoViewWindow`, `InterestTargeting`, `VideoViewAudiencePolicy`), which binds a named owner to a video-views objective, a same-tenant `AvatarProfile` interest stack, the canon's ten-second view and thirty-day retention window, a positive low `DailyPromotionBudget`, a caller-supplied target cost per ten-second view, a same-tenant `TrackingCode` and the existing `RetargetingAudience` lists it warms, reporting the funnel steps it builds for and refusing a non-video-views objective, an untyped or cross-tenant dependency, a weaker or over-thirty-day window and a non-positive target cost (canon file 30). Remaining candidate: the content measurement loop (a stage 10 observation of audience size and cost per view) is an operations asset outside these planning artifacts and still needs a named-owner decision on where it belongs.
-- Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 110) as the Measurement `RetargetingPlan` (`TrackingCode`, `ConversionGoal`, `RetargetingAudience`, `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep`), which orders the canon's tracking code, conversion goals, retargeting lists and focused campaigns and binds them to one tenant and a named owner; the canon's effective-ads step is covered by the stage 10 `SplitTest` and its metrics step by the `MetricDefinition` registry. Remaining candidate: the canon's invisible opt-in offer (a lead magnet retargeted to a non-converted visitor without requiring contact information; canon file 34) is the named highest priority ready next item as a stage 8/10 planning asset over the existing `RetargetingAudience`/`RetargetingCampaign` substrate; the banner-ad spec/swipe-file assets (canon 33) are a static reference library after that. Both still need a named-owner decision on where they belong.
+- Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 110) as the Measurement `RetargetingPlan` (`TrackingCode`, `ConversionGoal`, `RetargetingAudience`, `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep`), which orders the canon's tracking code, conversion goals, retargeting lists and focused campaigns and binds them to one tenant and a named owner; the canon's effective-ads step is covered by the stage 10 `SplitTest` and its metrics step by the `MetricDefinition` registry. Implemented 2026-10-03 (Ralph cycle 122) for the canon's invisible opt-in offer as the Measurement `InvisibleOptInOffer` (`LeadMagnetAsset`, `NonConvertedSegment`), which recovers a non-converted visitor segment (the step and page they stalled on plus the goal they did not achieve) and delivers a contact-free lead magnet on a typed channel while advancing an existing same-tenant retargeting list down the funnel, binds a named owner and refuses a contact-gated delivery, a cross-tenant segment and an audience still on the stalled step. Remaining candidate: the banner-ad spec/swipe-file assets (canon 33) as a static stage 8/10 reference library, the named highest priority ready next item. Both the offer and the banner spec still need a named-owner decision on where they belong in a required gate kind; any send or spend remains a human decision.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: implemented 2026-10-03 (Ralph cycle 94) as the Execution `CompliancePackage` (`ComplianceAssetKind`, `ComplianceAsset`, `ComplianceWaiver`) with the `ComplianceRequiredPolicy` gating `LaunchQA` traffic authorization, so "Launch Approved" needs every required asset or a live owned waiver; projecting the compliance assets onto their own canonical stage 9 gate kind remains a candidate that needs a named-owner decision.
 - Positioning and decision tools (Target Market Matchmaker, awareness levels, Funnel Finder) — canon 00, 04, 13, 14 — stages 1 and 2 — status: implemented 2026-10-03 (Ralph cycle 112) for the market awareness levels as the Commercial Design `MarketAwarenessMap` (`MarketAwarenessLevel`), which types the stage 1 `awareness-map` kind with the canon's five levels, requires research evidence and message requirements, rejects a retarget level that is not strictly further down the funnel, and projects to exact `StageAssetVersion` evidence; implemented 2026-10-03 (Ralph cycle 113) for the Target Market Matchmaker as the Commercial Design `TargetMarketCandidate` and `TargetMarketMatchmaker`, which narrows at least two canon-judged candidates to the one to serve now, grounds the chosen market on a same-tenant `MarketAwarenessMap`, and has `TargetMarketMatchPolicy.require_servable` refuse a market whose awareness position is not initially targetable; and implemented 2026-10-03 (Ralph cycle 114) for the Funnel Finder as the Commercial Design `FunnelProfile`, `FunnelType`, `OfferPriceBand` and `FunnelFinder`, which chooses one of the canon's funnel types from the four canon factors, narrows at least two considered types to the selected one with a rationale, and has `FunnelSelectionPolicy.require_price_fit` refuse a high-ticket offer with a self-serve funnel and a low-ticket offer with the sales-call CAC funnel (canon 13, 14). No candidate remains in this gap. Wiring the awareness map, the match or the finder into the `AvatarProfile`, the stage 1 `DiagnosisPackage`, the stage 6 `CampaignMessage` or the stage 8 `FunnelIntegration` is a bounded follow-up; none is a required gate kind yet (a methodology-owner decision).
 - Thirteen transformations (the overall shift, three phase shifts and nine step-level from/to pairs, titled from the million dollar message) — canon 09, 10 — stage 4 — status: implemented 2026-10-03 (Ralph cycle 118) as the pure Method `Transformation`, `TransformationScope` and `ThirteenTransformations`, which ground on a same-tenant stage 4 `SignatureSolution`, require exactly one overall shift titled with the Million Dollar Message, three phase shifts and nine step shifts (thirteen total), match each shift's from/to states to the solution's own states, and refuse a missing/extra/duplicate shift, a shift naming a phase or step the solution does not have, a no-op shift and a cross-tenant solution or shift, and never represent the structure as an observation. It is a method structure asset, not a new required stage 4 gate kind; wiring it into the `SignaturePackage` bridge or a required kind remains a bounded follow-up and a methodology-owner decision.

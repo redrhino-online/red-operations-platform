@@ -592,3 +592,67 @@ class VideoViewAudienceObservationError(MeasurementError):
     it is never an observation and cannot be represented as one.
     """
 
+
+class InvalidInvisibleOptInError(MeasurementError, ValueError):
+    """An invisible opt-in offer leaves a required field unspecified.
+
+    SPEC.md section 12.5 records the canon's invisible opt-in offer (canon file
+    34) as the remaining retargeting-system candidate. The offer names its
+    identity, owner, non-converted visitor segment, contact-free lead magnet,
+    channel and the retargeting audience it advances. An artifact missing its
+    identity, or carrying a lead-magnet gate flag that is not a boolean, cannot be
+    a traceable stage 8/10 plan element.
+    """
+
+
+class InvisibleOptInDependencyError(MeasurementError):
+    """An invisible opt-in offer is missing a typed prerequisite.
+
+    The canon's invisible opt-in offer (canon file 34) is grounded on the funnel's
+    conversion goal, the retargeting list it advances and a same-tenant tracking
+    code. Each must be a typed value object, not a free-text substitute, so the
+    offer composes from the retargeting substrate that already exists rather than
+    duplicating the step-based lists.
+    """
+
+
+class InvisibleOptInContactGateError(MeasurementError):
+    """An invisible opt-in offer delivers a lead magnet behind a contact gate.
+
+    Canon file 34: "I'll retarget them and give them the cheat sheet without
+    requiring an opt in" and "push them all the way down the funnel without ever
+    needing an email address". A lead magnet that requires contact information
+    defeats the invisible opt-in and is refused, so the offer always names a
+    contact-free delivery.
+    """
+
+
+class InvisibleOptInStepError(MeasurementError):
+    """An invisible opt-in offer does not move the prospect down the funnel.
+
+    Canon file 34: the offer pushes a non-converted visitor "all the way down the
+    funnel". An offer whose advanced audience occupies the same funnel step the
+    prospect stalled on presents no next action and is refused, mirroring the
+    focused campaign's named next-step rule.
+    """
+
+
+class InvisibleOptInTenantBoundaryError(MeasurementError):
+    """An invisible opt-in offer cites another tenant's segment or audience.
+
+    SPEC.md section 3: every tenant resource carries a tenant id and a query is
+    tenant scoped, so a client's invisible opt-in offer cannot be built from a
+    different client's segment, lead magnet or retargeting list.
+    """
+
+
+class InvisibleOptInObservationError(MeasurementError):
+    """An invisible opt-in offer was projected as an observed result.
+
+    SPEC.md section 3, Measurement invariant keeps observations distinct from
+    conclusions. The offer is a plan of a segment, a lead magnet, a channel and an
+    audience it advances, while the opt-ins or engagement it later produces are
+    separate observations, so it is never an observation and cannot be represented
+    as one.
+    """
+

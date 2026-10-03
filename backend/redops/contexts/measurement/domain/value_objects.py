@@ -41,6 +41,7 @@ from redops.contexts.measurement.domain.errors import (
     InvalidFunnelForecastError,
     InvalidImprovementError,
     InvalidImprovementOutcomeError,
+    InvalidInvisibleOptInError,
     InvalidMeasurementRecordError,
     InvalidMetricDefinitionError,
     InvalidMetricReportingError,
@@ -49,6 +50,11 @@ from redops.contexts.measurement.domain.errors import (
     InvalidScalingRecommendationError,
     InvalidSplitTestError,
     InvalidVideoViewAudienceError,
+    InvisibleOptInContactGateError,
+    InvisibleOptInDependencyError,
+    InvisibleOptInObservationError,
+    InvisibleOptInStepError,
+    InvisibleOptInTenantBoundaryError,
     MeasurementTenantBoundaryError,
     MeasurementWindowOpenError,
     RetargetingDependencyError,
@@ -2106,3 +2112,218 @@ class VideoViewAudiencePolicy:
                 f"viable ceiling {ceiling}; a higher cost signals a problem with "
                 "the topic (canon file 30)"
             )
+
+
+@dataclass(frozen=True)
+class LeadMagnetAsset:
+    """The canon's lead magnet delivered without an opt in (canon file 34).
+
+    Canon file 34's invisible opt-in gives a non-converted visitor "the cheat
+    sheet without requiring an opt in", so the delivered asset is named by its
+    locator rather than by a contact record. The asset records whether its normal
+    delivery would require contact information; the invisible opt-in itself
+    refuses a gated asset, so a magnet that is contact-gated elsewhere can still be
+    represented here rather than silently redefined.
+    """
+
+    asset_id: str
+    tenant_id: str
+    name: str
+    delivery_locator: str
+    requires_contact_information: bool
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("lead magnet asset id", self.asset_id),
+            ("lead magnet tenant id", self.tenant_id),
+            ("lead magnet name", self.name),
+            ("lead magnet delivery locator", self.delivery_locator),
+        ):
+            if not value or not value.strip():
+                raise InvalidInvisibleOptInError(f"{label} is required")
+        if not isinstance(self.requires_contact_information, bool):
+            raise InvalidInvisibleOptInError(
+                "a lead magnet requires_contact_information flag must be a boolean"
+            )
+
+
+@dataclass(frozen=True)
+class NonConvertedSegment:
+    """The canon's non-converted visitor segment (canon file 34).
+
+    Canon file 34's invisible opt-in recovers the prospect who "hit that landing
+    page and don't opt in", so the segment names the funnel step and page the
+    prospect stalled on and the conversion goal they did not achieve. It is
+    grounded on a same-tenant tracking code and the unachieved goal on that code,
+    so a segment cannot be invented apart from the pixel and goal that define it.
+    """
+
+    segment_id: str
+    tenant_id: str
+    name: str
+    landing_step: str
+    landing_page: str
+    unachieved_goal: ConversionGoal
+    tracking_code: TrackingCode
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("non-converted segment id", self.segment_id),
+            ("non-converted segment tenant id", self.tenant_id),
+            ("non-converted segment name", self.name),
+            ("non-converted segment landing step", self.landing_step),
+            ("non-converted segment landing page", self.landing_page),
+        ):
+            if not value or not value.strip():
+                raise InvalidInvisibleOptInError(f"{label} is required")
+        if not isinstance(self.unachieved_goal, ConversionGoal):
+            raise InvisibleOptInDependencyError(
+                "a non-converted segment must name the typed conversion goal the "
+                "prospect did not achieve, not a free-text state"
+            )
+        if not isinstance(self.tracking_code, TrackingCode):
+            raise InvisibleOptInDependencyError(
+                "a non-converted segment must be built on an installed tracking "
+                "code, not a free-text pixel"
+            )
+        if (
+            self.unachieved_goal.tenant_id != self.tenant_id
+            or self.tracking_code.tenant_id != self.tenant_id
+        ):
+            raise InvisibleOptInTenantBoundaryError(
+                f"non-converted segment {self.segment_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its goal or tracking code cites another "
+                "tenant"
+            )
+        if self.unachieved_goal.tracking_code != self.tracking_code:
+            raise InvisibleOptInDependencyError(
+                f"non-converted segment {self.segment_id!r} names a goal recorded "
+                f"on tracking code {self.unachieved_goal.tracking_code.code_id!r}, "
+                f"not its own tracking code {self.tracking_code.code_id!r}"
+            )
+
+
+@dataclass(frozen=True)
+class InvisibleOptInOffer:
+    """The canon's invisible opt-in offer (SPEC.md section 12.5; canon file 34).
+
+    SPEC.md section 12.5 records the canon's invisible opt-in offer as the
+    remaining retargeting-system candidate, an explicit stage 8/10 planning asset
+    that avoids a named-owner pipeline change. Canon file 34 retargets a prospect
+    who reached the lead-magnet page but did not opt in and gives them the lead
+    magnet "without requiring an opt in", pushing them "all the way down the funnel
+    without ever needing an email address". The offer therefore binds a named owner
+    to the non-converted segment it recovers, the contact-free lead magnet it
+    delivers, the typed channel it runs on and the same-tenant retargeting audience
+    it advances. It refuses a blank identity, an untyped or cross-tenant
+    dependency, a contact-gated lead magnet and an audience that does not move the
+    prospect past the stalled step.
+
+    The offer is a plan, not a gate kind and not an authorization to spend or send:
+    putting ads in front of prospects remains a named human decision (SPEC.md
+    sections 4 and 9). It is never an observed result; the opt-ins or engagement it
+    later produces are separate observations (SPEC.md section 3).
+    """
+
+    offer_id: str
+    tenant_id: str
+    owner: str
+    name: str
+    segment: NonConvertedSegment
+    lead_magnet: LeadMagnetAsset
+    channel: RetargetingChannel
+    advances: RetargetingAudience
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("invisible opt-in offer id", self.offer_id),
+            ("invisible opt-in offer tenant id", self.tenant_id),
+            ("invisible opt-in offer owner", self.owner),
+            ("invisible opt-in offer name", self.name),
+        ):
+            if not value or not value.strip():
+                raise InvalidInvisibleOptInError(f"{label} is required")
+        if not isinstance(self.segment, NonConvertedSegment):
+            raise InvisibleOptInDependencyError(
+                "an invisible opt-in offer must recover a typed non-converted "
+                "segment, not a free-text audience"
+            )
+        if self.segment.tenant_id != self.tenant_id:
+            raise InvisibleOptInTenantBoundaryError(
+                f"invisible opt-in offer {self.offer_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its segment "
+                f"{self.segment.segment_id!r} belongs to tenant "
+                f"{self.segment.tenant_id!r}"
+            )
+        if not isinstance(self.lead_magnet, LeadMagnetAsset):
+            raise InvisibleOptInDependencyError(
+                "an invisible opt-in offer must deliver a typed lead magnet, not "
+                "a free-text asset"
+            )
+        if self.lead_magnet.tenant_id != self.tenant_id:
+            raise InvisibleOptInTenantBoundaryError(
+                f"invisible opt-in offer {self.offer_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its lead magnet "
+                f"{self.lead_magnet.asset_id!r} belongs to tenant "
+                f"{self.lead_magnet.tenant_id!r}"
+            )
+        if self.lead_magnet.requires_contact_information:
+            raise InvisibleOptInContactGateError(
+                f"invisible opt-in offer {self.offer_id!r} delivers lead magnet "
+                f"{self.lead_magnet.asset_id!r} behind a contact gate; the "
+                "invisible opt-in gives the asset without requiring an opt in "
+                "(canon file 34)"
+            )
+        if not isinstance(self.channel, RetargetingChannel):
+            raise InvalidInvisibleOptInError(
+                "an invisible opt-in offer requires a named ad channel"
+            )
+        if not isinstance(self.advances, RetargetingAudience):
+            raise InvisibleOptInDependencyError(
+                "an invisible opt-in offer must advance a typed retargeting "
+                "audience, not a free-text list"
+            )
+        if self.advances.tenant_id != self.tenant_id:
+            raise InvisibleOptInTenantBoundaryError(
+                f"invisible opt-in offer {self.offer_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its advanced audience "
+                f"{self.advances.audience_id!r} belongs to tenant "
+                f"{self.advances.tenant_id!r}"
+            )
+        if self.advances.tracking_code != self.segment.tracking_code:
+            raise InvisibleOptInDependencyError(
+                f"invisible opt-in offer {self.offer_id!r} advances an audience "
+                f"built on tracking code {self.advances.tracking_code.code_id!r}, "
+                f"not the segment's tracking code "
+                f"{self.segment.tracking_code.code_id!r}"
+            )
+        if self.advances.funnel_step == self.segment.landing_step:
+            raise InvisibleOptInStepError(
+                f"invisible opt-in offer {self.offer_id!r} advances to the "
+                f"{self.advances.funnel_step!r} step, which is the step the "
+                "prospect stalled on; the offer must push the prospect down the "
+                "funnel to a new step (canon file 34)"
+            )
+
+    @property
+    def delivers_without_contact(self) -> bool:
+        """Whether the delivered lead magnet needs no contact information."""
+        return not self.lead_magnet.requires_contact_information
+
+    @property
+    def is_offer(self) -> bool:
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent an invisible opt-in offer as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The offer
+        describes the segment, lead magnet, channel and advanced audience that will
+        run, while the opt-ins or engagement it later produces are separate
+        observations, so an offer is never an observation.
+        """
+        raise InvisibleOptInObservationError(
+            f"invisible opt-in offer {claim_id!r} is a plan of a segment, a lead "
+            "magnet, a channel and an audience it advances, not an observed "
+            "result, and cannot be recorded as an observation"
+        )
