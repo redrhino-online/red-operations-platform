@@ -79,9 +79,31 @@ export interface ListParams {
   offset?: number;
 }
 
-export interface ClientSummary {
-  id: string;
+// The stage 0 client workspace tenant root and its authority registry (SPEC.md
+// sections 3, 7 and 8; Q9, Q44). Mirrors `ClientWorkspaceResponse`/
+// `ClientWorkspaceListResponse` in `backend/redops/api/schemas.py`. Every child
+// resource belongs to exactly one workspace, and each named authority is an
+// actor plus the authority they hold. The authority settings screen reads the
+// registry; the UI invents no authority role and grants no authority.
+export interface ClientAuthority {
+  actor: string;
+  authority: string;
+}
+
+export interface ClientWorkspace {
+  workspace_id: string;
   tenant_id: string;
+  lifecycle: string;
+  authorities: ClientAuthority[];
+  children: string[];
+}
+
+export interface ClientWorkspaceList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  workspaces: ClientWorkspace[];
 }
 
 // One durable workflow run and its stable append-only event log (SPEC.md
@@ -561,8 +583,18 @@ export interface OpportunityList {
 // Tenant-scoped reads used by the first screens. Paths match `backend/redops/
 // api/routes.py` (router prefix `/red`).
 export class RedOperationsApi extends RedApiClient {
-  listClients(tenantId: string, params: ListParams = {}): Promise<ClientSummary[]> {
-    return this.get<ClientSummary[]>("/red/clients", { tenant_id: tenantId, ...params });
+  // The client workspace and authority registry read (SPEC.md sections 3, 7 and
+  // 8; Q9, Q44). The tenant is a required query parameter, so the read can never
+  // span clients; the route is read-only, so listing a registry grants no
+  // authority.
+  listClients(
+    tenantId: string,
+    params: ListParams = {},
+  ): Promise<ClientWorkspaceList> {
+    return this.get<ClientWorkspaceList>("/red/clients", {
+      tenant_id: tenantId,
+      ...params,
+    });
   }
 
   getWorkflowRun(tenantId: string, runId: string): Promise<WorkflowRunView> {

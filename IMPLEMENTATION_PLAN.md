@@ -4,6 +4,80 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T203620Z (Ralph cycle, this run): selected item was Q44, the
+  authority settings screen (SPEC.md sections 3, 4, 7, 8 and 13 condition 6;
+  queue item Q44). It is the highest priority ready item: its only dependency
+  Q43 is done, and it is the last canonical section 8 screen, so it closes the
+  condition 6 screen manifest (the largest unstarted DoD condition). It outranks
+  alternatives: once Q44 lands the condition 6 screen, build and branding gates
+  all pass; Q28 stage 8-10 required kinds are still blocked on the named
+  methodology-owner placement decision; Q16 needs a connector idempotency seam;
+  Q3/Q4 need the ADR 0006 resolution and a live key; condition 2's remaining
+  scenarios are deploy-gated (gitops-revert, backup-restore; Q49) or need the
+  retrieval (Q8) and connector (Q16) seams; condition 3 needs the retrieval,
+  worker and artifact-URL seams; Q47-Q50 need the Atlas cluster. The canon gap
+  register has no ready pipeline item: its remaining entries are implemented or
+  are candidate pipeline additions awaiting a named-owner decision, so no
+  canon-covered method artifact outranks this gate work.
+- Outcome: new `frontend/src/features/authority-settings/` feature.
+  `AuthoritySettings.tsx` is a presentational view over two tenant-scoped reads:
+  the client workspace authority registry (`GET /red/clients`) and the
+  engagement production view (`GET /red/clients/{tenant}/engagements/{engagement}/
+  production-view`). Helpers `authorityHolders` flatten each workspace's
+  `(actor, authority)` registry with its owning workspace, and `approvalScopes`
+  maps each stage to its accountable role, required approver role
+  (`client-designated-authority`) and the human who recorded the decision
+  (`approverLabel` renders a missing record as "not recorded"). It grants no
+  authority, invents no authority role and approves no gate. The `/authority-
+  settings` route binds the `authority-settings` screen id now declared in
+  `frontend/dod-screens.txt` (twelfth and last screen). The API client's stale
+  `ClientSummary`/`listClients` was corrected to the real `ClientWorkspaceList`
+  projection (`ClientAuthority`, `ClientWorkspace`). No backend route, gate rule,
+  approval authority or pipeline stage changed.
+- Evidence: `frontend/src/features/authority-settings/AuthoritySettings.test.tsx`
+  (7 tests) pins `authorityHolders`, `approvalScopes`, `approverLabel`, the
+  rendered authorities and per-stage scopes (including an unrecorded approver and
+  an approved gate), the empty registry, loading/error, and a stubbed-fetch
+  screen read asserting both tenant-scoped paths (2 fetches). `npm test` -> 12
+  files, 98 passed (7 new). `npm run build` -> compiled, `/authority-settings`
+  route emitted. `make check` -> 2272 passed, 2 skipped, 706 subtests passed.
+  `bash scripts/check_frontend_build.sh frontend` -> exit 0.
+  `bash scripts/check_frontend_screens.sh frontend` -> exit 0 (all 12 section 8
+  screens declared with pages and a browser suite; condition 6's screen gate now
+  passes). `[5/6]` branding scan -> no OpenExecutive branding in `frontend/`.
+  `make done` still stops at `[2/6]` condition 2 (unchanged; the remaining
+  scenarios are not UI work).
+- New findings: the `/red/clients` response was already the full
+  `ClientWorkspaceListResponse` with the authority registry, so Q44 needed no new
+  backend route; only the client's stale `listClients` type was wrong and is now
+  fixed. The production view already carries each stage's `approver_role`
+  (`client-designated-authority` for every stage) and `recorded_approver`, so the
+  gate approval scope is readable without a new route. Closing Q44 also satisfies
+  Q45 (the all-screen browser suite): condition 6's screen, build and branding
+  gates all pass; Q45 has no further code scope. `make done` remains blocked
+  before condition 6 because `[2/6]` runs first.
+- Blockers (unchanged): condition 2 is the `make done` head blocker and its
+  remaining scenarios need the retrieval port (Q8: cross-client-retrieval-empty),
+  a connector idempotency seam (Q16: duplicate-delivery-one-effect), or the Atlas
+  cluster and a chosen backup target (Q49: gitops-revert-restores,
+  backup-restores-approval-trail). Condition 3 needs the retrieval, worker and
+  artifact-URL seams. Q28 stage 8-10 required kinds blocked on the named
+  methodology-owner placement decision; Q3 agent registration blocked on the ADR
+  0006 / vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q47-Q50 need the Atlas cluster.
+- Highest priority ready next item: the Knowledge retrieval port and its
+  tenant-scoped isolation test (Q8 retrieval layer, SPEC.md sections 3, 6 and 9;
+  DoD conditions 2 and 3). Required asset: a retrieval port in the Knowledge
+  context with a tenant-scoped adapter, wired so a different client's retrieval
+  returns no result, plus the `cross-client-retrieval-empty` acceptance test and
+  the `tests/security` retrieval layer declaration; checkpoint: none (seam, not a
+  gate); approver: none. Blocked downstream dependency: condition 2
+  cross-client-retrieval-empty and condition 3 retrieval layer (then conditions
+  2, 3, 4, 5, 7, 8). Prerequisite: Q7 (done). Alternative ready item: Q16
+  connector idempotency, needed by condition 2's duplicate-delivery scenario.
+
+### Prior cycle (2026-10-03T203428Z)
+
 - Cycle 2026-10-03T203428Z (Ralph cycle, this run): selected item was Q43, the
   portfolio opportunities screen (SPEC.md sections 3 and 8 and 13 condition 6;
   queue item Q43). It is the highest priority ready item: its only dependency
@@ -4529,8 +4603,8 @@ stalls:
 | Q41 | Launch readiness | ui | Q40 | Done 2026-10-03T202836Z: `frontend/src/features/launch-readiness/` (`LaunchReadiness.tsx` presentational with the `checksWithOutcome`/`criticalFailures`/`exceptions`/`isAuthorized` helpers, `LaunchReadinessScreen.tsx` tenant-scoped read, route `/launch-readiness`, `frontend/dod-screens.txt` declares the screen id) over `listLaunchQAs` (`GET /red/launch-qas`). That read is new: `LaunchQARepository` gained `list` (in-memory + PostgreSQL) and the route projects each QA's state, its checks (kind, outcome, evidence, owner, `is_critical_path`) and the pinned traffic authorization. The view surfaces the stage 9 state, critical-path failures, exceptions and the exact authorization; it authorizes no traffic. `npm run build` clean (`/launch-readiness` emitted), `npm test` 9 new passed (74 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 3 remaining screens |
 | Q42 | Performance review | ui | Q41 | Done 2026-10-03T203157Z: `frontend/src/features/performance-review/` (`PerformanceReview.tsx` presentational with the `baselineStage`/`baselinePins`/`milestoneStates` helpers, `PerformanceReviewScreen.tsx` parallel tenant-scoped read, route `/performance-review`, `frontend/dod-screens.txt` declares the screen id) over `getProductionView` (`GET /red/clients/{tenant}/engagements/{engagement}/production-view`) and `listMeasurements` (`GET /red/measurements?tenant_id=`). The view shows the stage 10 baseline gate state and exact pinned baseline asset versions, then the four distinct post-launch milestones mapped to the measured funnel steps with missing observations shown pending (a placeholder record stays pending, never a measurement). The client gained `MeasurementRecord`/`MeasurementList`/`MetricDefinitionSummary` and `listMeasurements`. `npm run build` clean (`/performance-review` emitted), `npm test` 10 new passed (84 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 2 remaining screens |
 | Q43 | Portfolio opportunities | ui | Q42 | Done 2026-10-03T203428Z: `frontend/src/features/portfolio-opportunities/` (`PortfolioOpportunities.tsx` presentational with the `groundingVersion`/`byKind`/`isProposal` helpers, `PortfolioOpportunitiesScreen.tsx` tenant-scoped read, route `/portfolio-opportunities`, `frontend/dod-screens.txt` declares the screen id) over `listOpportunities` (`GET /red/opportunities?tenant_id=`). The view groups proposals by the canon Grow effect (entry point vs lifetime value, canon files 11-12) and shows each proposal's state, exact pinned grounding source (`source_asset_id@vN`, source kind), expected outcome, investment case, owner, next action and capture date; it approves no investment. The client gained `PortfolioOpportunity`/`OpportunityList` and `listOpportunities`. `npm run build` clean (`/portfolio-opportunities` emitted), `npm test` 7 new passed (91 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 1 remaining screen |
-| Q44 | Authority settings | ui | Q43 | browser test |
-| Q45 | All screen browser suite | ui | Q44 | DoD 6. Condition 6 build/suite gate added 2026-10-03T201148Z: `scripts/check_frontend_build.sh` (run by `[5/6]` after `check_frontend_screens.sh`) requires `frontend/package.json` to declare `build` and `test` and runs both, so a green `[5/6]` requires the UI to compile and its browser suite to run, not merely exist. Red today: the shell declares no `test` script and ships no browser runner |
+| Q44 | Authority settings | ui | Q43 | Done 2026-10-03T203620Z: `frontend/src/features/authority-settings/` (`AuthoritySettings.tsx` presentational with the `authorityHolders`/`approvalScopes`/`approverLabel` helpers, `AuthoritySettingsScreen.tsx` parallel tenant-scoped read, route `/authority-settings`, `frontend/dod-screens.txt` declares the screen id, the twelfth and last section 8 screen) over `listClients` (`GET /red/clients?tenant_id=`) and `getProductionView`. The view flattens the workspace authority registry and shows each stage's accountable role, required approver role and recorded approver; it grants no authority and approves no gate. The client's stale `ClientSummary`/`listClients` was corrected to `ClientWorkspaceList` (`ClientAuthority`, `ClientWorkspace`). `npm run build` clean (`/authority-settings` emitted), `npm test` 7 new passed (98 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_screens.sh frontend` exit 0 (all 12 screens), `scripts/check_frontend_build.sh frontend` exit 0 |
+| Q45 | All screen browser suite | ui | Q44 | Satisfied 2026-10-03T203620Z by Q44: all twelve section 8 screens now declare a page and a browser test, so condition 6's screen, build and branding gates pass. DoD 6. Condition 6 build/suite gate added 2026-10-03T201148Z: `scripts/check_frontend_build.sh` (run by `[5/6]` after `check_frontend_screens.sh`) requires `frontend/package.json` to declare `build` and `test` and runs both |
 | Q46 | RED branding sweep: Director, charters, UI copy, LICENSE and NOTICE | branding | Q32 | DoD 8; no OpenExecutive branding in the UI |
 | Q47 | Dockerfile plus health endpoint | deploy | Q30 | image builds; health passes |
 | Q48 | Helm chart: web, api, worker, migration Job, ingress, PDB, probes | deploy | Q47 | chart lint and render |
