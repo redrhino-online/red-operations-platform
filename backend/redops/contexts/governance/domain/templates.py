@@ -95,6 +95,7 @@ def stage_zero_to_ten_template(
                         "consequences-of-inaction",
                         "awareness-map",
                         "audience-reach-estimate",
+                        "target-market-match",
                         "customer-evidence",
                         "voice-notes",
                     }

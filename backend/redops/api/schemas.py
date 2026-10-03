@@ -177,6 +177,37 @@ class AudienceReachEstimateInput(BaseModel):
     captured_on: date
 
 
+class TargetMarketCandidateInput(BaseModel):
+    """One candidate target market judged by the canon match criteria (canon 00)."""
+
+    market_id: str
+    name: str
+    passion: str
+    problem: str
+    profit: str
+    reachability: str
+    pathway: str
+
+
+class TargetMarketMatchmakerInput(BaseModel):
+    """The stage 1 typed target market matchmaker (canon file 00).
+
+    SPEC.md section 12.5 records the positioning and decision tools as a canon
+    gap and the owner decision makes a canon-informed asset already implemented a
+    required kind of its target stage. The typed ``TargetMarketMatchmaker`` narrows
+    two or more candidate markets to the one to serve now, so the route accepts
+    this shape and the domain projects it as the ``target-market-match`` gate kind.
+    RED reuses the stage 1 researched awareness map for the chosen market rather
+    than accepting a second, divergent copy (an intentional narrowing of the canon,
+    SPEC.md section 12.4).
+    """
+
+    matchmaker_id: str
+    version: int
+    candidates: list[TargetMarketCandidateInput]
+    selected_market_id: str
+
+
 class RecordStageOneGateRequest(BaseModel):
     """The stage 1 "Avatar Locked" gate request (SPEC.md section 4).
 
@@ -195,6 +226,7 @@ class RecordStageOneGateRequest(BaseModel):
     offer_funnel_audit: OfferFunnelAuditInput
     awareness_map: AwarenessMapInput
     audience_reach_estimate: AudienceReachEstimateInput
+    target_market_match: TargetMarketMatchmakerInput
     claims: list[ClaimInput]
     stage_owner: str
     approver: str

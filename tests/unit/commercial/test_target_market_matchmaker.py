@@ -15,9 +15,11 @@ canon's target market matchmaker (canon file 00):
   does not target the completely unaware initially, so a chosen market whose
   awareness position is the completely unaware cannot be served now.
 
-The matchmaker is a planning decision asset for stages 1 and 2, not a new
-required gate kind (a methodology-owner decision, SPEC.md section 12.5), and it
-is never an observation (SPEC.md section 3).
+The matchmaker is a planning decision asset for stages 1 and 2. Per the owner
+decision in SPEC.md section 12.5 a canon-informed asset already implemented
+becomes a required asset kind of its target stage gate in stage order, so it is
+pinned as the stage 1 ``target-market-match`` kind, and it is never an
+observation (SPEC.md section 3).
 """
 
 import unittest
@@ -148,6 +150,17 @@ class TargetMarketMatchmakerTests(unittest.TestCase):
     def test_a_match_is_immutable(self):
         with self.assertRaises(FrozenInstanceError):
             matchmaker().selected_market_id = "market-coaches"
+
+    def test_a_match_projects_onto_the_stage_one_gate_kind(self):
+        asset = matchmaker().as_stage_asset(version=3)
+
+        self.assertEqual("target-market-match", asset.kind)
+        self.assertEqual("match-3f", asset.asset_id)
+        self.assertEqual(3, asset.version)
+
+    def test_a_versionless_match_projection_is_refused(self):
+        with self.assertRaises(InvalidTargetMarketMatchmakerError):
+            matchmaker().as_stage_asset(version=0)
 
     def test_a_match_is_never_an_observation(self):
         with self.assertRaises(TargetMarketObservationError):

@@ -203,6 +203,31 @@ class StageFourGateRouteTests(unittest.TestCase):
                 "source_note": "Facebook Audience Insights sizing",
                 "captured_on": ON,
             },
+            "target_market_match": {
+                "matchmaker_id": "match-3f",
+                "version": 1,
+                "candidates": [
+                    {
+                        "market_id": "market-referrals",
+                        "name": "Referral-starved service business owners",
+                        "passion": "we have run this play inside the trade",
+                        "problem": "unpredictable referral flow",
+                        "profit": "they already spend on lead generation",
+                        "reachability": "active in two owner-operator communities",
+                        "pathway": "from a referral drought to a referral partner engine",
+                    },
+                    {
+                        "market_id": "market-coaches",
+                        "name": "New executive coaches",
+                        "passion": "we coach this transition",
+                        "problem": "no repeatable client acquisition",
+                        "profit": "they invest in their practice",
+                        "reachability": "active in coach communities",
+                        "pathway": "from no pipeline to a repeatable acquisition engine",
+                    },
+                ],
+                "selected_market_id": "market-referrals",
+            },
             "claims": [
                 {
                     "claim_id": claim_id,

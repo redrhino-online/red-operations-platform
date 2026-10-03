@@ -2,13 +2,13 @@
 
 Rules under test come from SPEC.md sections 3 and 4 and the reference model
 canon (SPEC.md section 12.3 maps stage 1 "Diagnose" to canon files 02, 03 and
-04). The stage 1 template enumerates ten required asset kinds -- avatar
+04). The stage 1 template enumerates eleven required asset kinds -- avatar
 profile, pains, goals, consequences of inaction, awareness map, audience reach
-estimate, customer evidence, voice notes, business snapshot and offer and funnel
-audit -- while the Commercial context reviews them as four rich value objects.
-This package is the bridge: it projects the reviewed values onto the ten
-canonical kinds as exact ``StageAssetVersion`` evidence so a stage 1 gate can pin
-one exact version per kind.
+estimate, target market match, customer evidence, voice notes, business snapshot
+and offer and funnel audit -- while the Commercial context reviews them as five
+rich value objects. This package is the bridge: it projects the reviewed values
+onto the eleven canonical kinds as exact ``StageAssetVersion`` evidence so a
+stage 1 gate can pin one exact version per kind.
 
 - A passing gate pins the exact evidence and intended downstream use, so the
   package carries a positive version per reviewed asset and refuses a versionless
@@ -46,6 +46,8 @@ from redops.contexts.commercial.domain.value_objects import (
     MarketAwarenessMap,
     OfferFunnelAudit,
     ResearchPlatform,
+    TargetMarketCandidate,
+    TargetMarketMatchmaker,
 )
 from redops.contexts.governance.domain.entities import StageGate
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
@@ -130,6 +132,35 @@ def reach(*, tenant_id: str = TENANT) -> AudienceReachEstimate:
     )
 
 
+def matchmaker(*, tenant_id: str = TENANT) -> TargetMarketMatchmaker:
+    return TargetMarketMatchmaker(
+        matchmaker_id="match-3f",
+        tenant_id=tenant_id,
+        candidates=(
+            TargetMarketCandidate(
+                market_id="market-referrals",
+                name="Referral-starved service business owners",
+                passion="we have run this play inside the trade",
+                problem="unpredictable referral flow",
+                profit="they already spend on lead generation",
+                reachability="active in two owner-operator communities",
+                pathway="from a referral drought to a referral partner engine",
+            ),
+            TargetMarketCandidate(
+                market_id="market-coaches",
+                name="New executive coaches",
+                passion="we coach this transition",
+                problem="no repeatable client acquisition",
+                profit="they invest in their practice",
+                reachability="active in coach communities",
+                pathway="from no pipeline to a repeatable acquisition engine",
+            ),
+        ),
+        selected_market_id="market-referrals",
+        awareness_map=awareness_map(tenant_id=tenant_id),
+    )
+
+
 def package(**overrides) -> DiagnosisPackage:
     values = {
         "package_id": "diagnosis-3f",
@@ -144,6 +175,8 @@ def package(**overrides) -> DiagnosisPackage:
         "awareness_map_version": 1,
         "audience_reach_estimate": reach(),
         "audience_reach_estimate_version": 1,
+        "target_market_match": matchmaker(),
+        "target_market_match_version": 1,
     }
     values.update(overrides)
     return DiagnosisPackage(**values)
@@ -178,6 +211,7 @@ class DiagnosisPackageProjectionTests(unittest.TestCase):
             offer_funnel_audit_version=4,
             awareness_map_version=5,
             audience_reach_estimate_version=6,
+            target_market_match_version=7,
         )
 
         versions = {
@@ -197,6 +231,18 @@ class DiagnosisPackageProjectionTests(unittest.TestCase):
         self.assertEqual(3, versions["business-snapshot"])
         self.assertEqual(4, versions["offer-funnel-audit"])
         self.assertEqual(6, versions["audience-reach-estimate"])
+        self.assertEqual(7, versions["target-market-match"])
+
+    def test_the_target_market_match_kind_is_pinned_from_the_typed_match(self):
+        value = package(target_market_match_version=7)
+
+        by_kind = {ref.asset_id: ref for ref in _pins(value)}
+        source = {
+            asset.kind: asset for asset in value.stage_asset_versions()
+        }
+
+        self.assertEqual(7, by_kind["target-market-match"].version)
+        self.assertEqual("match-3f", source["target-market-match"].asset_id)
 
     def test_the_audience_reach_kind_is_pinned_from_the_typed_estimate(self):
         value = package(audience_reach_estimate_version=7)
@@ -254,6 +300,7 @@ class DiagnosisPackageRejectionTests(unittest.TestCase):
             {"offer_funnel_audit_version": 0},
             {"awareness_map_version": 0},
             {"audience_reach_estimate_version": 0},
+            {"target_market_match_version": 0},
         ):
             with self.subTest(override=override):
                 with self.assertRaises(InvalidDiagnosisPackageError):
@@ -271,6 +318,10 @@ class DiagnosisPackageRejectionTests(unittest.TestCase):
         with self.assertRaises(DiagnosisTenantBoundaryError):
             package(
                 audience_reach_estimate=reach(tenant_id=OTHER_TENANT)
+            )
+        with self.assertRaises(DiagnosisTenantBoundaryError):
+            package(
+                target_market_match=matchmaker(tenant_id=OTHER_TENANT)
             )
 
     def test_the_package_is_immutable(self):

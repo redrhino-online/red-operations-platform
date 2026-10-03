@@ -570,6 +570,7 @@ CANONICAL_DIAGNOSIS_KINDS: tuple[str, ...] = (
     "consequences-of-inaction",
     "awareness-map",
     "audience-reach-estimate",
+    "target-market-match",
     "customer-evidence",
     "voice-notes",
     "business-snapshot",
@@ -602,9 +603,12 @@ class DiagnosisPackage:
 
     SPEC.md sections 4 and 12.3 (canon files 02 and 03) also make the measured
     market a stage 1 input, so the typed ``AudienceReachEstimate`` is carried and
-    projected as the ``audience-reach-estimate`` kind. Per the owner decision in
-    SPEC.md section 12.5 a canon-informed asset already implemented is a required
-    kind of its target stage, never a new stage.
+    projected as the ``audience-reach-estimate`` kind. The canon's positioning
+    and decision tools (canon file 00) force a defensible choice of the target
+    market, so the typed ``TargetMarketMatchmaker`` is carried and projected as
+    the ``target-market-match`` kind. Per the owner decision in SPEC.md section
+    12.5 a canon-informed asset already implemented is a required kind of its
+    target stage, never a new stage.
 
     SPEC.md sections 3 and 4 require a passing gate to pin the exact evidence, so
     each reviewed asset is projected with a positive integer version and a blank
@@ -633,6 +637,8 @@ class DiagnosisPackage:
     awareness_map_version: int
     audience_reach_estimate: AudienceReachEstimate
     audience_reach_estimate_version: int
+    target_market_match: TargetMarketMatchmaker
+    target_market_match_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -649,6 +655,8 @@ class DiagnosisPackage:
             ("awareness map", self.awareness_map, MarketAwarenessMap),
             ("audience reach estimate", self.audience_reach_estimate,
              AudienceReachEstimate),
+            ("target market match", self.target_market_match,
+             TargetMarketMatchmaker),
         ):
             if not isinstance(value, expected):
                 raise InvalidDiagnosisPackageError(
@@ -666,6 +674,7 @@ class DiagnosisPackage:
             ("awareness map version", self.awareness_map_version),
             ("audience reach estimate version",
              self.audience_reach_estimate_version),
+            ("target market match version", self.target_market_match_version),
         ):
             if not isinstance(value, int) or value < 1:
                 raise InvalidDiagnosisPackageError(
@@ -711,6 +720,9 @@ class DiagnosisPackage:
             self.awareness_map.as_stage_asset(version=self.awareness_map_version),
             self.audience_reach_estimate.as_stage_asset(
                 version=self.audience_reach_estimate_version
+            ),
+            self.target_market_match.as_stage_asset(
+                version=self.target_market_match_version
             ),
             StageAssetVersion(
                 asset_id=self.business_snapshot.snapshot_id,
@@ -1701,6 +1713,9 @@ class NurturePlan:
         )
 
 
+TARGET_MARKET_MATCH_KIND = "target-market-match"
+
+
 @dataclass(frozen=True)
 class TargetMarketCandidate:
     """One candidate target market judged by the canon's match criteria.
@@ -1749,10 +1764,12 @@ class TargetMarketMatchmaker:
     market that is not among the candidates, or a cross-tenant awareness map
     cannot be represented as a target market decision.
 
-    It is a planning decision for stages 1 and 2, not a new required gate kind (a
-    methodology-owner decision, SPEC.md section 12.5). It does not authorize
-    outreach or spend (SPEC.md sections 4 and 9) and it is never an observation
-    (SPEC.md section 3).
+    Per the owner decision in SPEC.md section 12.5 a canon-informed asset already
+    implemented in a bounded context becomes a required asset kind of its target
+    stage gate in stage order, so this is the stage 1 ``target-market-match``
+    kind, an asset inside the existing stage, never a new stage. It does not
+    authorize outreach or spend (SPEC.md sections 4 and 9) and it is never an
+    observation (SPEC.md section 3).
     """
 
     matchmaker_id: str
@@ -1819,6 +1836,27 @@ class TargetMarketMatchmaker:
     def is_decision(self) -> bool:
         """A target market matchmaker is a planning decision, not activity."""
         return True
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the match onto exact ``target-market-match`` evidence.
+
+        SPEC.md sections 4 and 12.5: a canon-informed asset already implemented
+        in a bounded context becomes a required asset kind of its target stage
+        gate, so the stage 1 "Avatar Locked" gate pins the chosen target market
+        as one exact ``StageAssetVersion``. A versionless projection is refused
+        rather than silently pinned (SPEC.md sections 3 and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidTargetMarketMatchmakerError(
+                "the target market match version must be a positive integer so "
+                "the stage 1 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.matchmaker_id,
+            tenant_id=self.tenant_id,
+            kind=TARGET_MARKET_MATCH_KIND,
+            version=version,
+        )
 
     def as_observation(self, *, claim_id: str) -> None:
         """Refuse to represent a target market match as an observed result.

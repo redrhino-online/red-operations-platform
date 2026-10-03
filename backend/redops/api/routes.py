@@ -78,6 +78,8 @@ from redops.contexts.commercial.domain.value_objects import (
     ResearchPlatform,
     SignaturePackage,
     StepDelivery,
+    TargetMarketCandidate,
+    TargetMarketMatchmaker,
 )
 from redops.contexts.engagement.application.commands import (
     RecordStageEightGateCommand,
@@ -1093,6 +1095,18 @@ def record_stage_one_gate(
             )
             for item in body.claims
         )
+        awareness_map = MarketAwarenessMap(
+            map_id=body.awareness_map.map_id,
+            tenant_id=tenant_id,
+            primary_level=MarketAwarenessLevel(body.awareness_map.primary_level),
+            research_evidence=tuple(body.awareness_map.research_evidence),
+            message_requirements=tuple(body.awareness_map.message_requirements),
+            retarget_level=(
+                MarketAwarenessLevel(body.awareness_map.retarget_level)
+                if body.awareness_map.retarget_level is not None
+                else None
+            ),
+        )
         package = DiagnosisPackage(
             package_id=body.diagnosis_package_id,
             tenant_id=tenant_id,
@@ -1140,22 +1154,7 @@ def record_stage_one_gate(
                 ),
             ),
             offer_funnel_audit_version=body.offer_funnel_audit.version,
-            awareness_map=MarketAwarenessMap(
-                map_id=body.awareness_map.map_id,
-                tenant_id=tenant_id,
-                primary_level=MarketAwarenessLevel(
-                    body.awareness_map.primary_level
-                ),
-                research_evidence=tuple(body.awareness_map.research_evidence),
-                message_requirements=tuple(
-                    body.awareness_map.message_requirements
-                ),
-                retarget_level=(
-                    MarketAwarenessLevel(body.awareness_map.retarget_level)
-                    if body.awareness_map.retarget_level is not None
-                    else None
-                ),
-            ),
+            awareness_map=awareness_map,
             awareness_map_version=body.awareness_map.version,
             audience_reach_estimate=AudienceReachEstimate(
                 estimate_id=body.audience_reach_estimate.estimate_id,
@@ -1179,6 +1178,25 @@ def record_stage_one_gate(
                 captured_on=body.audience_reach_estimate.captured_on,
             ),
             audience_reach_estimate_version=body.audience_reach_estimate.version,
+            target_market_match=TargetMarketMatchmaker(
+                matchmaker_id=body.target_market_match.matchmaker_id,
+                tenant_id=tenant_id,
+                candidates=tuple(
+                    TargetMarketCandidate(
+                        market_id=candidate.market_id,
+                        name=candidate.name,
+                        passion=candidate.passion,
+                        problem=candidate.problem,
+                        profit=candidate.profit,
+                        reachability=candidate.reachability,
+                        pathway=candidate.pathway,
+                    )
+                    for candidate in body.target_market_match.candidates
+                ),
+                selected_market_id=body.target_market_match.selected_market_id,
+                awareness_map=awareness_map,
+            ),
+            target_market_match_version=body.target_market_match.version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 1, tenant_id

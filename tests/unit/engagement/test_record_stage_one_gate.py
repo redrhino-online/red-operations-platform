@@ -43,6 +43,8 @@ from redops.contexts.commercial.domain.value_objects import (
     MarketAwarenessMap,
     OfferFunnelAudit,
     ResearchPlatform,
+    TargetMarketCandidate,
+    TargetMarketMatchmaker,
 )
 from redops.contexts.engagement.application.commands import (
     RecordStageOneGateCommand,
@@ -219,6 +221,35 @@ def reach(*, tenant_id: str = TENANT) -> AudienceReachEstimate:
     )
 
 
+def target_market_match(*, tenant_id: str = TENANT) -> TargetMarketMatchmaker:
+    return TargetMarketMatchmaker(
+        matchmaker_id="match-3f",
+        tenant_id=tenant_id,
+        candidates=(
+            TargetMarketCandidate(
+                market_id="market-referrals",
+                name="Referral-starved service business owners",
+                passion="we have run this play inside the trade",
+                problem="unpredictable referral flow",
+                profit="they already spend on lead generation",
+                reachability="active in two owner-operator communities",
+                pathway="from a referral drought to a referral partner engine",
+            ),
+            TargetMarketCandidate(
+                market_id="market-coaches",
+                name="New executive coaches",
+                passion="we coach this transition",
+                problem="no repeatable client acquisition",
+                profit="they invest in their practice",
+                reachability="active in coach communities",
+                pathway="from no pipeline to a repeatable acquisition engine",
+            ),
+        ),
+        selected_market_id="market-referrals",
+        awareness_map=awareness_map(tenant_id=tenant_id),
+    )
+
+
 def package(**overrides) -> DiagnosisPackage:
     values = {
         "package_id": "diagnosis-3f",
@@ -233,6 +264,8 @@ def package(**overrides) -> DiagnosisPackage:
         "awareness_map_version": 1,
         "audience_reach_estimate": reach(),
         "audience_reach_estimate_version": 1,
+        "target_market_match": target_market_match(),
+        "target_market_match_version": 1,
     }
     values.update(overrides)
     return DiagnosisPackage(**values)
@@ -315,7 +348,7 @@ class StageOneGateAssemblerTests(unittest.TestCase):
             self.template.required_asset_kinds(1),
             {ref.asset_id for ref in gate.required_assets},
         )
-        self.assertEqual(10, len(gate.required_assets))
+        self.assertEqual(11, len(gate.required_assets))
 
     def test_the_gate_pins_the_exact_version_each_reviewed_asset_carries(self):
         gate = self.assemble(
@@ -352,6 +385,8 @@ class StageOneGateAssemblerTests(unittest.TestCase):
             awareness_map_version=1,
             audience_reach_estimate=reach(tenant_id=OTHER_TENANT),
             audience_reach_estimate_version=1,
+            target_market_match=target_market_match(tenant_id=OTHER_TENANT),
+            target_market_match_version=1,
         )
 
         with self.assertRaises(TenantBoundaryError):
@@ -473,7 +508,7 @@ class StageOneGateRecorderTests(unittest.TestCase):
 
         decision = self.record(self.assembled_gate(), ledger)
 
-        self.assertEqual(10, len(decision.asset_approvals))
+        self.assertEqual(11, len(decision.asset_approvals))
         for request in decision.asset_approvals:
             self.assertEqual(SCOPE_ONE, request.scope)
             self.assertEqual(APPROVER, request.approver)

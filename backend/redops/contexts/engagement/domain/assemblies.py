@@ -26,6 +26,7 @@ from redops.contexts.commercial.domain.policies import (
     AvatarLockedPolicy,
     DiagnosisEvidencePolicy,
     MarketAwarenessPolicy,
+    TargetMarketMatchPolicy,
 )
 from redops.contexts.commercial.domain.value_objects import (
     CampaignMessagePackage,
@@ -259,6 +260,7 @@ class StageOneGateAssembler:
             package.offer_funnel_audit, evidence
         )
         MarketAwarenessPolicy().require_targetable(package.awareness_map)
+        TargetMarketMatchPolicy().require_servable(package.target_market_match)
         gate = StageGate.from_assets(
             template,
             STAGE_ONE,
