@@ -4,51 +4,53 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T06:07:36Z (Ralph cycle 124).
-- Selected item: build the canon's Content Crusher outline (canon files 12, 16
-  and 32) as a pure Commercial Design value object over the existing
-  `ContentRoadmap` substrate, closing the "produce" scope of the
-  audience-building and content flywheel canon gap (SPEC.md section 12.5). It is
-  a canon-covered, decision-free asset inside stage 6: the roadmap already plans
-  the topics and the syndication plan already distributes them, but nothing
-  captured how one topic becomes a world class content outline. It outranks the
-  remaining bounded wiring follow-ups (awareness map, matchmaker, funnel finder,
-  transformations, umbrella, swimlanes, enrollment, invisible opt-in, banner
-  library, this crusher and the content assets into their gates or views), each
-  of which needs a methodology-owner decision on a required kind, and the blocked
-  persistence work, which needs the storage ADR. It is not a new pipeline stage.
+- Cycle timestamp: 2026-10-03T06:09:57Z (Ralph cycle 125).
+- Selected item: build the canon's content measurement loop (canon files 23 and
+  30) as the pure Measurement `AudienceBuildObservation`, closing the measurement
+  half of the audience-building and content flywheel canon gap (SPEC.md section
+  12.5). It is a canon-covered, decision-free stage 10 asset: the audience
+  campaign already plans the target cost per ten-second view and declares that
+  "the audience size it later reaches is a separate observation" (its own
+  docstring), and canon file 30's diagnostic rule ("if the cost is super high then
+  you have a problem with the topic; so you can stop it") had no typed observation
+  to read. It outranks the remaining bounded wiring follow-ups (awareness map,
+  matchmaker, funnel finder, transformations, umbrella, swimlanes, enrollment,
+  invisible opt-in, banner library, content roadmap, syndication and crusher into
+  gates or views), each of which needs a methodology-owner decision on a required
+  kind, and the blocked persistence work, which needs the storage ADR. It is not a
+  new pipeline stage.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: the canon's Content Crusher now lives in the Commercial Design
-  bounded context as the pure value objects `ContentPromise` (a measure and a
-  timeline) and `ContentCrusher` (a named owner grounding a same-tenant
-  `ContentRoadmap` topic and teaching the roadmap's own `SignatureSolution`
-  steps), with the named errors `InvalidContentCrusherError`,
-  `ContentCrusherDependencyError`, `ContentCrusherTenantBoundaryError` and
-  `ContentCrusherObservationError`. The crusher carries every canon beat: topic
-  and title, a typed promise, at least one customer frustration and a goal, a
-  visual model, a metaphor, the context, at least one signature step, a real
-  story, a choice and the next action; it refuses a blank beat, an untyped
-  promise, an untyped/cross-tenant/absent roadmap, a topic the roadmap does not
-  plan, a step the solution does not name or a duplicate step, and is never an
-  observation. New behavioral coverage: 17 tests in
-  `tests/unit/commercial/test_content_crusher.py`. Running `PYTHONPATH=backend
-  python3 -m unittest discover -s tests -p 'test_*.py'` reports 1525 passed, up
-  from 1508. `python3 -m pyflakes backend/redops tests` is clean. `ruff` and
-  `mypy` remain uninstalled.
-- New findings: the canon's Content Crusher is the missing "produce" half of the
-  content flywheel -- the roadmap maps the steps to topics, the syndication plan
-  publishes, promotes and recycles them, but the crusher is the outline each
-  piece is produced from (canon file 28: "we never create a piece of content that
-  doesn't live in the signature solution"; canon file 32 walks the framework).
-  Its beats are topic, title, a promise with a metric and a timeline, the
-  transformation from the customer's top frustrations to their goal, a model, a
-  metaphor, the context, the steps, a story, a choice and the action. It is a
-  production outline, not a distribution plan, so it depends on the roadmap but
-  not on the syndication plan. The seed register (SPEC.md section 12.5) names the
-  flywheel candidate without naming the crusher, so it is added to the gap
-  register as part of this gap rather than a new stage. The canon's "top three
-  frustrations" is narrowed to at least one as a documented intentional
-  deviation (SPEC.md section 12.1).
+- Evidence: the content measurement loop now lives in the Measurement bounded
+  context as the pure value object `AudienceBuildObservation`, with the named
+  errors `InvalidAudienceBuildObservationError`,
+  `AudienceBuildObservationDependencyError`,
+  `AudienceBuildObservationTenantBoundaryError`,
+  `AudienceBuildObservationBasisError` and
+  `AudienceBuildObservationWindowOpenError`. It binds a named owner to a
+  same-tenant `VideoViewAudienceCampaign`, an explicit closed `MeasurementWindow`,
+  an observed basis, a positive integer audience size and a positive Decimal cost
+  per ten-second view, and an observation source; it refuses a blank identity, a
+  non-positive or non-integer audience size, a non-positive or non-Decimal cost,
+  an untyped or cross-tenant campaign, an untyped window or basis, a placeholder
+  basis and a result read before its window closed. It exposes
+  `meets_target_cost` and `indicates_topic_problem` against the campaign's own
+  target cost, and projects to an OBSERVATION `PerformanceClaim` so the loop stays
+  an observation, never a causal conclusion. New behavioral coverage: 14 tests in
+  `tests/unit/measurement/test_audience_build_observation.py`. Running
+  `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
+  reports 1539 passed, up from 1525. `python3 -m pyflakes backend/redops tests` is
+  clean. `ruff` and `mypy` remain uninstalled.
+- New findings: the content flywheel gap had a "produce" half (the crusher built
+  in cycle 124) and a "measure" half that was still represented only in prose. The
+  campaign's `target_cost_per_view` is a plan figure; the canonical diagnostic is
+  the observed cost per ten-second view and the size of the warm audience that was
+  actually built (canon file 30: "22,000 people to advertise to", "$0.03 for a 10
+  second video view"; canon file 23: a "top of funnel audience" of "25,000 people"
+  at "20 cents each"). The observation is read only after its window closes and
+  never from a placeholder, matching the metric registry discipline (cycles 93 and
+  100). The loop is stage 10 measurement, not a required gate kind: wiring an
+  observed audience into the stage 10 `PerformanceBaseline` milestone set is a
+  methodology-owner decision recorded below.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant model
   given slot-based single-active-client isolation, the lifecycle transition graph
@@ -56,21 +58,20 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   identities, and pilot metric targets. Persistence and the Operations delivery
   adapter still depend on the storage ADR; the placement of the planning assets
   built since cycle 110 (including the content roadmap, the syndication plan, the
-  audience campaign, the invisible opt-in, the banner library and this crusher)
-  in a required stage 8/10 kind still needs a methodology-owner decision. The
-  content measurement loop (a stage 10 observation of audience size and cost per
-  view) still needs a named-owner decision on where it belongs. Any spend, send or
-  publish authorization remains a human decision (SPEC.md sections 4 and 9).
-- Highest priority ready next item: none of the remaining named domain assets is
-  both ready and decision-free -- every remaining canon gap item is either
-  implemented or blocked on a named-owner decision (target stage/kind, storage
-  ADR, missing canon modules), and the bounded wiring follow-ups all change a
-  required gate kind or a production view. The single most useful unblocker is a
-  named-owner decision on the storage ADR (it releases persistence for every pure
-  artifact and the Operations delivery adapter) followed by the methodology-owner
-  decision on required stage 8/10 asset kinds (it releases wiring the awareness
-  map, matchmaker, funnel finder, transformations, umbrella, swimlanes, enrollment,
-  content roadmap, content syndication, content crusher, invisible opt-in and
+  audience campaign, the invisible opt-in, the banner library, the crusher and now
+  this observation) in a required stage 8/10 kind still needs a methodology-owner
+  decision. Any spend, send or publish authorization remains a human decision
+  (SPEC.md sections 4 and 9).
+- Highest priority ready next item: with this cycle the content flywheel gap is
+  complete for its planning and measurement scope, and the remaining named domain
+  work is either implemented or blocked on a named-owner decision (target
+  stage/kind, storage ADR, missing canon modules). The single most useful
+  unblocker is still a named-owner decision on the storage ADR (it releases
+  persistence for every pure artifact and the Operations delivery adapter)
+  followed by the methodology-owner decision on required stage 8/10 asset kinds
+  (it releases wiring the awareness map, matchmaker, funnel finder,
+  transformations, umbrella, swimlanes, enrollment, content roadmap, content
+  syndication, content crusher, content measurement loop, invisible opt-in and
   banner library into gates or views). Until then the next implementable slice, if
   a decision is granted, is wiring the content roadmap and crusher into a stage 6
   required kind or the banner library and the invisible opt-in into a stage 8/10
@@ -83,7 +84,9 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   awareness/matcher/finder, enrollment, content syndication, invisible opt-in and
   banner-ad reference plans into the production view, the command center or a
   required gate kind (methodology-owner decisions); the content measurement loop
-  (methodology-owner decision); and all persistence.
+  (completed in cycle 125 as the Measurement `AudienceBuildObservation`, with
+  wiring an observed audience into the stage 10 baseline a methodology-owner
+  decision); and all persistence.
   [DONE 2026-10-03 (Ralph cycle 124): built the canon's Content Crusher as the
   pure Commercial Design `ContentPromise` (a measure and a timeline) and
   `ContentCrusher`, which grounds a named owner on a same-tenant `ContentRoadmap`
@@ -721,7 +724,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 - Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 06, 13, 14, 21, 24 — between stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 119) as the Execution `EnrollmentPlan` (`EnrollmentStep`, `EnrollmentStepKind`, `EnrollmentHomework`, `EnrollmentQualification`, `EnrollmentPayment`, `EnrollmentPaymentMethod`), which binds a named owner and the accountable human closer to a same-tenant complete stage 8 `FunnelIntegration`, carries exactly the canon's four explicitly named call stages frame, examine, prescribe and prognosis once each in order, each with the red-flag opt-out check the canon applies every step of the way, requires pre-call homework drawing on a piece of the signature solution and scheduled within the canon's three-day window, requires the red velvet rope of at least one accept and one reject criterion, requires live payment over a typed method with a positive deposit and is never an observation; `EnrollmentReadinessPolicy` refuses the call before the funnel has passed Funnel Complete. SPEC.md section 12.5 permits it as an explicit stage 8/9 asset, avoiding the named-owner Sell/Enroll stage decision; canon file 06 adds the red velvet rope accept and reject criteria to the seed set. SPEC.md section 12.6 leaves the enumerated six-step process and the dedicated sales/enrollment training absent from the supplied canon, so the shape is extracted from the covered files and recorded as a documented gap. Wiring it into a required stage 8/9 gate kind remains a methodology-owner decision.
 - Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: implemented 2026-10-03 (Ralph cycle 111) as the Commercial Design `NurturePlan` (`NurtureAudienceState`, `NurtureModality`, `NurtureMessage`, `NurtureSequence`), which grounds each message on a step of a same-tenant stage 4 `SignatureSolution`, uses the 5P modality (ping is the one-question survey), re-engages non-openers with distinct headlines and binds the sequences to a named owner. SPEC.md section 12.6 warns the dedicated email/follow-up module is absent from the supplied canon, so the shape is extracted from the covered files and recorded as a documented gap; wiring it into a required stage kind remains a named-owner decision.
 - Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93 built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate. Cycle 106 completed that slice: the METRICS dimension now reports each registered metric's newest observed figure and a measured movement via `metric_reporting_views`. Cycle 107 built the canon's forecast equation (`FunnelMetricRole`, `FunnelFigure`, `FunnelEconomics`, `FunnelForecast`, `funnel_figure`) so the metrics matrix unit economics exist before real data and a forecast stays distinct from an observed result.   Cycle 108 built the canon's scaling rule (`LearningPhase`, `ScalingAction`, `ScalingRecommendation`, `AdScalingPolicy`), so the dashboard can now turn an observed cost per lead into an owner-approved scale, hold, bid-up-the-funnel or pause-and-review recommendation. Cycle 109 built the canon's split-test logging (`SplitTestMode`, `SplitTestChange`, `SplitTest`), so a stage 10 optimization logs the one variable it changes (bound to the approved improvement's lever) before reading the result. This candidate is now fully implemented; no remaining scope.
-- Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: implemented 2026-10-03 (Ralph cycle 115) as the Commercial Design `ContentRoadmap` (`ContentBeat`, `ContentChannel`, `ContentTopic`, `ContentDistributionPolicy`), which maps each step of a same-tenant stage 4 `SignatureSolution` to content topics that follow the Authority Amplifier beat order and reach the canon's minimum blog, YouTube and Facebook channels, binds a named owner and reports the steps it covers and misses. Implemented 2026-10-03 (Ralph cycle 120) for the syndication and recycling schedule as the Commercial Design `ContentSyndicationPlan` (`SyndicationChannel`, `SyndicationCadence`, `RecycledFormat`, `ChannelSyndication`, `DailyPromotionBudget`, `TopicSyndication`), which distributes a same-tenant `ContentRoadmap` by syndicating each planned topic to at least one typed channel on a per-channel cadence, promoting it on a positive dollar-a-day Decimal budget and recycling it into typed derivative formats, binds a named owner and reports the topics it does not yet syndicate, with `ContentSyndicationPolicy.require_multichannel` and `require_owned_reach` refusing a single-channel or borrowed-only distribution (canon file 31). Implemented 2026-10-03 (Ralph cycle 121) for the ten-second-view audience building campaign as the Measurement `VideoViewAudienceCampaign` (`AudienceBuildingObjective`, `VideoViewWindow`, `InterestTargeting`, `VideoViewAudiencePolicy`), which binds a named owner to a video-views objective, a same-tenant `AvatarProfile` interest stack, the canon's ten-second view and thirty-day retention window, a positive low `DailyPromotionBudget`, a caller-supplied target cost per ten-second view, a same-tenant `TrackingCode` and the existing `RetargetingAudience` lists it warms, reporting the funnel steps it builds for and refusing a non-video-views objective, an untyped or cross-tenant dependency, a weaker or over-thirty-day window and a non-positive target cost (canon file 30). Remaining candidate: the content measurement loop (a stage 10 observation of audience size and cost per view) is an operations asset outside these planning artifacts and still needs a named-owner decision on where it belongs.
+- Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: implemented 2026-10-03 (Ralph cycle 115) as the Commercial Design `ContentRoadmap` (`ContentBeat`, `ContentChannel`, `ContentTopic`, `ContentDistributionPolicy`), which maps each step of a same-tenant stage 4 `SignatureSolution` to content topics that follow the Authority Amplifier beat order and reach the canon's minimum blog, YouTube and Facebook channels, binds a named owner and reports the steps it covers and misses. Implemented 2026-10-03 (Ralph cycle 120) for the syndication and recycling schedule as the Commercial Design `ContentSyndicationPlan` (`SyndicationChannel`, `SyndicationCadence`, `RecycledFormat`, `ChannelSyndication`, `DailyPromotionBudget`, `TopicSyndication`), which distributes a same-tenant `ContentRoadmap` by syndicating each planned topic to at least one typed channel on a per-channel cadence, promoting it on a positive dollar-a-day Decimal budget and recycling it into typed derivative formats, binds a named owner and reports the topics it does not yet syndicate, with `ContentSyndicationPolicy.require_multichannel` and `require_owned_reach` refusing a single-channel or borrowed-only distribution (canon file 31). Implemented 2026-10-03 (Ralph cycle 121) for the ten-second-view audience building campaign as the Measurement `VideoViewAudienceCampaign` (`AudienceBuildingObjective`, `VideoViewWindow`, `InterestTargeting`, `VideoViewAudiencePolicy`), which binds a named owner to a video-views objective, a same-tenant `AvatarProfile` interest stack, the canon's ten-second view and thirty-day retention window, a positive low `DailyPromotionBudget`, a caller-supplied target cost per ten-second view, a same-tenant `TrackingCode` and the existing `RetargetingAudience` lists it warms, reporting the funnel steps it builds for and refusing a non-video-views objective, an untyped or cross-tenant dependency, a weaker or over-thirty-day window and a non-positive target cost (canon file 30). Remaining candidate: the content measurement loop (a stage 10 observation of audience size and cost per view). Implemented 2026-10-03 (Ralph cycle 125) as the Measurement `AudienceBuildObservation`, which binds a named owner to a same-tenant `VideoViewAudienceCampaign`, an explicit closed `MeasurementWindow`, an observed basis, a positive built audience size and a positive Decimal cost per ten-second view, exposes `meets_target_cost` and `indicates_topic_problem` against the campaign's own target cost, projects to an OBSERVATION `PerformanceClaim`, and refuses a blank identity, a non-positive or non-integer audience size, a non-positive or non-Decimal cost, an untyped or cross-tenant campaign, an untyped window or basis, a placeholder basis and a result read before its window closed (canon files 23 and 30). No candidate remains in this gap; wiring the observation into a required stage 10 gate kind or the baseline milestone set remains a methodology-owner decision, and any spend remains a human decision.
 - Content Crusher (the world class content outline: topic, title, measurable promise, transformation, model, metaphor, context, steps, story, choice, action) — canon 12, 16, 32 — stage 6 — status: implemented 2026-10-03 (Ralph cycle 124) as the Commercial Design `ContentPromise` and `ContentCrusher`, which grounds a named owner on a same-tenant `ContentRoadmap` topic and teaches the roadmap's `SignatureSolution` steps, so the content flywheel's "produce" scope (canon file 28: never create content that does not live in the signature solution) is now a typed, tenant-scoped asset rather than prose. SPEC.md section 12.5 does not name the crusher in its seed table, so it is recorded here as part of the audience-building and content flywheel candidate; it is an asset inside stage 6, not a new stage. Its placement in a required stage 6 gate kind remains a methodology-owner decision, and any publish or spend stays a human decision.
 - Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 110) as the Measurement `RetargetingPlan` (`TrackingCode`, `ConversionGoal`, `RetargetingAudience`, `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep`), which orders the canon's tracking code, conversion goals, retargeting lists and focused campaigns and binds them to one tenant and a named owner; the canon's effective-ads step is covered by the stage 10 `SplitTest` and its metrics step by the `MetricDefinition` registry. Implemented 2026-10-03 (Ralph cycle 122) for the canon's invisible opt-in offer as the Measurement `InvisibleOptInOffer` (`LeadMagnetAsset`, `NonConvertedSegment`), which recovers a non-converted visitor segment (the step and page they stalled on plus the goal they did not achieve) and delivers a contact-free lead magnet on a typed channel while advancing an existing same-tenant retargeting list down the funnel, binds a named owner and refuses a contact-gated delivery, a cross-tenant segment and an audience still on the stalled step. Implemented 2026-10-03 (Ralph cycle 123) for the canon's banner-ad specs and swipe file as the Measurement `BannerAdReferenceLibrary` (`BannerDimension`, `BannerAdReference`, `BannerAdReferencePolicy`), which binds a named owner and tenant to at least one unique-channel reference naming a typed channel, its required `WIDTHxHEIGHT` sizes and a swipe-copy note, enforces the canon's Google Display sizes (300x250, 728x90) and Facebook image (600x315), leaves canon-silent Twitter as a recorded gap, reports the canon channels it does not cover and is never an observation. No candidate remains in this gap. The invisible opt-in, the banner library and the rest of the planning assets still need a named-owner decision on where they belong in a required stage 8/10 gate kind; any send or spend remains a human decision.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: implemented 2026-10-03 (Ralph cycle 94) as the Execution `CompliancePackage` (`ComplianceAssetKind`, `ComplianceAsset`, `ComplianceWaiver`) with the `ComplianceRequiredPolicy` gating `LaunchQA` traffic authorization, so "Launch Approved" needs every required asset or a live owned waiver; projecting the compliance assets onto their own canonical stage 9 gate kind remains a candidate that needs a named-owner decision.

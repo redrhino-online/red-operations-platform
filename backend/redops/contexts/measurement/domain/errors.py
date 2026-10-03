@@ -691,3 +691,56 @@ class BannerAdObservationError(MeasurementError):
     and cannot be represented as one.
     """
 
+
+class InvalidAudienceBuildObservationError(MeasurementError, ValueError):
+    """The content measurement loop leaves a required field unspecified.
+
+    SPEC.md section 12.5 records the audience-building and content flywheel (canon
+    files 25-31) and SPEC.md section 3 names Measurement as the home of a metric
+    definition, window, observation and source. The loop records the audience a
+    top-of-funnel campaign actually built and the cost per ten-second view
+    (canon files 23 and 30), so an observation missing its identity, carrying a
+    non-positive or non-integer audience size, or a non-positive or non-Decimal
+    cost per view cannot be a traceable observed result.
+    """
+
+
+class AudienceBuildObservationDependencyError(MeasurementError):
+    """The content measurement loop is not grounded on a typed dependency.
+
+    The observation of the built audience must be grounded on the typed
+    ``VideoViewAudienceCampaign`` whose target cost it measures (canon file 30),
+    an explicit ``MeasurementWindow`` and an explicit placeholder-or-observed
+    basis, so the loop cannot measure a free-text campaign or an untyped window.
+    """
+
+
+class AudienceBuildObservationTenantBoundaryError(MeasurementError):
+    """The content measurement loop cites another tenant's campaign.
+
+    SPEC.md section 3: every tenant resource carries a tenant id and a query is
+    tenant scoped, so one client's observed audience cannot be attributed to a
+    different client's audience campaign.
+    """
+
+
+class AudienceBuildObservationBasisError(MeasurementError):
+    """The content measurement loop was recorded from a placeholder figure.
+
+    Canon files 23 and 24 are explicit that a placeholder figure is not a real
+    metric until it is measured over enough instances, so the loop records what
+    actually happened: an observation with a placeholder basis is refused rather
+    than allowed to look like the campaign's result.
+    """
+
+
+class AudienceBuildObservationWindowOpenError(MeasurementError):
+    """The content measurement loop was read before its window closed.
+
+    The canon's discipline (canon files 23 and 24: "I wait 10 days to see how it
+    does") reads a result only after the period it covers has elapsed, so an
+    observation recorded before its ``MeasurementWindow`` ends has no complete
+    result to report and is refused."""
+
+
+

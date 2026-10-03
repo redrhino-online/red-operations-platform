@@ -32,6 +32,10 @@ from redops.contexts.governance.domain.value_objects import (
     MetricReportingView,
 )
 from redops.contexts.measurement.domain.errors import (
+    AudienceBuildObservationBasisError,
+    AudienceBuildObservationDependencyError,
+    AudienceBuildObservationTenantBoundaryError,
+    AudienceBuildObservationWindowOpenError,
     BannerAdCanonSpecError,
     BannerAdObservationError,
     FunnelForecastObservationError,
@@ -39,6 +43,7 @@ from redops.contexts.measurement.domain.errors import (
     FunnelTenantBoundaryError,
     ImprovementObservationError,
     ImprovementResultWindowOpenError,
+    InvalidAudienceBuildObservationError,
     InvalidBannerAdError,
     InvalidFunnelFigureError,
     InvalidFunnelForecastError,
@@ -2584,3 +2589,147 @@ class BannerAdReferenceLibrary:
             "and swipe notes, not an observed result, and cannot be recorded as an "
             "observation"
         )
+
+
+@dataclass(frozen=True)
+class AudienceBuildObservation:
+    """The canon's content measurement loop for a top-of-funnel audience (SPEC.md
+    12.5).
+
+    SPEC.md section 12.5 records the audience-building and content flywheel (canon
+    files 25-31) and section 3 names Measurement as the home of "metric definition,
+    window, baseline, observation, source", with observations kept distinct from
+    causal conclusions. Canon file 30 measures the ten-second-view audience
+    campaign by the audience it builds ("22,000 people to advertise to") and by
+    the cost per ten-second view ("$0.03 for a 10 second video view"; "under 20
+    cents is a really rough metric"), and canon file 23's dashboard tracks the
+    "top of funnel audience" of "25,000 people" at "20 cents each".
+
+    The observation binds a named owner to the same-tenant
+    ``VideoViewAudienceCampaign`` whose target cost it measures, an explicit closed
+    ``MeasurementWindow``, an observed audience size and an observed cost per
+    ten-second view. It refuses a blank identity, a non-positive or non-integer
+    audience size, a non-positive or non-Decimal cost per view, an untyped or
+    cross-tenant campaign, an untyped window or basis, a placeholder basis and a
+    result read before its window closed. It exposes ``meets_target_cost`` and its
+    inverse ``indicates_topic_problem`` -- canon file 30: if the cost per view "is
+    super high. Then you have a problem with the topic. So you can stop it" -- and
+    projects to an OBSERVATION ``PerformanceClaim`` rather than a causal
+    conclusion.
+
+    It is a stage 10 measurement asset, not a required gate kind (a
+    methodology-owner decision), and it never authorizes spend: the campaign and
+    any payment remain named human decisions (SPEC.md sections 4 and 9).
+    """
+
+    observation_id: str
+    tenant_id: str
+    owner: str
+    campaign: VideoViewAudienceCampaign
+    window: MeasurementWindow
+    basis: MeasurementBasis
+    audience_size: int
+    cost_per_view: Decimal
+    source: str
+    recorded_on: date
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("audience build observation id", self.observation_id),
+            ("audience build observation tenant id", self.tenant_id),
+            ("audience build observation owner", self.owner),
+            ("audience build observation source", self.source),
+        ):
+            if not value or not value.strip():
+                raise InvalidAudienceBuildObservationError(f"{label} is required")
+        if not isinstance(self.campaign, VideoViewAudienceCampaign):
+            raise AudienceBuildObservationDependencyError(
+                "the content measurement loop must observe a typed video view "
+                "audience campaign, not a free-text campaign"
+            )
+        if self.campaign.tenant_id != self.tenant_id:
+            raise AudienceBuildObservationTenantBoundaryError(
+                f"audience build observation {self.observation_id!r} belongs to "
+                f"tenant {self.tenant_id!r}, but its campaign "
+                f"{self.campaign.campaign_id!r} belongs to tenant "
+                f"{self.campaign.tenant_id!r}"
+            )
+        if not isinstance(self.window, MeasurementWindow):
+            raise AudienceBuildObservationDependencyError(
+                "the content measurement loop requires a typed measurement window"
+            )
+        if not isinstance(self.basis, MeasurementBasis):
+            raise AudienceBuildObservationDependencyError(
+                "the content measurement loop requires a placeholder or observed "
+                "basis"
+            )
+        if self.basis is not MeasurementBasis.OBSERVED:
+            raise AudienceBuildObservationBasisError(
+                "the content measurement loop records what actually happened; a "
+                "placeholder figure is not a measured audience build (canon files "
+                "23 and 24)"
+            )
+        if not isinstance(self.audience_size, int) or isinstance(
+            self.audience_size, bool
+        ):
+            raise InvalidAudienceBuildObservationError(
+                "a built audience size must be an integer"
+            )
+        if self.audience_size <= 0:
+            raise InvalidAudienceBuildObservationError(
+                "a built audience size must be positive: an empty audience is not "
+                "a built warm audience (canon file 30)"
+            )
+        if not isinstance(self.cost_per_view, Decimal):
+            raise InvalidAudienceBuildObservationError(
+                "an observed cost per ten-second view must be a Decimal"
+            )
+        if self.cost_per_view <= 0:
+            raise InvalidAudienceBuildObservationError(
+                "an observed cost per ten-second view must be positive"
+            )
+        if not isinstance(self.recorded_on, date):
+            raise InvalidAudienceBuildObservationError(
+                "an audience build observation requires the date it was recorded"
+            )
+        if self.recorded_on < self.window.end:
+            raise AudienceBuildObservationWindowOpenError(
+                "an audience build observation cannot be read before the window "
+                f"it covers has closed: it was recorded on {self.recorded_on} but "
+                f"the window ends {self.window.end}"
+            )
+
+    @property
+    def meets_target_cost(self) -> bool:
+        """Whether the observed cost per view is at or below the campaign target."""
+        return self.cost_per_view <= self.campaign.target_cost_per_view
+
+    @property
+    def indicates_topic_problem(self) -> bool:
+        """Whether the observed cost signals a problem with the topic (canon 30)."""
+        return not self.meets_target_cost
+
+    def performance_claim(
+        self, *, claim_id: str, subject: str | None = None
+    ) -> PerformanceClaim:
+        """Project the loop onto an OBSERVATION claim (SPEC.md section 3).
+
+        SPEC.md section 3 keeps observations distinct from causal conclusions. The
+        projection always yields kind OBSERVATION, carrying the campaign name as
+        the subject, the built audience and cost per view as the statement, the
+        audience size as the sample, the observation's source and tenant, so a
+        stage 10 review reads a typed observed result rather than a conclusion.
+        """
+        return PerformanceClaim(
+            claim_id=claim_id,
+            tenant_id=self.tenant_id,
+            subject=subject or self.campaign.name,
+            statement=(
+                f"the audience building campaign built {self.audience_size} "
+                f"people at {self.cost_per_view} per ten-second view"
+            ),
+            kind=ClaimKind.OBSERVATION,
+            sample_size=self.audience_size,
+            source=self.source,
+        )
+
