@@ -21,16 +21,28 @@ from redops.contexts.measurement.domain.errors import (
     ImprovementObservationWindowError,
     ImprovementOutcomeSupportError,
     ImprovementStateError,
+    InvalidScalingRecommendationError,
     MetricBaselineNotObservedError,
     MetricSampleTooSmallError,
+    ScalingLearningPhaseError,
+    ScalingMetricError,
+    ScalingObservationError,
+    ScalingTenantBoundaryError,
 )
 from redops.contexts.measurement.domain.value_objects import (
+    FunnelEconomics,
     ImprovementApproval,
     ImprovementOutcome,
     ImprovementState,
+    LearningPhase,
     MeasurementBasis,
     MeasurementRecord,
     MetricDefinition,
+    MetricDirection,
+    MetricFunnelStep,
+    MetricUnit,
+    ScalingAction,
+    ScalingRecommendation,
 )
 
 
@@ -223,3 +235,136 @@ class MetricBaselinePolicy:
                 f"{max(record.sample_size for record in observed)}"
             )
         return max(adequate, key=lambda record: record.recorded_on)
+
+
+class AdScalingPolicy:
+    """Decides the canon's stage 10 advertising scaling action (canon 22, 23, 24).
+
+    SPEC.md section 4, stage 10: after the performance baseline, "performance
+    recommendations require evidence and owner approval before material changes",
+    and SPEC.md section 12.3 maps the advertising forecast and scaling rules to the
+    stage 10 canon files. The canon's scaling discipline is: do nothing while the
+    campaign is still in its learning phase; then decide from the return on ad
+    spend, not from a vanity cost per lead ("it's all about the roi... not some
+    vanity metric, cost per lead"); if the budget cannot feed the algorithm at
+    least ten leads a day, bid on clicks at an earlier funnel objective instead of
+    starving learning; scale up when the observed cost per lead is at or below the
+    target the desired return implies; and pause and revisit when it is above.
+
+    The policy reads a same-tenant observed cost per lead -- never a placeholder
+    figure or a metric of the wrong funnel step, unit or direction -- and returns a
+    ``ScalingRecommendation`` that remains a recommendation a named owner approves
+    before spend changes. It never mutates a campaign or authorizes spend.
+    """
+
+    def recommend(
+        self,
+        *,
+        observed: MeasurementRecord,
+        economics: FunnelEconomics,
+        target_return_on_ad_spend: float,
+        learning_phase: LearningPhase,
+        minimum_leads_per_day: float = 10.0,
+    ) -> ScalingRecommendation:
+        if not isinstance(observed, MeasurementRecord):
+            raise ScalingObservationError(
+                "ad scaling must read a typed observed measurement, not a "
+                "free-text figure"
+            )
+        if not observed.is_observed:
+            raise ScalingObservationError(
+                "ad scaling cannot act on a placeholder figure; the cost per lead "
+                "must be observed"
+            )
+        self._require_cost_per_lead_metric(observed.metric)
+        if not isinstance(economics, FunnelEconomics):
+            raise InvalidScalingRecommendationError(
+                "ad scaling requires typed funnel economics"
+            )
+        if observed.tenant_id != economics.tenant_id:
+            raise ScalingTenantBoundaryError(
+                f"the observed cost per lead belongs to tenant "
+                f"{observed.tenant_id!r}, but the economics belongs to tenant "
+                f"{economics.tenant_id!r}"
+            )
+        if not isinstance(learning_phase, LearningPhase):
+            raise ScalingLearningPhaseError(
+                "ad scaling requires a typed learning phase"
+            )
+        if (
+            not isinstance(minimum_leads_per_day, (int, float))
+            or isinstance(minimum_leads_per_day, bool)
+            or minimum_leads_per_day < 0
+        ):
+            raise InvalidScalingRecommendationError(
+                "the minimum leads per day must be a non-negative number"
+            )
+        if (
+            not isinstance(target_return_on_ad_spend, (int, float))
+            or isinstance(target_return_on_ad_spend, bool)
+            or target_return_on_ad_spend <= 0
+        ):
+            raise InvalidScalingRecommendationError(
+                "a scaling recommendation requires a positive target return on ad "
+                "spend"
+            )
+        target_cost_per_lead = economics.target_cost_per_lead(
+            target_return_on_ad_spend=target_return_on_ad_spend
+        )
+        if not learning_phase.is_complete(
+            observed_on=observed.recorded_on, event_count=observed.sample_size
+        ):
+            action = ScalingAction.HOLD
+            rationale = (
+                "the campaign is still in its learning phase; do not change it "
+                "until the learning period elapses"
+            )
+        else:
+            days = (
+                observed.window.end - observed.window.start
+            ).days + 1
+            leads_per_day = observed.sample_size / days
+            if leads_per_day < minimum_leads_per_day:
+                action = ScalingAction.BID_UP_FUNNEL
+                rationale = (
+                    f"the campaign gets {leads_per_day:.2f} leads a day, below the "
+                    f"{minimum_leads_per_day} needed to feed the algorithm; bid on "
+                    "clicks at an earlier funnel objective"
+                )
+            elif observed.value <= target_cost_per_lead:
+                action = ScalingAction.SCALE_UP
+                rationale = (
+                    f"the observed cost per lead {observed.value} is at or below "
+                    f"the target {target_cost_per_lead:.2f} for a "
+                    f"{target_return_on_ad_spend}x return on ad spend; scale up"
+                )
+            else:
+                action = ScalingAction.PAUSE_AND_REVIEW
+                rationale = (
+                    f"the observed cost per lead {observed.value} is above the "
+                    f"target {target_cost_per_lead:.2f} for a "
+                    f"{target_return_on_ad_spend}x return on ad spend; pause and "
+                    "revisit with the owner"
+                )
+        return ScalingRecommendation(
+            tenant_id=observed.tenant_id,
+            action=action,
+            observed=observed,
+            economics=economics,
+            target_return_on_ad_spend=float(target_return_on_ad_spend),
+            rationale=rationale,
+        )
+
+    @staticmethod
+    def _require_cost_per_lead_metric(metric: MetricDefinition) -> None:
+        if (
+            metric.funnel_step is not MetricFunnelStep.LEAD
+            or metric.unit is not MetricUnit.CURRENCY
+            or metric.direction is not MetricDirection.LOWER_IS_BETTER
+        ):
+            raise ScalingMetricError(
+                f"ad scaling reads a cost per lead -- a lead-step currency metric "
+                f"that is better when lower -- but metric {metric.metric_id!r} is "
+                f"{metric.funnel_step.value!r}/{metric.unit.value!r}/"
+                f"{metric.direction.value!r}"
+            )

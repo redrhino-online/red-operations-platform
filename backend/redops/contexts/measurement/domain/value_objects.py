@@ -40,8 +40,13 @@ from redops.contexts.measurement.domain.errors import (
     InvalidMetricDefinitionError,
     InvalidMetricReportingError,
     InvalidMetricWindowError,
+    InvalidScalingRecommendationError,
     MeasurementTenantBoundaryError,
     MeasurementWindowOpenError,
+    ScalingLearningPhaseError,
+    ScalingObservationError,
+    ScalingRecommendationObservationError,
+    ScalingTenantBoundaryError,
 )
 
 if TYPE_CHECKING:
@@ -943,4 +948,177 @@ def funnel_figure(
         basis=MeasurementBasis.PLACEHOLDER,
         source=placeholder_source,
     )
+
+
+@dataclass(frozen=True)
+class LearningPhase:
+    """The waiting period before a campaign can be scaled (canon files 22, 24).
+
+    The canon is explicit that a new ad set must be left alone while Facebook
+    learns: "for the first 10 days or 100 plus conversions, they're simply
+    learning", and "after seven to 10 days, Facebook is going to transition from
+    the learning phase to the optimization phase". Touching a campaign during
+    learning restarts the phase, so the phase is a typed period with a start date,
+    a minimum day count and a minimum event count, and it is complete once either
+    threshold is met.
+    """
+
+    started_on: date
+    minimum_days: int = 7
+    minimum_events: int = 100
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.started_on, date):
+            raise ScalingLearningPhaseError(
+                "a learning phase requires the date the campaign started"
+            )
+        for label, value in (
+            ("minimum days", self.minimum_days),
+            ("minimum events", self.minimum_events),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ScalingLearningPhaseError(
+                    f"a learning phase {label} must be an integer"
+                )
+        if self.minimum_days < 1:
+            raise ScalingLearningPhaseError(
+                "a learning phase minimum days must be positive"
+            )
+        if self.minimum_events < 0:
+            raise ScalingLearningPhaseError(
+                "a learning phase minimum events cannot be negative"
+            )
+
+    def days_elapsed(self, *, observed_on: date) -> int:
+        return (observed_on - self.started_on).days
+
+    def is_complete(self, *, observed_on: date, event_count: int) -> bool:
+        """Whether the learning phase has ended by time or by conversion volume."""
+        return (
+            self.days_elapsed(observed_on=observed_on) >= self.minimum_days
+            or event_count >= self.minimum_events
+        )
+
+
+class ScalingAction(Enum):
+    """A named stage 10 advertising scaling action (canon files 22, 23, 24).
+
+    The canon's scaling discipline yields a small set of moves: leave a campaign
+    alone while it is learning (HOLD), increase budget on a campaign whose return
+    on ad spend is at or above target (SCALE_UP), bid on an earlier funnel
+    objective when the budget cannot feed the algorithm enough leads (BID_UP_FUNNEL,
+    canon file 24: "if you can't afford to get 10 leads a day... bid on clicks"),
+    and pause and revisit a campaign whose observed cost per lead is above the
+    target that its desired return implies (PAUSE_AND_REVIEW).
+    """
+
+    HOLD = "hold"
+    SCALE_UP = "scale_up"
+    BID_UP_FUNNEL = "bid_up_funnel"
+    PAUSE_AND_REVIEW = "pause_and_review"
+
+
+@dataclass(frozen=True)
+class ScalingRecommendation:
+    """A stage 10 recommendation to change ad spend (SPEC.md section 4; canon 22-24).
+
+    SPEC.md section 4, stage 10: "performance recommendations require evidence and
+    owner approval before material changes". The canon's scaling rule (canon files
+    22, 23 and 24) is that the decision is about the return on ad spend derived
+    from the observed cost per lead, never a vanity cost per lead, and it is read
+    only after the learning phase. The recommendation pins the observed
+    same-tenant cost per lead, the economics and target return it was judged
+    against, and a rationale, so the action is a traceable proposal rather than an
+    authorization. It can never be projected to an OBSERVATION claim and always
+    requires a named owner's approval before spend changes.
+    """
+
+    tenant_id: str
+    action: ScalingAction
+    observed: MeasurementRecord
+    economics: FunnelEconomics
+    target_return_on_ad_spend: float
+    rationale: str
+
+    def __post_init__(self) -> None:
+        if not self.tenant_id or not self.tenant_id.strip():
+            raise InvalidScalingRecommendationError(
+                "a scaling recommendation requires the owning tenant so it stays "
+                "tenant scoped"
+            )
+        if not isinstance(self.action, ScalingAction):
+            raise InvalidScalingRecommendationError(
+                "a scaling recommendation requires a named scale action"
+            )
+        if not isinstance(self.observed, MeasurementRecord):
+            raise ScalingObservationError(
+                "a scaling recommendation must read a typed observed measurement, "
+                "not a free-text figure"
+            )
+        if not self.observed.is_observed:
+            raise ScalingObservationError(
+                "a scaling recommendation cannot be driven by a placeholder "
+                "figure; the cost per lead must be observed"
+            )
+        if not isinstance(self.economics, FunnelEconomics):
+            raise InvalidScalingRecommendationError(
+                "a scaling recommendation requires typed funnel economics"
+            )
+        if (
+            self.observed.tenant_id != self.tenant_id
+            or self.economics.tenant_id != self.tenant_id
+            or self.observed.metric.tenant_id != self.tenant_id
+        ):
+            raise ScalingTenantBoundaryError(
+                f"scaling recommendation belongs to tenant {self.tenant_id!r}, "
+                "but its observation or economics cites another tenant"
+            )
+        if (
+            not isinstance(self.target_return_on_ad_spend, (int, float))
+            or isinstance(self.target_return_on_ad_spend, bool)
+            or self.target_return_on_ad_spend <= 0
+        ):
+            raise InvalidScalingRecommendationError(
+                "a scaling recommendation requires a positive target return on ad "
+                "spend"
+            )
+        if not self.rationale or not self.rationale.strip():
+            raise InvalidScalingRecommendationError(
+                "a scaling recommendation requires a rationale"
+            )
+
+    @property
+    def target_cost_per_lead(self) -> float:
+        """The cost per lead that the target return on ad spend implies."""
+        return self.economics.target_cost_per_lead(
+            target_return_on_ad_spend=self.target_return_on_ad_spend
+        )
+
+    @property
+    def leads_per_day(self) -> float:
+        """The observed lead volume per day over the observation window."""
+        days = (self.observed.window.end - self.observed.window.start).days + 1
+        return self.observed.sample_size / days
+
+    @property
+    def requires_owner_approval(self) -> bool:
+        return True
+
+    @property
+    def is_recommendation(self) -> bool:
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a scaling recommendation as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions, and
+        SPEC.md section 4 requires owner approval before a material change. A
+        recommendation to change spend is an unapproved proposal and can never be
+        recorded as an observed measurement.
+        """
+        raise ScalingRecommendationObservationError(
+            f"scaling recommendation {claim_id!r} is an unapproved proposal to "
+            "change spend, not an observed measurement, and cannot be recorded as "
+            "an observation"
+        )
 

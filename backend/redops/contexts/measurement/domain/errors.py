@@ -308,3 +308,65 @@ class FunnelForecastObservationError(MeasurementError):
     never an observation and cannot be represented as one.
     """
 
+
+class ScalingLearningPhaseError(MeasurementError, ValueError):
+    """A stage 10 learning phase is not a valid period.
+
+    The canon's advertising discipline (canon files 22 and 24) does not touch a
+    campaign until Facebook has left its learning phase, which it describes as
+    the first seven to ten days or 100 plus conversions. A learning phase with no
+    start date, a non-positive minimum day count or a negative event threshold
+    cannot bound that waiting period.
+    """
+
+
+class InvalidScalingRecommendationError(MeasurementError, ValueError):
+    """A stage 10 scaling recommendation or its inputs are invalid.
+
+    SPEC.md section 4, stage 10: a performance recommendation carries evidence
+    and a named accountable owner and any material change needs owner approval.
+    The canon's scaling rule (canon files 22, 23 and 24) compares an observed cost
+    per lead against the target derived from a desired return on ad spend, so a
+    non-positive target return or a recommendation without a rationale cannot
+    produce a reviewable recommendation.
+    """
+
+
+class ScalingObservationError(MeasurementError):
+    """A scaling recommendation was asked to act on a non-observed figure.
+
+    SPEC.md section 3 keeps observations distinct from causal conclusions and the
+    canon (canon files 23 and 24) treats a placeholder figure as not a real metric
+    until measured over enough instances. A placeholder cost per lead therefore
+    cannot drive a spending recommendation.
+    """
+
+
+class ScalingMetricError(MeasurementError):
+    """A scaling recommendation was asked to act on a metric of the wrong shape.
+
+    The canon's scaling rule (canon files 22, 23 and 24) reads a cost per lead: a
+    lead-step currency metric that is better when lower. A figure whose registered
+    metric measures another funnel step, unit or direction cannot stand in as the
+    campaign's cost per lead.
+    """
+
+
+class ScalingTenantBoundaryError(MeasurementError):
+    """A scaling recommendation mixes two tenants' figures.
+
+    SPEC.md section 3: every tenant resource carries a tenant id and a query is
+    tenant scoped, so a client's campaign cannot be scaled against the economics
+    of a different client.
+    """
+
+
+class ScalingRecommendationObservationError(MeasurementError):
+    """A scaling recommendation was projected as an observed result.
+
+    SPEC.md section 3, Measurement invariant keeps observations distinct from
+    conclusions, and SPEC.md section 4 requires owner approval before a material
+    change. A scaling recommendation is an unapproved proposal to change spend,
+    never an observed measurement or an authorization.
+    """
+
