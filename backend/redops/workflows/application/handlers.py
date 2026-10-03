@@ -170,3 +170,46 @@ class RunWorkflowHandler:
                 f"workflow run {run_id!r} is not visible to tenant {tenant_id!r}"
             )
         return run
+
+
+class ResumeDueRunsHandler:
+    """The background worker's per-client resume pass (SPEC.md sections 7 and 9).
+
+    A worker process runs continuously and must advance the in-flight runs that
+    are due for its clients. It asks the tenant-scoped ``WorkflowRunStore`` for
+    the runs it may act on and resumes each through the same
+    ``RunWorkflowHandler`` the API uses, so resumption stays idempotent and a
+    waiting approval is still left for its human (SPEC.md section 11, ADR 0005).
+    The pass takes one ``tenant_id``: the store scan returns only that client's
+    runs, and every resume is re-checked against the same tenant, so a worker
+    for one client cannot read or advance another client's run (SPEC.md section
+    9: cross-client access is tested at the background worker layer).
+    """
+
+    def __init__(
+        self, *, store: WorkflowRunStore, executor: WorkflowStepExecutor
+    ) -> None:
+        self._store = store
+        self._resume = RunWorkflowHandler(store=store, executor=executor)
+
+    def resume_due(
+        self,
+        *,
+        tenant_id: str,
+        actor: str,
+        reason: str,
+        on: date,
+        correlation_id: str,
+    ) -> tuple[WorkflowRun, ...]:
+        """Resume every run due for ``tenant_id`` and return the advanced runs."""
+        return tuple(
+            self._resume.resume(
+                run_id,
+                tenant_id=tenant_id,
+                actor=actor,
+                reason=reason,
+                on=on,
+                correlation_id=correlation_id,
+            )
+            for run_id in self._store.list_resumable(tenant_id=tenant_id)
+        )

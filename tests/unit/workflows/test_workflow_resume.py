@@ -66,6 +66,13 @@ class InMemoryRunStore(WorkflowRunStore):
             return None
         return copy.deepcopy(run)
 
+    def list_resumable(self, *, tenant_id: str) -> tuple[str, ...]:
+        return tuple(
+            run_id
+            for run_id, run in self.runs.items()
+            if run.tenant_id == tenant_id and run.resume_step() is not None
+        )
+
 
 class RecordingExecutor(WorkflowStepExecutor):
     def __init__(self, fail_on: str | None = None) -> None:

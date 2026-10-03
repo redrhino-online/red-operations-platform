@@ -161,6 +161,22 @@ class InMemoryWorkflowRunStoreTests(unittest.TestCase):
         with self.assertRaises(CrossTenantWorkflowRunError):
             self.store.get("run-1", tenant_id="")
 
+    def test_list_resumable_returns_only_runs_with_a_due_step(self) -> None:
+        self.store.save(waiting_run())
+        self.store.save(interrupted_run())
+
+        self.assertEqual(("run-2",), self.store.list_resumable(tenant_id=TENANT))
+
+    def test_list_resumable_is_scoped_to_the_requested_client(self) -> None:
+        self.store.save(waiting_run())
+        self.store.save(interrupted_run())
+
+        self.assertEqual((), self.store.list_resumable(tenant_id=OTHER))
+
+    def test_list_resumable_refuses_an_unscoped_scan(self) -> None:
+        with self.assertRaises(CrossTenantWorkflowRunError):
+            self.store.list_resumable(tenant_id="")
+
     def test_the_factory_builds_the_in_memory_store_without_a_database(self) -> None:
         store = workflow_run_store_from_env(None)
         self.assertIsInstance(store, InMemoryWorkflowRunStore)
@@ -258,6 +274,13 @@ class PostgresWorkflowRunStoreTests(unittest.TestCase):
         self.store.save(waiting_run())
 
         self.assertIsNone(self.store.get("run-1", tenant_id=OTHER))
+
+    def test_list_resumable_returns_only_the_clients_due_runs(self) -> None:
+        self.store.save(waiting_run())
+        self.store.save(interrupted_run())
+
+        self.assertEqual(("run-2",), self.store.list_resumable(tenant_id=TENANT))
+        self.assertEqual((), self.store.list_resumable(tenant_id=OTHER))
 
     def test_reload_refuses_a_stored_run_the_domain_would_reject(self) -> None:
         from redops.workflows.infrastructure.mappers import workflow_run_to_payload

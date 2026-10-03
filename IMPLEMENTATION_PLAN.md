@@ -4,6 +4,74 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T205830Z (Ralph cycle, this run): selected item was the
+  background-worker isolation layer (Q8 worker layer; SPEC.md sections 7, 9 and
+  13 condition 3). It is the highest priority ready item: after the retrieval
+  layer landed, the worker was the one remaining condition 3 layer that could be
+  built from an existing seam, and it closes SPEC.md section 11's "restarting
+  worker preserves a waiting workflow" at the worker boundary. It outranks
+  alternatives: condition 2's remaining scenarios are deploy-gated (Atlas
+  cluster, chosen backup target, Q49); condition 3's artifact-URL layer is the
+  other candidate but was left for the next cycle (see below); Q28 stages 8-10
+  required kinds stay blocked on the named methodology-owner placement
+  decision; Q3/Q4 need the ADR 0006 resolution and a live key; Q47-Q50 need the
+  Atlas cluster. The canon gap register has no ready pipeline item.
+- Outcome: new abstract `WorkflowRunStore.list_resumable(*, tenant_id)` in
+  `.../workflows/application/ports.py` (a tenant-scoped scan for runs with a
+  step due); implementations in `InMemoryWorkflowRunStore` (filter by tenant
+  and `resume_step() is not None`) and `PostgresWorkflowRunStore` (`WHERE
+  tenant_id = %s AND status = 'running' ORDER BY id`); and the new
+  `ResumeDueRunsHandler` application use case in
+  `.../workflows/application/handlers.py`, the worker's per-client pass that
+  lists the client's due runs and resumes each through `RunWorkflowHandler`. No
+  route, gate rule, approval authority, pipeline stage, vendored file or
+  migration changed; the existing run store contract and every run status
+  transition are unchanged.
+- Evidence: new `tests/security/test_worker_isolation.py` (6 tests) proves the
+  worker pass resumes only its client's interrupted run, never reads, lists or
+  advances another client's run, leaves a waiting approval for its human, is
+  scoped per requested client, and refuses a blank tenant.
+  `tests/unit/workflows/test_workflow_run_store.py` gained 4 adapter-contract
+  tests for `list_resumable` (in-memory and the real PostgreSQL schema), and the
+  `test_repository_suite_is_honest` gate test now expects only `artifact-url`
+  missing. `make check` -> 2304 passed, 2 skipped, 706 subtests passed (was
+  2294; +10). `scripts/check_security_coverage.sh tests/security` now reports
+  only the `artifact-url` layer missing (was worker and artifact-url). `make
+  done` still stops at `[2/6]` condition 2 (deploy-gated), unchanged.
+- New findings: the worker's store scan is now a first-class tenant-scoped
+  query, so "a worker for one client never reads another client's run" is
+  enforced at the seam and tested (SPEC.md section 9). The PostgreSQL scan
+  filters on `status = 'running'` and the only index is the `(tenant_id,
+  run_id)` unique key, so a large per-tenant scan would benefit from a
+  `(tenant_id, status)` index in a later migration; a performance follow-up,
+  not a correctness gap. The worker use case has no composition consumer (no
+  `backend/redops/worker` process) yet, exactly as the connector seam preceded
+  its consumer; the layer is exercised by its adapter and security tests.
+- Blockers (unchanged head): condition 2 is the `make done` head blocker and its
+  remaining two scenarios need the Atlas cluster and a chosen backup target
+  (Q49). Condition 3 needs only the artifact-URL layer. Condition 5 needs the
+  deterministic agent e2e (Q3, ADR 0006 tension) and a live key. Q28 stage 8-10
+  required kinds blocked on the named methodology-owner placement decision; Q3
+  agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q47-Q50
+  need the Atlas cluster.
+- Highest priority ready next item: the condition 3 artifact-URL isolation layer
+  (SPEC.md sections 9 and 13 condition 3). Required asset: a tenant-scoped
+  artifact access port (an `ArtifactUrlResolver`/`ArtifactStore`) with an
+  in-memory reference adapter and `tests/security/test_artifact_url_isolation.py`,
+  plus the `artifact-url` layer declared in `tests/security/covered-layers.txt`,
+  so a URL or reference minted for one client's artifact never resolves for
+  another. Build it at the port/adapter seam like the connector and worker
+  layers; the durable object-store adapter follows once the object-store
+  provisioner decision (SPEC.md section 11: a decision to settle after
+  inspecting the cluster) is made. Checkpoint: none (seam, not a gate);
+  approver: none. Blocked downstream dependency: condition 3 (then condition
+  2's cross-client coverage). Prerequisite: none (the reference adapter needs no
+  cluster decision). Alternative ready item: none cleanly; Q16's
+  optimistic-version-conflict half has no mutation route carrying a version yet.
+
+### Prior cycle (2026-10-03T205006Z)
+
 - Cycle 2026-10-03T205006Z (Ralph cycle, this run): selected item was the
   durable PostgreSQL `ExternalOperationStore` adapter and migration
   `0018_external_operations` (Q16 completion; SPEC.md sections 6, 7, 9 and 11;
@@ -4788,7 +4856,7 @@ stalls:
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). REST `/workflows/{id}` polling read landed 2026-10-03T185701Z (Q15). The fork `workflows/resumer.py` adapter was reassessed and rejected as mis-specified: the resumer is an 809-line fork polling loop, not a per-step executor, so RED's `WorkflowStepExecutor` seam is served by connector adapters (Q16), not a resumer shim |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z). The stage 0 `ClientWorkspace` and the knowledge `SourceRecord` stores completed with Q9 2026-10-03T190017Z (`0010_client_workspaces`, `0011_source_records`); the Production `BuildObject` store completed with Q11 2026-10-03T193035Z (`0013_build_objects`, which also added the required `tenant_id` the aggregate lacked) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
-| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests). Retrieval layer done 2026-10-03T203755Z: `KnowledgeRetriever` port (`backend/redops/contexts/knowledge/application/ports.py`) with the `InMemoryKnowledgeRetriever` tenant-scoped reference adapter over the `ClaimStore`, and `tests/security/test_retrieval_isolation.py` (6 tests); `tests/security/covered-layers.txt` declares `retrieval`. Worker, artifact-URL and injection-guard coverage remain, blocked on the worker entry point and artifact-serving route. The condition 3 gate now enforces coverage: `tests/security/covered-layers.txt` declares each covered layer and `scripts/check_security_coverage.sh` (called by DoD `[3/6]`) refuses a suite that does not declare `api`, `retrieval`, `worker` and `artifact-url` with a test each (2026-10-03T195801Z), so condition 3 cannot pass until all four layers exist. Condition 2's cross-client-retrieval scenario is now covered by `tests/security/test_retrieval_isolation.py` |
+| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests). Retrieval layer done 2026-10-03T203755Z: `KnowledgeRetriever` port (`backend/redops/contexts/knowledge/application/ports.py`) with the `InMemoryKnowledgeRetriever` tenant-scoped reference adapter over the `ClaimStore`, and `tests/security/test_retrieval_isolation.py` (6 tests); `tests/security/covered-layers.txt` declares `retrieval`. Worker layer done 2026-10-03T205830Z: `WorkflowRunStore.list_resumable(*, tenant_id)` on the port with in-memory and PostgreSQL implementations, the `ResumeDueRunsHandler` per-client worker pass in `backend/redops/workflows/application/handlers.py`, and `tests/security/test_worker_isolation.py` (6 tests); `tests/security/covered-layers.txt` declares `worker`. Artifact-URL and injection-guard coverage remain; artifact-URL is the ready next item (see Current cycle status). The condition 3 gate now enforces coverage: `tests/security/covered-layers.txt` declares each covered layer and `scripts/check_security_coverage.sh` (called by DoD `[3/6]`) refuses a suite that does not declare `api`, `retrieval`, `worker` and `artifact-url` with a test each (2026-10-03T195801Z), so condition 3 cannot pass until all four layers exist; it now names only `artifact-url` missing. Condition 2's cross-client-retrieval scenario is now covered by `tests/security/test_retrieval_isolation.py` |
 | Q9 | REST `/clients` and `/clients/{id}/sources` (done 2026-10-03T190017Z; `GET /red/clients?tenant_id=&limit=&offset=` and `POST /red/clients`, `GET`/`POST /red/clients/{tenant_id}/sources`; durable `ClientWorkspaceStore` and `SourceRecordStore` ports with in-memory and PostgreSQL adapters and migrations `0010_client_workspaces`/`0011_source_records`; tenant is a required query parameter, an unscoped read/write or a rewritten source is refused) | api | Q7 | route tests `tests/unit/engagement/test_clients_route.py` (8), adapter tests `tests/unit/engagement/test_client_workspace_store.py` and `tests/unit/knowledge/test_source_record_store.py` |
 | Q10 | REST `/claims`, `/methods` (done 2026-10-03T192641Z; `GET`/`POST /red/claims` and `GET /red/methods`, tenant required on GET and path/body-scoped to the tenant; new durable Knowledge `ClaimStore` port with in-memory and PostgreSQL adapters and migration `0012_claims`; the claim create route verifies every citation against the same tenant's stored immutable `SourceRecord` by id and checksum, and the claim store refuses a same-id non-append-only re-statement; `MethodVersionRepository.list` added so `/methods` is a tenant-scoped paginated read of approved methods, left read-only because approval is gate-owned. Tests `tests/unit/knowledge/test_claim_store.py`, `tests/unit/knowledge/test_claims_route.py`, `tests/unit/method/test_methods_route.py`) | api | Q9 | route tests |
 | Q11 | REST `/offers`, `/builds` (done 2026-10-03T193035Z; `GET /red/offers` and `GET`/`POST /red/builds`, tenant required on every read and carried on the create body; `BuildObject` now requires a `tenant_id` (SPEC.md sections 3 and 9); new Production `BuildObjectRepository` port with in-memory and PostgreSQL adapters and migration `0013_build_objects` (upsert per `(tenant_id, build_id)`); `/offers` is a tenant-scoped paginated read over the existing offer store, left read-only because production readiness is gate-owned; `/builds` list is tenant-scoped and paginated and create records an Identified proposal. Tests `tests/unit/commercial/test_offers_route.py`, `tests/unit/production/test_build_object_store.py`, `tests/unit/production/test_builds_route.py`, `tests/unit/production/test_build_object_postgres.py`) | api | Q10 | route tests |

@@ -30,6 +30,20 @@ class WorkflowRunStore(abc.ABC):
     def get(self, run_id: str, *, tenant_id: str) -> WorkflowRun | None:
         """Return the tenant's run, or ``None`` if it is absent or foreign."""
 
+    @abc.abstractmethod
+    def list_resumable(self, *, tenant_id: str) -> tuple[str, ...]:
+        """Return the tenant's run ids that have a step due (SPEC.md section 7).
+
+        A background worker must find the in-flight runs to resume, and that
+        scan is itself a tenant-scoped query: it returns only the requested
+        client's runs, so a worker for one client never sees, reads or advances
+        another client's run (SPEC.md section 9: "Test cross client access at
+        API, retrieval, background worker, and artifact URL layers"). A run with
+        no step due -- pending, awaiting a human approval, completed or failed --
+        is not returned, so the worker never commits a waiting approval or
+        restarts a terminal run (SPEC.md section 11).
+        """
+
     def close(self) -> None:
         """Release any resource the adapter owns for the caller's request.
 

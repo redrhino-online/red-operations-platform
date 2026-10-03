@@ -16,6 +16,7 @@ from typing import Any
 from redops.workflows.application.ports import WorkflowRunStore
 from redops.workflows.domain.entities import WorkflowRun
 from redops.workflows.domain.errors import CrossTenantWorkflowRunError
+from redops.workflows.domain.value_objects import WorkflowRunStatus
 from redops.workflows.infrastructure.mappers import (
     workflow_run_from_payload,
     workflow_run_to_payload,
@@ -70,6 +71,14 @@ class InMemoryWorkflowRunStore(WorkflowRunStore):
     def get(self, run_id: str, *, tenant_id: str) -> WorkflowRun | None:
         _require_run_tenant(tenant_id, "load")
         return self._runs.get((tenant_id, run_id))
+
+    def list_resumable(self, *, tenant_id: str) -> tuple[str, ...]:
+        _require_run_tenant(tenant_id, "load")
+        return tuple(
+            run_id
+            for (owner, run_id), run in self._runs.items()
+            if owner == tenant_id and run.resume_step() is not None
+        )
 
     def close(self) -> None:
         """A process-local store owns no external resource to release."""
@@ -148,6 +157,21 @@ class PostgresWorkflowRunStore(WorkflowRunStore):
         if row is None:
             return None
         return workflow_run_from_payload(row[0])
+
+    def list_resumable(self, *, tenant_id: str) -> tuple[str, ...]:
+        _require_run_tenant(tenant_id, "load")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT run_id
+                FROM workflow_runs
+                WHERE tenant_id = %s AND status = %s
+                ORDER BY id
+                """,
+                (tenant_id, WorkflowRunStatus.RUNNING.value),
+            )
+            rows = cursor.fetchall()
+        return tuple(row[0] for row in rows)
 
     def close(self) -> None:
         """Release the connection the adapter holds for the request."""
