@@ -2446,7 +2446,7 @@ def record_stage_nine_gate(
     08, 21, 22 and 24 per SPEC.md section 12.3). The route rebuilds the reviewed QA
     on the rebuilt complete stage 8 funnel and drives ``authorize_traffic``, so the
     ``LaunchApprovedPolicy`` and ``ComplianceRequiredPolicy`` -- not the transport
-    layer -- decide whether the sixteen canonical kinds may be pinned as passing
+    layer -- decide whether the seventeen canonical kinds may be pinned as passing
     evidence. The route resolves the approved method, production ready offer,
     approved stage 6 message and approved stage 7 amplifier from their stores by
     exact identity, and resolves the completed stage 8 funnel from its store by

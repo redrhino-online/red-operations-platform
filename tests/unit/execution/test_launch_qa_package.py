@@ -11,12 +11,12 @@ QA criteria, the funnel pre-launch checklist, the compliance assets, and the
 learning-versus-optimization and set-and-forget rules.
 
 Like the stage 1 through 8 reviewed-asset bridges, this package projects the
-reviewed stage 9 ``LaunchQA`` onto the sixteen canonical stage 9 asset kinds as
+reviewed stage 9 ``LaunchQA`` onto the seventeen canonical stage 9 asset kinds as
 exact ``StageAssetVersion`` evidence so a canonical gate can be assembled. A
 ``LaunchQA`` only reaches ``LaunchQAState.READY_FOR_TRAFFIC`` after
 ``authorize_traffic`` passes the checkpoint on a complete same-tenant funnel and a
 designated human authorization, so the package refuses a QA that has not passed
-"Launch Approved" rather than pinning sixteen kinds for an unauthorized QA
+"Launch Approved" rather than pinning seventeen kinds for an unauthorized QA
 (SPEC.md section 4: a missing asset prevents gate completion and a waiver never
 makes an absent asset appear present). It also refuses a blank identity, a
 versionless QA and a cross-tenant QA.
@@ -33,6 +33,7 @@ from redops.contexts.execution.domain.errors import (
 from redops.contexts.execution.domain.value_objects import (
     CANONICAL_LAUNCH_KIND_CHECKS,
     CANONICAL_LAUNCH_KINDS,
+    COMPLIANCE_PACKAGE_KIND,
     LaunchQAPackage,
     QACheckKind,
 )
@@ -75,12 +76,12 @@ def package(**overrides) -> LaunchQAPackage:
 
 
 class LaunchQAPackageProjectionTests(unittest.TestCase):
-    def test_the_package_projects_all_sixteen_canonical_stage_nine_kinds(self):
+    def test_the_package_projects_all_seventeen_canonical_stage_nine_kinds(self):
         assets = package().stage_asset_versions()
 
         kinds = {asset.kind for asset in assets}
         self.assertEqual(frozenset(CANONICAL_LAUNCH_KINDS), kinds)
-        self.assertEqual(16, len(assets))
+        self.assertEqual(17, len(assets))
 
     def test_the_canonical_kinds_match_the_template_stage_nine_package(self):
         template_kinds = stage_zero_to_ten_template().required_asset_kinds(9)
@@ -101,21 +102,33 @@ class LaunchQAPackageProjectionTests(unittest.TestCase):
         self.assertEqual(len(mapped), len(set(mapped)))
         self.assertEqual(
             frozenset(CANONICAL_LAUNCH_KINDS),
-            frozenset(CANONICAL_LAUNCH_KIND_CHECKS),
+            frozenset(CANONICAL_LAUNCH_KIND_CHECKS) | {COMPLIANCE_PACKAGE_KIND},
         )
 
     def test_every_kind_pins_the_reviewed_qa_at_its_exact_version(self):
         assets = package(qa_version=4).stage_asset_versions()
 
-        self.assertEqual(16, len(assets))
+        self.assertEqual(17, len(assets))
         for asset in assets:
             self.assertEqual(4, asset.version)
 
-    def test_each_kind_pins_the_reviewed_qa_identity(self):
+    def test_the_check_kinds_pin_the_reviewed_qa_identity(self):
         assets = package().stage_asset_versions()
 
         for asset in assets:
+            if asset.kind == COMPLIANCE_PACKAGE_KIND:
+                continue
             self.assertEqual("qa-3f", asset.asset_id)
+
+    def test_the_compliance_kind_pins_the_reviewed_compliance_package(self):
+        assets = package().stage_asset_versions()
+
+        compliance = [
+            asset for asset in assets if asset.kind == COMPLIANCE_PACKAGE_KIND
+        ]
+        self.assertEqual(1, len(compliance))
+        self.assertEqual("compliance-3f", compliance[0].asset_id)
+        self.assertEqual(1, compliance[0].version)
 
     def test_the_projected_evidence_is_tenant_scoped(self):
         for asset in package().stage_asset_versions():

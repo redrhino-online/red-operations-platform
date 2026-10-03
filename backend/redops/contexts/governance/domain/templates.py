@@ -264,6 +264,7 @@ def stage_zero_to_ten_template(
                         "creative-approval",
                         "launch-dashboard",
                         "launch-decision",
+                        "compliance-package",
                     }
                 ),
             ),

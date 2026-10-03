@@ -127,10 +127,10 @@ class InvalidLaunchQAPackageError(LaunchQAError, ValueError):
 
     SPEC.md sections 3 and 4: a passing stage 9 gate pins the exact evidence and
     intended downstream use, so the reviewed stage 9 ``LaunchQA`` is projected onto
-    the sixteen canonical asset kinds with a positive integer version. A package
+    the seventeen canonical asset kinds with a positive integer version. A package
     that leaves its identity or the QA version unspecified cannot be represented as
     exact gate evidence. The same error is raised when the QA has not passed
-    "Launch Approved", because its sixteen kinds would then be pinned without an
+    "Launch Approved", because its seventeen kinds would then be pinned without an
     authorization to begin traffic to own them (a missing asset prevents gate
     completion and a waiver never makes an absent asset appear present).
     """

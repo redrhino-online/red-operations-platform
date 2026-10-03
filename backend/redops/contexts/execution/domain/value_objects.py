@@ -468,6 +468,7 @@ CANONICAL_LAUNCH_KINDS: tuple[str, ...] = (
     "creative-approval",
     "launch-dashboard",
     "launch-decision",
+    "compliance-package",
 )
 
 
@@ -499,7 +500,7 @@ CANONICAL_LAUNCH_KIND_CHECKS: dict[str, tuple[QACheckKind, ...]] = {
 
 @dataclass(frozen=True)
 class LaunchQAPackage:
-    """The reviewed stage 9 launch QA, projected to the sixteen canonical gate kinds.
+    """The reviewed stage 9 launch QA, projected to the seventeen canonical gate kinds.
 
     SPEC.md section 4, stage 9 "QA" and its "Launch Approved" checkpoint: a stage
     is complete only when its required assets exist, pass the checkpoint and
@@ -517,20 +518,24 @@ class LaunchQAPackage:
     24) carries a funnel pre-launch checklist together with the compliance assets
     (GDPR consent, Facebook and income disclaimers, privacy and terms) and the
     learning-versus-optimization and set-and-forget rules. ``LaunchQA`` already
-    enforces the complete same-tenant check set, the critical-path outcomes and
-    the designated-authority traffic authorization at construction and
-    authorization, so each canonical kind is projected from the single reviewed QA
-    at one positive integer version. The QACheckKind set is finer grained than the
-    sixteen kinds (technical and commercial QA each cover desktop and mobile), so
-    ``CANONICAL_LAUNCH_KIND_CHECKS`` records which checks evidence each kind.
+    enforces the complete same-tenant check set, the critical-path outcomes, the
+    reviewed compliance package and the designated-authority traffic authorization
+    at construction and authorization, so each canonical kind is projected from
+    the single reviewed QA at one positive integer version. The QACheckKind set is
+    finer grained than the check kinds (technical and commercial QA each cover
+    desktop and mobile), so ``CANONICAL_LAUNCH_KIND_CHECKS`` records which checks
+    evidence each kind; the ``compliance-package`` kind is projected from the
+    reviewed ``CompliancePackage`` itself, because SPEC.md section 12.5 makes the
+    canon's compliance suite a required stage 9 asset.
 
     A ``LaunchQA`` only owns its launch evidence once ``authorize_traffic`` passes
     the checkpoint, so this package refuses a QA that has not reached
-    ``LaunchQAState.READY_FOR_TRAFFIC``: sixteen kinds cannot be pinned as this
+    ``LaunchQAState.READY_FOR_TRAFFIC``: seventeen kinds cannot be pinned as this
     client's evidence without a QA that actually passed and was authorized to
     begin traffic (SPEC.md section 4). It also refuses a blank identity, a
-    versionless QA or a cross-tenant QA rather than silently pinning inexact or
-    foreign evidence (SPEC.md sections 3 and 4).
+    versionless QA, a QA whose reviewed compliance package is absent and a
+    cross-tenant QA rather than silently pinning inexact or foreign evidence
+    (SPEC.md sections 3 and 4).
     """
 
     package_id: str
@@ -558,8 +563,21 @@ class LaunchQAPackage:
         if not self.qa.is_ready_for_traffic:
             raise InvalidLaunchQAPackageError(
                 f"stage 9 launch QA {self.qa.qa_id!r} has not passed Launch "
-                "Approved, so its sixteen asset kinds cannot be pinned as exact "
+                "Approved, so its seventeen asset kinds cannot be pinned as exact "
                 "evidence"
+            )
+        compliance = self.qa.compliance
+        if not isinstance(compliance, CompliancePackage):
+            raise InvalidLaunchQAPackageError(
+                f"stage 9 launch QA {self.qa.qa_id!r} has no reviewed compliance "
+                "package, so its compliance-package kind cannot be pinned as exact "
+                "evidence"
+            )
+        if compliance.tenant_id != self.tenant_id:
+            raise LaunchQAPackageTenantBoundaryError(
+                f"stage 9 launch QA {self.qa.qa_id!r} carries compliance package "
+                f"{compliance.package_id!r} from tenant {compliance.tenant_id!r}, "
+                f"not package tenant {self.tenant_id!r}"
             )
 
     @property
@@ -581,13 +599,16 @@ class LaunchQAPackage:
     def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
         """Project the reviewed stage 9 launch QA onto exact governance evidence.
 
-        Every canonical kind is evidenced by checks that belong to the same
-        reviewed ``LaunchQA``, so each is pinned to that QA's identity at its
-        exact version. Governance still pins each projection for the workspace
-        tenant, so a cross-client QA is refused rather than silently authorized
-        (SPEC.md sections 3, 4 and 11).
+        Every check kind is evidenced by checks that belong to the same reviewed
+        ``LaunchQA``, so each is pinned to that QA's identity at its exact
+        version. The ``compliance-package`` kind is pinned from the reviewed
+        ``CompliancePackage`` itself, at the same reviewed QA version, so the
+        gate records the exact compliance evidence rather than only asserting the
+        package was present. Governance still pins each projection for the
+        workspace tenant, so a cross-client QA or package is refused rather than
+        silently authorized (SPEC.md sections 3, 4 and 11).
         """
-        return tuple(
+        assets = [
             StageAssetVersion(
                 asset_id=self.qa.qa_id,
                 tenant_id=self.tenant_id,
@@ -595,7 +616,12 @@ class LaunchQAPackage:
                 version=self.qa_version,
             )
             for kind in CANONICAL_LAUNCH_KINDS
+            if kind != COMPLIANCE_PACKAGE_KIND
+        ]
+        assets.append(
+            self.qa.compliance.as_stage_asset(version=self.qa_version)
         )
+        return tuple(assets)
 
 
 @dataclass(frozen=True)
@@ -735,6 +761,9 @@ class ComplianceWaiver:
         return self.expires_on is not None and on > self.expires_on
 
 
+COMPLIANCE_PACKAGE_KIND = "compliance-package"
+
+
 @dataclass(frozen=True)
 class CompliancePackage:
     """The reviewed stage 9 launch compliance and consent package (SPEC.md 4/9).
@@ -859,6 +888,30 @@ class CompliancePackage:
     def is_complete(self, *, on: date) -> bool:
         """Whether every required asset exists or is validly waived as of ``on``."""
         return not self.uncovered_kinds(on=on)
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the reviewed package onto exact ``compliance-package`` evidence.
+
+        SPEC.md sections 4 and 12.5 make the canon's compliance suite (canon files
+        21 and 34) a required stage 9 asset, so the reviewed package is projected
+        at a positive integer version and a versionless projection is refused
+        rather than silently pinned (SPEC.md sections 3 and 4). The package is the
+        unit of evidence because the six canonical compliance assets may be met by
+        an asset or by a live scoped human waiver, and SPEC.md section 4 keeps a
+        waiver from making an absent asset appear present: pinning the package
+        captures whichever mix of assets and waivers was reviewed.
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidComplianceError(
+                "the compliance package version must be a positive integer so the "
+                "stage 9 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.package_id,
+            tenant_id=self.tenant_id,
+            kind=COMPLIANCE_PACKAGE_KIND,
+            version=version,
+        )
 
 
 class MilestoneKind(Enum):

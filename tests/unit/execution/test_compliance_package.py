@@ -31,10 +31,12 @@ from redops.contexts.execution.domain.errors import (
 )
 from redops.contexts.execution.domain.value_objects import (
     ALWAYS_REQUIRED_COMPLIANCE_KINDS,
+    COMPLIANCE_PACKAGE_KIND,
     ComplianceAssetKind,
 )
 
 from .fixtures import (
+    TENANT,
     authorization,
     compliance_asset,
     compliance_assets,
@@ -242,6 +244,20 @@ class CompliancePackageTests(unittest.TestCase):
 
         with self.assertRaises(FrozenInstanceError):
             package.package_id = "tampered"
+
+    def test_a_package_projects_the_compliance_package_stage_kind(self):
+        asset = compliance_package().as_stage_asset(version=3)
+
+        self.assertEqual(COMPLIANCE_PACKAGE_KIND, asset.kind)
+        self.assertEqual("compliance-3f", asset.asset_id)
+        self.assertEqual(TENANT, asset.tenant_id)
+        self.assertEqual(3, asset.version)
+
+    def test_a_versionless_compliance_package_projection_is_refused(self):
+        for version in (0, -1):
+            with self.subTest(version=version):
+                with self.assertRaises(InvalidComplianceError):
+                    compliance_package().as_stage_asset(version=version)
 
 
 class LaunchComplianceTests(unittest.TestCase):
