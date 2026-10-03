@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING
 
 from redops.contexts.commercial.domain.errors import (
     CampaignMessageTenantBoundaryError,
+    ContentCrusherDependencyError,
+    ContentCrusherObservationError,
+    ContentCrusherTenantBoundaryError,
     ContentRoadmapDependencyError,
     ContentRoadmapFormatError,
     ContentRoadmapObservationError,
@@ -17,6 +20,7 @@ from redops.contexts.commercial.domain.errors import (
     ContentSyndicationFormatError,
     ContentSyndicationObservationError,
     ContentSyndicationTenantBoundaryError,
+    InvalidContentCrusherError,
     InvalidContentSyndicationError,
     CurrencyTenantBoundaryError,
     DiagnosisTenantBoundaryError,
@@ -2469,4 +2473,166 @@ class ContentSyndicationPlan:
         raise ContentSyndicationObservationError(
             f"content syndication plan {claim_id!r} is distribution to perform, "
             "not an observed result, and cannot be recorded as an observation"
+        )
+
+
+@dataclass(frozen=True)
+class ContentPromise:
+    """The canon's measurable promise line for one piece of content (canon 32).
+
+    The canon puts a promise with a metric and a timeline in every marketing
+    message: "I always want to have in every marketing message a promise, a hook
+    that's clearly measurable, relevant to them. With a timeline" (canon file
+    32). The promise is frozen and reject-only, so an unmeasured or timeless
+    promise cannot be represented as the content's hook.
+    """
+
+    measure: str
+    timeline: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("content promise measure", self.measure),
+            ("content promise timeline", self.timeline),
+        ):
+            if not value or not value.strip():
+                raise InvalidContentCrusherError(f"{label} is required")
+
+
+@dataclass(frozen=True)
+class ContentCrusher:
+    """The canon's Content Crusher outline for one roadmap topic (canon 12, 16, 32).
+
+    SPEC.md section 12.5 records the Content Crusher as part of the
+    audience-building and content flywheel canon gap and maps it to stage 6
+    content assets. The canon uses the Content Crusher to turn one idea into
+    "world class content" in any format (canon file 32): it captures the topic
+    and title, a promise with a metric and a timeline, the transformation from
+    the customer's top frustrations to their goal, a visual model, a metaphor,
+    the context of where the content lives in the whole program, the steps, a
+    real story, a choice and the next action. Rule one is that content never
+    leaves the method -- "we never create a piece of content that doesn't live in
+    the signature solution" (canon file 28) -- so the crusher is grounded on a
+    same-tenant ``ContentRoadmap`` topic and teaches the roadmap's own Signature
+    Solution steps.
+
+    It is frozen and reject-only, so a blank identity, a missing beat, an untyped
+    promise, a foreign or absent roadmap, a topic the roadmap does not plan or a
+    step the solution does not name cannot be represented as a content outline.
+
+    It is a stage 6 planning asset, not a new required gate kind (a
+    methodology-owner decision, SPEC.md section 12.5). It does not authorize
+    publishing or spend (SPEC.md sections 4 and 9) and it is never an observation
+    (SPEC.md section 3). The canon suggests capturing the customer's "top three
+    frustrations"; RED requires at least one and records the narrower count as an
+    intentional deviation (SPEC.md section 12.1).
+    """
+
+    crusher_id: str
+    tenant_id: str
+    owner: str
+    roadmap: ContentRoadmap
+    topic_id: str
+    title: str
+    promise: ContentPromise
+    frustrations: tuple[str, ...]
+    goal: str
+    model: str
+    metaphor: str
+    context: str
+    steps: tuple[str, ...]
+    story: str
+    choice: str
+    action: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("content crusher id", self.crusher_id),
+            ("content crusher tenant id", self.tenant_id),
+            ("content crusher owner", self.owner),
+            ("content crusher topic id", self.topic_id),
+            ("content crusher title", self.title),
+            ("content crusher goal", self.goal),
+            ("content crusher model", self.model),
+            ("content crusher metaphor", self.metaphor),
+            ("content crusher context", self.context),
+            ("content crusher story", self.story),
+            ("content crusher choice", self.choice),
+            ("content crusher action", self.action),
+        ):
+            if not value or not value.strip():
+                raise InvalidContentCrusherError(f"{label} is required")
+        if not isinstance(self.promise, ContentPromise):
+            raise InvalidContentCrusherError(
+                "a content crusher must carry a typed content promise"
+            )
+        frustrations = tuple(self.frustrations)
+        if not frustrations:
+            raise InvalidContentCrusherError(
+                "a content crusher must name at least one customer frustration"
+            )
+        for frustration in frustrations:
+            if not frustration or not frustration.strip():
+                raise InvalidContentCrusherError(
+                    "a content crusher frustration must be a non-blank statement"
+                )
+        if not isinstance(self.roadmap, ContentRoadmap):
+            raise ContentCrusherDependencyError(
+                "a content crusher must outline a topic from a typed Content "
+                "Roadmap"
+            )
+        if self.roadmap.tenant_id != self.tenant_id:
+            raise ContentCrusherTenantBoundaryError(
+                f"content crusher {self.crusher_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Content Roadmap "
+                f"{self.roadmap.roadmap_id!r} belongs to tenant "
+                f"{self.roadmap.tenant_id!r}"
+            )
+        topic_ids = {topic.topic_id for topic in self.roadmap.topics}
+        if self.topic_id not in topic_ids:
+            raise ContentCrusherDependencyError(
+                f"content crusher {self.crusher_id!r} outlines topic "
+                f"{self.topic_id!r}, which the roadmap's Content Roadmap does not "
+                "name"
+            )
+        step_names = {step.name for step in self.roadmap.method.steps}
+        steps = tuple(self.steps)
+        if not steps:
+            raise InvalidContentCrusherError(
+                "a content crusher must teach at least one Signature Solution step"
+            )
+        seen: set[str] = set()
+        for step in steps:
+            if not step or not step.strip():
+                raise InvalidContentCrusherError(
+                    "a content crusher step must be a non-blank Signature "
+                    "Solution step"
+                )
+            if step in seen:
+                raise InvalidContentCrusherError(
+                    f"content crusher {self.crusher_id!r} teaches duplicate step "
+                    f"{step!r}"
+                )
+            seen.add(step)
+            if step not in step_names:
+                raise ContentCrusherDependencyError(
+                    f"content crusher {self.crusher_id!r} teaches step {step!r}, "
+                    "which the roadmap's Signature Solution does not name"
+                )
+
+    @property
+    def is_plan(self) -> bool:
+        """A content crusher is a plan, not activity or an observed result."""
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a content crusher as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The
+        crusher describes the content that will be produced, while any measured
+        movement is a separate observation, so a crusher is never an observation.
+        """
+        raise ContentCrusherObservationError(
+            f"content crusher {claim_id!r} is content to produce, not an observed "
+            "result, and cannot be recorded as an observation"
         )

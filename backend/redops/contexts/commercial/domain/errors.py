@@ -586,3 +586,45 @@ class ContentSyndicationObservationError(CommercialError):
     a separate observation, so a plan is never an observation.
     """
 
+
+class InvalidContentCrusherError(CommercialError, ValueError):
+    """A content crusher was built without its required topic, promise or beats.
+
+    SPEC.md section 12.5 records the Content Crusher as part of the
+    audience-building and content flywheel canon gap, shaped by the canon's
+    Content Crusher framework (canon files 12, 16 and 32): each piece of content
+    is outlined with a topic, a title, a promise carrying a metric and a timeline,
+    the customer's frustrations and goal, a visual model, a metaphor, the context,
+    the steps, a story, a choice and the next action. A crusher missing any
+    required beat cannot be represented as a world class content outline.
+    """
+
+
+class ContentCrusherDependencyError(CommercialError):
+    """A content crusher was not grounded on the mapped Content Roadmap.
+
+    The canon never creates a piece of content that does not live in the
+    signature solution (canon file 28) and outlines each roadmap topic on the
+    same Content Crusher framework (canon file 32), so a crusher must be
+    grounded on a same-tenant Content Roadmap and outline one of that roadmap's
+    named topics using the solution's own steps.
+    """
+
+
+class ContentCrusherTenantBoundaryError(CommercialError):
+    """A content crusher mixed in an asset from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. A
+    crusher and the Content Roadmap it outlines cannot cross a tenant boundary.
+    """
+
+
+class ContentCrusherObservationError(CommercialError):
+    """A content crusher was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. A crusher is
+    the content that will be produced, while any measured movement stays a
+    separate observation, so a crusher is never an observation.
+    """
+
+
