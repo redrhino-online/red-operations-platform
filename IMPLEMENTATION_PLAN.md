@@ -4,57 +4,45 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03 (Ralph cycle 2026-10-03T143500Z):
-- Selected item: bind the API to the durable gate ledger adapter (the previous
-  cycle's highest priority ready next item). Chosen because the stage 0 gate
-  route is the first production write path and it was still bound to the
-  process-local `InMemoryGateLedgerRepository`: a recorded gate vanished on
-  restart and was not shared with a worker. The durable PostgreSQL adapter and
-  its committed migration already existed and were verified, so the remaining
-  gap was the entry-point wiring, making this the smallest change that makes the
-  pipeline's gate record actually durable.
-- Outcome: `backend/redops/contexts/governance/infrastructure/repositories.py`
-  gains `GateLedgerConfigurationError` and
-  `gate_ledger_repository_from_env(database_url)`, which returns the durable
-  `PostgresGateLedgerRepository` when `DATABASE_URL` is set and the process-local
-  adapter when it is absent, and raises rather than silently downgrading when a
-  database is configured but psycopg is missing (SPEC.md sections 3, 4 and 9; ADR
-  0003). Both adapters expose `close()`, and the `GateLedgerRepository` port
-  documents a default no-op `close()` for request-scoped lifecycle. The FastAPI
-  `get_gate_ledger_repository` dependency (`backend/redops/api/routes.py`) is now
-  a generator that selects the adapter from `DATABASE_URL`, yields it to the
-  route and releases its connection in `finally`, so the stage 0 gate route
-  records into PostgreSQL in the process that serves traffic with no route or
-  domain change.
-- Evidence: new domain test
-  `tests/unit/governance/test_gate_ledger_repository_factory.py` (2 tests) pins
-  selection: absent/blank `DATABASE_URL` yields the process-local adapter, and a
-  set URL with no driver raises `GateLedgerConfigurationError`.
-  `tests/unit/test_app_smoke.py` gains a test that the real dependency yields the
-  process-local adapter when `DATABASE_URL` is unset. The Postgres contract test
-  gains a case that the factory builds and closes a working
-  `PostgresGateLedgerRepository` against the compose database. Domain suite 1622
-  run / 10 skipped (the Postgres cases skip on the domain-only interpreter); app
-  smoke plus the stage 0 route 8 passed in the vendored core env; the Postgres
-  adapter test 8 passed against `redop-dev-postgres-1` with `DATABASE_URL`;
-  `python3 -m pyflakes backend/redops tests` clean.
-- New findings: the app does not yet run `alembic upgrade head` before serving,
-  so a deployment that sets `DATABASE_URL` on a fresh database will fail its
-  first gate write until the migration is applied; the committed migration and
-  `env.py` already support it. The route still synthesises the stage 0 `StageRun`
-  from the request, so a real run store remains a follow-up. Row-level security
-  (ADR 0004) is still only the WHERE clause plus the NOT NULL column. The host
-  still has no repo-root `.venv`, and `.venv/` is not in `.gitignore`.
-- Blockers: none for this item. The durable route now depends on the deployment
-  applying migrations before traffic; without that it turns a silent in-memory
-  success into a loud failure on first write, which is correct but must be
-  paired with the migration step.
-- Highest priority ready next item: add the migration path the app and the
-  deployment run before serving (`alembic upgrade head`, invoked from an app
-  startup hook or an init/migration job that reads `DATABASE_URL`), and add
-  `.venv/` to `.gitignore` while touching the developer setup. Prerequisites: the
-  committed `0001_gate_decisions` migration and `env.py` (done) and this cycle's
-  environment-selected dependency (done).
+- Cycle 2026-10-03 (Ralph cycle 2026-10-03T144315Z): selected item was the
+  migration path named last cycle — apply the committed schema before the API
+  serves. A deployment that sets `DATABASE_URL` on a fresh database otherwise
+  fails its first gate write. Chosen over the `StageRun` store because no gate
+  can be recorded at all until the schema is applied.
+- Outcome: added `backend/redops/shared/persistence/migrate.py`, a programmatic
+  `python -m redops.shared.persistence.migrate` runner that applies
+  `alembic upgrade head` against the committed migration set, resolving paths
+  relative to the module (works from `/app` or the repo root) and normalising
+  the platform `postgresql://` URL to the psycopg 3 dialect. It refuses a blank
+  `DATABASE_URL` or a missing alembic with `MigrationConfigurationError` instead
+  of silently skipping schema. The FastAPI app deliberately does not migrate at
+  startup: SPEC.md section 10 makes migration its own scoped, reviewed step
+  before the app serves. `.gitignore` now excludes `.venv/`.
+- Evidence: `tests/unit/shared/test_migrate.py` (3 tests, contract for the
+  runner) run with the app environment against `redop-dev-postgres-1`
+  (`DATABASE_URL=postgresql://redops:redops@localhost:5432/redops`): blank URL is
+  a named error; a configured database is migrated to head idempotently and the
+  `gate_decisions` table exists. Domain suite 1625 run / 11 skipped (the DB case
+  skips on the domain-only interpreter); Postgres ledger tests 9 passed / 1
+  skipped; app smoke + stage 0 route 8 passed; `pyflakes backend/redops tests`
+  clean.
+- New findings: this cycle was interrupted by an opencode external-directory
+  permission (`cd /tmp` was auto-rejected) after the work and verification
+  completed but before the commit message was written; the harness correctly
+  refused to commit without the why, so the work is committed here by hand and
+  `opencode.json` now allows `/tmp/opencode/**` so a cycle can use a throwaway
+  venv without aborting. The migration step still needs wiring into the
+  deployment (an init/migration Job or a pre-serve hook reading `DATABASE_URL`),
+  and the route still synthesises the stage 0 `StageRun` (no run store yet).
+- Blockers: Tier 2 facts still hold. The deployment migration step needs the
+  chart to run the new command; RLS remains WHERE-clause only (ADR 0004);
+  `StageRun` has no durable store.
+- Highest priority ready next item: wire the migration step into the deployment
+  (a migration Job or init container in the redop chart that runs
+  `python -m redops.shared.persistence.migrate` with the app image and
+  `DATABASE_URL`, gated before the API serves), then add the durable `StageRun`
+  store so the stage 0 route records the run instead of synthesising it.
+  Prerequisites: the runner (done), the local compose database for validation.
 
 ### Standing decisions (unchanged this cycle)
 

@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 project_sources/
+.venv/
 __pycache__/
 *.py[cod]
 .serena/
