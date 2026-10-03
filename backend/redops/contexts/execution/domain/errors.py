@@ -64,6 +64,30 @@ class LaunchQAAuthorityError(LaunchQAError):
     """Traffic was not authorized by the designated human authority."""
 
 
+class InvalidLaunchQAPackageError(LaunchQAError, ValueError):
+    """A stage 9 reviewed asset package was built without identity, version or readiness.
+
+    SPEC.md sections 3 and 4: a passing stage 9 gate pins the exact evidence and
+    intended downstream use, so the reviewed stage 9 ``LaunchQA`` is projected onto
+    the sixteen canonical asset kinds with a positive integer version. A package
+    that leaves its identity or the QA version unspecified cannot be represented as
+    exact gate evidence. The same error is raised when the QA has not passed
+    "Launch Approved", because its sixteen kinds would then be pinned without an
+    authorization to begin traffic to own them (a missing asset prevents gate
+    completion and a waiver never makes an absent asset appear present).
+    """
+
+
+class LaunchQAPackageTenantBoundaryError(LaunchQAError):
+    """A stage 9 reviewed asset package mixed in launch QA from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client, so the
+    ``LaunchQA`` projected onto a workspace's stage 9 gate package must belong to
+    that workspace's tenant. A cross-tenant stage 9 QA cannot be pinned as this
+    client's gate evidence.
+    """
+
+
 class PerformanceBaselineError(ExecutionError):
     """Base class for stage 10 performance baseline rule violations."""
 

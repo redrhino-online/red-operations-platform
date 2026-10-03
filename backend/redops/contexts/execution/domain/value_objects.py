@@ -19,13 +19,18 @@ from redops.contexts.execution.domain.errors import (
     InvalidFunnelError,
     InvalidFunnelIntegrationPackageError,
     InvalidLaunchQAError,
+    InvalidLaunchQAPackageError,
     InvalidPerformanceBaselineError,
     InvalidPerformanceClaimError,
+    LaunchQAPackageTenantBoundaryError,
 )
 from redops.contexts.governance.domain.value_objects import StageAssetVersion
 
 if TYPE_CHECKING:
-    from redops.contexts.execution.domain.entities import FunnelIntegration
+    from redops.contexts.execution.domain.entities import (
+        FunnelIntegration,
+        LaunchQA,
+    )
 
 
 class FunnelState(Enum):
@@ -439,6 +444,153 @@ class QACheck:
     @property
     def is_passing(self) -> bool:
         return self.outcome is QACheckOutcome.PASSED
+
+
+CANONICAL_LAUNCH_KINDS: tuple[str, ...] = (
+    "recorded-message",
+    "technical-tests",
+    "commercial-tests",
+    "qa-forms",
+    "qa-crm",
+    "qa-email",
+    "qa-automation",
+    "qa-booking",
+    "qa-tracking",
+    "qa-payment",
+    "qa-handoff",
+    "client-approval",
+    "budget-approval",
+    "creative-approval",
+    "launch-dashboard",
+    "launch-decision",
+)
+
+
+CANONICAL_LAUNCH_KIND_CHECKS: dict[str, tuple[QACheckKind, ...]] = {
+    "recorded-message": (QACheckKind.RECORDED_MESSAGE,),
+    "technical-tests": (
+        QACheckKind.TECHNICAL_DESKTOP,
+        QACheckKind.TECHNICAL_MOBILE,
+    ),
+    "commercial-tests": (
+        QACheckKind.COMMERCIAL_DESKTOP,
+        QACheckKind.COMMERCIAL_MOBILE,
+    ),
+    "qa-forms": (QACheckKind.FORMS,),
+    "qa-crm": (QACheckKind.CRM,),
+    "qa-email": (QACheckKind.EMAIL,),
+    "qa-automation": (QACheckKind.AUTOMATION,),
+    "qa-booking": (QACheckKind.BOOKING,),
+    "qa-tracking": (QACheckKind.TRACKING,),
+    "qa-payment": (QACheckKind.PAYMENT,),
+    "qa-handoff": (QACheckKind.SALES_HANDOFF,),
+    "client-approval": (QACheckKind.CLIENT_APPROVAL,),
+    "budget-approval": (QACheckKind.BUDGET,),
+    "creative-approval": (QACheckKind.CREATIVE,),
+    "launch-dashboard": (QACheckKind.DASHBOARD,),
+    "launch-decision": (QACheckKind.LAUNCH_DECISION,),
+}
+
+
+@dataclass(frozen=True)
+class LaunchQAPackage:
+    """The reviewed stage 9 launch QA, projected to the sixteen canonical gate kinds.
+
+    SPEC.md section 4, stage 9 "QA" and its "Launch Approved" checkpoint: a stage
+    is complete only when its required assets exist, pass the checkpoint and
+    receive approval for downstream use, and a passing gate pins the exact
+    evidence. The required asset package is the recorded message, technical and
+    commercial tests on desktop and mobile, forms, CRM, email, automation,
+    booking, tracking, payment when relevant, handoff, client approval, budget,
+    creative, dashboard and the launch decision. The Execution context reviews
+    that as one rich ``LaunchQA`` (the checks belong to the same QA, grounded on
+    the completed stage 8 funnel and a designated human authorization); this
+    package is the bridge to the governance gate, which pins one exact
+    ``StageAssetVersion`` per canonical kind.
+
+    The canon (SPEC.md section 12.3: stage 9 uses canon files 01, 08, 21, 22 and
+    24) carries a funnel pre-launch checklist together with the compliance assets
+    (GDPR consent, Facebook and income disclaimers, privacy and terms) and the
+    learning-versus-optimization and set-and-forget rules. ``LaunchQA`` already
+    enforces the complete same-tenant check set, the critical-path outcomes and
+    the designated-authority traffic authorization at construction and
+    authorization, so each canonical kind is projected from the single reviewed QA
+    at one positive integer version. The QACheckKind set is finer grained than the
+    sixteen kinds (technical and commercial QA each cover desktop and mobile), so
+    ``CANONICAL_LAUNCH_KIND_CHECKS`` records which checks evidence each kind.
+
+    A ``LaunchQA`` only owns its launch evidence once ``authorize_traffic`` passes
+    the checkpoint, so this package refuses a QA that has not reached
+    ``LaunchQAState.READY_FOR_TRAFFIC``: sixteen kinds cannot be pinned as this
+    client's evidence without a QA that actually passed and was authorized to
+    begin traffic (SPEC.md section 4). It also refuses a blank identity, a
+    versionless QA or a cross-tenant QA rather than silently pinning inexact or
+    foreign evidence (SPEC.md sections 3 and 4).
+    """
+
+    package_id: str
+    tenant_id: str
+    qa: "LaunchQA"
+    qa_version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("launch QA package id", self.package_id),
+            ("launch QA package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidLaunchQAPackageError(f"{label} is required")
+        if self.qa.tenant_id != self.tenant_id:
+            raise LaunchQAPackageTenantBoundaryError(
+                f"stage 9 launch QA {self.qa.qa_id!r} belongs to tenant "
+                f"{self.qa.tenant_id!r}, not package tenant {self.tenant_id!r}"
+            )
+        if not isinstance(self.qa_version, int) or self.qa_version < 1:
+            raise InvalidLaunchQAPackageError(
+                "the launch QA version must be a positive integer so the stage 9 "
+                "gate can pin the reviewed asset at an exact version"
+            )
+        if not self.qa.is_ready_for_traffic:
+            raise InvalidLaunchQAPackageError(
+                f"stage 9 launch QA {self.qa.qa_id!r} has not passed Launch "
+                "Approved, so its sixteen asset kinds cannot be pinned as exact "
+                "evidence"
+            )
+
+    @property
+    def kinds(self) -> frozenset[str]:
+        """The canonical kinds the reviewed stage 9 launch QA projects onto."""
+        return frozenset(CANONICAL_LAUNCH_KINDS)
+
+    def missing_kinds(self) -> tuple[str, ...]:
+        """Canonical stage 9 kinds not covered by the projected launch QA."""
+        covered = {asset.kind for asset in self.stage_asset_versions()}
+        return tuple(
+            kind for kind in CANONICAL_LAUNCH_KINDS if kind not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_kinds()
+
+    def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
+        """Project the reviewed stage 9 launch QA onto exact governance evidence.
+
+        Every canonical kind is evidenced by checks that belong to the same
+        reviewed ``LaunchQA``, so each is pinned to that QA's identity at its
+        exact version. Governance still pins each projection for the workspace
+        tenant, so a cross-client QA is refused rather than silently authorized
+        (SPEC.md sections 3, 4 and 11).
+        """
+        return tuple(
+            StageAssetVersion(
+                asset_id=self.qa.qa_id,
+                tenant_id=self.tenant_id,
+                kind=kind,
+                version=self.qa_version,
+            )
+            for kind in CANONICAL_LAUNCH_KINDS
+        )
 
 
 @dataclass(frozen=True)
