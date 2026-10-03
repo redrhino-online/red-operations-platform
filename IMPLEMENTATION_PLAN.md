@@ -4,6 +4,76 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T184653Z (Ralph cycle, this run): selected item was the
+  smallest independently verifiable slice of queue Q5, the workflow engine: the
+  pure durable run-state contract plus the resume use case, proven by a
+  restart/idempotency test (SPEC.md sections 6 and 7; SPEC.md section 11
+  "restarting worker preserves a waiting workflow"; ADR 0005; implementation
+  plan Q5). Q5 is the plan's highest priority ready item and the only remaining
+  implementable gap on the last failing DoD checkpoint: it is a prerequisite for
+  Q15 (`/workflows/{id}`) -> Q32 (`frontend/`, DoD condition 6). It outranked the
+  alternatives for these reasons. The stage 8-10 canon required-kind wiring
+  (Q28) is still blocked on the named methodology-owner placement decision
+  (`EnrollmentPlan`, `ClientProcess`, `SwimlanesPlan` between the stage 8
+  "Funnel Complete" gate and a later stage 9/10 gate), and the task forbids
+  making that decision unattended. The Next.js `frontend/` shell (DoD condition
+  6, Q32) would make `make done`'s [5/6] pass, but its substance (all section 8
+  screens, DoD condition 6) is far larger than a shell, so building one only to
+  clear the proxy gate would misrepresent completion; Q32 remains blocked on the
+  workflow route Q15 per the plan. Q29 (method change impact emission) is
+  domain-complete and tested (`MethodChangeImpactPolicy` / `ImpactAssessment`),
+  so it is not an open defect. No smaller gate-integrity defect with satisfied
+  prerequisites remained.
+- Outcome: new bounded module `backend/redops/workflows/`. Pure domain
+  (`WorkflowDefinition`, `WorkflowStep`, `WorkflowStepKind`, `WorkflowRunStatus`,
+  `WorkflowRunTransition`, the `WorkflowRun` entity, `WorkflowTransitionPolicy`
+  and named errors) plus application (`WorkflowRunStore` and
+  `WorkflowStepExecutor` ports and `RunWorkflowHandler`). A run pins the exact
+  definition version it started on (SPEC.md section 10), advances one step at a
+  time, persists state before a side effect (`begin_step` sets
+  `in_progress_step`), commits only the in-progress step, and records
+  actor/reason/old and new status/correlation on each status change.
+  `RunWorkflowHandler` is the only place that orders persistence and effects: it
+  saves before executing, re-runs only an interrupted step idempotently on
+  resume, leaves a `wait_for_human` approval in `AWAITING_APPROVAL`, and scopes
+  every run read by tenant. Onion rule respected: domain imports no web, ORM,
+  queue or vendor code; the use case depends on ports.
+- Evidence: `make check` -> 1976 passed, 2 skipped, 680 subtests; pyflakes
+  clean. New behavioral tests `tests/unit/workflows/test_workflow_resume.py`
+  (17 tests): start persists before effects and waits at approval; a second
+  handler over the same durable store preserves the waiting run and re-runs no
+  committed step; approval resumes from committed steps without repeating
+  effects; a crash mid-step leaves `in_progress_step` persisted and resume
+  re-runs only that step; duplicate resume is a no-op; resume is tenant scoped;
+  a failed run is terminal; plus definition/transition/order domain rules.
+  `make done` clears [1/6]-[4/6] and still fails [5/6] (`frontend/` missing,
+  Q32).
+- New findings: the RED workflow contract is now testable without the fork or
+  PostgreSQL, so the next Q5 slices are the PostgreSQL `WorkflowRunStore` adapter
+  plus migration, the fork `workflows/resumer.py` adapter behind the same port
+  (DoD condition 7: zero vendor edits), and the REST `/workflows/{id}` route
+  (Q15). `WorkflowStepExecutor` is the seam that must be idempotent, so connector
+  steps and outbox dedup (Q16) plug in there. The unresolved Q3 architecture
+  tension remains: ADR 0006 registers RED agents through the fork's
+  `orchestrator/router.py` while DoD condition 7 requires zero vendor edits; that
+  is a named-owner/architecture decision.
+- Blockers: the Q28 stage 8/9/10 required-kind placement decision (named-owner);
+  `frontend/` (DoD condition 6, Q32) blocked on Q15; request idempotency (Q16)
+  blocked on the same; RLS is a WHERE clause only (ADR 0004); the condition 3
+  retrieval, background worker and artifact-URL layers are unbuilt; Q3 agent
+  registration blocked on the ADR 0006 versus vendor-edit tension; Q4's live call
+  needs an `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: the next Q5 slice, the PostgreSQL
+  `WorkflowRunStore` adapter plus migration (durable run state in PostgreSQL, so
+  a real process restart resumes), then the REST `/workflows/{id}` route (Q15)
+  once the store lands; Q15 unblocks Q16 and Q32. The adapter is the smaller,
+  dependency-satisfied item and unblocks the SPEC.md section 11 restart
+  scenario. Required owner input for the pipeline: the stage 8/9/10 canon
+  placement decision; approver for any wired kind: the client designated
+  authority; blocked downstream dependency: the stage 9 gate.
+
+### Prior cycle (2026-10-03T184450Z)
+
 - Cycle 2026-10-03T184450Z (Ralph cycle, this run): selected item was queue Q4,
   the env-gated live OpenRouter smoke test (SPEC.md sections 6 and 13 condition
   5; implementation plan Q4). Q4 is the highest ready item whose prerequisites
@@ -2210,7 +2280,7 @@ stalls:
 | Q2 | RED LLM adapter logs model, prompt version, usage, trace id | agents | Q1 | adapter contract test. Done 2026-10-03T184310Z: `ForkProviderModelGateway` wraps the fork's `get_provider` behind `ModelGateway`; `LoggingModelGateway` logs tenant/model/prompt version/trace id/context refs/tokens without prompt text; `ModelGatewayRuntimeError` guards a running loop. Verified by `tests/unit/agents/test_llm_gateway.py` (12 tests). Live smoke remains Q4 |
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
 | Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key. Done 2026-10-03T184450Z: `tests/unit/agents/test_live_openrouter_smoke.py` skips unless `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE` are set, then drives one live call through `ForkProviderModelGateway.from_fork_registry()` plus `LoggingModelGateway` and asserts the section 6 attribution; executing it awaits a real key |
-| Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test |
+| Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). PostgreSQL `WorkflowRunStore` adapter + migration, fork `workflows/resumer.py` adapter behind the port, and REST `/workflows/{id}` (Q15) remain |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
 | Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams |
