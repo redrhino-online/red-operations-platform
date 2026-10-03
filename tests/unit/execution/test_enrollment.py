@@ -55,6 +55,7 @@ from redops.contexts.execution.domain.errors import (
 )
 from redops.contexts.execution.domain.policies import EnrollmentReadinessPolicy
 
+from ..method.fixtures import signature_solution
 from .fixtures import TENANT, complete_funnel, funnel_integration
 
 STEP_PURPOSES = {
@@ -84,7 +85,7 @@ def enrollment_steps() -> tuple[EnrollmentStep, ...]:
 
 def homework(**overrides) -> EnrollmentHomework:
     values = {
-        "signature_step": "positioning",
+        "signature_step": "Position",
         "questions": (
             "what are your current sales?",
             "what is holding you back?",
@@ -121,6 +122,7 @@ def enrollment_plan(**overrides) -> EnrollmentPlan:
         "owner": "journey-owner",
         "closer": "sales-closer",
         "funnel": complete_funnel(),
+        "method": signature_solution(),
         "homework": homework(),
         "steps": enrollment_steps(),
         "qualification": qualification(),
@@ -165,7 +167,7 @@ class EnrollmentStepTests(unittest.TestCase):
 
 class EnrollmentHomeworkTests(unittest.TestCase):
     def test_homework_draws_on_a_signature_step_and_at_least_one_question(self):
-        self.assertEqual("positioning", homework().signature_step)
+        self.assertEqual("Position", homework().signature_step)
         for override in (
             {"signature_step": ""},
             {"questions": ()},
@@ -289,6 +291,19 @@ class EnrollmentReadinessPolicyTests(unittest.TestCase):
 
     def test_readiness_checks_a_typed_funnel(self):
         self.assertIsInstance(enrollment_plan().funnel, FunnelIntegration)
+
+
+class EnrollmentMethodBindingTests(unittest.TestCase):
+    def test_a_plan_requires_a_typed_same_tenant_signature_solution(self):
+        with self.assertRaises(EnrollmentDependencyError):
+            enrollment_plan(method="signature-solution")
+        with self.assertRaises(EnrollmentTenantBoundaryError):
+            enrollment_plan(method=signature_solution("client-other"))
+
+    def test_homework_must_draw_on_a_step_of_the_plans_signature_solution(self):
+        self.assertEqual("Position", enrollment_plan().homework.signature_step)
+        with self.assertRaises(EnrollmentDependencyError):
+            enrollment_plan(homework=homework(signature_step="not-a-step"))
 
 
 if __name__ == "__main__":

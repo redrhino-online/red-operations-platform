@@ -46,6 +46,7 @@ from redops.contexts.execution.domain.errors import (
     EnrollmentTenantBoundaryError,
     InvalidEnrollmentError,
 )
+from redops.contexts.method.domain.entities import SignatureSolution
 
 
 class EnrollmentStepKind(Enum):
@@ -229,12 +230,15 @@ class EnrollmentPlan:
     """The canon enrollment and sales call over the stage 8 funnel (SPEC.md 12.5).
 
     The plan binds a named owner and the accountable human closer to a same-tenant
-    stage 8 ``FunnelIntegration``, the pre-call homework, exactly the canon's four
-    call stages in order, the red velvet rope and the live payment terms. It is a
-    planning decision, not a new required gate kind (a methodology-owner decision,
-    SPEC.md section 12.5), it does not authorize spend, payment, external
-    commitment or traffic (SPEC.md sections 4 and 9) and it is never an observation
-    (SPEC.md section 3).
+    stage 8 ``FunnelIntegration`` and a same-tenant stage 4 ``SignatureSolution``,
+    the pre-call homework, exactly the canon's four call stages in order, the red
+    velvet rope and the live payment terms. The homework must draw on a step the
+    plan's Signature Solution actually names (canon file 21: the homework gives
+    away "a piece of my signature solution"), so a free-text step cannot be
+    represented as that piece. It is a planning decision, not a new required gate
+    kind (a methodology-owner decision, SPEC.md section 12.5), it does not
+    authorize spend, payment, external commitment or traffic (SPEC.md sections 4
+    and 9) and it is never an observation (SPEC.md section 3).
     """
 
     plan_id: str
@@ -242,6 +246,7 @@ class EnrollmentPlan:
     owner: str
     closer: str
     funnel: FunnelIntegration
+    method: SignatureSolution
     homework: EnrollmentHomework
     steps: tuple[EnrollmentStep, ...]
     qualification: EnrollmentQualification
@@ -268,9 +273,28 @@ class EnrollmentPlan:
                 f"{self.funnel.integration_id!r} belongs to tenant "
                 f"{self.funnel.tenant_id!r}"
             )
+        if not isinstance(self.method, SignatureSolution):
+            raise EnrollmentDependencyError(
+                "an enrollment plan must be grounded on a typed stage 4 Signature "
+                "Solution, not a free-text method reference"
+            )
+        if self.method.tenant_id != self.tenant_id:
+            raise EnrollmentTenantBoundaryError(
+                f"enrollment plan {self.plan_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Signature Solution "
+                f"{self.method.solution_id!r} belongs to tenant "
+                f"{self.method.tenant_id!r}"
+            )
         if not isinstance(self.homework, EnrollmentHomework):
             raise InvalidEnrollmentError(
                 "an enrollment plan requires a typed pre-call homework"
+            )
+        step_names = {step.name for step in self.method.steps}
+        if self.homework.signature_step not in step_names:
+            raise EnrollmentDependencyError(
+                f"enrollment homework draws on Signature Solution step "
+                f"{self.homework.signature_step!r}, which the plan's Signature "
+                "Solution does not name"
             )
         if not isinstance(self.qualification, EnrollmentQualification):
             raise InvalidEnrollmentError(

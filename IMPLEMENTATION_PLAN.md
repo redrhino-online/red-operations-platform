@@ -4,41 +4,43 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T06:26:41Z (Ralph cycle 133).
-- Selected item: close the last unbound goal-to-step edge in the canon stage 8/10
-  invisible opt-in asset (canon file 34) -- `NonConvertedSegment` now refuses an
-  `unachieved_goal` recorded at a different step than the `landing_step` it names,
-  raising the existing named `InvisibleOptInStepError`, whose docstring now covers
-  both this segment binding and the offer's advance rule. It is a
-  dependency-enforcement fix inside the cycle 122 asset, not new work: canon file
-  34 creates "a conversion goal for every step in the funnel" and the invisible
-  opt-in recovers the prospect who "hit that landing page and don't opt in", so
-  the goal a prospect failed to achieve must be the goal recorded at the step they
-  stalled on. It is exactly the small slice the cycle 132 note flagged as the next
-  candidate defect family. It outranks the blocked persistence work and the
-  service/partnership canon assets (both need a named-owner decision), and the
-  bounded wiring follow-ups, because it hardens an already-shipped asset's
-  dependency graph and completes the retargeting family's goal-to-step linkage end
-  to end (plan, goal, list, campaign, segment). It adds no stage, asset or
-  required gate kind and authorizes no spend or send.
+- Cycle timestamp: 2026-10-03T06:27:46Z (Ralph cycle 134).
+- Selected item: close the last unbound step edge in the canon stages 8/10
+  enrollment and sales call asset (canon file 21) -- `EnrollmentPlan` now carries
+  a typed same-tenant stage 4 `SignatureSolution` and refuses a pre-call homework
+  whose `signature_step` the plan's Signature Solution does not name, raising the
+  existing named `EnrollmentDependencyError` / `EnrollmentTenantBoundaryError`.
+  Canon file 21 requires the homework qualifier to give away "a piece of my
+  signature solution", so the step the homework draws on must be a step the
+  method actually names and it must belong to the same client. It is a
+  dependency-enforcement fix inside the cycle 119 asset, not new work, and mirrors
+  the same-tenant solution binding already used by `NurturePlan` (cycle 111),
+  `ContentRoadmap` (cycle 115), `ContentCrusher` (cycle 124) and `ProductProgram`
+  (cycle 126). It outranks the blocked persistence work and the service and
+  partnership canon assets (both need a named-owner decision) and the bounded
+  wiring follow-ups because it hardens an already-shipped asset's dependency graph
+  and tenant boundary. It adds no stage, asset or required gate kind and
+  authorizes no spend, payment, send or external commitment.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: the step check in `NonConvertedSegment.__post_init__` and the expanded
-  `NonConvertedSegment` docstring
-  (`backend/redops/contexts/measurement/domain/value_objects.py`), plus the
-  expanded `InvisibleOptInStepError` docstring
-  (`backend/redops/contexts/measurement/domain/errors.py`). Two new behavioral
-  tests in `tests/unit/measurement/test_invisible_opt_in.py`
-  (`test_a_segment_binds_its_goal_to_the_step_it_stalled_on` and
-  `test_a_segment_refuses_a_goal_recorded_at_another_step`), so the file now has
-  28 tests. Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
-  'test_*.py'` reports 1601 passed, up from 1599. `python3 -m pyflakes
-  backend/redops tests` is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the `NonConvertedSegment` carried the same unbound goal-to-step
-  edge the cycle 132 fix closed on `RetargetingAudience` and `RetargetingCampaign`.
-  The shared fixture masked it because `landing_step` and the goal's `funnel_step`
-  both read "opt-in", so a segment could name one step while its unachieved goal
-  marked another. With this fix the retargeting family's goal-to-step linkage is
-  complete across the plan, goal, list, campaign and segment assets.
+- Evidence: the `method` field and its typed, tenant and homework-step checks in
+  `EnrollmentPlan.__post_init__`
+  (`backend/redops/contexts/execution/domain/enrollment.py`). Two new behavioral
+  tests in `tests/unit/execution/test_enrollment.py`
+  (`test_a_plan_requires_a_typed_same_tenant_signature_solution` and
+  `test_homework_must_draw_on_a_step_of_the_plans_signature_solution`), so the
+  file now has 21 tests. Running `PYTHONPATH=backend python3 -m unittest discover
+  -s tests -p 'test_*.py'` reports 1603 passed, up from 1601. `python3 -m
+  pyflakes backend/redops tests` is clean. `ruff` and `mypy` remain uninstalled.
+- New findings: `EnrollmentHomework.signature_step` was the last canon method
+  asset reference that named a Signature Solution step without binding it to any
+  method. The plan reached the stage 8 `FunnelIntegration` but not its method, so
+  a homework could claim a step the client never defined, or a step from another
+  client's method. The funnel's approved stage 6 message offer does carry the
+  exact stage 4 solution through its locked stage 5 `DeliverySpecification`, but
+  that chain is deep and the delivery specification is optional, so binding the
+  solution explicitly at the plan matches the other canon assets. Cross-checking
+  that the plan's Signature Solution is the exact one the funnel's offer was
+  locked on remains a bounded follow-up.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant model
   given slot-based single-active-client isolation, the lifecycle transition graph
@@ -47,26 +49,29 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   adapter still depend on the storage ADR; the placement of the planning assets
   built since cycle 110 (including the content roadmap, the syndication plan, the
   audience campaign, the invisible opt-in, the banner library, the crusher, the
-  content measurement loop, the product program, the audience reach estimate and
-  the retargeting roadmap) in a required gate kind still needs a methodology-owner
-  decision, as does any service/partnership asset placement. Any spend, send or
-  publish authorization remains a human decision (SPEC.md sections 4 and 9).
-- Highest priority ready next item: with the retargeting family's goal-to-step
-  linkage now complete, the remaining named domain work is either implemented or
-  blocked on a named-owner decision (target stage/kind, storage ADR, missing canon
-  modules). The single most useful unblocker remains a named-owner decision on the
-  storage ADR (it releases persistence for every pure artifact and the Operations
-  delivery adapter) followed by the methodology-owner decision on required stage
-  1/5/6/8/10 asset kinds (it releases wiring the audience reach estimate, the
-  product program, the awareness map, the matchmaker, the funnel finder, the
-  transformations, the umbrella, the swimlanes, the enrollment, the content
-  roadmap, the content syndication, the content crusher, the content measurement
-  loop, the invisible opt-in, the banner library and the retargeting roadmap into
-  gates or views). Until then the next implementable slice, if a decision is
-  granted, is wiring the audience reach estimate into the `TargetMarketCandidate`
-  or a stage 1 required kind, or the product program into a stage 5 required kind.
-  No further candidate defect family is currently identified in the retargeting or
-  opt-in assets after this cycle.
+  content measurement loop, the product program, the audience reach estimate, the
+  retargeting roadmap and the enrollment plan) in a required gate kind still needs
+  a methodology-owner decision, as does any service/partnership asset placement.
+  Any spend, send, payment or publish authorization remains a human decision
+  (SPEC.md sections 4 and 9).
+- Highest priority ready next item: the remaining named domain work is either
+  implemented or blocked on a named-owner decision (target stage/kind, storage
+  ADR, missing canon modules). The single most useful unblocker remains a
+  named-owner decision on the storage ADR (it releases persistence for every pure
+  artifact and the Operations delivery adapter) followed by the methodology-owner
+  decision on required stage 1/5/6/8/10 asset kinds (it releases wiring the
+  audience reach estimate, the product program, the awareness map, the matchmaker,
+  the funnel finder, the transformations, the umbrella, the swimlanes, the
+  enrollment, the content roadmap, the content syndication, the content crusher,
+  the content measurement loop, the invisible opt-in, the banner library and the
+  retargeting roadmap into gates or views). Until then the next implementable
+  slice, if a decision is granted, is wiring the audience reach estimate into the
+  `TargetMarketCandidate` or a stage 1 required kind, or the product program into
+  a stage 5 required kind. The one bounded dependency-enforcement follow-up this
+  cycle identified is cross-checking the enrollment plan's Signature Solution
+  against the solution the funnel's offer was locked on. No further candidate
+  defect family is currently identified in the retargeting, opt-in, content or
+  product assets after this cycle.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; a stage-parameterized gate recorder/handler refactor;
@@ -82,7 +87,19 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   and partner plan, community rules, reputation track), which need a named-owner
   stage decision; the content measurement loop (completed in cycle 125 as the
   Measurement `AudienceBuildObservation`, with wiring an observed audience into the
-  stage 10 baseline a methodology-owner decision); and all persistence.
+  stage 10 baseline a methodology-owner decision);   and all persistence.
+  [DONE 2026-10-03 (Ralph cycle 134): bound the canon stages 8/10 enrollment and sales
+  call pre-call homework to the method it draws on -- `EnrollmentPlan` now carries a typed
+  same-tenant stage 4 `SignatureSolution` and refuses a homework whose `signature_step` the
+  solution does not name, raising the existing named `EnrollmentDependencyError` /
+  `EnrollmentTenantBoundaryError`, so the homework can no longer claim a step the client
+  never defined or a step from another client's method (SPEC.md sections 3, 4 and 12.5;
+  canon file 21: the homework qualifier gives away "a piece of my signature solution"). It
+  mirrors the same-tenant solution binding of `NurturePlan`, `ContentRoadmap`,
+  `ContentCrusher` and `ProductProgram`, is a defect fix inside the cycle 119 asset, adds no
+  new stage, asset or required gate kind, and authorizes no spend, payment, send or external
+  commitment. 2 new tests in `tests/unit/execution/test_enrollment.py`, full suite 1603
+  passed.]
   [DONE 2026-10-03 (Ralph cycle 133): closed the last unbound goal-to-step edge in the
   canon stage 8/10 invisible opt-in asset -- `NonConvertedSegment` now refuses an
   `unachieved_goal` recorded at a different step than the `landing_step` it names, raising
@@ -825,7 +842,7 @@ The reference model canon is the licensed source reference for the shape, intent
 
 This register tracks canon-described assets and steps the stage 0 to 10 template does not yet represent. Each entry: candidate, canon files, target stage, intended use, status, and whether it is a candidate pipeline change that needs a named-owner decision. Seed entries are in SPEC.md section 12.5. Adding or renaming a pipeline stage is a named-owner decision; implementing a candidate as an asset inside an existing stage is not.
 
-- Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 06, 13, 14, 21, 24 — between stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 119) as the Execution `EnrollmentPlan` (`EnrollmentStep`, `EnrollmentStepKind`, `EnrollmentHomework`, `EnrollmentQualification`, `EnrollmentPayment`, `EnrollmentPaymentMethod`), which binds a named owner and the accountable human closer to a same-tenant complete stage 8 `FunnelIntegration`, carries exactly the canon's four explicitly named call stages frame, examine, prescribe and prognosis once each in order, each with the red-flag opt-out check the canon applies every step of the way, requires pre-call homework drawing on a piece of the signature solution and scheduled within the canon's three-day window, requires the red velvet rope of at least one accept and one reject criterion, requires live payment over a typed method with a positive deposit and is never an observation; `EnrollmentReadinessPolicy` refuses the call before the funnel has passed Funnel Complete. SPEC.md section 12.5 permits it as an explicit stage 8/9 asset, avoiding the named-owner Sell/Enroll stage decision; canon file 06 adds the red velvet rope accept and reject criteria to the seed set. SPEC.md section 12.6 leaves the enumerated six-step process and the dedicated sales/enrollment training absent from the supplied canon, so the shape is extracted from the covered files and recorded as a documented gap. Wiring it into a required stage 8/9 gate kind remains a methodology-owner decision.
+- Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 06, 13, 14, 21, 24 — between stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 119) as the Execution `EnrollmentPlan` (`EnrollmentStep`, `EnrollmentStepKind`, `EnrollmentHomework`, `EnrollmentQualification`, `EnrollmentPayment`, `EnrollmentPaymentMethod`), which binds a named owner and the accountable human closer to a same-tenant complete stage 8 `FunnelIntegration`, carries exactly the canon's four explicitly named call stages frame, examine, prescribe and prognosis once each in order, each with the red-flag opt-out check the canon applies every step of the way, requires pre-call homework drawing on a piece of the signature solution and scheduled within the canon's three-day window, requires the red velvet rope of at least one accept and one reject criterion, requires live payment over a typed method with a positive deposit and is never an observation; `EnrollmentReadinessPolicy` refuses the call before the funnel has passed Funnel Complete. SPEC.md section 12.5 permits it as an explicit stage 8/9 asset, avoiding the named-owner Sell/Enroll stage decision; canon file 06 adds the red velvet rope accept and reject criteria to the seed set. SPEC.md section 12.6 leaves the enumerated six-step process and the dedicated sales/enrollment training absent from the supplied canon, so the shape is extracted from the covered files and recorded as a documented gap. Wiring it into a required stage 8/9 gate kind remains a methodology-owner decision. Hardened 2026-10-03 (Ralph cycle 134): `EnrollmentPlan` now also requires a typed same-tenant stage 4 `SignatureSolution` and refuses a homework whose `signature_step` the solution does not name, so the "piece of my signature solution" the homework draws on is bound to the method and client (canon file 21).
 - Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: implemented 2026-10-03 (Ralph cycle 111) as the Commercial Design `NurturePlan` (`NurtureAudienceState`, `NurtureModality`, `NurtureMessage`, `NurtureSequence`), which grounds each message on a step of a same-tenant stage 4 `SignatureSolution`, uses the 5P modality (ping is the one-question survey), re-engages non-openers with distinct headlines and binds the sequences to a named owner. SPEC.md section 12.6 warns the dedicated email/follow-up module is absent from the supplied canon, so the shape is extracted from the covered files and recorded as a documented gap; wiring it into a required stage kind remains a named-owner decision.
 - Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93 built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate. Cycle 106 completed that slice: the METRICS dimension now reports each registered metric's newest observed figure and a measured movement via `metric_reporting_views`. Cycle 107 built the canon's forecast equation (`FunnelMetricRole`, `FunnelFigure`, `FunnelEconomics`, `FunnelForecast`, `funnel_figure`) so the metrics matrix unit economics exist before real data and a forecast stays distinct from an observed result.   Cycle 108 built the canon's scaling rule (`LearningPhase`, `ScalingAction`, `ScalingRecommendation`, `AdScalingPolicy`), so the dashboard can now turn an observed cost per lead into an owner-approved scale, hold, bid-up-the-funnel or pause-and-review recommendation. Cycle 109 built the canon's split-test logging (`SplitTestMode`, `SplitTestChange`, `SplitTest`), so a stage 10 optimization logs the one variable it changes (bound to the approved improvement's lever) before reading the result. This candidate is now fully implemented; no remaining scope.
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: implemented 2026-10-03 (Ralph cycle 115) as the Commercial Design `ContentRoadmap` (`ContentBeat`, `ContentChannel`, `ContentTopic`, `ContentDistributionPolicy`), which maps each step of a same-tenant stage 4 `SignatureSolution` to content topics that follow the Authority Amplifier beat order and reach the canon's minimum blog, YouTube and Facebook channels, binds a named owner and reports the steps it covers and misses. Implemented 2026-10-03 (Ralph cycle 120) for the syndication and recycling schedule as the Commercial Design `ContentSyndicationPlan` (`SyndicationChannel`, `SyndicationCadence`, `RecycledFormat`, `ChannelSyndication`, `DailyPromotionBudget`, `TopicSyndication`), which distributes a same-tenant `ContentRoadmap` by syndicating each planned topic to at least one typed channel on a per-channel cadence, promoting it on a positive dollar-a-day Decimal budget and recycling it into typed derivative formats, binds a named owner and reports the topics it does not yet syndicate, with `ContentSyndicationPolicy.require_multichannel` and `require_owned_reach` refusing a single-channel or borrowed-only distribution (canon file 31). Implemented 2026-10-03 (Ralph cycle 121) for the ten-second-view audience building campaign as the Measurement `VideoViewAudienceCampaign` (`AudienceBuildingObjective`, `VideoViewWindow`, `InterestTargeting`, `VideoViewAudiencePolicy`), which binds a named owner to a video-views objective, a same-tenant `AvatarProfile` interest stack, the canon's ten-second view and thirty-day retention window, a positive low `DailyPromotionBudget`, a caller-supplied target cost per ten-second view, a same-tenant `TrackingCode` and the existing `RetargetingAudience` lists it warms, reporting the funnel steps it builds for and refusing a non-video-views objective, an untyped or cross-tenant dependency, a weaker or over-thirty-day window and a non-positive target cost (canon file 30). Remaining candidate: the content measurement loop (a stage 10 observation of audience size and cost per view). Implemented 2026-10-03 (Ralph cycle 125) as the Measurement `AudienceBuildObservation`, which binds a named owner to a same-tenant `VideoViewAudienceCampaign`, an explicit closed `MeasurementWindow`, an observed basis, a positive built audience size and a positive Decimal cost per ten-second view, exposes `meets_target_cost` and `indicates_topic_problem` against the campaign's own target cost, projects to an OBSERVATION `PerformanceClaim`, and refuses a blank identity, a non-positive or non-integer audience size, a non-positive or non-Decimal cost, an untyped or cross-tenant campaign, an untyped window or basis, a placeholder basis and a result read before its window closed (canon files 23 and 30). No candidate remains in this gap; wiring the observation into a required stage 10 gate kind or the baseline milestone set remains a methodology-owner decision, and any spend remains a human decision.
