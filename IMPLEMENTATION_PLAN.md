@@ -10,40 +10,59 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   the fork is the primary build and deploy target, and this planning repository
   remains the spec and plan authority. This resolves the "where RED code lives"
   blocker. The accepted decision is recorded as fork `docs/adr/0002`.
-- Selected item (first integration cycle): write the fork's `docs/context_map.md`
-  and the initial ADRs, per the fork inventory's recommended next actions.
-- Outcome: completed and verified. Committed to the fork as `7b5a958` and pushed
-  to `origin` (`redrhino-online/OpenExecutive`).
-- Evidence: fork `docs/context_map.md` (RED bounded contexts, relationships, and
-  their landing on OpenExecutive modules through ports) and `docs/adr/0001`-`0006`
-  (ADR convention; accepted code-location; proposed storage, tenant-isolation,
-  scheduler-topology and agent-registration decisions). `git push origin main`
-  advanced the fork `bc79d05..7b5a958`.
-- New findings: the fork's Phase 0 inventory is already complete and pushed
-  (`docs/fork_inventory.md`; upstream pinned `4b370b0b8e6939c247d5a3541de86617408f7462`,
-  Apache-2.0 with NOTICE retained, baseline 7213 unit + 52 integration tests
-  green, 334 typed source files). Reality differs from the original SPEC
-  assumptions: SQLite plus embedded ChromaDB (not PostgreSQL), slot-based
-  single-active-client isolation (not concurrent multi-tenancy), and a
-  single-instance scheduler. The four decisions that gate real client data are
-  recorded as Proposed ADRs with owner RED principal. No RED code exists in the
-  fork yet.
+- Prior integration cycle: wrote the fork's `docs/context_map.md` and the
+  initial ADRs, per the fork inventory's recommended next actions. Completed and
+  verified; committed to the fork as `7b5a958` and pushed to `origin`
+  (`redrhino-online/OpenExecutive`). The fork's Phase 0 inventory is already
+  complete and pushed (`docs/fork_inventory.md`; upstream pinned
+  `4b370b0b8e6939c247d5a3541de86617408f7462`, Apache-2.0 with NOTICE retained,
+  baseline 7213 unit + 52 integration tests green, 334 typed source files).
+  Reality differs from the original SPEC assumptions: SQLite plus embedded
+  ChromaDB (not PostgreSQL), slot-based single-active-client isolation (not
+  concurrent multi-tenancy), and a single-instance scheduler.
+- Current cycle (2026-10-03, Ralph cycle 135): selected item was the first staged
+  step of the `redops` port into the fork — the pure Governance domain layer, the
+  fork inventory/context map's recommended next action.
+- Outcome: completed and verified. The Governance bounded context now lives in
+  the fork at `packages/core/openexecutive/redops/contexts/governance/domain/`
+  (`errors`, `value_objects`, `entities`, `policies`, `templates`) and the
+  planning repository's 17 governance test modules were ported to
+  `packages/core/tests/unit/redops/governance/` with import paths rewritten to
+  `openexecutive.redops`.
+- Evidence: `uv run pytest tests/unit/redops/ -q` → 252 passed, 65 subtests
+  passed; `uv run ruff check openexecutive/` → clean; `uv run mypy
+  openexecutive/` → Success, 343 source files. The port carries the whole gate
+  integrity core: version-pinned `GateDecision`, append-only `GateLedger`,
+  `StageGate`/`ApprovalRequest`/`StageRun`/`PipelineProgress`, the canonical
+  stage 0-10 `StageTemplate`, and the canon-informed production view and observed
+  metric reporting (canon files 23, 24). Two fork-toolchain adaptations, both
+  behavior preserving: ruff's py311 rules replaced `typing.Iterable`/`Mapping`
+  with `collections.abc`, and the ledger's stage-definition lookup was bound once
+  so the fork's mypy accepts the non-None narrow.
+- New findings: the fork's `make lint` now covers `openexecutive/redops/`, so
+  py310 code ported from the planning repository needs py311 ruff cleanup.
+  `redops` is a new module under `packages/core/openexecutive/`, so the fork's
+  arch-docs gate (`scripts/pr_checks.py`) expects an architecture section; this
+  cycle records an `Arch-Docs: n/a` waiver because the ported domain has no route
+  or runtime behavior yet, and the architecture section is deferred until it
+  does. The prior dual-commit blocker is resolved: `ralph_cycle.sh` commits fork
+  code and this repository's plan in their own repositories.
 - Blockers: the storage, tenant-isolation, scheduler-topology and
   agent-registration ADRs still need the RED principal's explicit acceptance
-  before any real client data; the `redops` port has not started; and the harness
-  commits only the target repository, so running cycles against the fork would
-  leave plan edits in this repository uncommitted (a dual-commit design is
-  needed). No fork or cluster facts invented.
-- Highest priority ready next item: begin the `redops` port into the fork. First
-  staged step: create `packages/core/openexecutive/redops/` with the pure domain
-  layer for the Governance context (`StageGate`, `GateDecision`, `GateLedger`,
-  `ApprovalRequest`, `StageRun`, `PipelineProgress`) under the fork's toolchain
-  (`ruff` + `mypy` + `pytest`), mirroring the planning repository's domain tests.
-  Governance is cross-cutting and upstream of every stage transition, so it
-  unblocks the rest of the pipeline. Prerequisites: accepted code-location ADR
-  (done); no storage dependency for pure domain. Deferred: the persistence port
-  (storage ADR), the application/API/UI wiring, and RED agent registration
-  (agent-registration ADR).
+  before any real client data; the `redops` application/API/UI wiring is
+  unstarted; and the remaining contexts (Engagement, Knowledge, Method,
+  Commercial, Production, Execution, Measurement, Portfolio, Operations) are not
+  yet in the fork. No fork or cluster facts invented.
+- Highest priority ready next item: continue the `redops` port with the
+  Engagement context's pure domain layer (`ClientWorkspace` tenant root and the
+  intake package), because Engagement is the tenant root every other context
+  references and its domain imports only the now-ported Governance domain
+  (`StageAssetVersion`, `StageRun`, `StageTemplate`). Prerequisites: accepted
+  code-location ADR (done); ported Governance domain (done); no storage
+  dependency for the pure domain. Deferred: the Engagement application layer
+  (depends on Commercial/Execution/Knowledge/Production), the remaining
+  contexts, the persistence port (storage ADR), the application/API/UI wiring,
+  and RED agent registration (agent-registration ADR).
 
 ## Canon reference and gap register
 
