@@ -32,6 +32,8 @@ printf '\n[4/6] vendored OpenExecutive is unmodified (zero vendor edits)\n'
 printf '\n[5/6] RED UI: all section 8 screens render, browser tests, no OpenExecutive branding\n'
 ./scripts/check_frontend_screens.sh frontend \
   || fail "the section 8 screens are not rendered; condition 6 is unmet"
+./scripts/check_frontend_build.sh frontend \
+  || fail "the frontend does not build or its browser suite does not run; condition 6 is unmet"
 if command -v rg >/dev/null 2>&1; then
   if rg -q 'OpenExecutive' frontend --glob '!**/node_modules/**' --glob '!**/.next/**' 2>/dev/null; then
     fail "OpenExecutive branding found in frontend/; product surfaces must be RED branded"

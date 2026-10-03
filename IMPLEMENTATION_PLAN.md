@@ -4,7 +4,71 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T200524Z (Ralph cycle, this run): selected item was Q32, the
+- Cycle 2026-10-03T201148Z (Ralph cycle, this run): selected item was hardening
+  the prototype definition-of-done gate so DoD condition 6 (all section 8
+  screens render, SPEC.md section 13) can no longer pass without the frontend
+  actually building and its browser suite running. `[5/6]` ran only
+  `scripts/check_frontend_screens.sh`, which proves a screen/route manifest and
+  the existence of a browser test file, but never compiles the UI nor runs the
+  suite. Once Q33-Q44 land real screens, that check could pass on placeholder
+  pages and a no-op test, turning `make done` green with a non-compiling UI or
+  an unrun suite -- the same class of false stop condition the prior cycles
+  closed for `[2/6]`, `[3/6]` and condition 5. It outranks starting Q33 (the
+  command center screen): the task prioritizes missing gate integrity over
+  downstream dashboards, and Q45 ("all screen browser suite") only adds the
+  suite; it does not make the gate require it. No ready method-artifact or
+  stage-gate item remained: Q28 stage 8-10 required kinds are blocked on the
+  named methodology-owner placement decision, Q16 is blocked on a workflow
+  write route and a connector seam, Q3/Q4 are blocked on the ADR 0006 tension
+  and a live key, Q8's retrieval/worker/artifact-URL layers have no seam yet,
+  and Q47-Q50 need the Atlas cluster.
+- Outcome: new standalone `scripts/check_frontend_build.sh` closes the gap. It
+  refuses a `frontend/` without `package.json`, requires the package to declare
+  both a `build` and a `test` script, and runs `npm run build` then `npm test`
+  inside `frontend/`, failing by name if either is missing or fails. `[5/6]` now
+  runs it after `check_frontend_screens.sh`, so a green condition 6 requires the
+  UI to compile and its browser suite to run, not merely exist. No product
+  authority, gate decision or pipeline stage changed.
+- Evidence: new `tests/unit/shared/test_frontend_build_check.py` (7 tests) pins
+  a complete frontend passing, missing `frontend/`, missing `package.json`, a
+  missing `build` script, a missing `test` script, a failing build (which skips
+  the suite), and a failing suite; the tests inject a fake `npm` on `PATH` so
+  they run without a real toolchain. `make check` -> 2264 passed, 2 skipped, 704
+  subtests (was 2257; +7). `bash scripts/check_frontend_build.sh frontend`
+  against the real shell -> exit 1
+  `frontend/package.json declares no 'test' script; the browser suite is not
+  runnable` (honest red; the shell has no browser runner yet). `make done` still
+  fails first at `[2/6]` condition 2 (four section 11 scenarios uncovered),
+  before reaching `[5/6]`.
+- New findings: the real `frontend/package.json` declares `build` but no `test`
+  script and ships no browser test runner, so the new gate keeps condition 6
+  unmet until Q33+ chooses a runner and wires `npm test`. The first cut parsed
+  the package path with `require()` before resolving it, so a relative argument
+  (`frontend`) silently read as "no build script"; the script now resolves
+  `package.json` with `realpath` first (this was caught by running it against
+  the real frontend, not only the absolute-path temp fixtures).
+- Blockers (unchanged): `frontend/` Q33-Q45 are the path to DoD condition 6 and
+  Q33 now also carries the browser-runner choice; Q8's retrieval, worker and
+  artifact-URL isolation coverage and the condition 2 cross-client-retrieval
+  scenario are blocked until those seams exist; Q28 stage 8-10 required kinds
+  blocked on the named methodology-owner placement decision; Q16 idempotency
+  keys blocked on a workflow write route and a connector seam; Q3 agent
+  registration blocked on the ADR 0006 / vendor-edit tension; Q4 live smoke
+  needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
+  deploy-only scenarios need the Atlas cluster and a chosen backup target.
+- Highest priority ready next item: Q33, the portfolio command center screen,
+  now safe to start because the shell (Q32) builds, serves and exposes a typed
+  `/red` client, and because `[5/6]` now requires the screen's browser test to
+  actually run. Required asset: the command center screen at a declared route
+  showing blockers and owners from the `GET /red/interventions` cards (SPEC.md
+  sections 7 and 8), plus the browser test runner and `npm test` wiring the
+  hardened `[5/6]` gate now demands; checkpoint: none (UI, not a gate);
+  approver: none. Blocked downstream dependency: Q34-Q45. Prerequisite: Q32
+  (done).
+
+### Prior cycle (2026-10-03T200524Z)
+
+- Cycle 2026-10-03T200524Z (Ralph cycle, prior): selected item was Q32, the
   Next.js shell in `frontend/` plus the RED theme and API client (SPEC.md section
   8; section 13 condition 6; queue item Q32). It is the plan's highest priority
   ready item and its only dependency, Q15 (`/workflows/{id}` polling read), is
@@ -3775,7 +3839,7 @@ stalls:
 | Q30 | Stage 0-10 API e2e with deterministic agents | e2e | Q27 | DoD 1: one client intake to baseline |
 | Q31 | Section 11 acceptance suite (SPEC.md section 11) | e2e | Q30 | DoD 2. Condition 2 gate added 2026-10-03T200006Z: `scripts/check_acceptance_coverage.sh` requires all ten canonical scenarios declared in `tests/acceptance/covered-scenarios.txt`, each covered scenario pointing at a test file that exists with at least one test, so condition 2 cannot pass without the suite. Covered today: source-attribution, known-requires-source, unauthorized-approval-rejected, method-change-identifies-dependents, worker-restart-preserves-waiting, launch-blocked-on-failed-path. Uncovered and keeping the gate red: duplicate-delivery-one-effect (needs a connector idempotency seam, Q16), cross-client-retrieval-empty (needs the retrieval port, Q8), gitops-revert-restores and backup-restores-approval-trail (deploy-only, Q49 and a chosen backup target) |
 | Q32 | Next.js shell in `frontend/` plus RED theme plus API client | ui | Q15 | builds; health route. Done 2026-10-03T200524Z: `frontend/` Next.js 16 / React 19 / TypeScript app (`package.json`, `next.config.ts` `output: standalone`, RED `globals.css` palette, `layout.tsx` shell, `page.tsx` surface list, `health/route.ts` liveness, tenant-scoped `shared/api/client.ts` over `/red`); `npm run build` clean, `/health` -> `{"status":"ok"}`, `/` -> 200. No section 8 screen or `dod-screens.txt` yet, so the condition 6 gate stays honestly red |
-| Q33 | Command center screen | ui | Q32 | browser test; shows blockers and owners |
+| Q33 | Command center screen | ui | Q32 | browser test (chooses the frontend browser runner and wires `npm test`); shows blockers and owners |
 | Q34 | Client workspace overview | ui | Q33 | browser test |
 | Q35 | Source and claim explorer | ui | Q34 | browser test |
 | Q36 | Transformation map | ui | Q35 | browser test |
@@ -3787,7 +3851,7 @@ stalls:
 | Q42 | Performance review | ui | Q41 | browser test |
 | Q43 | Portfolio opportunities | ui | Q42 | browser test |
 | Q44 | Authority settings | ui | Q43 | browser test |
-| Q45 | All screen browser suite | ui | Q44 | DoD 6 |
+| Q45 | All screen browser suite | ui | Q44 | DoD 6. Condition 6 build/suite gate added 2026-10-03T201148Z: `scripts/check_frontend_build.sh` (run by `[5/6]` after `check_frontend_screens.sh`) requires `frontend/package.json` to declare `build` and `test` and runs both, so a green `[5/6]` requires the UI to compile and its browser suite to run, not merely exist. Red today: the shell declares no `test` script and ships no browser runner |
 | Q46 | RED branding sweep: Director, charters, UI copy, LICENSE and NOTICE | branding | Q32 | DoD 8; no OpenExecutive branding in the UI |
 | Q47 | Dockerfile plus health endpoint | deploy | Q30 | image builds; health passes |
 | Q48 | Helm chart: web, api, worker, migration Job, ingress, PDB, probes | deploy | Q47 | chart lint and render |
