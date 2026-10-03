@@ -4,7 +4,7 @@ Version: 0.2, September 27, 2026. Status: implementation baseline, subject to fo
 
 ## 1. Product contract
 
-RED Operations Platform coordinates RED client work from discovery through approved intellectual property, offers, assets, live customer journeys, measured results, and portfolio expansion. Its visible interface is the RED Operations Director. Specialist agents operate within bounded domains. Every output has a source, status, owner, next action, and applicable approval. The platform never represents a draft or model inference as client approved fact.
+RED Operations Platform coordinates RED client work from discovery through approved intellectual property, offers, assets, live customer journeys, measured results, and portfolio expansion. It also helps each client design and implement their own sales process, in the client's voice, following the licensed reference model, as a versioned artifact under the same approval rules. Its visible interface is the RED Operations Director. Specialist agents operate within bounded domains. Every output has a source, status, owner, next action, and applicable approval. The platform never represents a draft or model inference as client approved fact.
 
 Primary users: RED principal, production manager, specialists, client approvers, and read limited client collaborators. Initial pilot: one RED engagement and the 3F journey, with real client approval before publication. Later: multiple isolated client workspaces and a practice wide command center.
 
@@ -204,7 +204,7 @@ This map is the starting index, not a replacement for reading the cited files. R
 | 9 QA | 01, 08, 21, 22, 24 | Pre-launch QA criteria, funnel pre-launch checklist, compliance assets, learning-versus-optimization and set-and-forget rules |
 | 10 Launch | 22, 23, 29-31, 33, 34 | Facebook Ads quick start, Metrics Matrix, Mastery Advertising Metrics Dashboard, audience-building campaign, content publish/promote/syndicate, Retargeting Roadmap |
 
-Canon material that sits over or between these stages rather than inside one: the Online Business Launch Map and Bulletproof Business Plan (portfolio and engagement planning), the enrollment and sales call (between stages 8 and 10), the follow-up and nurture lifecycle (after stage 10), and the Swimlanes channel model (cross-cutting).
+Canon material that sits over or between these stages rather than inside one: the Online Business Launch Map and Bulletproof Business Plan (portfolio and engagement planning), the enrollment and sales call (canon files 35-49, between stages 8 and 10), the follow-up and nurture lifecycle (after stage 10), and the Swimlanes channel model (cross-cutting). The enrollment block (files 35-49) is the supplied sales process and training: pre-call preparation and mindset, a six part enrollment process, five checkpoints, the Objection Crusher, three strategy-session models, and a funnel calculator. RED uses it both as a stage 8/9 asset and as the template for a client's own designed process (section 12.7).
 
 ### 12.4 Artifact definition contract
 
@@ -226,7 +226,8 @@ The canon describes assets and steps important to the method that the current st
 
 | Candidate asset or step | Canon files | Intended use | Fits where |
 | --- | --- | --- | --- |
-| Enrollment and sales call: 10x Enrollment Call script, medical-style frame/examine/prescribe/prognosis, pre-call homework qualifier, acceptance/rejection ("red velvet rope") criteria, live payment and checkout | 00, 13, 14, 21, 24 | Convert an engaged prospect into a client with a defined, authority-preserving process | Between stage 8 and 10; a candidate dedicated Sell/Enroll step or explicit stage 8/9 assets |
+| Enrollment and sales call: the six part enrollment process (Frame, Discover Problems, Prescription, Application, Invitation, plus the Objection Crusher), the five checkpoints (intent, commitment, value, confidence, desire), pre-call preparation and mindset, the three strategy-session models (single call, fast track, paid strategy session), the funnel calculator, homework, a 72-hour booking window, a no-show policy, and live payment | 00, 06, 13, 14, 21, 24, 35-49 | Convert an engaged prospect into a client with a defined, authority-preserving process | Between stage 8 and 10; a candidate dedicated Sell/Enroll step or explicit stage 8/9 assets |
+| Client process design: a client authored enrollment process, script, question set, checkpoints and objection answers derived from the canonical six part structure | 35-49 | Give the client an approved, reusable sales process they run, and a service deliverable RED produces | Stage 8/9 asset; see section 12.7. Not a new pipeline stage |
 | Follow-up and nurture lifecycle: Signature Solution Series (multi-week), 5P email system, one-question survey email, re-engagement of non-openers, no-shows and non-buyers | 15, 24, 33, 34 | Keep non-converting prospects warm and recover stalled ones | After stage 10 or as a lifecycle track |
 | Advertising and forecast dashboard: Mastery Advertising Metrics Dashboard, Metrics Matrix, bid-up/bid-down rule, split-test discipline and logging | 22, 23, 24 | Forecast and track funnel unit economics, target cost per lead and return on ad spend before real data exists | Stage 10 measurement; beyond the current performance baseline |
 | Audience building and content flywheel: Content Blitz (produce, publish, promote, syndicate), Content Roadmap (steps x topics), ten-second-view audience campaign, syndication and dollar-a-day promotion | 25-31 | Build a warm retargetable audience and evergreen content at low cost | Stage 6 content assets and stage 10 audience operations |
@@ -238,4 +239,19 @@ The canon describes assets and steps important to the method that the current st
 
 ### 12.6 Gaps in the supplied canon
 
-The supplied canon is incomplete. Files numbered 19 and 20 are absent, and the material repeatedly promises a dedicated sales/enrollment training and an email/follow-up sequence that no supplied file contains. Request the missing modules from the license owner before treating enrollment or nurture artifacts as canon-complete, and record the request as an unresolved decision with an owner.
+The supplied canon is incomplete. Files numbered 19 and 20 are absent. The dedicated sales/enrollment training is now supplied as canon files 35-49: pre-call preparation and mindset, the six part enrollment process, the five checkpoints, the Objection Crusher, the three strategy-session models, and the funnel calculator. The emailed follow-up and nurture sequence the material promises still has no dedicated file. Request the missing modules from the license owner before treating nurture artifacts as canon-complete, and record the request as an unresolved decision with an owner.
+
+### 12.7 RED process design service
+
+RED helps each client design and implement their own sales process, in the client's voice, using the enrollment block (canon files 35-49) as the template rather than as copy. This is a product capability, not a new pipeline stage: it produces a stage 8/9 asset that the client or their team runs, and it feeds stage 10 measurement.
+
+The client process is a versioned artifact under sections 3, 4 and 12.4. It must record:
+
+- Canon reference: files 35-49, and the client's own approved stage 2 currency, stage 3 model, stage 4 signature solution and stage 5 product roadmap it is grounded on.
+- Intention and usage: the enrollment conversation the client will run, and the stage 10 metrics it is measured by.
+- Required shape: the six part enrollment process in order (Frame, Discover Problems, Prescription, Application, Invitation, plus the Objection Crusher); the five checkpoints (intent, commitment, value, confidence, desire) as pass or fail, each with the client's own question; the acceptance and rejection criteria; the answers to the common objections; the chosen strategy-session model (single call, fast track, or paid strategy session); the price floor; the pre-call homework; the booking window; and the no-show rules.
+- Downstream consumer: stage 9 launch checks and the stage 10 performance baseline.
+- Owner and approver: a named RED owner and the client's designated authority; the client's written process is client approved information and is version scoped.
+- Deviations: where RED narrows or adapts the reference model, with the rationale.
+
+The platform treats canon text as data (section 12.2). It extracts structure, terms and intent, and it never copies canon text into a shipped script, prompt, or interface copy, and never presents a draft client process as approved. Any live sending, spend, or client commitment remains a human decision under sections 4 and 9.
