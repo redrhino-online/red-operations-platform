@@ -340,3 +340,29 @@ class NurtureObservationError(CommercialError):
     a separate observation, so a plan is never an observation.
     """
 
+
+class InvalidMarketAwarenessMapError(CommercialError, ValueError):
+    """A stage 1 market awareness map was built without its required content.
+
+    SPEC.md section 12.3 maps the market awareness levels to stage 1 and section
+    12.5 records the positioning and decision tools as a canon gap, shaped by the
+    canon's five levels of market awareness (canon file 04): completely unaware,
+    problem aware, solution aware, product aware and most aware. The map names the
+    level the market currently sits at, the research evidence that places it
+    there, and what a message must supply at that level, so a blank identity, an
+    untyped level, or a map with no evidence or message requirements cannot be
+    represented as stage 1 awareness-map evidence.
+    """
+
+
+class MarketAwarenessTargetingError(CommercialError):
+    """A market awareness map was asked to target a market it cannot reach.
+
+    The canon places the completely unaware outside the initial target (canon
+    file 04: "which is who we definitely do not want to sell to initially") and
+    treats retargeting as a step further down the funnel, so a retarget level must
+    be more aware than the primary level. A map that targets the unprepared or
+    the already-aware with the same message cannot be represented as a defensible
+    awareness position (SPEC.md section 4, stage 1 "Avatar Locked").
+    """
+

@@ -19,6 +19,7 @@ from redops.contexts.commercial.domain.errors import (
     InvalidDeliverySpecificationError,
     InvalidDiagnosisPackageError,
     InvalidDiagnosticPackageError,
+    InvalidMarketAwarenessMapError,
     InvalidMillionDollarMessageError,
     InvalidNurtureError,
     InvalidOfferError,
@@ -26,6 +27,7 @@ from redops.contexts.commercial.domain.errors import (
     InvalidOfferPackageError,
     InvalidPositioningDecisionError,
     InvalidSignaturePackageError,
+    MarketAwarenessTargetingError,
     NurtureDependencyError,
     NurtureObservationError,
     NurtureSequenceError,
@@ -411,6 +413,120 @@ class OfferFunnelAudit:
             ("evidence", self.evidence_claim_ids),
         ):
             _require_entries(entries, label, InvalidOfferFunnelAuditError)
+
+
+class MarketAwarenessLevel(Enum):
+    """The canon's five levels of market awareness (canon file 04).
+
+    The canon uses the levels to place a prospect before any research or message
+    is shaped (canon file 04: "you have to understand where your prospect is"):
+    completely unaware, problem aware, solution aware, product aware and most
+    aware. The rank orders them from least to most aware along the buying path,
+    and the completely unaware are explicitly not the initial target (canon file
+    04: "which is who we definitely do not want to sell to initially").
+    """
+
+    COMPLETELY_UNAWARE = "completely_unaware"
+    PROBLEM_AWARE = "problem_aware"
+    SOLUTION_AWARE = "solution_aware"
+    PRODUCT_AWARE = "product_aware"
+    MOST_AWARE = "most_aware"
+
+    @property
+    def rank(self) -> int:
+        """The position of the level along the buying path, from 0 to 4."""
+        return _MARKET_AWARENESS_RANK[self]
+
+    @property
+    def is_initially_targetable(self) -> bool:
+        """Whether the canon treats this level as an initial target."""
+        return self is not MarketAwarenessLevel.COMPLETELY_UNAWARE
+
+
+_MARKET_AWARENESS_RANK: dict[MarketAwarenessLevel, int] = {
+    level: index for index, level in enumerate(MarketAwarenessLevel)
+}
+
+AWARENESS_MAP_KIND = "awareness-map"
+
+
+@dataclass(frozen=True)
+class MarketAwarenessMap:
+    """The stage 1 market awareness map for one client and one level.
+
+    SPEC.md section 12.3 maps the market awareness levels to stage 1 "Diagnose"
+    and section 12.5 records the positioning and decision tools as a canon gap
+    informed by canon file 04. The map names the awareness level the market
+    currently sits at, the research evidence that places it there (canon file 04
+    reads the market's own language from Amazon reviews, Quora, Reddit, Facebook
+    groups and search), what a message must supply at that level, and an optional
+    retarget level further down the funnel. It is frozen and reject-only, so an
+    untyped level or a map with no evidence or message requirements cannot be
+    represented as stage 1 awareness-map evidence, and it never authorizes
+    outreach or spend (SPEC.md sections 4 and 9).
+    """
+
+    map_id: str
+    tenant_id: str
+    primary_level: MarketAwarenessLevel
+    research_evidence: tuple[str, ...]
+    message_requirements: tuple[str, ...]
+    retarget_level: MarketAwarenessLevel | None = None
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("market awareness map id", self.map_id),
+            ("market awareness map tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidMarketAwarenessMapError(f"{label} is required")
+        if not isinstance(self.primary_level, MarketAwarenessLevel):
+            raise InvalidMarketAwarenessMapError(
+                "a market awareness map requires one of the five canon awareness "
+                "levels"
+            )
+        _require_entries(
+            self.research_evidence,
+            "research evidence",
+            InvalidMarketAwarenessMapError,
+        )
+        _require_entries(
+            self.message_requirements,
+            "message requirements",
+            InvalidMarketAwarenessMapError,
+        )
+        if self.retarget_level is not None:
+            if not isinstance(self.retarget_level, MarketAwarenessLevel):
+                raise InvalidMarketAwarenessMapError(
+                    "a retarget level must be one of the five canon awareness "
+                    "levels"
+                )
+            if self.retarget_level.rank <= self.primary_level.rank:
+                raise MarketAwarenessTargetingError(
+                    f"market awareness map {self.map_id!r} retargets "
+                    f"{self.retarget_level.value!r}, which is not further down the "
+                    f"funnel than its primary level {self.primary_level.value!r}"
+                )
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the map onto exact ``awareness-map`` gate evidence.
+
+        The governance gate pins one exact ``StageAssetVersion`` per canonical
+        kind, so the map is projected at a positive integer version and a
+        versionless projection is refused rather than silently pinned (SPEC.md
+        sections 3 and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidMarketAwarenessMapError(
+                "the market awareness map version must be a positive integer so "
+                "the stage 1 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.map_id,
+            tenant_id=self.tenant_id,
+            kind=AWARENESS_MAP_KIND,
+            version=version,
+        )
 
 
 CANONICAL_DIAGNOSIS_KINDS: tuple[str, ...] = (

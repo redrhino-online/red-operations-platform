@@ -19,12 +19,14 @@ from redops.contexts.commercial.domain.entities import (
 from redops.contexts.commercial.domain.errors import (
     AvatarLockedError,
     CampaignMessageAlignmentError,
+    MarketAwarenessTargetingError,
     OfferReadinessError,
     UnsourcedDiagnosisEvidenceError,
 )
 from redops.contexts.commercial.domain.value_objects import (
     AvatarProfile,
     BusinessSnapshot,
+    MarketAwarenessMap,
     MethodReference,
     OfferFunnelAudit,
     OfferImpactAssessment,
@@ -265,6 +267,27 @@ class AvatarLockedPolicy:
                     f"evidence {claim_id!r} is not a known, directly sourced "
                     "claim for this tenant"
                 )
+
+
+class MarketAwarenessPolicy:
+    """Refuses a stage 1 awareness position the canon does not target initially.
+
+    SPEC.md section 12.3 maps the market awareness levels to stage 1 "Diagnose"
+    and section 12.5 records them as a canon gap. The canon places the completely
+    unaware outside the initial target (canon file 04: "which is who we definitely
+    do not want to sell to initially") and aims at people actively seeking a
+    solution, so an awareness map whose primary level is completely unaware cannot
+    be represented as a defensible stage 1 position (SPEC.md section 4, stage 1
+    "Avatar Locked").
+    """
+
+    def require_targetable(self, awareness: MarketAwarenessMap) -> None:
+        if not awareness.primary_level.is_initially_targetable:
+            raise MarketAwarenessTargetingError(
+                f"market awareness map {awareness.map_id!r} targets the "
+                f"{awareness.primary_level.value!r} market, which the canon does "
+                "not treat as an initial target"
+            )
 
 
 class DiagnosisEvidencePolicy:
