@@ -569,6 +569,7 @@ CANONICAL_DIAGNOSIS_KINDS: tuple[str, ...] = (
     "goals",
     "consequences-of-inaction",
     "awareness-map",
+    "audience-reach-estimate",
     "customer-evidence",
     "voice-notes",
     "business-snapshot",
@@ -587,7 +588,7 @@ _AVATAR_DIAGNOSIS_KINDS: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class DiagnosisPackage:
-    """The reviewed stage 1 assets, projected to the nine canonical gate kinds.
+    """The reviewed stage 1 assets, projected to the canonical gate kinds.
 
     SPEC.md section 4, stage 1 "Diagnose": the required asset package enumerates
     the avatar with demographics, psychographics, pains, goals, consequences of
@@ -598,6 +599,12 @@ class DiagnosisPackage:
     which pins one exact ``StageAssetVersion`` per canonical kind. The avatar
     value carries the content for its seven kinds; the business snapshot and offer
     and funnel audit each satisfy one kind.
+
+    SPEC.md sections 4 and 12.3 (canon files 02 and 03) also make the measured
+    market a stage 1 input, so the typed ``AudienceReachEstimate`` is carried and
+    projected as the ``audience-reach-estimate`` kind. Per the owner decision in
+    SPEC.md section 12.5 a canon-informed asset already implemented is a required
+    kind of its target stage, never a new stage.
 
     SPEC.md sections 3 and 4 require a passing gate to pin the exact evidence, so
     each reviewed asset is projected with a positive integer version and a blank
@@ -624,6 +631,8 @@ class DiagnosisPackage:
     offer_funnel_audit_version: int
     awareness_map: MarketAwarenessMap
     awareness_map_version: int
+    audience_reach_estimate: AudienceReachEstimate
+    audience_reach_estimate_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -638,6 +647,8 @@ class DiagnosisPackage:
             ("offer and funnel audit", self.offer_funnel_audit,
              OfferFunnelAudit),
             ("awareness map", self.awareness_map, MarketAwarenessMap),
+            ("audience reach estimate", self.audience_reach_estimate,
+             AudienceReachEstimate),
         ):
             if not isinstance(value, expected):
                 raise InvalidDiagnosisPackageError(
@@ -653,6 +664,8 @@ class DiagnosisPackage:
             ("business snapshot version", self.business_snapshot_version),
             ("offer and funnel audit version", self.offer_funnel_audit_version),
             ("awareness map version", self.awareness_map_version),
+            ("audience reach estimate version",
+             self.audience_reach_estimate_version),
         ):
             if not isinstance(value, int) or value < 1:
                 raise InvalidDiagnosisPackageError(
@@ -696,6 +709,9 @@ class DiagnosisPackage:
         return (
             *(self._avatar_asset(kind) for kind in _AVATAR_DIAGNOSIS_KINDS),
             self.awareness_map.as_stage_asset(version=self.awareness_map_version),
+            self.audience_reach_estimate.as_stage_asset(
+                version=self.audience_reach_estimate_version
+            ),
             StageAssetVersion(
                 asset_id=self.business_snapshot.snapshot_id,
                 tenant_id=self.tenant_id,
@@ -3067,6 +3083,9 @@ class AudienceDefinition:
             seen.add(key)
 
 
+AUDIENCE_REACH_ESTIMATE_KIND = "audience-reach-estimate"
+
+
 @dataclass(frozen=True)
 class AudienceReachEstimate:
     """A canon-shaped stage 1 estimate of how big and reachable a market is.
@@ -3135,6 +3154,28 @@ class AudienceReachEstimate:
     def is_plan(self) -> bool:
         """An audience reach estimate is a research input, not activity."""
         return True
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the sizing onto exact ``audience-reach-estimate`` evidence.
+
+        SPEC.md sections 4 and 12.5: a canon-informed asset already implemented
+        in a bounded context becomes a required asset kind of its target stage
+        gate, so the stage 1 "Avatar Locked" gate pins this measured market as
+        one exact ``StageAssetVersion``. A versionless projection is refused
+        rather than silently pinned (SPEC.md sections 3 and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidAudienceReachError(
+                "the audience reach estimate version must be a positive integer "
+                "so the stage 1 gate can pin the reviewed asset at an exact "
+                "version"
+            )
+        return StageAssetVersion(
+            asset_id=self.estimate_id,
+            tenant_id=self.tenant_id,
+            kind=AUDIENCE_REACH_ESTIMATE_KIND,
+            version=version,
+        )
 
     def as_observation(self, *, claim_id: str) -> None:
         """Refuse to represent an audience reach estimate as an observed result.

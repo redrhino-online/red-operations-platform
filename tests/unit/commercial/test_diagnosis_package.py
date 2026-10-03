@@ -2,13 +2,13 @@
 
 Rules under test come from SPEC.md sections 3 and 4 and the reference model
 canon (SPEC.md section 12.3 maps stage 1 "Diagnose" to canon files 02, 03 and
-04). The stage 1 template enumerates nine required asset kinds -- avatar
-profile, pains, goals, consequences of inaction, awareness map, customer
-evidence, voice notes, business snapshot and offer and funnel audit -- while the
-Commercial context reviews them as three rich value objects. This package is the
-bridge: it projects the three reviewed values onto the nine canonical kinds as
-exact ``StageAssetVersion`` evidence so a stage 1 gate can pin one exact version
-per kind.
+04). The stage 1 template enumerates ten required asset kinds -- avatar
+profile, pains, goals, consequences of inaction, awareness map, audience reach
+estimate, customer evidence, voice notes, business snapshot and offer and funnel
+audit -- while the Commercial context reviews them as four rich value objects.
+This package is the bridge: it projects the reviewed values onto the ten
+canonical kinds as exact ``StageAssetVersion`` evidence so a stage 1 gate can pin
+one exact version per kind.
 
 - A passing gate pins the exact evidence and intended downstream use, so the
   package carries a positive version per reviewed asset and refuses a versionless
@@ -27,6 +27,7 @@ client approver or a concrete authority role.
 
 import unittest
 from dataclasses import FrozenInstanceError
+from datetime import date
 
 from redops.contexts.commercial.domain.errors import (
     DiagnosisTenantBoundaryError,
@@ -34,12 +35,17 @@ from redops.contexts.commercial.domain.errors import (
 )
 from redops.contexts.commercial.domain.value_objects import (
     CANONICAL_DIAGNOSIS_KINDS,
+    AudienceDefinition,
+    AudienceReachEstimate,
     AvatarProfile,
     BusinessSnapshot,
     DiagnosisPackage,
+    InterestKind,
+    InterestSignal,
     MarketAwarenessLevel,
     MarketAwarenessMap,
     OfferFunnelAudit,
+    ResearchPlatform,
 )
 from redops.contexts.governance.domain.entities import StageGate
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
@@ -101,6 +107,29 @@ def awareness_map(*, tenant_id: str = TENANT) -> MarketAwarenessMap:
     )
 
 
+def reach(*, tenant_id: str = TENANT) -> AudienceReachEstimate:
+    return AudienceReachEstimate(
+        estimate_id="reach-3f",
+        tenant_id=tenant_id,
+        owner="red-owner",
+        platform=ResearchPlatform.FACEBOOK_AUDIENCE_INSIGHTS,
+        audience=AudienceDefinition(
+            location="United States",
+            age="35-50",
+            gender="all",
+            interests=(
+                InterestSignal(
+                    kind=InterestKind.EXPERT,
+                    value="small service firm coach",
+                ),
+            ),
+        ),
+        estimated_reach=180000,
+        source_note="Facebook Audience Insights sizing on 2026-10-03",
+        captured_on=date(2026, 10, 3),
+    )
+
+
 def package(**overrides) -> DiagnosisPackage:
     values = {
         "package_id": "diagnosis-3f",
@@ -113,6 +142,8 @@ def package(**overrides) -> DiagnosisPackage:
         "offer_funnel_audit_version": 1,
         "awareness_map": awareness_map(),
         "awareness_map_version": 1,
+        "audience_reach_estimate": reach(),
+        "audience_reach_estimate_version": 1,
     }
     values.update(overrides)
     return DiagnosisPackage(**values)
@@ -146,6 +177,7 @@ class DiagnosisPackageProjectionTests(unittest.TestCase):
             business_snapshot_version=3,
             offer_funnel_audit_version=4,
             awareness_map_version=5,
+            audience_reach_estimate_version=6,
         )
 
         versions = {
@@ -164,6 +196,18 @@ class DiagnosisPackageProjectionTests(unittest.TestCase):
         self.assertEqual(5, versions["awareness-map"])
         self.assertEqual(3, versions["business-snapshot"])
         self.assertEqual(4, versions["offer-funnel-audit"])
+        self.assertEqual(6, versions["audience-reach-estimate"])
+
+    def test_the_audience_reach_kind_is_pinned_from_the_typed_estimate(self):
+        value = package(audience_reach_estimate_version=7)
+
+        by_kind = {ref.asset_id: ref for ref in _pins(value)}
+        source = {
+            asset.kind: asset for asset in value.stage_asset_versions()
+        }
+
+        self.assertEqual(7, by_kind["audience-reach-estimate"].version)
+        self.assertEqual("reach-3f", source["audience-reach-estimate"].asset_id)
 
     def test_the_awareness_map_kind_is_pinned_from_the_typed_map(self):
         value = package(awareness_map_version=7)
@@ -209,6 +253,7 @@ class DiagnosisPackageRejectionTests(unittest.TestCase):
             {"business_snapshot_version": -1},
             {"offer_funnel_audit_version": 0},
             {"awareness_map_version": 0},
+            {"audience_reach_estimate_version": 0},
         ):
             with self.subTest(override=override):
                 with self.assertRaises(InvalidDiagnosisPackageError):
@@ -223,6 +268,10 @@ class DiagnosisPackageRejectionTests(unittest.TestCase):
             package(offer_funnel_audit=audit(tenant_id=OTHER_TENANT))
         with self.assertRaises(DiagnosisTenantBoundaryError):
             package(awareness_map=awareness_map(tenant_id=OTHER_TENANT))
+        with self.assertRaises(DiagnosisTenantBoundaryError):
+            package(
+                audience_reach_estimate=reach(tenant_id=OTHER_TENANT)
+            )
 
     def test_the_package_is_immutable(self):
         with self.assertRaises(FrozenInstanceError):

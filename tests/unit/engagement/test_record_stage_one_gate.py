@@ -32,12 +32,17 @@ from redops.contexts.commercial.domain.errors import (
     UnsourcedDiagnosisEvidenceError,
 )
 from redops.contexts.commercial.domain.value_objects import (
+    AudienceDefinition,
+    AudienceReachEstimate,
     AvatarProfile,
     BusinessSnapshot,
     DiagnosisPackage,
+    InterestKind,
+    InterestSignal,
     MarketAwarenessLevel,
     MarketAwarenessMap,
     OfferFunnelAudit,
+    ResearchPlatform,
 )
 from redops.contexts.engagement.application.commands import (
     RecordStageOneGateCommand,
@@ -191,6 +196,29 @@ def awareness_map(*, tenant_id: str = TENANT) -> MarketAwarenessMap:
     )
 
 
+def reach(*, tenant_id: str = TENANT) -> AudienceReachEstimate:
+    return AudienceReachEstimate(
+        estimate_id="reach-3f",
+        tenant_id=tenant_id,
+        owner=OWNER,
+        platform=ResearchPlatform.FACEBOOK_AUDIENCE_INSIGHTS,
+        audience=AudienceDefinition(
+            location="United States",
+            age="35-50",
+            gender="all",
+            interests=(
+                InterestSignal(
+                    kind=InterestKind.EXPERT,
+                    value="small service firm coach",
+                ),
+            ),
+        ),
+        estimated_reach=180000,
+        source_note="Facebook Audience Insights sizing",
+        captured_on=ON,
+    )
+
+
 def package(**overrides) -> DiagnosisPackage:
     values = {
         "package_id": "diagnosis-3f",
@@ -203,6 +231,8 @@ def package(**overrides) -> DiagnosisPackage:
         "offer_funnel_audit_version": 1,
         "awareness_map": awareness_map(),
         "awareness_map_version": 1,
+        "audience_reach_estimate": reach(),
+        "audience_reach_estimate_version": 1,
     }
     values.update(overrides)
     return DiagnosisPackage(**values)
@@ -285,7 +315,7 @@ class StageOneGateAssemblerTests(unittest.TestCase):
             self.template.required_asset_kinds(1),
             {ref.asset_id for ref in gate.required_assets},
         )
-        self.assertEqual(9, len(gate.required_assets))
+        self.assertEqual(10, len(gate.required_assets))
 
     def test_the_gate_pins_the_exact_version_each_reviewed_asset_carries(self):
         gate = self.assemble(
@@ -320,6 +350,8 @@ class StageOneGateAssemblerTests(unittest.TestCase):
             offer_funnel_audit_version=1,
             awareness_map=awareness_map(tenant_id=OTHER_TENANT),
             awareness_map_version=1,
+            audience_reach_estimate=reach(tenant_id=OTHER_TENANT),
+            audience_reach_estimate_version=1,
         )
 
         with self.assertRaises(TenantBoundaryError):
@@ -441,7 +473,7 @@ class StageOneGateRecorderTests(unittest.TestCase):
 
         decision = self.record(self.assembled_gate(), ledger)
 
-        self.assertEqual(9, len(decision.asset_approvals))
+        self.assertEqual(10, len(decision.asset_approvals))
         for request in decision.asset_approvals:
             self.assertEqual(SCOPE_ONE, request.scope)
             self.assertEqual(APPROVER, request.approver)

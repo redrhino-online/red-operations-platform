@@ -56,6 +56,8 @@ from redops.contexts.commercial.infrastructure.repositories import (
     offer_version_repository_from_env,
 )
 from redops.contexts.commercial.domain.value_objects import (
+    AudienceDefinition,
+    AudienceReachEstimate,
     AvatarProfile,
     BusinessSnapshot,
     CampaignMessagePackage,
@@ -64,6 +66,8 @@ from redops.contexts.commercial.domain.value_objects import (
     DeliverySpecification,
     DiagnosisPackage,
     DiagnosticPackage,
+    InterestKind,
+    InterestSignal,
     MarketAwarenessLevel,
     MarketAwarenessMap,
     MethodReference,
@@ -71,6 +75,7 @@ from redops.contexts.commercial.domain.value_objects import (
     OfferFunnelAudit,
     OfferPackage,
     PositioningDecision,
+    ResearchPlatform,
     SignaturePackage,
     StepDelivery,
 )
@@ -1152,6 +1157,28 @@ def record_stage_one_gate(
                 ),
             ),
             awareness_map_version=body.awareness_map.version,
+            audience_reach_estimate=AudienceReachEstimate(
+                estimate_id=body.audience_reach_estimate.estimate_id,
+                tenant_id=tenant_id,
+                owner=body.audience_reach_estimate.owner,
+                platform=ResearchPlatform(body.audience_reach_estimate.platform),
+                audience=AudienceDefinition(
+                    location=body.audience_reach_estimate.audience.location,
+                    age=body.audience_reach_estimate.audience.age,
+                    gender=body.audience_reach_estimate.audience.gender,
+                    interests=tuple(
+                        InterestSignal(
+                            kind=InterestKind(signal.kind),
+                            value=signal.value,
+                        )
+                        for signal in body.audience_reach_estimate.audience.interests
+                    ),
+                ),
+                estimated_reach=body.audience_reach_estimate.estimated_reach,
+                source_note=body.audience_reach_estimate.source_note,
+                captured_on=body.audience_reach_estimate.captured_on,
+            ),
+            audience_reach_estimate_version=body.audience_reach_estimate.version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 1, tenant_id

@@ -141,6 +141,42 @@ class AwarenessMapInput(BaseModel):
     retarget_level: str | None = None
 
 
+class InterestSignalInput(BaseModel):
+    """One canon interest signal an audience sizing narrows on (canon file 02)."""
+
+    kind: str
+    value: str
+
+
+class AudienceDefinitionInput(BaseModel):
+    """The location, age, gender and interests that define a sized audience."""
+
+    location: str
+    age: str
+    gender: str
+    interests: list[InterestSignalInput]
+
+
+class AudienceReachEstimateInput(BaseModel):
+    """The stage 1 typed audience reach estimate (canon files 02 and 03).
+
+    SPEC.md section 12.3 maps audience sizing research onto stage 1 "Diagnose".
+    The typed ``AudienceReachEstimate`` carries the research platform, the sized
+    audience, the reachable size, the source note and the capture date, so the
+    route accepts this shape and the domain projects it as the
+    ``audience-reach-estimate`` gate kind.
+    """
+
+    estimate_id: str
+    version: int
+    owner: str
+    platform: str
+    audience: AudienceDefinitionInput
+    estimated_reach: int
+    source_note: str
+    captured_on: date
+
+
 class RecordStageOneGateRequest(BaseModel):
     """The stage 1 "Avatar Locked" gate request (SPEC.md section 4).
 
@@ -158,6 +194,7 @@ class RecordStageOneGateRequest(BaseModel):
     business_snapshot: BusinessSnapshotInput
     offer_funnel_audit: OfferFunnelAuditInput
     awareness_map: AwarenessMapInput
+    audience_reach_estimate: AudienceReachEstimateInput
     claims: list[ClaimInput]
     stage_owner: str
     approver: str

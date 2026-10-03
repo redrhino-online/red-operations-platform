@@ -184,6 +184,23 @@ class StageThreeGateRouteTests(unittest.TestCase):
                 ],
                 "retarget_level": "solution_aware",
             },
+            "audience_reach_estimate": {
+                "estimate_id": "reach-3f",
+                "version": 1,
+                "owner": OWNER,
+                "platform": "facebook_audience_insights",
+                "audience": {
+                    "location": "United States",
+                    "age": "35-50",
+                    "gender": "all",
+                    "interests": [
+                        {"kind": "expert", "value": "small service firm coach"}
+                    ],
+                },
+                "estimated_reach": 180000,
+                "source_note": "Facebook Audience Insights sizing",
+                "captured_on": ON,
+            },
             "claims": [
                 {
                     "claim_id": claim_id,
