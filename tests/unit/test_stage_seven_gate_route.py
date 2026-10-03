@@ -212,10 +212,6 @@ class StageSevenGateRouteTests(unittest.TestCase):
     def payload(self, **overrides):
         body = {
             "workspace_id": "ws-3f",
-            "authorities": [
-                {"actor": OWNER, "authority": "production-owner"},
-                {"actor": APPROVER, "authority": "client-designated-authority"},
-            ],
             "amplifier_package_id": "amplifier-package-3f",
             "amplifier_version": 1,
             "message": self._six._message(),
@@ -345,6 +341,49 @@ class StageSevenGateRouteTests(unittest.TestCase):
         response = self.client.post(
             self.url(), json=self.payload(approver="stranger")
         )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"],
+            "GateApproverNotAuthorizedError",
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(7))
+
+    def test_a_gate_without_a_registered_workspace_is_a_named_404(self) -> None:
+        self.seed_through_stage_six()
+
+        response = self.client.post(
+            self.url(), json=self.payload(workspace_id="ws-unregistered")
+        )
+
+        self.assertEqual(response.status_code, 404, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"], "ClientWorkspaceNotFoundError"
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(7))
+
+    def test_the_gate_approves_against_the_persisted_registry(self) -> None:
+        # The body no longer carries authorities; the approver is authorized
+        # only if the persisted workspace registry names them. Seed through
+        # stage 6 with an authorized approver, then rebuild the store without a
+        # client-designated authority and the same stage 7 request is refused.
+        self.seed_through_stage_six()
+        self.workspaces = self.workspace_store_class()
+        self.register_workspace(with_approver=False)
+
+        response = self.client.post(self.url(), json=self.payload())
 
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(

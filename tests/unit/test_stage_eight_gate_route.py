@@ -224,7 +224,10 @@ class StageEightGateRouteTests(unittest.TestCase):
         seven = self._seven.payload()
         body = {
             "workspace_id": seven["workspace_id"],
-            "authorities": seven["authorities"],
+            "authorities": [
+                {"actor": OWNER, "authority": "production-owner"},
+                {"actor": APPROVER, "authority": "client-designated-authority"},
+            ],
             "funnel_package_id": "funnel-package-3f",
             "funnel_version": 1,
             "message": seven["message"],

@@ -4,6 +4,65 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T191920Z (Ralph cycle, this run): selected item was Q24
+  hardening, the stage 7 "Authority Amplifier Approved" gate route hardened
+  against the caller-supplied-authority defect (prerequisite Q23 met). Q17-Q23
+  closed the defect on stages 0-6, but the stage 7 route still rebuilt
+  `ClientWorkspace` from `body.authorities`, so a caller could name itself the
+  client designated approver and the first gate that carries the Authority
+  Amplifier package and its dual script/creative approvals would approve against
+  a transient registry rather than the persisted tenant root (SPEC.md sections
+  3, 4 and 11). Stage 7 is the next dependent gate after the now-hardened stage
+  6, so closing it keeps gate integrity ahead of the remaining stages (Q25-Q27),
+  the REST surface (Q10-Q14) and UI (Q32-Q45). The `frontend/` shell Q32 was
+  again rejected: the DoD [5/6] script passes on `frontend/` merely existing
+  with no `OpenExecutive` string, so a screens-less shell would falsely turn
+  `make done` green while condition 6 (Q45) is far off. Q28 stays blocked on the
+  named methodology-owner placement decision.
+- Outcome: `RecordStageSevenGateRequest` drops `authorities`.
+  `record_stage_seven_gate` now depends on `get_client_workspace_store`,
+  resolves the workspace by `(tenant_id, body.workspace_id)` through the
+  `ClientWorkspaceStore` port, and approves against the persisted registry; an
+  unregistered workspace is a named 404 `ClientWorkspaceNotFoundError`, not a
+  gate built from caller-supplied authorities. `tests/unit/test_stage_seven_gate_route.py`
+  drops the `authorities` key from its payload and adds two behavioral tests: an
+  unregistered workspace is a 404 with no ledger write, and the identical
+  request is a 422 `GateApproverNotAuthorizedError` when the persisted registry
+  omits the client authority. Because the stage 8-10 schemas still require
+  `authorities` (Q25-Q27 not yet done), `tests/unit/test_stage_eight_gate_route.py`
+  now inlines its own authority list instead of borrowing it from the stage 7
+  payload; the stage 9 and 10 suites that reuse `eight["authorities"]` and
+  `nine["authorities"]` inherit the inline list unchanged.
+- Evidence: `make check` -> 2044 passed, 2 skipped, 684 subtests; pyflakes
+  clean. `make done` still fails only [5/6] (`frontend/` missing, Q32);
+  [1/6]-[4/6] pass.
+- New findings: with Q17-Q24 done, stages 0-7 resolve their tenant root and
+  authority registry from durable stores, but stages 8-10 gate routes still
+  build `ClientWorkspace` from `body.authorities` (for example
+  `record_stage_eight_gate` at `backend/redops/api/routes.py`), so the
+  caller-supplied-authority defect remains on three routes. The stage 8 test's
+  inlined authority list can be dropped once Q25 hardens that route, and the
+  stage 9 and 10 payload builders that borrow `eight["authorities"]` and
+  `nine["authorities"]` must be updated in the same step.
+- Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
+  land shell-only; Q28 stage 8-10 required kinds blocked on the named
+  methodology-owner placement decision; Q16 idempotency keys blocked on a
+  workflow write route; Q3 agent registration blocked on the ADR 0006 /
+  vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: Q25 hardening, extend the Q17-Q24 hardening
+  to the stage 8 "Funnel Complete" gate (resolve the persisted `ClientWorkspace`
+  and its authority registry, 404 when unregistered, drop `authorities` from
+  `RecordStageEightGateRequest`, the stage 8 route and the stage 8 test's inline
+  authority list). Prerequisite: Q24 (done this cycle). Required asset: the
+  stage 8 `FunnelIntegrationPackage` with the test-prospect dry run; checkpoint:
+  Funnel Complete; designated approver: the client designated authority in the
+  persisted registry. Blocked downstream dependency: the stage 9 "Launch
+  Approved" gate. Then Q26-Q27 hardening for the remaining stages, Q10-Q14
+  (remaining REST resources) and the `frontend/` screens Q32-Q45.
+
+### Prior cycle (2026-10-03T191741Z)
+
 - Cycle 2026-10-03T191741Z (Ralph cycle, this run): selected item was Q23
   hardening, the stage 6 "Campaign Message Approved" / "Content Plan Locked"
   gate route hardened against the caller-supplied-authority defect

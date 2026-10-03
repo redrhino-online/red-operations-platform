@@ -896,8 +896,9 @@ class RecordStageSevenGateRequest(BaseModel):
 
     The caller supplies the reviewed amplifier, the approved stage 6 message, the
     approved method and production ready offer the amplifier grounds on, the
-    known claims that support its proof, the workspace authority registry and the
-    decision metadata. The route builds the canonical gate from these through the
+    known claims that support its proof and the decision metadata; the authority
+    registry is resolved from the durable workspace store, never the body. The
+    route builds the canonical gate from these through the
     use case; it deliberately accepts no pre-built gate, so the tenant boundary,
     the script-before-visuals-before-creative approval order, approver authority
     and exact-version evidence cannot be bypassed. Stage 7 depends on a passing
@@ -907,7 +908,6 @@ class RecordStageSevenGateRequest(BaseModel):
     """
 
     workspace_id: str
-    authorities: list[ClientAuthorityInput]
     amplifier_package_id: str
     amplifier_version: int
     message: CampaignMessageInput
