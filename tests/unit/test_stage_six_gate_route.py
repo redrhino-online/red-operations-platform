@@ -687,6 +687,7 @@ class StageSixGateRouteTests(unittest.TestCase):
             "message_version": 1,
             "message": self._message(),
             "content_roadmap": self._roadmap(),
+            "content_crusher": self._crusher(),
             "offer": self._offer(),
             "method": self._method(),
             "stage_owner": OWNER,
@@ -723,6 +724,29 @@ class StageSixGateRouteTests(unittest.TestCase):
                 }
                 for index, name in enumerate(steps)
             ],
+        }
+        body.update(overrides)
+        return body
+
+    def _crusher(self, **overrides):
+        first_step = self._solution()["phases"][0]["steps"][0]["name"]
+        body = {
+            "crusher_id": "crusher-3f",
+            "version": 1,
+            "owner": "content-owner",
+            "topic_id": "topic-1",
+            "title": "why the first step matters now",
+            "promise_measure": "a measurable result",
+            "promise_timeline": "within 90 days",
+            "frustrations": ["the current approach stalls"],
+            "goal": "reach the next level with confidence",
+            "model": "the transformation model",
+            "metaphor": "a map for the journey",
+            "context": "part of the signature program",
+            "steps": [first_step],
+            "story": "a client who made the shift",
+            "choice": "keep guessing or follow the method",
+            "action": "book the next step",
         }
         body.update(overrides)
         return body

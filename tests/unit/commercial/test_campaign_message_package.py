@@ -38,6 +38,7 @@ from .fixtures import (
     TENANT,
     approved_method,
     campaign_message,
+    content_crusher,
     content_roadmap,
     delivery_specification,
     offer_version,
@@ -65,18 +66,20 @@ def package(**overrides) -> CampaignMessagePackage:
         "message_version": 1,
         "roadmap": content_roadmap(),
         "roadmap_version": 1,
+        "crusher": content_crusher(),
+        "crusher_version": 1,
     }
     values.update(overrides)
     return CampaignMessagePackage(**values)
 
 
 class CampaignMessagePackageProjectionTests(unittest.TestCase):
-    def test_the_package_projects_all_thirteen_canonical_stage_six_kinds(self):
+    def test_the_package_projects_all_fourteen_canonical_stage_six_kinds(self):
         assets = package().stage_asset_versions()
 
         kinds = {asset.kind for asset in assets}
         self.assertEqual(frozenset(CANONICAL_MESSAGE_KINDS), kinds)
-        self.assertEqual(13, len(assets))
+        self.assertEqual(14, len(assets))
 
     def test_the_canonical_kinds_match_the_template_stage_six_package(self):
         template_kinds = stage_zero_to_ten_template().required_asset_kinds(6)
@@ -87,7 +90,9 @@ class CampaignMessagePackageProjectionTests(unittest.TestCase):
         assets = package(message_version=4).stage_asset_versions()
 
         message_assets = [
-            asset for asset in assets if asset.kind != "content-roadmap"
+            asset
+            for asset in assets
+            if asset.kind not in ("content-roadmap", "content-crusher")
         ]
         self.assertEqual(12, len(message_assets))
         for asset in message_assets:
@@ -106,11 +111,26 @@ class CampaignMessagePackageProjectionTests(unittest.TestCase):
         self.assertEqual("roadmap-3f", asset.asset_id)
         self.assertEqual(7, asset.version)
 
+    def test_the_content_crusher_kind_pins_the_crusher_at_its_own_version(self):
+        assets = package(crusher_version=9).stage_asset_versions()
+
+        crusher_assets = {
+            asset.kind: asset
+            for asset in assets
+            if asset.kind == "content-crusher"
+        }
+        self.assertEqual(1, len(crusher_assets))
+        asset = crusher_assets["content-crusher"]
+        self.assertEqual("crusher-3f", asset.asset_id)
+        self.assertEqual(9, asset.version)
+
     def test_each_message_kind_pins_the_reviewed_message_identity(self):
         assets = package().stage_asset_versions()
 
         message_assets = [
-            asset for asset in assets if asset.kind != "content-roadmap"
+            asset
+            for asset in assets
+            if asset.kind not in ("content-roadmap", "content-crusher")
         ]
         for asset in message_assets:
             self.assertEqual("message-3f", asset.asset_id)
@@ -164,6 +184,26 @@ class CampaignMessagePackageBoundaryTests(unittest.TestCase):
     def test_an_untyped_roadmap_is_refused(self):
         with self.assertRaises(InvalidCampaignMessagePackageError):
             package(roadmap="not-a-roadmap")
+
+    def test_a_cross_tenant_crusher_is_refused(self):
+        with self.assertRaises(CampaignMessageTenantBoundaryError):
+            package(
+                crusher=content_crusher(
+                    roadmap=content_roadmap(
+                        solution=signature_solution(tenant_id=OTHER_TENANT)
+                    )
+                )
+            )
+
+    def test_a_versionless_crusher_is_refused(self):
+        for override in ({"crusher_version": 0}, {"crusher_version": -1}):
+            with self.subTest(override=override):
+                with self.assertRaises(InvalidCampaignMessagePackageError):
+                    package(**override)
+
+    def test_an_untyped_crusher_is_refused(self):
+        with self.assertRaises(InvalidCampaignMessagePackageError):
+            package(crusher="not-a-crusher")
 
 
 if __name__ == "__main__":

@@ -202,6 +202,7 @@ def stage_zero_to_ten_template(
                         "landing-message",
                         "authority-amplifier-outline",
                         "content-roadmap",
+                        "content-crusher",
                     }
                 ),
             ),

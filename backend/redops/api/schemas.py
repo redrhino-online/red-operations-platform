@@ -714,6 +714,34 @@ class ContentRoadmapInput(BaseModel):
     topics: list[ContentTopicInput]
 
 
+class ContentCrusherInput(BaseModel):
+    """The stage 6 content crusher the gate pins as a required asset kind.
+
+    SPEC.md sections 4 and 12.5 (owner decision 2026-10-03; canon files 12, 16 and
+    32): the canon-informed content crusher is a required asset of the stage 6
+    "Campaign Message Approved" gate. The route grounds it on the same content
+    roadmap it builds from the request, so the caller supplies its identity, owner,
+    the roadmap topic it outlines, the promise and the outline beats.
+    """
+
+    crusher_id: str
+    version: int
+    owner: str
+    topic_id: str
+    title: str
+    promise_measure: str
+    promise_timeline: str
+    frustrations: list[str]
+    goal: str
+    model: str
+    metaphor: str
+    context: str
+    steps: list[str]
+    story: str
+    choice: str
+    action: str
+
+
 class RecordStageSixGateRequest(BaseModel):
     """The stage 6 "Campaign Message Approved" gate request (SPEC.md section 4).
 
@@ -734,6 +762,7 @@ class RecordStageSixGateRequest(BaseModel):
     message_version: int
     message: CampaignMessageInput
     content_roadmap: ContentRoadmapInput
+    content_crusher: ContentCrusherInput
     offer: OfferVersionInput
     method: MethodVersionInput
     stage_owner: str

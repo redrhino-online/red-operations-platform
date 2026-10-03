@@ -13,6 +13,8 @@ from redops.contexts.commercial.domain.entities import CampaignMessage, OfferVer
 from redops.contexts.commercial.domain.value_objects import (
     AUTHORITY_AMPLIFIER_BEATS,
     ContentChannel,
+    ContentCrusher,
+    ContentPromise,
     ContentRoadmap,
     ContentTopic,
     DeliverySpecification,
@@ -140,6 +142,37 @@ def content_roadmap(
     }
     values.update(overrides)
     return ContentRoadmap(**values)
+
+
+def content_crusher(
+    roadmap: ContentRoadmap | None = None, **overrides
+) -> ContentCrusher:
+    """A valid stage 6 content crusher outlining the roadmap's first topic."""
+
+    roadmap = roadmap or content_roadmap()
+    topic = roadmap.topics[0]
+    values = {
+        "crusher_id": "crusher-3f",
+        "tenant_id": roadmap.tenant_id,
+        "owner": "content-owner",
+        "roadmap": roadmap,
+        "topic_id": topic.topic_id,
+        "title": f"why {topic.name} matters now",
+        "promise": ContentPromise(
+            measure="a measurable result", timeline="within 90 days"
+        ),
+        "frustrations": ("the current approach stalls",),
+        "goal": "reach the next level with confidence",
+        "model": "the transformation model",
+        "metaphor": "a map for the journey",
+        "context": "part of the signature program",
+        "steps": (topic.signature_step,),
+        "story": "a client who made the shift",
+        "choice": "keep guessing or follow the method",
+        "action": "book the next step",
+    }
+    values.update(overrides)
+    return ContentCrusher(**values)
 
 
 def approved_method(

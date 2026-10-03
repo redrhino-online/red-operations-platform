@@ -63,6 +63,8 @@ from redops.contexts.commercial.domain.value_objects import (
     BusinessSnapshot,
     CampaignMessagePackage,
     ContentChannel,
+    ContentCrusher,
+    ContentPromise,
     ContentRoadmap,
     ContentTopic,
     CurrencyInventory,
@@ -2138,6 +2140,28 @@ def record_stage_six_gate(
             message_version=body.message_version,
             roadmap=roadmap,
             roadmap_version=body.content_roadmap.version,
+            crusher=ContentCrusher(
+                crusher_id=body.content_crusher.crusher_id,
+                tenant_id=tenant_id,
+                owner=body.content_crusher.owner,
+                roadmap=roadmap,
+                topic_id=body.content_crusher.topic_id,
+                title=body.content_crusher.title,
+                promise=ContentPromise(
+                    measure=body.content_crusher.promise_measure,
+                    timeline=body.content_crusher.promise_timeline,
+                ),
+                frustrations=tuple(body.content_crusher.frustrations),
+                goal=body.content_crusher.goal,
+                model=body.content_crusher.model,
+                metaphor=body.content_crusher.metaphor,
+                context=body.content_crusher.context,
+                steps=tuple(body.content_crusher.steps),
+                story=body.content_crusher.story,
+                choice=body.content_crusher.choice,
+                action=body.content_crusher.action,
+            ),
+            crusher_version=body.content_crusher.version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 6, tenant_id

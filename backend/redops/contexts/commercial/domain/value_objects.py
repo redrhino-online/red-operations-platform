@@ -1420,6 +1420,7 @@ class OfferPackage:
 
 
 CONTENT_ROADMAP_KIND = "content-roadmap"
+CONTENT_CRUSHER_KIND = "content-crusher"
 
 CANONICAL_MESSAGE_KINDS: tuple[str, ...] = (
     "promise",
@@ -1435,12 +1436,13 @@ CANONICAL_MESSAGE_KINDS: tuple[str, ...] = (
     "landing-message",
     "authority-amplifier-outline",
     CONTENT_ROADMAP_KIND,
+    CONTENT_CRUSHER_KIND,
 )
 
 
 @dataclass(frozen=True)
 class CampaignMessagePackage:
-    """The reviewed stage 6 message, projected to the twelve canonical gate kinds.
+    """The reviewed stage 6 message, projected to the canonical gate kinds.
 
     SPEC.md section 4, stage 6 "Message" and its "Campaign Message Approved"
     checkpoint: a stage is complete only when its required assets exist, pass the
@@ -1461,11 +1463,12 @@ class CampaignMessagePackage:
     that coherent shape and its dependency on the approved stage 5 offer at
     construction, so each message kind is projected from the single reviewed
     message at one positive integer version. The Content Roadmap (canon files
-    25-28, owner decision 2026-10-03) is a separate typed Commercial asset, so its
-    ``content-roadmap`` kind is projected from the roadmap's own identity at the
-    roadmap's exact version. A blank identity, a versionless message or roadmap,
-    or a cross-tenant message or roadmap is refused rather than silently pinned
-    (SPEC.md sections 3 and 4).
+    25-28, owner decision 2026-10-03) and the Content Crusher (canon files 12, 16
+    and 32, owner decision 2026-10-03) are separate typed Commercial assets, so
+    their ``content-roadmap`` and ``content-crusher`` kinds are projected from
+    each asset's own identity at that asset's exact version. A blank identity, a
+    versionless message, roadmap or crusher, or a cross-tenant message, roadmap or
+    crusher is refused rather than silently pinned (SPEC.md sections 3 and 4).
     """
 
     package_id: str
@@ -1474,6 +1477,8 @@ class CampaignMessagePackage:
     message_version: int
     roadmap: "ContentRoadmap"
     roadmap_version: int
+    crusher: "ContentCrusher"
+    crusher_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -1508,6 +1513,21 @@ class CampaignMessagePackage:
                 "the content roadmap version must be a positive integer so the "
                 "stage 6 gate can pin the reviewed asset at an exact version"
             )
+        if not isinstance(self.crusher, ContentCrusher):
+            raise InvalidCampaignMessagePackageError(
+                "the stage 6 content crusher must be a typed content crusher"
+            )
+        if self.crusher.tenant_id != self.tenant_id:
+            raise CampaignMessageTenantBoundaryError(
+                f"stage 6 content crusher {self.crusher.crusher_id!r} belongs to "
+                f"tenant {self.crusher.tenant_id!r}, not package tenant"
+                f" {self.tenant_id!r}"
+            )
+        if not isinstance(self.crusher_version, int) or self.crusher_version < 1:
+            raise InvalidCampaignMessagePackageError(
+                "the content crusher version must be a positive integer so the "
+                "stage 6 gate can pin the reviewed asset at an exact version"
+            )
 
     @property
     def kinds(self) -> frozenset[str]:
@@ -1526,17 +1546,20 @@ class CampaignMessagePackage:
         return not self.missing_kinds()
 
     def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
-        """Project the reviewed stage 6 message and roadmap onto exact evidence.
+        """Project the reviewed stage 6 message, roadmap and crusher to evidence.
 
         Every message kind belongs to the same reviewed ``CampaignMessage``, so
         each is pinned to that message's identity at its exact version, while the
-        ``content-roadmap`` kind is pinned to the roadmap's own identity at the
-        roadmap's exact version. Governance still pins each projection for the
-        workspace tenant, so a cross-client message or roadmap is refused rather
-        than silently authorized (SPEC.md sections 3, 4 and 11).
+        ``content-roadmap`` and ``content-crusher`` kinds are pinned to the
+        roadmap's and crusher's own identities at their exact versions.
+        Governance still pins each projection for the workspace tenant, so a
+        cross-client message, roadmap or crusher is refused rather than silently
+        authorized (SPEC.md sections 3, 4 and 11).
         """
         message_kinds = tuple(
-            kind for kind in CANONICAL_MESSAGE_KINDS if kind != CONTENT_ROADMAP_KIND
+            kind
+            for kind in CANONICAL_MESSAGE_KINDS
+            if kind not in (CONTENT_ROADMAP_KIND, CONTENT_CRUSHER_KIND)
         )
         return (
             *(
@@ -1549,6 +1572,7 @@ class CampaignMessagePackage:
                 for kind in message_kinds
             ),
             self.roadmap.as_stage_asset(version=self.roadmap_version),
+            self.crusher.as_stage_asset(version=self.crusher_version),
         )
 
 
@@ -2856,6 +2880,28 @@ class ContentCrusher:
         raise ContentCrusherObservationError(
             f"content crusher {claim_id!r} is content to produce, not an observed "
             "result, and cannot be recorded as an observation"
+        )
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the crusher onto exact ``content-crusher`` gate evidence.
+
+        SPEC.md sections 4 and 12.5 (owner decision 2026-10-03): a canon-informed
+        asset already implemented in a bounded context becomes a required asset
+        kind of its target stage gate, so the stage 6 "Campaign Message Approved"
+        gate pins the typed content crusher (canon files 12, 16 and 32) as one
+        exact ``StageAssetVersion``. A versionless projection is refused rather
+        than silently pinned (SPEC.md sections 3 and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidContentCrusherError(
+                "the content crusher version must be a positive integer so the "
+                "stage 6 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.crusher_id,
+            tenant_id=self.tenant_id,
+            kind=CONTENT_CRUSHER_KIND,
+            version=version,
         )
 
 
