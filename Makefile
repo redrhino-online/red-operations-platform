@@ -104,6 +104,10 @@ loop:
 	    fi; \
 	    break; \
 	  fi; \
+	  if (( status == 4 )); then \
+	    printf 'Canon content changed; halting the loop now (not a retryable failure). Re-pin with make canon-pin, or set RALPH_CANON_STRICT=0, then resume.\n'; \
+	    break; \
+	  fi; \
 	  if (( status != 0 )); then \
 	    failures=$$(( failures + 1 )); \
 	    printf 'Cycle %s failed (status %s); failure %s of %s\n' "$$cycle" "$$status" "$$failures" "$(MAX_FAILURES)"; \

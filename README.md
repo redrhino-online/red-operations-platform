@@ -22,7 +22,7 @@ The target home is a Kubernetes cluster on a home network. Helm will define the 
 
 The script blocks a second run while one run is active. It writes a log in the target repo's `.ralph` folder. It does not push changes, deploy the app, or give client approval; it does commit each cycle's changes with the message the cycle writes. Review the code and plan change after each run.
 
-The loop stops on `.ralph/STOP`, when the prototype meets its definition of done (SPEC section 13, checked by `make done`), or after `MAX_FAILURES` consecutive failures (default 5; a failed cycle retries the same round after `RETRY_SLEEP` seconds). A crashed cycle's lock is reclaimed automatically once its recorded pid is gone, so a hard kill does not wedge the loop. See `.env.example` for the local database the harness and `make check` use.
+The loop stops on `.ralph/STOP`, when the prototype meets its definition of done (SPEC section 13, checked by `make done`), or after `MAX_FAILURES` consecutive failures (default 5; a failed cycle retries the same round after `RETRY_SLEEP` seconds). A canon content change halts the loop immediately, without retrying, until `make canon-pin` re-pins it. A crashed cycle's lock is reclaimed automatically once its recorded pid is gone, so a hard kill does not wedge the loop. See `.env.example` for the local database the harness and `make check` use.
 
 To use it, put this README, `SPEC.md`, `IMPLEMENTATION_PLAN.md`, `ralph_cycle.sh`, and `Makefile` together. Install OpenCode and run one cycle against a Git checkout of the fork:
 
