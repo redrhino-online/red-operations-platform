@@ -222,6 +222,36 @@ export interface MethodVersionList {
   methods: MethodVersion[];
 }
 
+// One unit of production work with its lifecycle, dependency refs and blockers
+// (SPEC.md sections 3, 4, 7 and 8; Q38). Mirrors `BuildObjectResponse` in
+// `backend/redops/api/schemas.py`. The BuildObject is the unit of production
+// work; an active build always carries an owner and a next action, and its
+// `refs` name the assets or artifacts it depends on while `blockers` name what
+// stalls it. The board reads them; the UI recomputes no state rule and can
+// transition no build.
+export interface BuildObject {
+  build_id: string;
+  tenant_id: string;
+  build_type: string;
+  purpose: string;
+  audience: string;
+  owner: string;
+  next_action: string;
+  state: string;
+  is_active: boolean;
+  is_blocked: boolean;
+  blockers: string[];
+  refs: string[];
+}
+
+export interface BuildList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  builds: BuildObject[];
+}
+
 // One production ready offer version and its pinned method dependencies
 // (SPEC.md sections 3, 5, 7 and 8; Q37). The stage 5 shape is informed by canon
 // files 11 and 12 (Perfect Product, Product Matrix, pricing by outcome). Mirrors
@@ -440,6 +470,17 @@ export class RedOperationsApi extends RedApiClient {
     params: ListParams = {},
   ): Promise<MethodVersionList> {
     return this.get<MethodVersionList>("/red/methods", {
+      tenant_id: tenantId,
+      ...params,
+    });
+  }
+
+  // The build board read (SPEC.md sections 3, 4, 7 and 8; Q38). The tenant is a
+  // required query scope and the route is read-only; a build is born Identified
+  // as a proposal and only a later transition changes its state, so the board
+  // reads the work items and can transition none.
+  listBuilds(tenantId: string, params: ListParams = {}): Promise<BuildList> {
+    return this.get<BuildList>("/red/builds", {
       tenant_id: tenantId,
       ...params,
     });

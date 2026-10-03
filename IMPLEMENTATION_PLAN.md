@@ -4,7 +4,71 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T202056Z (Ralph cycle, this run): selected item was Q37, the
+- Cycle 2026-10-03T202254Z (Ralph cycle, this run): selected item was Q38, the
+  build board with dependency view (SPEC.md sections 3, 4, 8 and 13 condition 6;
+  queue item Q38). It is the highest priority ready item: its only dependency
+  Q37 is done, and it is now the head of the Q38-Q45 chain for condition 6, the
+  largest unstarted DoD condition. It outranks alternatives: Q39-Q45 each depend
+  on Q38; Q28 stage 8-10 required kinds are still blocked on the named
+  methodology-owner placement decision; Q16 needs a workflow write route and a
+  connector seam; Q3/Q4 need the ADR 0006 resolution and a live key; Q8 layer
+  coverage and the condition 2 cross-client-retrieval scenario have no
+  retrieval/worker/artifact seam yet; Q47-Q50 need the Atlas cluster. Q31 also
+  blocks condition 2 on a connector idempotency seam and the deploy-only
+  scenarios. The canon gap register has no ready pipeline item: its remaining
+  entries are implemented or are candidate pipeline additions awaiting a
+  named-owner decision, so no canon-covered method artifact outranks this gate
+  work.
+- Outcome: new `frontend/src/features/build-board/` feature. `BuildBoard.tsx`
+  is a presentational board over the tenant-scoped production work items from
+  `GET /red/builds`: it groups each BuildObject into its SPEC.md section 4
+  lifecycle state column using the `boardStates` canonical-order helper, and
+  renders per build the type, purpose, audience, owner, next action, the
+  `dependencyRefs` it declares and its blockers, with a dependency view listing
+  the `blockedBuilds`; `BuildBoardScreen.tsx` owns the tenant-scoped read;
+  route `/build-board` (`src/app/build-board/page.tsx`) binds the `build-board`
+  screen id now declared in `frontend/dod-screens.txt`. The API client gained
+  `BuildObject`, `BuildList` and `listBuilds`. No product authority, gate
+  decision or pipeline stage changed; the board can transition no build.
+- Evidence: `frontend/src/features/build-board/BuildBoard.test.tsx` (11 tests)
+  pins `boardStates` canonical ordering and unknown-state handling,
+  `buildsInState` filtering and ordering, `dependencyRefs`, `blockedBuilds`,
+  build field/owner/next/refs/blocker rendering, the blocked dependency view,
+  the loading/error states, the empty states, and a stubbed-fetch screen read
+  asserting the tenant-scoped request path. `npm test` -> 6 files, 43 passed (11
+  new). `npm run build` -> compiled, `/build-board` route emitted.
+  `make check` -> 2265 passed, 2 skipped, 704 subtests passed.
+  `bash scripts/check_frontend_build.sh frontend` -> exit 0.
+  `bash scripts/check_frontend_screens.sh frontend` -> still exit 1, now 6
+  remaining section 8 ids (approval-inbox, workflow-run-detail,
+  launch-readiness, performance-review, portfolio-opportunities,
+  authority-settings; condition 6 needs Q39-Q45). `make done` still fails first
+  at `[2/6]` condition 2.
+- New findings: `GET /red/builds` already returns a fully typed BuildObject
+  (state, owner, next_action, is_active, is_blocked, blockers, refs), so the
+  board needed only client types and `listBuilds` and no new backend route. The
+  dependency view is read-only and derives only ordering and grouping from the
+  build's own `refs`/`blockers`; it resolves no asset and asserts no state
+  transition, so it re-derives no production rule.
+- Blockers (unchanged): `frontend/` Q39-Q45 are the path to DoD condition 6;
+  Q8's retrieval, worker and artifact-URL isolation coverage and the condition 2
+  cross-client-retrieval scenario are blocked until those seams exist; Q28 stage
+  8-10 required kinds blocked on the named methodology-owner placement decision;
+  Q16 idempotency keys blocked on a workflow write route and a connector seam;
+  Q3 agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
+  deploy-only scenarios need the Atlas cluster and a chosen backup target.
+- Highest priority ready next item: Q39, the approval inbox with exact version
+  diff. Required asset: an approval inbox at a declared route showing the
+  tenant-scoped version-specific approvals and their exact asset versions with
+  the version diff (SPEC.md sections 3, 4 and 8) over the tenant-scoped
+  approval read, plus its browser test; checkpoint: none (UI, not a gate);
+  approver: none. Blocked downstream dependency: Q40-Q45. Prerequisite: Q38
+  (done this cycle).
+
+### Prior cycle (2026-10-03T202056Z)
+
+- Cycle 2026-10-03T202056Z (Ralph cycle, prior): selected item was Q37, the
   offer and journey editor screen (SPEC.md sections 3, 5, 7 and 8; section 13
   condition 6; queue item Q37). It is the highest priority ready item: its only
   dependency Q36 is done, and it is now the head of the Q37-Q45 chain for
@@ -4114,7 +4178,7 @@ stalls:
 | Q35 | Source and claim explorer | ui | Q34 | Done 2026-10-03T201635Z: `frontend/src/features/source-explorer/` (`SourceClaimExplorer.tsx` presentational with `claimsForSource`/`groundedClaims`, `SourceClaimExplorerScreen.tsx` tenant-scoped parallel read, route `/source-explorer`, `frontend/dod-screens.txt` declares the screen id) over `listSources`/`listClaims` (`GET /red/clients/{tenant}/sources` and `GET /red/claims?tenant_id=`). `npm run build` clean, `npm test` 6 new passed (16 total), `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 9 remaining screens |
 | Q36 | Transformation map | ui | Q35 | Done 2026-10-03T201934Z: `frontend/src/features/transformation-map/` (`TransformationMap.tsx` presentational with the `transformationSteps` phase-flattening helper, `TransformationMapScreen.tsx` tenant-scoped read, route `/transformation-map`, `frontend/dod-screens.txt` declares the screen id) over `listMethods` (`GET /red/methods?tenant_id=`). The method read now projects the pinned stage 4 `signature_solution` (transformation map, start/final states, narrative, three phases, nine named steps with inputs/actions/outputs) via the shared `signature_solution_to_payload` mapper plus `SignatureSolutionResponse`/`TransformationPhaseResponse`/`SignatureStepResponse`. `npm run build` clean (`/transformation-map` emitted), `npm test` 7 new passed (23 total), `tests/unit/method/test_methods_route.py` 6 passed, `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 8 remaining screens |
 | Q37 | Offer and journey editor | ui | Q36 | Done 2026-10-03T202056Z: `frontend/src/features/offer-journey/` (`OfferJourneyEditor.tsx` presentational with the `pinnedMethodRefs`/`releasedAssetKinds` helpers, `OfferJourneyEditorScreen.tsx` parallel tenant-scoped read, route `/offer-and-journey`, `frontend/dod-screens.txt` declares the screen id) over `listOffers`/`listJourneys` (`GET /red/offers?tenant_id=` and `GET /red/journeys?tenant_id=`). Stage 5 shape cites canon 11-12 and routing cites canon 13-14, 21-22. `npm run build` clean (`/offer-and-journey` emitted), `npm test` 9 new passed (32 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 7 remaining screens |
-| Q38 | Build board with dependency view | ui | Q37 | browser test |
+| Q38 | Build board with dependency view | ui | Q37 | Done 2026-10-03T202254Z: `frontend/src/features/build-board/` (`BuildBoard.tsx` presentational with the `boardStates` lifecycle-order, `buildsInState`, `dependencyRefs` and `blockedBuilds` helpers, `BuildBoardScreen.tsx` tenant-scoped read, route `/build-board`, `frontend/dod-screens.txt` declares the screen id) over `listBuilds` (`GET /red/builds?tenant_id=`). `npm run build` clean (`/build-board` emitted), `npm test` 11 new passed (43 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 6 remaining screens |
 | Q39 | Approval inbox with exact version diff | ui | Q38 | browser test; version diff shown |
 | Q40 | Workflow run detail | ui | Q39 | browser test |
 | Q41 | Launch readiness | ui | Q40 | browser test |
