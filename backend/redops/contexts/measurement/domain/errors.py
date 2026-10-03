@@ -56,6 +56,21 @@ class ImprovementObservationWindowError(MeasurementError):
     """
 
 
+class ImprovementResultWindowOpenError(MeasurementError):
+    """An outcome is measured before its own result window has closed.
+
+    SPEC.md section 3 keys a MeasurementRecord by its window and keeps
+    observations distinct from causal conclusions, and SPEC.md section 4, stage
+    10 with Phase 5 reads the observed result only after the optimization has
+    run. The canon's optimization discipline (canon files 23 and 24: "I wait 10
+    days to see how it does"; "don't touch anything for 10 days") does not read
+    a result until the window it is measured over has elapsed, so an outcome
+    whose ``measured_on`` date falls before its after observation window has
+    closed is refused: the result period is still open, so the movement has not
+    yet been observed over a complete window.
+    """
+
+
 class ImprovementDependencyError(MeasurementError):
     """An improvement is not grounded on an established same-tenant baseline.
 

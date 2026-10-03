@@ -22,6 +22,7 @@ from redops.contexts.execution.domain.value_objects import (
 )
 from redops.contexts.measurement.domain.errors import (
     ImprovementObservationError,
+    ImprovementResultWindowOpenError,
     InvalidImprovementError,
     InvalidImprovementOutcomeError,
     InvalidMeasurementRecordError,
@@ -99,7 +100,9 @@ class ImprovementOutcome:
     waits before reading how a change performed (canon file 24: "I wait 10 days to
     see how it does"), so the before window must end before the after window
     starts; an after-state observed before or during its own before-state is not a
-    movement.
+    movement. The same discipline means the after window must have closed by the
+    date the outcome is read: until the result period has elapsed there is no
+    complete observed movement to report.
     """
 
     outcome_id: str
@@ -170,6 +173,12 @@ class ImprovementOutcome:
                 f"({self.before.window.start} to {self.before.window.end}) must "
                 f"end before the after window starts "
                 f"({self.after.window.start})"
+            )
+        if self.measured_on < self.after.window.end:
+            raise ImprovementResultWindowOpenError(
+                "an improvement outcome cannot be measured before its after "
+                f"window has closed: it was measured on {self.measured_on} but "
+                f"the after window ends {self.after.window.end}"
             )
 
     def observations(

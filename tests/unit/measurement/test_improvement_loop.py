@@ -18,6 +18,10 @@ a time so the movement can be attributed (canon files 23 and 24):
   recorded movement is temporally sound and an after-state is never read from
   before or during its own before-state (canon file 24: wait before reading how
   the change did).
+- The after observation window must have closed by the outcome's ``measured_on``
+  date, so a result is not read before the window it is measured over has
+  elapsed (canon file 24: "I wait 10 days to see how it does"; "don't touch
+  anything for 10 days").
 """
 
 import unittest
@@ -32,6 +36,7 @@ from redops.contexts.measurement.domain.errors import (
     ImprovementObservationError,
     ImprovementObservationWindowError,
     ImprovementOutcomeSupportError,
+    ImprovementResultWindowOpenError,
     ImprovementStateError,
     InvalidImprovementError,
     InvalidImprovementOutcomeError,
@@ -444,6 +449,53 @@ class ImprovementApprovalPrecedenceTests(unittest.TestCase):
             measured.outcome.after.window.start,
             measured.approval.approved_on,
         )
+
+
+class ImprovementOutcomeSettlementTests(unittest.TestCase):
+    """A result is read only once its own result window has closed.
+
+    SPEC.md section 3 keys a ``MeasurementRecord`` by its window and keeps
+    observations distinct from causal conclusions, and SPEC.md section 4, stage
+    10 with Phase 5 read the observed result only after the optimization has run.
+    The canon's optimization discipline (canon files 23 and 24: "I wait 10 days
+    to see how it does"; "don't touch anything for 10 days") does not read a
+    result until the window it is measured over has elapsed, so an outcome whose
+    ``measured_on`` date falls before its after window has closed is refused:
+    the result window is still open and the movement cannot yet be read.
+    """
+
+    def test_an_outcome_cannot_be_measured_before_its_after_window_closes(self):
+        with self.assertRaises(ImprovementResultWindowOpenError):
+            improvement_outcome(
+                measured_on=date(2026, 10, 2),
+                after=measurement_record(
+                    record_id="measure-after-3f",
+                    value=8.0,
+                    window=MeasurementWindow(
+                        start=date(2026, 10, 2), end=date(2026, 10, 5)
+                    ),
+                ),
+            )
+
+    def test_an_outcome_may_be_measured_on_the_day_its_after_window_closes(self):
+        outcome = improvement_outcome(
+            measured_on=date(2026, 10, 5),
+            after=measurement_record(
+                record_id="measure-after-3f",
+                value=8.0,
+                window=MeasurementWindow(
+                    start=date(2026, 10, 2), end=date(2026, 10, 5)
+                ),
+            ),
+        )
+
+        self.assertEqual(date(2026, 10, 5), outcome.after.window.end)
+        self.assertEqual(date(2026, 10, 5), outcome.measured_on)
+
+    def test_the_default_outcome_is_measured_after_its_after_window_closes(self):
+        outcome = improvement_outcome()
+
+        self.assertGreaterEqual(outcome.measured_on, outcome.after.window.end)
 
 
 class ImprovementMetricGroundingTests(unittest.TestCase):
