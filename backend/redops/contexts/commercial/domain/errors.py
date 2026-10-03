@@ -733,3 +733,55 @@ class MarketReachBoundaryError(CommercialError):
     """
 
 
+
+class InvalidContentPlanError(CommercialError, ValueError):
+    """A content plan or one of its ideas left a required field unstated.
+
+    SPEC.md section 12.5 records the Extract motion (the pre-content plan) as a
+    canon gap and the implementation plan's bounded slice names a pure-domain
+    ``ContentPlan`` grounded on the same-tenant stage 4 Signature Solution. A
+    blank identity, owner, theme, idea prompt or channel set cannot be
+    represented as the content plan that feeds stage 6 and stage 10 content
+    operations.
+    """
+
+
+class ContentPlanDependencyError(CommercialError):
+    """A content plan depended on a method or idea it cannot map from.
+
+    The canon's first content rule is that content never leaves the method: "we
+    never create a piece of content that doesn't live in the signature solution"
+    (canon file 28), and the plan is built by brainstorming the questions for each
+    step of the Signature Solution (canon file 27). An untyped method, or an idea
+    that maps from a step the solution does not name, cannot be represented as a
+    grounded content plan.
+    """
+
+
+class ContentPlanTenantBoundaryError(CommercialError):
+    """A content plan mixed assets or ideas that do not belong to one client.
+
+    SPEC.md sections 3 and 9 make ``tenant_id`` on every tenant resource and
+    query a hard invariant. A plan whose method, currency, themes or ideas span
+    more than one client cannot be represented as one content plan.
+    """
+
+
+class ContentPlanThemeError(CommercialError):
+    """A content plan's themes did not group around the one locked currency.
+
+    The Extract motion groups the extracted ideas around the one primary
+    currency (SPEC.md section 12.5; canon file 27), so each theme must advance a
+    measure of that same locked currency. A theme that names a measure the
+    currency does not carry cannot be represented as a currency-aligned theme.
+    """
+
+
+class ContentPlanObservationError(CommercialError):
+    """A content plan was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The plan
+    describes the content that will be planned, produced and published, while any
+    measured reach is a separate observation, so a content plan is never an
+    observation.
+    """

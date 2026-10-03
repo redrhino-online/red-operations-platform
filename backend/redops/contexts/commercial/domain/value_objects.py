@@ -14,6 +14,10 @@ from redops.contexts.commercial.domain.errors import (
     ContentCrusherDependencyError,
     ContentCrusherObservationError,
     ContentCrusherTenantBoundaryError,
+    ContentPlanDependencyError,
+    ContentPlanObservationError,
+    ContentPlanTenantBoundaryError,
+    ContentPlanThemeError,
     ContentRoadmapDependencyError,
     ContentRoadmapFormatError,
     ContentRoadmapObservationError,
@@ -23,6 +27,7 @@ from redops.contexts.commercial.domain.errors import (
     ContentSyndicationObservationError,
     ContentSyndicationTenantBoundaryError,
     InvalidContentCrusherError,
+    InvalidContentPlanError,
     InvalidContentSyndicationError,
     CurrencyTenantBoundaryError,
     DiagnosisTenantBoundaryError,
@@ -3125,5 +3130,303 @@ class AudienceReachEstimate:
         """
         raise AudienceReachObservationError(
             f"audience reach estimate {claim_id!r} is a market research input, "
+            "not an observed result, and cannot be recorded as an observation"
+        )
+
+
+CONTENT_PLAN_CANON_REFERENCE = "25, 27, 28"
+
+
+class ContentIdeaSource(Enum):
+    """The Extract motions RED pulls ideas from (SPEC.md section 12.5).
+
+    The canon builds every content topic by brainstorming the FAQs and questions
+    the audience already asks about a step of the Signature Solution (canon file
+    27: "just brainstorming FAQs and questions you already know your audience is
+    asking"), and reminds the operator that clients keep asking the same question.
+    RED types the sources the Extract motion pulls from: the FAQs, the problems
+    the step solves, the process itself, and the reviews and praise the client
+    already has (SPEC.md section 12.5).
+    """
+
+    FAQ = "faq"
+    PROBLEM = "problem"
+    PROCESS = "process"
+    REVIEW_AND_PRAISE = "review_and_praise"
+
+
+class ContentPlanChannel(Enum):
+    """The two plans the Extract motion builds (SPEC.md section 12.5).
+
+    The implementation plan's canon gap register names "an email and social
+    content plan" as the Extract output, so RED types those two deliveries and a
+    plan cannot represent itself as complete without both.
+    """
+
+    EMAIL = "email"
+    SOCIAL = "social"
+
+
+@dataclass(frozen=True)
+class ContentTheme:
+    """One currency-aligned theme grouping extracted content ideas.
+
+    The Extract motion groups the ideas it pulls from the Signature Solution
+    around the one locked currency (SPEC.md section 12.5; canon file 27), so a
+    theme records the measure of that currency it advances. The theme is frozen
+    and reject-only, so a blank identity or a theme with no currency measure
+    cannot be represented as a theme the ideas group under.
+    """
+
+    theme_id: str
+    tenant_id: str
+    name: str
+    currency_measure: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("content theme id", self.theme_id),
+            ("content theme tenant id", self.tenant_id),
+            ("content theme name", self.name),
+            ("content theme currency measure", self.currency_measure),
+        ):
+            if not value or not value.strip():
+                raise InvalidContentPlanError(f"{label} is required")
+
+
+@dataclass(frozen=True)
+class ContentIdea:
+    """One idea the Extract motion pulls from a Signature Solution step.
+
+    The canon's first content rule is that content never leaves the method ("we
+    never create a piece of content that doesn't live in the signature solution",
+    canon file 28). The idea records the step it comes from, the typed source it
+    was extracted as (SPEC.md section 12.5), the question the audience already
+    asks, the currency-aligned theme it belongs to, and the plan channels it
+    feeds. It is frozen and reject-only, so an idea that leaves its step, source,
+    prompt, theme or channel set unstated cannot be represented.
+    """
+
+    idea_id: str
+    tenant_id: str
+    signature_step: str
+    source: ContentIdeaSource
+    prompt: str
+    theme_id: str
+    channels: tuple[ContentPlanChannel, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("content idea id", self.idea_id),
+            ("content idea tenant id", self.tenant_id),
+            ("content idea signature step", self.signature_step),
+            ("content idea prompt", self.prompt),
+            ("content idea theme id", self.theme_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidContentPlanError(f"{label} is required")
+        if not isinstance(self.source, ContentIdeaSource):
+            raise InvalidContentPlanError(
+                "a content idea source must be a typed extract source"
+            )
+        channels = tuple(self.channels)
+        if not channels:
+            raise InvalidContentPlanError(
+                f"content idea {self.idea_id!r} must feed at least one plan channel"
+            )
+        seen: set[ContentPlanChannel] = set()
+        for channel in channels:
+            if not isinstance(channel, ContentPlanChannel):
+                raise InvalidContentPlanError(
+                    "a content idea channel must be a typed content plan channel"
+                )
+            if channel in seen:
+                raise InvalidContentPlanError(
+                    f"content idea {self.idea_id!r} names duplicate channel "
+                    f"{channel.value!r}"
+                )
+            seen.add(channel)
+
+
+@dataclass(frozen=True)
+class ContentPlan:
+    """The Extract content plan feeding stage 6 and stage 10 content operations.
+
+    SPEC.md section 12.5 records the Extract motion ("pull key ideas from the
+    signature solution ... group themes around the one currency, and build an
+    email and social content plan") as a canon gap, and the implementation plan's
+    canon gap register names this pure-domain ``ContentPlan`` as its bounded
+    slice, an asset inside stage 6, not a new stage or required gate kind. The
+    plan grounds on a same-tenant stage 4 ``SignatureSolution`` and stage 2
+    ``PrimaryCurrency``, groups the extracted ideas under currency-aligned
+    themes, requires both an email and a social delivery, binds a named owner and
+    reports the solution steps it does not yet cover. It is frozen and
+    reject-only, so a blank identity, an untyped or foreign method or currency, a
+    duplicate theme or idea, a theme the currency does not carry, an idea whose
+    step the solution does not name, or a plan missing either delivery cannot be
+    represented as a content plan.
+
+    It does not authorize publishing or spend (SPEC.md sections 4 and 9) and it
+    is never an observation (SPEC.md section 3).
+    """
+
+    plan_id: str
+    tenant_id: str
+    owner: str
+    method: SignatureSolution
+    currency: PrimaryCurrency
+    themes: tuple[ContentTheme, ...]
+    ideas: tuple[ContentIdea, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("content plan id", self.plan_id),
+            ("content plan tenant id", self.tenant_id),
+            ("content plan owner", self.owner),
+        ):
+            if not value or not value.strip():
+                raise InvalidContentPlanError(f"{label} is required")
+        if not isinstance(self.method, SignatureSolution):
+            raise ContentPlanDependencyError(
+                "a content plan must extract from a typed stage 4 Signature Solution"
+            )
+        if self.method.tenant_id != self.tenant_id:
+            raise ContentPlanTenantBoundaryError(
+                f"content plan {self.plan_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Signature Solution "
+                f"{self.method.solution_id!r} belongs to tenant "
+                f"{self.method.tenant_id!r}"
+            )
+        if not isinstance(self.currency, PrimaryCurrency):
+            raise ContentPlanDependencyError(
+                "a content plan must group its themes around a typed stage 2 "
+                "Primary Currency"
+            )
+        if self.currency.tenant_id != self.tenant_id:
+            raise ContentPlanTenantBoundaryError(
+                f"content plan {self.plan_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Primary Currency belongs to tenant "
+                f"{self.currency.tenant_id!r}"
+            )
+        themes = tuple(self.themes)
+        if not themes:
+            raise InvalidContentPlanError(
+                f"content plan {self.plan_id!r} requires at least one theme"
+            )
+        currency_measures = {
+            self.currency.current_measure.strip(),
+            self.currency.desired_measure.strip(),
+        }
+        theme_ids: set[str] = set()
+        for theme in themes:
+            if not isinstance(theme, ContentTheme):
+                raise InvalidContentPlanError(
+                    "a content plan theme must be a typed content theme"
+                )
+            if theme.tenant_id != self.tenant_id:
+                raise ContentPlanTenantBoundaryError(
+                    f"content plan {self.plan_id!r} cites theme "
+                    f"{theme.theme_id!r} from another tenant"
+                )
+            if theme.theme_id in theme_ids:
+                raise InvalidContentPlanError(
+                    f"content plan {self.plan_id!r} contains duplicate theme id "
+                    f"{theme.theme_id!r}"
+                )
+            theme_ids.add(theme.theme_id)
+            if theme.currency_measure.strip() not in currency_measures:
+                raise ContentPlanThemeError(
+                    f"content theme {theme.theme_id!r} advances measure "
+                    f"{theme.currency_measure!r}, which the locked primary "
+                    f"currency {self.currency.currency!r} does not carry"
+                )
+        ideas = tuple(self.ideas)
+        if not ideas:
+            raise InvalidContentPlanError(
+                f"content plan {self.plan_id!r} requires at least one idea"
+            )
+        step_names = {step.name for step in self.method.steps}
+        seen_ideas: set[str] = set()
+        delivered: set[ContentPlanChannel] = set()
+        for idea in ideas:
+            if not isinstance(idea, ContentIdea):
+                raise InvalidContentPlanError(
+                    "a content plan idea must be a typed content idea"
+                )
+            if idea.tenant_id != self.tenant_id:
+                raise ContentPlanTenantBoundaryError(
+                    f"content plan {self.plan_id!r} cites idea {idea.idea_id!r} "
+                    "from another tenant"
+                )
+            if idea.idea_id in seen_ideas:
+                raise InvalidContentPlanError(
+                    f"content plan {self.plan_id!r} contains duplicate idea id "
+                    f"{idea.idea_id!r}"
+                )
+            seen_ideas.add(idea.idea_id)
+            if idea.signature_step not in step_names:
+                raise ContentPlanDependencyError(
+                    f"content idea {idea.idea_id!r} maps from Signature Solution "
+                    f"step {idea.signature_step!r}, which the plan's Signature "
+                    "Solution does not name"
+                )
+            if idea.theme_id not in theme_ids:
+                raise InvalidContentPlanError(
+                    f"content idea {idea.idea_id!r} groups under theme "
+                    f"{idea.theme_id!r}, which the plan does not declare"
+                )
+            delivered.update(idea.channels)
+        missing_deliveries = [
+            channel.value
+            for channel in ContentPlanChannel
+            if channel not in delivered
+        ]
+        if missing_deliveries:
+            raise InvalidContentPlanError(
+                f"content plan {self.plan_id!r} must build an email and a social "
+                "content plan; missing delivery channels: "
+                + ", ".join(sorted(missing_deliveries))
+            )
+
+    @property
+    def covered_steps(self) -> tuple[str, ...]:
+        """The Signature Solution steps the plan already has an idea for."""
+        ideas = self.ideas
+        return tuple(
+            step.name
+            for step in self.method.steps
+            if any(idea.signature_step == step.name for idea in ideas)
+        )
+
+    def missing_steps(self) -> tuple[str, ...]:
+        """Signature Solution steps the plan does not yet cover with an idea."""
+        covered = set(self.covered_steps)
+        return tuple(
+            step.name for step in self.method.steps if step.name not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_steps()
+
+    def ideas_for_theme(self, theme_id: str) -> tuple[ContentIdea, ...]:
+        """The extracted ideas grouped under one currency-aligned theme."""
+        return tuple(idea for idea in self.ideas if idea.theme_id == theme_id)
+
+    @property
+    def is_plan(self) -> bool:
+        """A content plan is a plan, not activity or an observed result."""
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a content plan as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The plan
+        describes the content that will be planned, produced and published, while
+        any measured reach is a separate observation, so a content plan is never
+        an observation.
+        """
+        raise ContentPlanObservationError(
+            f"content plan {claim_id!r} is content to plan, produce and publish, "
             "not an observed result, and cannot be recorded as an observation"
         )

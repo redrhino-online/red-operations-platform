@@ -4,7 +4,58 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T173909Z (Ralph cycle, this run): selected item was the
+- Cycle 2026-10-03T174319Z (Ralph cycle, this run): selected item was the
+  Extract content plan (Commercial Design `ContentPlan`), the bounded slice named
+  by the canon gap register entry "Extract" (SPEC.md section 12.5; canon files
+  25, 27, 28). It outranked the Next.js `frontend/` shell (a downstream
+  dashboard; the loop prioritizes gate integrity and canon method artifacts over
+  downstream features) and the larger gate-integrity items (a durable
+  `MethodVersion`/offer store, request idempotency Q16 whose queue dependency
+  Q15/Q5 is unmet) because it is a ready, independently verifiable, canon-
+  informed asset with no unmet dependency, and it closes an open content gap
+  ahead of the stage 6 and stage 10 content operations the pipeline feeds.
+- Outcome: new pure-domain `ContentPlan`, `ContentTheme`, `ContentIdea`,
+  `ContentIdeaSource`, `ContentPlanChannel` and the `CONTENT_PLAN_CANON_REFERENCE`
+  in `backend/redops/contexts/commercial/domain/value_objects.py`, plus five
+  named errors (`InvalidContentPlanError`, `ContentPlanDependencyError`,
+  `ContentPlanTenantBoundaryError`, `ContentPlanThemeError`,
+  `ContentPlanObservationError`) in `commercial/domain/errors.py`. It encodes the
+  Extract shape as value objects and invariants: ground on a same-tenant stage 4
+  `SignatureSolution` and stage 2 `PrimaryCurrency`; extract ideas with a typed
+  source (faq, problem, process, review_and_praise); every idea maps to a step the
+  solution names and to a declared theme; each theme advances either the current
+  or the desired measure of the one locked currency; unique theme and idea ids;
+  the plan must build both an email and a social delivery; it binds a named owner,
+  reports covered and missing steps, is a plan and is never an observation.
+- Evidence: `make check` (`uv run pytest -q`) -> 1780 passed, 1 skipped, 644
+  subtests passed; `uv run pyflakes backend tests` clean. New
+  `tests/unit/commercial/test_content_plan.py` (22 tests). `make done` clears
+  steps [1/6]-[4/6] (per-cycle check, stage 0-10 e2e, cross-tenant security,
+  vendored tree clean) and still fails at [5/6] (`frontend/` missing).
+- New findings: Extract is RED's own layer, not a numbered canon file (SPEC.md
+  section 12.5), so its shape is extracted from the Content Blitz files 25, 27 and
+  28 and the SPEC's own wording. `ContentPlan` is distinct from the existing
+  `ContentRoadmap` (canon 26, 27): the roadmap maps solution steps to publishable
+  topics with the Authority Amplifier beats, while the plan extracts ideas by
+  source and currency-aligned theme and declares the email and social deliveries
+  before the roadmap. Both are stage 6 planning assets; reconciling them into one
+  flow is a bounded follow-up. Wiring `ContentPlan` into a required stage 6 gate
+  kind remains a methodology-owner decision (SPEC.md section 12.5).
+- Blockers: unchanged Tier 2 facts; the missing `frontend/` (DoD 5, condition 6)
+  is still the next `make done` failure; request idempotency, RLS WHERE-clause
+  only (ADR 0004) and no durable MethodVersion/offer/funnel/QA store remain; the
+  condition 3 retrieval, worker and artifact-URL layers are unbuilt.
+- Highest priority ready next item: the Next.js `frontend/` shell plus RED theme
+  plus API client (queue Q32; SPEC.md sections 8 and 13 condition 6), the next
+  `make done` failure. Prerequisites: the read API and the 0-10 route surface are
+  done. Alternative gate-integrity items: build the durable `MethodVersion`/offer
+  store so the gates stop re-stating upstream approvals; wire `ContentPlan` into
+  the stage 6 gate as a required kind (a methodology-owner decision); or the
+  idempotency key (Q16) when its Q15/Q5 workflow dependency lands.
+
+### Prior cycle (2026-10-03T173909Z)
+
+- Cycle 2026-10-03T173909Z (Ralph cycle): selected item was the
   client-authored enrollment process (`ClientProcess` in the Execution domain),
   the next bounded slice named by the canon gap register entry "Client process
   design" (SPEC.md sections 1 and 12.7; canon files 35-49). It outranked the
@@ -1042,7 +1093,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 - Audience sizing and market research (Facebook Audience Insights, LinkedIn search; "one source and audience size"; specific experts/authors/books/tools/publications/associations as interest signals) — canon 02, 03 — stage 1 — status: implemented 2026-10-03 (Ralph cycle 127) as the pure Commercial Design `AudienceReachEstimate` (`AudienceDefinition`, `InterestSignal`, `ResearchPlatform`, `InterestKind`) with the caller-invoked `MarketReachPolicy`, which records the platform, the audience location, age, gender and at least one typed specific interest signal, a positive integer estimated reach, a source note and capture date, binds a named owner, refuses blank or untyped or duplicate content, reports `is_litmus_test`/`is_plan` and is never an observation; `MarketReachPolicy.require_reachable` refuses a market below the caller's minimum viable audience and `require_multiplatform` refuses a single-network litmus or a confirmation spanning more than one client with the named `MarketReachBoundaryError` (hardened in Ralph cycle 128), so the canon's Market gate that "the market is big enough, reachable" now has a typed research input with a tenant boundary. SPEC.md section 12.5 did not seed this asset, so it is recorded here as a newly identified gap; it is an asset inside stage 1, not a new stage. Wiring it into the `TargetMarketCandidate`, the stage 1 `DiagnosisPackage` or a required stage 1 gate kind remains a bounded follow-up and a methodology-owner decision. Google keyword research is named at the end of canon file 02 but its session is absent from the supplied canon, so it is recorded as a gap.
 - Missing canon files 19 and 20; promised sales/enrollment and email/follow-up modules absent — status: unresolved, request from license owner.
 - Service and partnership lines (kickoff checklist, module production standard, session guide, client scorecard, case study template; renewal and win-back, next-offer path, referral and partner plan, community rules, reputation track) — canon internal/service-ops and internal/stations docs — after stage 10 (service delivery and portfolio expansion) — status: identified gap 2026-10-03 (Ralph cycle 130; canon stations and method map updated 2026-10-03). The canon map now has nine stations (Plan, Market, Message, Offer, Funnel, Traffic, Content, Retargeting, Enroll) whose build line is a 12-week program, and the third phase's motions are Extract, Content, Expand; Serve is the client's own delivery and Grow splits the foundation offer into smaller offers that raise customer lifetime value. The back half of the client life is still thin, so RED defines the service line (deliver one module a week, teach one day and coach another, track attendance and results, collect a case study when results land) and the partnership line (retain, grow, refer, renew, reputation). SPEC.md section 1 puts "portfolio expansion" in the product contract and section 3 names the Portfolio context (opportunity and roadmap), but no stage 0-10 asset or required gate kind represents delivery progress, the case study as sourced proof, or the renewal, referral and reputation clocks. These are candidate pipeline additions that need a named-owner decision (adding or renaming a stage is not an agent decision); the case study is also constrained by SPEC.md section 1 (no unreviewed testimonials or performance claims) and section 4 (client-approved, version-scoped claims). Any publish, send, spend or client commitment remains a human decision.
-- Extract (pull key ideas from the signature solution: FAQs, problems, process, reviews and praise; group themes around the one currency; build an email and social content plan) — n/a, our layer (feeds 25-28) — service layer ahead of stage 10 content operations, a stage 6/10 asset — status: identified gap 2026-10-03 (canon stations and method map updated). The canon's third phase starts with Extract, which turns the signature solution into a content plan before the Content motion makes posts and emails; no stage 0-10 asset represents this plan. The bounded slice is a pure-domain `ContentPlan` grounded on the same-tenant stage 4 `SignatureSolution`, grouping themes around the stage 2 currency and binding a named owner. Not a new stage; any publish stays a human decision.
+- Extract (pull key ideas from the signature solution: FAQs, problems, process, reviews and praise; group themes around the one currency; build an email and social content plan) — n/a, our layer (feeds 25-28) — service layer ahead of stage 10 content operations, a stage 6/10 asset — status: implemented 2026-10-03 (Ralph cycle 2026-10-03T174319Z) as the pure Commercial Design `ContentPlan` (`ContentIdeaSource`, `ContentPlanChannel`, `ContentTheme`, `ContentIdea`, `ContentPlan`, `CONTENT_PLAN_CANON_REFERENCE = "25, 27, 28"`), which grounds on a same-tenant stage 4 `SignatureSolution` and stage 2 `PrimaryCurrency`, extracts ideas with a typed source (faq, problem, process, review_and_praise), maps every idea to a step the solution names and to a declared theme, requires each theme to advance either the current or the desired measure of the one locked currency, refuses a duplicate or cross-tenant theme or idea, requires the plan to build both an email and a social delivery, binds a named owner, reports the solution steps it covers and misses, is a plan and is never an observation. It is an asset inside stage 6, not a new stage; wiring it into a required stage 6 gate kind remains a methodology-owner decision, and any publish or spend stays a human decision. It is distinct from the `ContentRoadmap` (canon 26, 27); reconciling the two into one flow is a bounded follow-up.
 - Serve and Grow (Serve is the client's own delivery of the offer; Grow splits the foundation offer into smaller offers that are new entry points and raise customer lifetime value, expanding the RED Portfolio) — canon 11, 12 — after stage 10, Portfolio context — status: identified gap 2026-10-03 (canon stations and method map updated). SPEC.md section 1 puts portfolio expansion in the product contract and section 3 names the Portfolio context, but no stage 0-10 asset represents the smaller offers as entry points or the lifetime value they raise. A candidate pipeline addition needing a named-owner decision; any client commitment stays a human decision.
 
 ## Product priority: the gated production engagement
