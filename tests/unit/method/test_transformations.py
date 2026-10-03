@@ -444,5 +444,23 @@ class StepCoverageTests(unittest.TestCase):
             thirteen(step_transformations=candidate)
 
 
+class ThirteenTransformationsStageAssetTests(unittest.TestCase):
+    """SPEC.md sections 4 and 12.5: the shifts are a required stage 4 kind."""
+
+    def test_the_shifts_project_to_the_exact_thirteen_transformations_kind(self):
+        asset = thirteen().as_stage_asset(version=5)
+
+        self.assertEqual("thirteen-transformations", asset.kind)
+        self.assertEqual("transformations-3f", asset.asset_id)
+        self.assertEqual(TENANT, asset.tenant_id)
+        self.assertEqual(5, asset.version)
+
+    def test_a_versionless_projection_is_refused(self):
+        for version in (0, -1):
+            with self.subTest(version=version):
+                with self.assertRaises(InvalidTransformationError):
+                    thirteen().as_stage_asset(version=version)
+
+
 if __name__ == "__main__":
     unittest.main()

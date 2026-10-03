@@ -68,6 +68,11 @@ from redops.contexts.governance.domain.value_objects import (
     PipelineProgress,
 )
 from redops.contexts.method.domain.entities import SignatureSolution
+from redops.contexts.method.domain.transformations import (
+    ThirteenTransformations,
+    Transformation,
+    TransformationScope,
+)
 from redops.contexts.method.domain.value_objects import (
     SignatureStep,
     TransformationPhase,
@@ -167,12 +172,57 @@ def solution(tenant_id: str = TENANT) -> SignatureSolution:
     )
 
 
+def transformations(sol: SignatureSolution) -> ThirteenTransformations:
+    return ThirteenTransformations(
+        transformations_id="transformations-3f",
+        tenant_id=sol.tenant_id,
+        million_dollar_message="from chaotic delivery to a launched campaign",
+        solution=sol,
+        overall=Transformation(
+            transformation_id="transformations-3f-overall",
+            tenant_id=sol.tenant_id,
+            scope=TransformationScope.OVERALL,
+            scope_id=sol.solution_id,
+            title="from chaotic delivery to a launched campaign",
+            from_state=sol.starting_state,
+            to_state=sol.final_state,
+        ),
+        phase_transformations=tuple(
+            Transformation(
+                transformation_id=f"transformations-3f-{phase.phase_id}",
+                tenant_id=sol.tenant_id,
+                scope=TransformationScope.PHASE,
+                scope_id=phase.phase_id,
+                title=phase.name,
+                from_state=phase.steps[0].starting_state,
+                to_state=phase.steps[-1].final_state,
+            )
+            for phase in sol.phases
+        ),
+        step_transformations=tuple(
+            Transformation(
+                transformation_id=f"transformations-3f-{step.step_id}",
+                tenant_id=sol.tenant_id,
+                scope=TransformationScope.STEP,
+                scope_id=step.step_id,
+                title=step.name,
+                from_state=step.starting_state,
+                to_state=step.final_state,
+            )
+            for step in sol.steps
+        ),
+    )
+
+
 def package(*, tenant_id: str = TENANT, **overrides) -> SignaturePackage:
+    sol = overrides.get("solution", solution(tenant_id))
     values = {
         "package_id": "signature-3f",
         "tenant_id": tenant_id,
-        "solution": solution(tenant_id),
+        "solution": sol,
         "solution_version": 1,
+        "transformations": transformations(sol),
+        "transformations_version": 1,
     }
     values.update(overrides)
     return SignaturePackage(**values)
@@ -268,13 +318,15 @@ class StageFourGateAssemblerTests(unittest.TestCase):
             self.template.required_asset_kinds(4),
             {ref.asset_id for ref in gate.required_assets},
         )
-        self.assertEqual(12, len(gate.required_assets))
+        self.assertEqual(13, len(gate.required_assets))
 
     def test_the_gate_pins_the_exact_version_the_reviewed_solution_carries(self):
-        gate = self.assemble(package_=package(solution_version=5))
+        gate = self.assemble(
+            package_=package(solution_version=5, transformations_version=5)
+        )
 
         versions = {ref.asset_id: ref.version for ref in gate.required_assets}
-        self.assertEqual(12, len(versions))
+        self.assertEqual(13, len(versions))
         for kind, version in versions.items():
             self.assertEqual(5, version, msg=kind)
 
@@ -363,7 +415,7 @@ class StageFourGateRecorderTests(unittest.TestCase):
 
         decision = self.record(self.assembled_gate(), ledger)
 
-        self.assertEqual(12, len(decision.asset_approvals))
+        self.assertEqual(13, len(decision.asset_approvals))
         for request in decision.asset_approvals:
             self.assertEqual(SCOPE_FOUR, request.scope)
             self.assertEqual(APPROVER, request.approver)

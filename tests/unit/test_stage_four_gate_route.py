@@ -445,6 +445,13 @@ class StageFourGateRouteTests(unittest.TestCase):
             "authorities": self._authorities(),
             "signature_package_id": "signature-3f",
             "solution": self._solution(),
+            "transformations": {
+                "transformations_id": "transformations-3f",
+                "version": 1,
+                "million_dollar_message": (
+                    "from referral chaos to predictable demand in 90 days"
+                ),
+            },
             "stage_owner": OWNER,
             "approver": APPROVER,
             "proposed_by": OWNER,
@@ -504,6 +511,20 @@ class StageFourGateRouteTests(unittest.TestCase):
         self.assertEqual(
             {asset.asset_id for asset in decision_four.required_assets},
             set(self.signature_kinds),
+        )
+
+    def test_a_versionless_transformations_asset_is_rejected_without_a_write(
+        self,
+    ) -> None:
+        self.seed_stage_three()
+        payload = self.payload()
+        payload["transformations"]["version"] = 0
+
+        response = self.client.post(self.url(), json=payload)
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"], "InvalidSignaturePackageError"
         )
 
     def test_the_stage_run_is_persisted_with_its_completion(self) -> None:

@@ -71,6 +71,10 @@ from redops.contexts.commercial.domain.errors import (
 )
 from redops.contexts.governance.domain.value_objects import StageAssetVersion
 from redops.contexts.method.domain.entities import DiagnosticModel, SignatureSolution
+from redops.contexts.method.domain.transformations import (
+    THIRTEEN_TRANSFORMATIONS_KIND,
+    ThirteenTransformations,
+)
 from redops.contexts.method.domain.value_objects import (
     ImpactAssessment,
     PrimaryCurrency,
@@ -1138,12 +1142,13 @@ CANONICAL_SIGNATURE_KINDS: tuple[str, ...] = (
     "stage-outputs",
     "transformation-narrative",
     "transformation-visual",
+    THIRTEEN_TRANSFORMATIONS_KIND,
 )
 
 
 @dataclass(frozen=True)
 class SignaturePackage:
-    """The reviewed stage 4 solution, projected to the twelve canonical gate kinds.
+    """The reviewed stage 4 solution, projected to the canonical gate kinds.
 
     SPEC.md section 4, stage 4 "Package IP" and its "IP Architecture Locked"
     checkpoint: a stage is complete only when its required assets exist, pass the
@@ -1161,16 +1166,26 @@ class SignaturePackage:
     three main phases and nine clear steps from point A to point B, each named
     stage carrying its own from/to transformation, titled from the million dollar
     message. ``SignatureSolution`` already enforces that coherent shape and its
-    continuity at construction, so each canonical kind is projected from the
+    continuity at construction, so each solution kind is projected from the
     single reviewed solution at one positive integer version, and a blank
     identity, a versionless solution or a cross-tenant solution is refused rather
     than silently pinned (SPEC.md sections 3 and 4).
+
+    SPEC.md sections 4 and 12.5 (owner decision 2026-10-03) make a canon-informed
+    asset already implemented in a bounded context a required asset kind of its
+    target stage gate, so the typed ``ThirteenTransformations`` (canon files 09
+    and 10) is carried and projected as the ``thirteen-transformations`` kind.
+    Requiring the typed shifts, rather than the solution's own phase/step
+    attributes alone, makes the "IP Architecture Locked" gate record the canon's
+    thirteen titled from/to shifts it reviewed.
     """
 
     package_id: str
     tenant_id: str
     solution: SignatureSolution
     solution_version: int
+    transformations: ThirteenTransformations
+    transformations_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -1189,14 +1204,32 @@ class SignaturePackage:
                 "the signature solution version must be a positive integer so the "
                 "stage 4 gate can pin the reviewed asset at an exact version"
             )
+        if not isinstance(self.transformations, ThirteenTransformations):
+            raise InvalidSignaturePackageError(
+                "stage 4 transformations must be a typed reviewed asset"
+            )
+        if self.transformations.tenant_id != self.tenant_id:
+            raise SignatureTenantBoundaryError(
+                f"stage 4 transformations {self.transformations.transformations_id!r} "
+                f"belongs to tenant {self.transformations.tenant_id!r}, not package "
+                f"tenant {self.tenant_id!r}"
+            )
+        if (
+            not isinstance(self.transformations_version, int)
+            or self.transformations_version < 1
+        ):
+            raise InvalidSignaturePackageError(
+                "the thirteen transformations version must be a positive integer so "
+                "the stage 4 gate can pin the reviewed asset at an exact version"
+            )
 
     @property
     def kinds(self) -> frozenset[str]:
-        """The canonical kinds the reviewed stage 4 solution projects onto."""
+        """The canonical kinds the reviewed stage 4 assets project onto."""
         return frozenset(CANONICAL_SIGNATURE_KINDS)
 
     def missing_kinds(self) -> tuple[str, ...]:
-        """Canonical stage 4 kinds not covered by the projected solution."""
+        """Canonical stage 4 kinds not covered by the projected assets."""
         covered = {asset.kind for asset in self.stage_asset_versions()}
         return tuple(
             kind for kind in CANONICAL_SIGNATURE_KINDS if kind not in covered
@@ -1207,22 +1240,34 @@ class SignaturePackage:
         return not self.missing_kinds()
 
     def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
-        """Project the reviewed stage 4 solution onto exact governance evidence.
+        """Project the reviewed stage 4 assets onto exact governance evidence.
 
-        Every canonical kind belongs to the same reviewed ``SignatureSolution``,
-        so each is pinned to that solution's identity at its exact version.
-        Governance still pins each projection for the workspace tenant, so a
-        cross-client solution is refused rather than silently authorized (SPEC.md
-        sections 3, 4 and 11).
+        The solution kinds belong to the single reviewed ``SignatureSolution`` and
+        are pinned to its identity at its exact version; the
+        ``thirteen-transformations`` kind belongs to the typed
+        ``ThirteenTransformations`` and is pinned to the shifts' own identity at
+        their exact version. Governance still pins each projection for the
+        workspace tenant, so a cross-client solution or shift set is refused
+        rather than silently authorized (SPEC.md sections 3, 4 and 11).
         """
-        return tuple(
-            StageAssetVersion(
-                asset_id=self.solution.solution_id,
-                tenant_id=self.tenant_id,
-                kind=kind,
-                version=self.solution_version,
-            )
+        solution_kinds = tuple(
+            kind
             for kind in CANONICAL_SIGNATURE_KINDS
+            if kind != THIRTEEN_TRANSFORMATIONS_KIND
+        )
+        return (
+            *(
+                StageAssetVersion(
+                    asset_id=self.solution.solution_id,
+                    tenant_id=self.tenant_id,
+                    kind=kind,
+                    version=self.solution_version,
+                )
+                for kind in solution_kinds
+            ),
+            self.transformations.as_stage_asset(
+                version=self.transformations_version
+            ),
         )
 
 

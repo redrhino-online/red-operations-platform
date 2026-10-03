@@ -157,6 +157,7 @@ def stage_zero_to_ten_template(
                         "stage-outputs",
                         "transformation-narrative",
                         "transformation-visual",
+                        "thirteen-transformations",
                     }
                 ),
             ),

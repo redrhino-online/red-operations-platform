@@ -192,6 +192,11 @@ from redops.contexts.method.domain.entities import (
     MethodVersion,
     SignatureSolution,
 )
+from redops.contexts.method.domain.transformations import (
+    Transformation,
+    TransformationScope,
+    ThirteenTransformations,
+)
 from redops.contexts.method.domain.errors import (
     MethodError,
     MethodVersionConflictError,
@@ -1684,41 +1689,91 @@ def record_stage_four_gate(
                 for entry in body.authorities
             ),
         )
+        solution = SignatureSolution(
+            solution_id=body.solution.solution_id,
+            tenant_id=tenant_id,
+            transformation_map=body.solution.transformation_map,
+            process_inventory=tuple(body.solution.process_inventory),
+            phases=tuple(
+                TransformationPhase(
+                    phase_id=phase.phase_id,
+                    tenant_id=tenant_id,
+                    name=phase.name,
+                    steps=tuple(
+                        SignatureStep(
+                            step_id=step.step_id,
+                            tenant_id=tenant_id,
+                            name=step.name,
+                            starting_state=step.starting_state,
+                            final_state=step.final_state,
+                            inputs=tuple(step.inputs),
+                            actions=tuple(step.actions),
+                            outputs=tuple(step.outputs),
+                        )
+                        for step in phase.steps
+                    ),
+                )
+                for phase in body.solution.phases
+            ),
+            starting_state=body.solution.starting_state,
+            final_state=body.solution.final_state,
+            narrative=body.solution.narrative,
+            visual=body.solution.visual,
+        )
+        transformations = ThirteenTransformations(
+            transformations_id=body.transformations.transformations_id,
+            tenant_id=tenant_id,
+            million_dollar_message=body.transformations.million_dollar_message,
+            solution=solution,
+            overall=Transformation(
+                transformation_id=(
+                    f"{body.transformations.transformations_id}-overall"
+                ),
+                tenant_id=tenant_id,
+                scope=TransformationScope.OVERALL,
+                scope_id=solution.solution_id,
+                title=body.transformations.million_dollar_message,
+                from_state=solution.starting_state,
+                to_state=solution.final_state,
+            ),
+            phase_transformations=tuple(
+                Transformation(
+                    transformation_id=(
+                        f"{body.transformations.transformations_id}-"
+                        f"{phase.phase_id}"
+                    ),
+                    tenant_id=tenant_id,
+                    scope=TransformationScope.PHASE,
+                    scope_id=phase.phase_id,
+                    title=phase.name,
+                    from_state=phase.steps[0].starting_state,
+                    to_state=phase.steps[-1].final_state,
+                )
+                for phase in solution.phases
+            ),
+            step_transformations=tuple(
+                Transformation(
+                    transformation_id=(
+                        f"{body.transformations.transformations_id}-"
+                        f"{step.step_id}"
+                    ),
+                    tenant_id=tenant_id,
+                    scope=TransformationScope.STEP,
+                    scope_id=step.step_id,
+                    title=step.name,
+                    from_state=step.starting_state,
+                    to_state=step.final_state,
+                )
+                for step in solution.steps
+            ),
+        )
         package = SignaturePackage(
             package_id=body.signature_package_id,
             tenant_id=tenant_id,
-            solution=SignatureSolution(
-                solution_id=body.solution.solution_id,
-                tenant_id=tenant_id,
-                transformation_map=body.solution.transformation_map,
-                process_inventory=tuple(body.solution.process_inventory),
-                phases=tuple(
-                    TransformationPhase(
-                        phase_id=phase.phase_id,
-                        tenant_id=tenant_id,
-                        name=phase.name,
-                        steps=tuple(
-                            SignatureStep(
-                                step_id=step.step_id,
-                                tenant_id=tenant_id,
-                                name=step.name,
-                                starting_state=step.starting_state,
-                                final_state=step.final_state,
-                                inputs=tuple(step.inputs),
-                                actions=tuple(step.actions),
-                                outputs=tuple(step.outputs),
-                            )
-                            for step in phase.steps
-                        ),
-                    )
-                    for phase in body.solution.phases
-                ),
-                starting_state=body.solution.starting_state,
-                final_state=body.solution.final_state,
-                narrative=body.solution.narrative,
-                visual=body.solution.visual,
-            ),
+            solution=solution,
             solution_version=body.solution.version,
+            transformations=transformations,
+            transformations_version=body.transformations.version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 4, tenant_id

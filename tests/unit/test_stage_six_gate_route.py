@@ -489,6 +489,13 @@ class StageSixGateRouteTests(unittest.TestCase):
             "authorities": self._authorities(),
             "signature_package_id": "signature-3f",
             "solution": self._solution(),
+            "transformations": {
+                "transformations_id": "transformations-3f",
+                "version": 1,
+                "million_dollar_message": (
+                    "from referral chaos to predictable demand in 90 days"
+                ),
+            },
             "stage_owner": OWNER,
             "approver": APPROVER,
             "proposed_by": OWNER,

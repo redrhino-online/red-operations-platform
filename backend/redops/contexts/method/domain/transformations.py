@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from redops.contexts.method.domain.entities import SignatureSolution
+from redops.contexts.governance.domain.value_objects import StageAssetVersion
 from redops.contexts.method.domain.errors import (
     InvalidTransformationError,
     TransformationCoverageError,
@@ -49,6 +50,8 @@ from redops.contexts.method.domain.errors import (
 TRANSFORMATION_COUNT = 13
 PHASE_TRANSFORMATION_COUNT = 3
 STEP_TRANSFORMATION_COUNT = 9
+
+THIRTEEN_TRANSFORMATIONS_KIND = "thirteen-transformations"
 
 
 class TransformationScope(Enum):
@@ -313,6 +316,28 @@ class ThirteenTransformations:
     def is_method_structure(self) -> bool:
         """The transformations are the method structure content lives inside."""
         return True
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the shifts onto exact ``thirteen-transformations`` evidence.
+
+        SPEC.md sections 4 and 12.5 (owner decision 2026-10-03): a canon-informed
+        asset already implemented in a bounded context becomes a required asset
+        kind of its target stage gate, so the stage 4 "IP Architecture Locked"
+        gate pins the typed thirteen transformations (canon files 09 and 10) as
+        one exact ``StageAssetVersion``. A versionless projection is refused
+        rather than silently pinned (SPEC.md sections 3 and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidTransformationError(
+                "the thirteen transformations version must be a positive integer "
+                "so the stage 4 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.transformations_id,
+            tenant_id=self.tenant_id,
+            kind=THIRTEEN_TRANSFORMATIONS_KIND,
+            version=version,
+        )
 
     def as_observation(self, *, claim_id: str) -> None:
         """Refuse to represent the transformations as an observed result.

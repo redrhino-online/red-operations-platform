@@ -433,6 +433,25 @@ class SignatureSolutionInput(BaseModel):
     visual: str
 
 
+class TransformationsInput(BaseModel):
+    """The reviewed stage 4 thirteen transformations and their exact version.
+
+    SPEC.md sections 4 and 12.5 make the canon-informed
+    ``ThirteenTransformations`` (canon files 09 and 10) a required stage 4 asset.
+    The caller supplies the asset identity, the exact version and the Million
+    Dollar Message the overall shift is titled with; the route derives the three
+    phase shifts and nine step shifts from the already-reviewed solution's own
+    states, so every shift moves the client between the solution's real points A
+    and B. The domain enforces the thirteen-shift coverage, the titling and the
+    solution grounding, so the transport layer only carries the values and the
+    exact version.
+    """
+
+    transformations_id: str
+    version: int
+    million_dollar_message: str
+
+
 class RecordStageFourGateRequest(BaseModel):
     """The stage 4 "IP Architecture Locked" gate request (SPEC.md section 4).
 
@@ -450,6 +469,7 @@ class RecordStageFourGateRequest(BaseModel):
     authorities: list[ClientAuthorityInput]
     signature_package_id: str
     solution: SignatureSolutionInput
+    transformations: TransformationsInput
     stage_owner: str
     approver: str
     scope: str
