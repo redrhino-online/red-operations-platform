@@ -573,18 +573,18 @@ class RecordStageFiveGateRequest(BaseModel):
     """The stage 5 "Offer Locked" gate request (SPEC.md section 4).
 
     The caller supplies the reviewed delivery values, the reviewed product
-    program, the workspace authority registry and the decision metadata. The
-    route builds the canonical gate from these through the use case; it
-    deliberately accepts no pre-built gate, so approver authority and
-    exact-version evidence cannot be bypassed. Stage 5 depends on a passing stage
-    4 decision already in the ledger. The delivery carries no claims: the "Offer
-    Locked" checkpoint turns on every method step carrying an action, actor,
-    deliverable, timing and measure and on the typed product program, which the
-    domain enforces at construction, rather than external customer evidence.
+    program and the decision metadata; the authority registry is resolved from
+    the durable workspace store, never the body. The route builds the canonical
+    gate from these through the use case; it deliberately accepts no pre-built
+    gate, so approver authority and exact-version evidence cannot be bypassed.
+    Stage 5 depends on a passing stage 4 decision already in the ledger. The
+    delivery carries no claims: the "Offer Locked" checkpoint turns on every
+    method step carrying an action, actor, deliverable, timing and measure and
+    on the typed product program, which the domain enforces at construction,
+    rather than external customer evidence.
     """
 
     workspace_id: str
-    authorities: list[ClientAuthorityInput]
     offer_package_id: str
     delivery: DeliverySpecificationInput
     product_program: ProductProgramInput
