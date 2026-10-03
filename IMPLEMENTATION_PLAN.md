@@ -4,53 +4,53 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:43:29Z (Ralph cycle 112).
-- Selected item: build the canon's five market awareness levels as the pure
-  Commercial Design `MarketAwarenessLevel` and `MarketAwarenessMap`, grounding the
-  stage 1 `awareness-map` canonical kind on a typed level with research evidence,
-  message requirements, a narrowly-more-aware retarget level and an exact
-  `StageAssetVersion` projection (canon file 04: the five levels of market
-  awareness, from completely unaware to most aware; "you have to understand where
-  your prospect is"; "which is who we definitely do not want to sell to
-  initially"; SPEC.md section 12.3 map for stage 1 and section 12.5 positioning
-  and decision tools canon gap). It was the named highest priority ready next item
-  after cycle 111 and outranks the Target Market Matchmaker and the Funnel Finder
-  (the other two positioning and decision tools in the same canon gap) because it
-  is the one that types an existing stage 1 gate kind, `awareness-map`, which was
-  satisfied only by a free-text `AvatarProfile.awareness` string, so it
-  strengthens gate integrity with a bounded, pure-domain change. It also outranks
-  the Operations delivery adapter (blocked on the storage ADR) and the stage 9
-  compliance projection (needs a named-owner decision).
+- Cycle timestamp: 2026-10-03T05:45:16Z (Ralph cycle 113).
+- Selected item: build the canon's Target Market Matchmaker as the pure
+  Commercial Design `TargetMarketCandidate` and `TargetMarketMatchmaker`,
+  grounding the stages 1 and 2 target market decision on the canon's match
+  criteria and the cycle 112 `MarketAwarenessMap`. Canon file 00: "take maybe two
+  or three potential target markets and narrow it down to the one you should be
+  serving now", judged on "an audience that you're passionate to help", "the
+  problem you solve for them", "where there's actually a profit", "have a
+  presence and be known to them" and "a clear pathway from point A to point B";
+  SPEC.md section 12.5 records it as part of the positioning and decision tools
+  canon gap and section 12.3 maps canon file 04's awareness research to stage 1.
+  It was the named highest priority ready next item after cycle 112 and outranks
+  the Funnel Finder (the last sibling in the same gap) because it is the
+  decision that directly precedes stage 1 "Avatar Locked" and stage 2 "Currency
+  Locked", and it outranks the enrollment and sales call and the audience and
+  content flywheel because those need larger named-owner pipeline decisions. It
+  is a bounded, pure-domain planning decision, not a new required gate kind (a
+  methodology-owner decision).
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: the canon market awareness map now lives in the Commercial Design
-  domain with the named `InvalidMarketAwarenessMapError` and
-  `MarketAwarenessTargetingError`. `MarketAwarenessLevel` orders the five canon
-  levels from completely unaware to most aware and marks only the completely
-  unaware as not initially targetable; `MarketAwarenessMap` requires a typed
-  primary level, research evidence and message requirements, refuses a blank
-  identity, an untyped level, empty evidence or empty message requirements, and a
-  retarget level that is not strictly more aware than the primary level, and
-  `as_stage_asset(version=...)` projects the map onto the canonical
-  `awareness-map` kind at a positive version while refusing a versionless
-  projection. `MarketAwarenessPolicy.require_targetable` refuses a map whose
-  primary level is completely unaware. New behavioral coverage: 12 tests in
-  `tests/unit/commercial/test_market_awareness.py`. Running `PYTHONPATH=backend
-  python3 -m unittest discover -s tests -p 'test_*.py'` reports 1251 passed, up
-  from 1239. `python3 -m pyflakes backend/redops tests` is clean. `ruff` and
+- Evidence: the canon target market matchmaker now lives in the Commercial
+  Design domain with the named `InvalidTargetMarketMatchmakerError`,
+  `TargetMarketTenantBoundaryError`, `TargetMarketMatchError` and
+  `TargetMarketObservationError`. `TargetMarketCandidate` requires all five canon
+  match criteria (passion, problem, profit, reachability and pathway) alongside
+  its identity; `TargetMarketMatchmaker` requires at least two candidates (the
+  canon's "two or three"), one selected market among them, unique candidate ids,
+  a typed same-tenant `MarketAwarenessMap` and a `selected_market` projection,
+  and it refuses to be recorded as an observation. `TargetMarketMatchPolicy.
+  require_servable` refuses a match whose chosen market's awareness position is
+  not initially targetable, reusing the canon's completely-unaware rule. New
+  behavioral coverage: 12 tests in
+  `tests/unit/commercial/test_target_market_matchmaker.py`. Running `PYTHONPATH=backend
+  python3 -m unittest discover -s tests -p 'test_*.py'` reports 1263 passed, up
+  from 1251. `python3 -m pyflakes backend/redops tests` is clean. `ruff` and
   `mypy` remain uninstalled.
-- New findings: the stage 1 `awareness-map` canonical kind was previously
-  satisfied only by a free-text `AvatarProfile.awareness` string, so the "Avatar
-  Locked" gate could pass on an untyped awareness claim; the new `MarketAwarenessMap`
-  supplies the canon's typed substance, its five-level progression, its research
-  evidence and its message requirements, but it is not yet wired into the
-  `AvatarProfile` or the stage 1 `DiagnosisPackage` (that is a bounded follow-up,
-  and changing the avatar lock or the stage 1 required-kind set is a
-  methodology-owner-adjacent decision, SPEC.md section 12.5). The canon file 04
-  five levels are consistent with canon file 00's agenda, so no contradiction is
-  carried. The map is a decision asset, not an observation, and it does not
-  authorize outreach or spend (SPEC.md sections 4 and 9). The positioning and
-  decision tools canon gap is now partly implemented for the market awareness
-  levels; the Target Market Matchmaker and Funnel Finder remain.
+- New findings: the matchmaker grounds the chosen market on the same-tenant
+  `MarketAwarenessMap` built in cycle 112 and delegates the canon's
+  completely-unaware rule to `TargetMarketMatchPolicy`, so the positioning and
+  decision tools gap is now implemented for the market awareness levels and the
+  Target Market Matchmaker; the Funnel Finder remains the last candidate in that
+  gap. The matchmaker is not yet wired into the stage 1 `AvatarProfile` or the
+  stage 2 `PositioningDecision`, and it is not a new required stage kind, so the
+  stage 1 "Avatar Locked" gate is unchanged (wiring either is a
+  methodology-owner-adjacent decision, SPEC.md section 12.5). It is a planning
+  decision, not an observation, and it does not authorize outreach or spend
+  (SPEC.md sections 4 and 9). The canon file 00 match criteria are consistent
+  with canon file 04's awareness research, so no contradiction is carried.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -58,27 +58,37 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: build the canon's Target Market Matchmaker as
-  a pure Commercial Design decision asset at stages 1 and 2 (canon file 00: take
-  two or three candidate markets and narrow to the one to serve now on being
-  passionate to help, a clear problem the offer solves, real profit, reachability
-  and a clear point-A-to-point-B pathway; canon file 04 supplies the awareness
-  research; SPEC.md section 12.5 records it as part of the positioning and decision
-  tools canon gap). It is the smallest remaining sibling of the same gap and it
-  directly precedes stage 1 "Avatar Locked" and stage 2 "Currency Locked", so it
-  outranks the Funnel Finder (canon 13, 14, pre-stage-8 selection), the
-  audience-building and content flywheel (canon 25-31, stages 6 and 10) and the
-  downstream candidates. Prerequisite: read canon file 00 before shaping, keep the
+- Highest priority ready next item: build the canon's Funnel Finder as a pure
+  Commercial Design selection decision (canon files 13 and 14: choose a funnel
+  type from the prospect's technical level, experience, offer price and business
+  model; SPEC.md section 12.5 records it as the last part of the positioning and
+  decision tools canon gap and section 12.3 places the pre-stage-8 selection with
+  canon files 13 and 14). It is the smallest remaining sibling of the same gap
+  and it precedes stage 8 "Funnel Complete", so it outranks the audience-building
+  and content flywheel (canon 25-31, stages 6 and 10) and the downstream
+  candidates. Prerequisite: read canon files 13 and 14 before shaping, keep the
   new asset a planning decision rather than a new required gate kind (a
-  methodology-owner decision), and consider grounding it on the same-tenant
-  `MarketAwarenessMap` and stage 2 `PositioningDecision`. The enrollment and sales
-  call (canon 00, 13, 14, 21, 24) remains a larger named-owner pipeline decision
-  and is not selected.
+  methodology-owner decision), and consider grounding it on the stage 8
+  `FunnelIntegration` asset kinds. The enrollment and sales call (canon 00, 13,
+  14, 21, 24) remains a larger named-owner pipeline decision and is not selected.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; a stage-parameterized gate recorder/handler refactor;
   projecting the compliance package onto a canonical stage 9 gate kind
   (methodology-owner decision); and all persistence.
+  [DONE 2026-10-03 (Ralph cycle 113): built the canon's Target Market Matchmaker
+  as the pure Commercial Design `TargetMarketCandidate` and
+  `TargetMarketMatchmaker` -- a candidate carries the canon's five match criteria
+  (passion, problem, profit, reachability, point-A-to-point-B pathway), the match
+  narrows at least two candidates to exactly the one selected, grounds the chosen
+  market on a same-tenant `MarketAwarenessMap`, refuses a duplicate candidate or a
+  selected market that is not among the candidates, and
+  `TargetMarketMatchPolicy.require_servable` refuses a match whose chosen market's
+  awareness position is not initially targetable (SPEC.md section 12.5; canon file
+  00); verified by `tests/unit/commercial/test_target_market_matchmaker.py` (12
+  tests, full suite 1263 passed), so the target market decision is now a typed,
+  tenant-scoped planning asset rather than prose. The Funnel Finder remains in
+  this canon gap.]
   [DONE 2026-10-03 (Ralph cycle 112): built the canon's five market awareness
   levels as the pure Commercial Design `MarketAwarenessLevel` and
   `MarketAwarenessMap` -- the map types the stage 1 `awareness-map` canonical kind
@@ -527,7 +537,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: candidate.
 - Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 110) as the Measurement `RetargetingPlan` (`TrackingCode`, `ConversionGoal`, `RetargetingAudience`, `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep`), which orders the canon's tracking code, conversion goals, retargeting lists and focused campaigns and binds them to one tenant and a named owner; the canon's effective-ads step is covered by the stage 10 `SplitTest` and its metrics step by the `MetricDefinition` registry. Remaining candidate: the canon's invisible opt-in offer and banner-ad spec/swipe-file assets are delivery assets outside this planning artifact and still need a named-owner decision on where they belong.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: implemented 2026-10-03 (Ralph cycle 94) as the Execution `CompliancePackage` (`ComplianceAssetKind`, `ComplianceAsset`, `ComplianceWaiver`) with the `ComplianceRequiredPolicy` gating `LaunchQA` traffic authorization, so "Launch Approved" needs every required asset or a live owned waiver; projecting the compliance assets onto their own canonical stage 9 gate kind remains a candidate that needs a named-owner decision.
-- Positioning and decision tools (Target Market Matchmaker, awareness levels, Funnel Finder) — canon 00, 04, 13, 14 — stages 1 and 2 — status: partly implemented 2026-10-03 (Ralph cycle 112) for the market awareness levels as the Commercial Design `MarketAwarenessMap` (`MarketAwarenessLevel`), which types the stage 1 `awareness-map` kind with the canon's five levels, requires research evidence and message requirements, rejects a retarget level that is not strictly further down the funnel, and projects to exact `StageAssetVersion` evidence; the Target Market Matchmaker (canon 00, 04; choose one market from two or three candidates) and the Funnel Finder (canon 13, 14; choose a funnel type from technical level, experience, offer price and business model) remain candidates. Wiring the map into the `AvatarProfile` or the stage 1 `DiagnosisPackage` is a bounded follow-up.
+- Positioning and decision tools (Target Market Matchmaker, awareness levels, Funnel Finder) — canon 00, 04, 13, 14 — stages 1 and 2 — status: partly implemented 2026-10-03 (Ralph cycle 112) for the market awareness levels as the Commercial Design `MarketAwarenessMap` (`MarketAwarenessLevel`), which types the stage 1 `awareness-map` kind with the canon's five levels, requires research evidence and message requirements, rejects a retarget level that is not strictly further down the funnel, and projects to exact `StageAssetVersion` evidence; and implemented 2026-10-03 (Ralph cycle 113) for the Target Market Matchmaker as the Commercial Design `TargetMarketCandidate` and `TargetMarketMatchmaker`, which narrows at least two canon-judged candidates to the one to serve now, grounds the chosen market on a same-tenant `MarketAwarenessMap`, and has `TargetMarketMatchPolicy.require_servable` refuse a market whose awareness position is not initially targetable. The Funnel Finder (canon 13, 14; choose a funnel type from technical level, experience, offer price and business model) remains a candidate. Wiring the awareness map or the match into the `AvatarProfile` or the stage 1 `DiagnosisPackage` is a bounded follow-up; neither is a required gate kind yet (a methodology-owner decision).
 - Thirteen transformations (the overall shift, three phase shifts and nine step-level from/to pairs, titled from the million dollar message) — canon 09, 10 — stage 4 — status: candidate; the SPEC stage 4 package names named stages, starting/final states and narrative but not the explicit 13 from/to transformations, so adding a required kind or field is a methodology-owner decision on the gate contract.
 - Umbrella planning (Online Business Launch Map, Bulletproof Business Plan) — canon 00, 01 — over stages 0 to 10 — status: candidate.
 - Swimlanes channel model — canon 13, 14, 33, 34 — cross-cutting stages 8 to 10 — status: candidate.

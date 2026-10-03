@@ -27,6 +27,7 @@ from redops.contexts.commercial.domain.errors import (
     InvalidOfferPackageError,
     InvalidPositioningDecisionError,
     InvalidSignaturePackageError,
+    InvalidTargetMarketMatchmakerError,
     MarketAwarenessTargetingError,
     NurtureDependencyError,
     NurtureObservationError,
@@ -34,6 +35,8 @@ from redops.contexts.commercial.domain.errors import (
     NurtureTenantBoundaryError,
     OfferTenantBoundaryError,
     SignatureTenantBoundaryError,
+    TargetMarketObservationError,
+    TargetMarketTenantBoundaryError,
 )
 from redops.contexts.governance.domain.value_objects import StageAssetVersion
 from redops.contexts.method.domain.entities import DiagnosticModel, SignatureSolution
@@ -1632,5 +1635,137 @@ class NurturePlan:
         """
         raise NurtureObservationError(
             f"nurture plan {claim_id!r} is follow-up content to run, not an "
+            "observed result, and cannot be recorded as an observation"
+        )
+
+
+@dataclass(frozen=True)
+class TargetMarketCandidate:
+    """One candidate target market judged by the canon's match criteria.
+
+    SPEC.md section 12.5 records the positioning and decision tools as a canon
+    gap. The canon's target market matchmaker judges each candidate market on
+    being an audience you are passionate to help, a clear problem the offer
+    solves, real profit, a place where you can have a presence and be known to
+    them, and a clear pathway from point A to point B (canon file 00). The
+    candidate is frozen and reject-only, so a market that leaves any of those
+    criteria unstated cannot be represented as a match candidate.
+    """
+
+    market_id: str
+    name: str
+    passion: str
+    problem: str
+    profit: str
+    reachability: str
+    pathway: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("target market candidate id", self.market_id),
+            ("target market candidate name", self.name),
+            ("target market candidate passion", self.passion),
+            ("target market candidate problem", self.problem),
+            ("target market candidate profit", self.profit),
+            ("target market candidate reachability", self.reachability),
+            ("target market candidate pathway", self.pathway),
+        ):
+            if not value or not value.strip():
+                raise InvalidTargetMarketMatchmakerError(f"{label} is required")
+
+
+@dataclass(frozen=True)
+class TargetMarketMatchmaker:
+    """The canon's target market matchmaker for one client and one selection.
+
+    SPEC.md section 12.5 records the target market matchmaker as part of the
+    positioning and decision tools canon gap. The canon takes two or three
+    candidate target markets and narrows them to the one to serve now (canon file
+    00), judged on the ``TargetMarketCandidate`` criteria, and the awareness
+    research (canon file 04) places the chosen market. The match is frozen and
+    reject-only, so fewer than two candidates, a duplicate candidate, a selected
+    market that is not among the candidates, or a cross-tenant awareness map
+    cannot be represented as a target market decision.
+
+    It is a planning decision for stages 1 and 2, not a new required gate kind (a
+    methodology-owner decision, SPEC.md section 12.5). It does not authorize
+    outreach or spend (SPEC.md sections 4 and 9) and it is never an observation
+    (SPEC.md section 3).
+    """
+
+    matchmaker_id: str
+    tenant_id: str
+    candidates: tuple[TargetMarketCandidate, ...]
+    selected_market_id: str
+    awareness_map: MarketAwarenessMap
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("target market matchmaker id", self.matchmaker_id),
+            ("target market matchmaker tenant id", self.tenant_id),
+            ("target market selected market id", self.selected_market_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidTargetMarketMatchmakerError(f"{label} is required")
+        candidates = tuple(self.candidates)
+        if len(candidates) < 2:
+            raise InvalidTargetMarketMatchmakerError(
+                "the target market matchmaker requires at least two candidate "
+                "markets to narrow from"
+            )
+        seen: set[str] = set()
+        for candidate in candidates:
+            if not isinstance(candidate, TargetMarketCandidate):
+                raise InvalidTargetMarketMatchmakerError(
+                    "a target market matchmaker candidate must be a typed market "
+                    "candidate"
+                )
+            if candidate.market_id in seen:
+                raise InvalidTargetMarketMatchmakerError(
+                    f"target market matchmaker {self.matchmaker_id!r} contains "
+                    f"duplicate candidate market id {candidate.market_id!r}"
+                )
+            seen.add(candidate.market_id)
+        if self.selected_market_id not in seen:
+            raise InvalidTargetMarketMatchmakerError(
+                f"target market matchmaker {self.matchmaker_id!r} selects market "
+                f"{self.selected_market_id!r}, which is not one of its candidates"
+            )
+        if not isinstance(self.awareness_map, MarketAwarenessMap):
+            raise InvalidTargetMarketMatchmakerError(
+                "a target market matchmaker requires the awareness map that "
+                "places the chosen market"
+            )
+        if self.awareness_map.tenant_id != self.tenant_id:
+            raise TargetMarketTenantBoundaryError(
+                f"target market matchmaker {self.matchmaker_id!r} belongs to "
+                f"tenant {self.tenant_id!r}, but its awareness map "
+                f"{self.awareness_map.map_id!r} belongs to tenant "
+                f"{self.awareness_map.tenant_id!r}"
+            )
+
+    @property
+    def selected_market(self) -> TargetMarketCandidate:
+        """The one candidate market selected to serve now."""
+        return next(
+            candidate
+            for candidate in self.candidates
+            if candidate.market_id == self.selected_market_id
+        )
+
+    @property
+    def is_decision(self) -> bool:
+        """A target market matchmaker is a planning decision, not activity."""
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a target market match as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The match
+        decides which market to serve, while any measured movement is a separate
+        observation, so a match is never an observation.
+        """
+        raise TargetMarketObservationError(
+            f"target market match {claim_id!r} is a planning decision, not an "
             "observed result, and cannot be recorded as an observation"
         )

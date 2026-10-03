@@ -366,3 +366,46 @@ class MarketAwarenessTargetingError(CommercialError):
     awareness position (SPEC.md section 4, stage 1 "Avatar Locked").
     """
 
+
+class InvalidTargetMarketMatchmakerError(CommercialError, ValueError):
+    """A target market candidate or match was built without its required content.
+
+    SPEC.md section 12.5 records the positioning and decision tools as a canon
+    gap. The canon's target market matchmaker takes two or three candidate
+    markets and narrows them to the one to serve now, judging each on being
+    passionate to help, a clear problem the offer solves, real profit,
+    reachability and a clear point A to point B pathway (canon file 00). A
+    candidate missing a criterion, a match with fewer than two candidates, a
+    duplicate candidate or a selected market that is not among the candidates
+    cannot be represented as a target market decision.
+    """
+
+
+class TargetMarketTenantBoundaryError(CommercialError):
+    """A target market match mixed in an asset from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. The
+    awareness position the chosen market is placed against cannot cross a tenant
+    boundary, so a match cannot cite another client's awareness map.
+    """
+
+
+class TargetMarketMatchError(CommercialError):
+    """A target market match was asked to serve a market it cannot serve now.
+
+    The canon narrows the candidate markets to the one to serve now (canon file
+    00), and its awareness research (canon file 04) places the completely
+    unaware outside the initial target. A match whose chosen market sits at the
+    completely unaware level cannot be served as the current target market
+    (SPEC.md sections 4 and 12.5).
+    """
+
+
+class TargetMarketObservationError(CommercialError):
+    """A target market match was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The match is
+    a planning decision about which market to serve, while any measured movement
+    stays a separate observation, so a match is never an observation.
+    """
+

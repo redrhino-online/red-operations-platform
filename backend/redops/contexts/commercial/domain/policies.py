@@ -21,6 +21,7 @@ from redops.contexts.commercial.domain.errors import (
     CampaignMessageAlignmentError,
     MarketAwarenessTargetingError,
     OfferReadinessError,
+    TargetMarketMatchError,
     UnsourcedDiagnosisEvidenceError,
 )
 from redops.contexts.commercial.domain.value_objects import (
@@ -30,6 +31,7 @@ from redops.contexts.commercial.domain.value_objects import (
     MethodReference,
     OfferFunnelAudit,
     OfferImpactAssessment,
+    TargetMarketMatchmaker,
 )
 from redops.contexts.knowledge.domain.entities import Claim
 from redops.contexts.knowledge.domain.policies import sourced_claim_ids
@@ -287,6 +289,28 @@ class MarketAwarenessPolicy:
                 f"market awareness map {awareness.map_id!r} targets the "
                 f"{awareness.primary_level.value!r} market, which the canon does "
                 "not treat as an initial target"
+            )
+
+
+class TargetMarketMatchPolicy:
+    """Refuses a target market match the canon cannot serve now.
+
+    SPEC.md section 12.5 records the target market matchmaker as part of the
+    positioning and decision tools canon gap. The canon narrows the candidate
+    markets to the one to serve now (canon file 00), and its awareness research
+    (canon file 04) places the completely unaware outside the initial target
+    ("which is who we definitely do not want to sell to initially"). A match
+    whose chosen market's awareness position is not initially targetable cannot
+    be the current target market (SPEC.md sections 4 and 12.5).
+    """
+
+    def require_servable(self, match: TargetMarketMatchmaker) -> None:
+        if not match.awareness_map.primary_level.is_initially_targetable:
+            raise TargetMarketMatchError(
+                f"target market match {match.matchmaker_id!r} selects market "
+                f"{match.selected_market_id!r}, but its awareness position "
+                f"{match.awareness_map.primary_level.value!r} is not an initial "
+                "target the canon will serve"
             )
 
 
