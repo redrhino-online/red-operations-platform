@@ -55,3 +55,14 @@ class WorkflowRunNotFoundError(WorkflowError):
     Run lookups are tenant scoped, so a run owned by another client is
     indistinguishable from a missing run and never leaks its existence.
     """
+
+
+class CrossTenantWorkflowRunError(WorkflowError):
+    """A workflow run was stored or read without a client scope (SPEC.md section 9).
+
+    A workflow run is a client resource and carries its tenant on every command
+    and query (SPEC.md sections 3 and 9). An unscoped write would create an
+    orphaned or cross-client run, and an unscoped read could leak one client's
+    run to another, so the adapter refuses a blank tenant instead of falling
+    back to a global key.
+    """

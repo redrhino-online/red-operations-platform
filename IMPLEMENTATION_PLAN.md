@@ -4,6 +4,84 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T185523Z (Ralph cycle, this run): selected item was the next
+  Q5 workflow-engine slice, the durable PostgreSQL `WorkflowRunStore` adapter
+  plus migration (SPEC.md sections 7 and 11; ADR 0003; ADR 0005; implementation
+  plan Q5). It is the plan's named highest-priority ready item and the smallest
+  dependency-satisfied slice that makes durable run state real across a process
+  restart. It outranked the alternatives for these reasons. The prior cycle left
+  the pure workflow contract with only an in-memory reference store, so SPEC.md
+  section 11's "restarting worker preserves a waiting workflow" held only inside
+  one process; the adapter is the bounded change that makes it hold across a
+  real restart and is the prerequisite for the fork `resumer.py` adapter and the
+  REST `/workflows/{id}` route (Q15) that eventually unblocks Q32
+  (`frontend/`, the only failing DoD checkpoint, condition 6). The stage 8-10
+  canon required-kind wiring (Q28) is still blocked on the named
+  methodology-owner placement decision (`EnrollmentPlan`, `ClientProcess`,
+  `SwimlanesPlan`), and the task forbids making that decision unattended. The
+  Next.js `frontend/` shell (Q32) remains blocked on the workflow route and is
+  far larger than one cycle, so building only its proxy would misrepresent
+  completion. Q9-Q14 REST resource routes are ready but are API surface, not the
+  last DoD blocker, so they rank below the store. No smaller gate-integrity
+  defect with satisfied prerequisites remained.
+- Outcome: new package `backend/redops/workflows/infrastructure/`. `mappers.py`
+  serialises a `WorkflowRun` to a JSONB payload (pinned `WorkflowDefinition`
+  with step names/kinds, status, completed steps, in-progress step, pending
+  approval, failure reason and the full transition log) and rebuilds it through
+  `WorkflowRun.__post_init__`, then `restore_history`, so a reload re-validates
+  through the aggregate without replaying the state machine (SPEC.md section 4;
+  the pinned version keeps an in-flight run on its start definition, SPEC.md
+  section 10). `repositories.py` adds the `InMemoryWorkflowRunStore` reference
+  adapter (round-trips through the mapper so it copies like a real adapter),
+  `PostgresWorkflowRunStore`, and `workflow_run_store_from_env` (durable when
+  `DATABASE_URL` is set, in-memory when blank, `WorkflowRunConfigurationError`
+  when set without psycopg). Reads are tenant scoped by the WHERE clause and a
+  NOT NULL `tenant_id`, so a foreign run is indistinguishable from a missing one
+  (SPEC.md section 9). New domain error `CrossTenantWorkflowRunError` refuses an
+  unscoped read or write. Migration `0009_workflow_runs` (down_revision
+  `0008_launch_qas`) creates `workflow_runs(tenant_id NOT NULL, run_id, status,
+  definition_id, definition_version, run JSONB, recorded_at, UNIQUE(tenant_id,
+  run_id))`.
+- Evidence: `make check` -> 1990 passed, 2 skipped, 680 subtests; pyflakes
+  clean. New adapter contract tests
+  `tests/unit/workflows/test_workflow_run_store.py` (14 tests: 9 in-memory, 5
+  PostgreSQL) prove a waiting run keeps its pending approval and pinned
+  definition version across a reload, an interrupted `in_progress_step` is
+  persisted for `resume_step`, a resave upserts without losing the append-only
+  transition log, a stored run is independent of later caller mutation, a run is
+  not read back for another tenant, an unscoped save/get raises the named error,
+  the env factory picks the right adapter, and a stored row the aggregate would
+  reject raises on load. `tests/unit/shared/test_migrate.py` now asserts the
+  `workflow_runs` table and alembic head `0009_workflow_runs`; the PostgreSQL
+  subset ran against the compose database (17 passed including the migration
+  runner). `make done` still fails only [5/6] (`frontend/` missing, Q32).
+- New findings: durable run state is now real, so the remaining Q5 slices are the
+  fork `vendor/openexecutive/packages/core/openexecutive/workflows/resumer.py`
+  adapter behind the `WorkflowStepExecutor` port (zero vendor edits, DoD
+  condition 7) and the REST `/workflows/{id}` route. The store is not yet wired
+  into any entry point (no API route or worker constructs it); `from_env` is the
+  seam an entry point will call. `WorkflowStepExecutor` remains the idempotency
+  seam connector steps and outbox dedup (Q16) plug into. The unresolved Q3
+  architecture tension remains (ADR 0006 registers RED agents through the fork's
+  `orchestrator/router.py` while DoD condition 7 requires zero vendor edits);
+  that is a named-owner/architecture decision.
+- Blockers: the Q28 stage 8/9/10 required-kind placement decision (named-owner);
+  `frontend/` (DoD condition 6, Q32) blocked on Q15; request idempotency (Q16)
+  blocked on the same; RLS is a WHERE clause only (ADR 0004); the condition 3
+  retrieval, background worker and artifact-URL layers are unbuilt; Q3 agent
+  registration blocked on the ADR 0006 versus vendor-edit tension; Q4's live call
+  needs an `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: the next Q5 slice, the fork
+  `workflows/resumer.py` adapter behind the `WorkflowStepExecutor` port
+  (dependency-satisfied now that the durable store lands; proves zero vendor
+  edits for DoD condition 7), then the REST `/workflows/{id}` route (Q15) and the
+  `frontend/` shell (Q32, DoD condition 6). Required owner input for the
+  pipeline: the stage 8/9/10 canon placement decision; approver for any wired
+  kind: the client designated authority; blocked downstream dependency: the
+  stage 9 gate.
+
+### Prior cycle (2026-10-03T184653Z)
+
 - Cycle 2026-10-03T184653Z (Ralph cycle, this run): selected item was the
   smallest independently verifiable slice of queue Q5, the workflow engine: the
   pure durable run-state contract plus the resume use case, proven by a
@@ -2280,7 +2358,7 @@ stalls:
 | Q2 | RED LLM adapter logs model, prompt version, usage, trace id | agents | Q1 | adapter contract test. Done 2026-10-03T184310Z: `ForkProviderModelGateway` wraps the fork's `get_provider` behind `ModelGateway`; `LoggingModelGateway` logs tenant/model/prompt version/trace id/context refs/tokens without prompt text; `ModelGatewayRuntimeError` guards a running loop. Verified by `tests/unit/agents/test_llm_gateway.py` (12 tests). Live smoke remains Q4 |
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
 | Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key. Done 2026-10-03T184450Z: `tests/unit/agents/test_live_openrouter_smoke.py` skips unless `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE` are set, then drives one live call through `ForkProviderModelGateway.from_fork_registry()` plus `LoggingModelGateway` and asserts the section 6 attribution; executing it awaits a real key |
-| Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). PostgreSQL `WorkflowRunStore` adapter + migration, fork `workflows/resumer.py` adapter behind the port, and REST `/workflows/{id}` (Q15) remain |
+| Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). Fork `workflows/resumer.py` adapter behind the port and REST `/workflows/{id}` (Q15) remain |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
 | Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams |
