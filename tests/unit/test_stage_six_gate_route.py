@@ -709,6 +709,27 @@ class StageSixGateRouteTests(unittest.TestCase):
         )
         self.assertIsNone(other.decision_for(6))
 
+    def test_re_stating_the_approved_method_with_different_content_is_refused(
+        self,
+    ) -> None:
+        self.seed_stage_five()
+        self.assertEqual(
+            self.client.post(self.url(), json=self.payload()).status_code, 201
+        )
+
+        tampered = self._method()
+        tampered["currency"] = "monthly revenue"
+        tampered["primary_currency"]["currency"] = "monthly revenue"
+
+        response = self.client.post(
+            self.url(), json=self.payload(method=tampered)
+        )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"], "MethodVersionConflictError"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,7 +15,7 @@ from collections.abc import Iterator
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from redops.api.schemas import (
     AuthorityAmplifierInput,
@@ -148,18 +148,25 @@ from redops.contexts.knowledge.domain.value_objects import (
     ProvenanceClass,
     SourceCitation,
 )
+from redops.contexts.method.application.ports import MethodVersionRepository
 from redops.contexts.method.domain.entities import (
     DiagnosticModel,
     MethodVersion,
     SignatureSolution,
 )
-from redops.contexts.method.domain.errors import MethodError
+from redops.contexts.method.domain.errors import (
+    MethodError,
+    MethodVersionConflictError,
+)
 from redops.contexts.method.domain.value_objects import (
     PrimaryCurrency,
     ProfitPyramidLevel,
     SemanticVersion,
     SignatureStep,
     TransformationPhase,
+)
+from redops.contexts.method.infrastructure.repositories import (
+    InMemoryMethodVersionRepository,
 )
 from redops.contexts.production.domain.entities import AuthorityAmplifier
 from redops.contexts.production.domain.errors import ProductionError
@@ -212,12 +219,34 @@ def get_stage_run_repository() -> Iterator[StageRunRepository]:
         repository.close()
 
 
+def get_method_version_repository(request: Request) -> MethodVersionRepository:
+    """Provide the approved method version seam to the API (SPEC.md section 6).
+
+    SPEC.md section 3 pins an exact method version and intended use at approval,
+    and SPEC.md section 4 keeps the approved version identifiable, so the stage
+    6 to 10 gates must resolve the approved method a prior gate pinned rather
+    than trust a repeated request body. The adapter is held on the app state so
+    one app instance shares it across requests and a test app stays isolated; no
+    durable PostgreSQL adapter is wired yet, so the process-local reference
+    adapter stands in and the durable store remains a follow-up (the same
+    port-first path the gate ledger took). A caller may override this dependency
+    to supply a durable adapter.
+    """
+
+    repository = getattr(request.app.state, "method_version_repository", None)
+    if repository is None:
+        repository = InMemoryMethodVersionRepository()
+        request.app.state.method_version_repository = repository
+    return repository
+
+
 def _approve_method_offer_message(
     tenant_id: str,
     *,
     method_body: MethodVersionInput,
     offer_body: OfferVersionInput,
     message_body: CampaignMessageInput,
+    method_repository: MethodVersionRepository,
 ) -> tuple[MethodVersion, MethodReference, OfferVersion, CampaignMessage]:
     """Rebuild the approved method, production ready offer and approved message.
 
@@ -273,7 +302,7 @@ def _approve_method_offer_message(
         minor=method_body.semantic_version.minor,
         patch=method_body.semantic_version.patch,
     )
-    method = MethodVersion(
+    candidate = MethodVersion(
         method_id=method_body.method_id,
         tenant_id=tenant_id,
         parent_method=method_body.parent_method,
@@ -316,6 +345,21 @@ def _approve_method_offer_message(
         intended_use=method_body.intended_use,
         on=method_body.approved_on,
     )
+    stored = method_repository.get(
+        tenant_id, method_body.method_id, semantic_version
+    )
+    if stored is None:
+        method_repository.save(candidate)
+        method = candidate
+    elif stored == candidate:
+        method = stored
+    else:
+        raise MethodVersionConflictError(
+            f"approved method {method_body.method_id!r} at version "
+            f"{semantic_version} was previously pinned for tenant "
+            f"{tenant_id!r} with different content; the stage gate must reuse "
+            "the exact approved method, not re-state it"
+        )
     method_reference = MethodReference(
         method_id=method_body.method_id,
         version=semantic_version,
@@ -1621,6 +1665,9 @@ def record_stage_six_gate(
     body: RecordStageSixGateRequest,
     repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
     run_repository: StageRunRepository = Depends(get_stage_run_repository),
+    method_repository: MethodVersionRepository = Depends(
+        get_method_version_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 6 "Campaign Message Approved" gate through the use case.
 
@@ -1662,6 +1709,7 @@ def record_stage_six_gate(
             method_body=body.method,
             offer_body=body.offer,
             message_body=body.message,
+            method_repository=method_repository,
         )
         package = CampaignMessagePackage(
             package_id=body.campaign_message_package_id,
@@ -1744,6 +1792,9 @@ def record_stage_seven_gate(
     body: RecordStageSevenGateRequest,
     repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
     run_repository: StageRunRepository = Depends(get_stage_run_repository),
+    method_repository: MethodVersionRepository = Depends(
+        get_method_version_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 7 "Authority Amplifier Approved" gate through the use case.
 
@@ -1788,6 +1839,7 @@ def record_stage_seven_gate(
             method_body=body.method,
             offer_body=body.offer,
             message_body=body.message,
+            method_repository=method_repository,
         )
         amplifier = _approve_authority_amplifier(
             tenant_id,
@@ -1878,6 +1930,9 @@ def record_stage_eight_gate(
     body: RecordStageEightGateRequest,
     repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
     run_repository: StageRunRepository = Depends(get_stage_run_repository),
+    method_repository: MethodVersionRepository = Depends(
+        get_method_version_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 8 "Funnel Complete" gate through the use case.
 
@@ -1921,6 +1976,7 @@ def record_stage_eight_gate(
             method_body=body.method,
             offer_body=body.offer,
             message_body=body.message,
+            method_repository=method_repository,
         )
         amplifier = _approve_authority_amplifier(
             tenant_id,
@@ -2015,6 +2071,9 @@ def record_stage_nine_gate(
     body: RecordStageNineGateRequest,
     repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
     run_repository: StageRunRepository = Depends(get_stage_run_repository),
+    method_repository: MethodVersionRepository = Depends(
+        get_method_version_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 9 "Launch Approved" gate through the use case.
 
@@ -2059,6 +2118,7 @@ def record_stage_nine_gate(
             method_body=body.method,
             offer_body=body.offer,
             message_body=body.message,
+            method_repository=method_repository,
         )
         amplifier = _approve_authority_amplifier(
             tenant_id,
@@ -2154,6 +2214,9 @@ def record_stage_ten_gate(
     body: RecordStageTenGateRequest,
     repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
     run_repository: StageRunRepository = Depends(get_stage_run_repository),
+    method_repository: MethodVersionRepository = Depends(
+        get_method_version_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 10 "Performance Baseline Established" gate.
 
@@ -2199,6 +2262,7 @@ def record_stage_ten_gate(
             method_body=body.method,
             offer_body=body.offer,
             message_body=body.message,
+            method_repository=method_repository,
         )
         amplifier = _approve_authority_amplifier(
             tenant_id,

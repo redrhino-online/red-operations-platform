@@ -4,7 +4,62 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T174319Z (Ralph cycle, this run): selected item was the
+- Cycle 2026-10-03T174702Z (Ralph cycle, this run): selected item was the durable
+  approved method version store, the gate-integrity item the prior cycles named as
+  the next alternative to the dashboard work (SPEC.md sections 3, 4, 6 and 9).
+  The stage 6 to 10 routes re-stated the approved method from the request body and
+  trusted caller-supplied `approved_by`/`intended_use`/`approved_on`, so a later
+  gate could silently declare a different method under an approved identity. It
+  outranked the Next.js `frontend/` shell, whose queue dependency Q15 (the
+  `/workflows/{id}` route) is unmet through the unbuilt workflow engine Q5, and
+  the larger required-kind wiring (Q28, which changes every stage's asset package
+  and route). The loop prioritizes exact approved asset versions over downstream
+  features.
+- Outcome: new Method application port `MethodVersionRepository`
+  (`backend/redops/contexts/method/application/ports.py`) and reference adapter
+  `InMemoryMethodVersionRepository`
+  (`backend/redops/contexts/method/infrastructure/repositories.py`); two named
+  errors `MethodVersionConflictError` and `MethodVersionTenantBoundaryError` in
+  `method/domain/errors.py` (the store also refuses an unapproved draft with the
+  existing `MethodApprovalError`). `api/routes.py` gains an app-state-scoped,
+  overridable `get_method_version_repository` dependency, and
+  `_approve_method_offer_message` now resolves the exact approved method by
+  `(tenant, method id, semantic version)`: absent, it stores the approved
+  candidate; identical, it reuses the stored version; a same-identity but
+  different body raises `MethodVersionConflictError` (422). The five stage 6 to
+  10 routes pass the repository through.
+- Evidence: `make check` -> 1788 passed, 1 skipped, 646 subtests; pyflakes clean.
+  New `tests/unit/method/test_method_version_repository.py` (7) and
+  `test_re_stating_the_approved_method_with_different_content_is_refused` in
+  `tests/unit/test_stage_six_gate_route.py`. `make done` clears [1/6]-[4/6] (per
+  cycle check, stage 0-10 e2e, cross-tenant security, vendor clean) and still
+  fails at [5/6] (`frontend/` missing).
+- New findings: this is a port-first slice. The reference adapter is held on the
+  FastAPI `app.state`, so the immutability rule is live within one app instance
+  and isolated per test app, but there is no durable PostgreSQL adapter or
+  migration yet, so method versions do not survive a restart and `make check`
+  without an override gets no cross-process durability. `OfferVersion` and
+  `CampaignMessage` are still re-stated from the request (no offer/message store),
+  so the same resolve-not-restate rule for the stage 5 offer remains open. The
+  stage 6 to 10 route docstrings still describe the old re-statement behavior and
+  should be updated when the store is fully wired.
+- Blockers: `frontend/` (DoD condition 6, Q32) is blocked on the workflow engine
+  Q5 via Q15; request idempotency (Q16) is blocked on the same; RLS is still a
+  WHERE clause only (ADR 0004); no durable offer, funnel or launch-QA store; the
+  condition 3 retrieval, background worker and artifact-URL layers are unbuilt;
+  the remaining canon gap register entries need named-owner decisions.
+- Highest priority ready next item: extend the same store -- add the PostgreSQL
+  `MethodVersionRepository` adapter plus a migration (mirroring the gate ledger
+  and stage run adapters), then apply the resolve-not-restate rule to
+  `OfferVersion` so the stage 6 to 10 gates ground on the exact approved stage 5
+  offer (SPEC.md sections 3, 4; DoD condition 1). Prerequisite: none beyond the
+  port and reference adapter now in place. Alternative gate-integrity item: wire
+  the implemented canon assets as required gate kinds (Q28) -- larger, changes the
+  stage asset packages and routes.
+
+### Prior cycle (2026-10-03T174319Z)
+
+- Cycle 2026-10-03T174319Z (Ralph cycle): selected item was the
   Extract content plan (Commercial Design `ContentPlan`), the bounded slice named
   by the canon gap register entry "Extract" (SPEC.md section 12.5; canon files
   25, 27, 28). It outranked the Next.js `frontend/` shell (a downstream

@@ -22,6 +22,27 @@ class MethodApprovalError(MethodError):
     """
 
 
+class MethodVersionConflictError(MethodError):
+    """An approved method version was re-stated with different content.
+
+    SPEC.md section 3: approval pins an exact version and intended use, and
+    SPEC.md section 4 keeps a previous approved version historically
+    identifiable. Two different methods cannot share one identity, so a
+    (client, method id, semantic version) already holding an approved method
+    refuses a different body rather than silently overwriting the approved
+    version the downstream gates were pinned to.
+    """
+
+
+class MethodVersionTenantBoundaryError(MethodError):
+    """An approved method store was read or written without a client scope.
+
+    SPEC.md sections 3 and 9 make a method version a client resource: every read
+    and write must carry the owning tenant so one client's approved method can
+    never be resolved for, or written under, another client.
+    """
+
+
 class MethodChangeImpactError(MethodError):
     """A change impact assessment was requested for a change it cannot describe.
 
