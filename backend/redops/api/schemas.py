@@ -449,6 +449,123 @@ class RecordStageFiveGateRequest(BaseModel):
     next_action: str = ""
 
 
+class SemanticVersionInput(BaseModel):
+    """An exact method version (SPEC.md section 3, MethodVersion)."""
+
+    major: int
+    minor: int
+    patch: int
+
+
+class MethodVersionInput(BaseModel):
+    """The stage 6 dependency: the approved method version the message grounds on.
+
+    SPEC.md section 3: production requires approved dependencies, and stage 6's
+    "Campaign Message Approved" checkpoint requires the message's method to be an
+    approved version for the same tenant, exact version and intended use. The
+    method pins its locked stage 2 primary currency, stage 3 diagnostic model and
+    stage 4 Signature Solution; the route re-states them from the request because
+    no MethodVersion store is exposed yet, so the caller supplies the approval
+    that governance would otherwise own. That limitation is recorded in the plan.
+    """
+
+    method_id: str
+    parent_method: str
+    semantic_version: SemanticVersionInput
+    stages: list[str]
+    currency: str
+    primary_currency: PrimaryCurrencyInput
+    diagnostic_model: DiagnosticModelInput
+    approved_by: str
+    intended_use: str
+    approved_on: date
+    claims: list[str] = Field(default_factory=list)
+
+
+class OfferVersionInput(BaseModel):
+    """The stage 6 dependency: the production ready stage 5 offer.
+
+    The offer carries the audience, promise, eligibility, price hypothesis,
+    owner and the complete stage 5 delivery package (nested
+    ``DeliverySpecificationInput``, which itself grounds on the locked stage 4
+    transformation). The route derives the message's single method reference from
+    the method input, so the offer is production ready once the method is
+    approved.
+    """
+
+    offer_id: str
+    audience: str
+    promise: str
+    eligibility: str
+    price_hypothesis: str
+    owner: str
+    delivery: DeliverySpecificationInput
+
+
+class CampaignMessageInput(BaseModel):
+    """The reviewed stage 6 message fields (SPEC.md section 4, stage 6).
+
+    The message carries the promise, problem hierarchy, desired outcome, proof and
+    objections, story, method explanation, CTA, lead magnet, hook, angles, landing
+    message and Authority Amplifier outline. The domain refuses a message whose
+    avatar, currency, problem, promise or product do not agree with the approved
+    method and offer, so the transport layer only carries the values.
+    """
+
+    message_id: str
+    owner: str
+    avatar: str
+    currency: str
+    problem: str
+    promise: str
+    cta: str
+    product_offer_id: str
+    problem_hierarchy: list[str]
+    desired_outcome: str
+    proof_objections: list[str]
+    story: str
+    method_explanation: str
+    lead_magnet: str
+    hook: str
+    angles: list[str]
+    landing_message: str
+    authority_amplifier_outline: str
+
+
+class RecordStageSixGateRequest(BaseModel):
+    """The stage 6 "Campaign Message Approved" gate request (SPEC.md section 4).
+
+    The caller supplies the reviewed message, the approved method and production
+    ready offer it grounds on, the workspace authority registry and the decision
+    metadata. The route builds the canonical gate from these through the use case;
+    it deliberately accepts no pre-built gate, so approver authority and
+    exact-version evidence cannot be bypassed. Stage 6 depends on a passing stage
+    5 decision already in the ledger. The message carries no claims: the
+    "Campaign Message Approved" checkpoint turns on the congruence of avatar,
+    currency, problem, promise, method, product and CTA, which the domain
+    enforces, rather than external customer evidence.
+    """
+
+    workspace_id: str
+    authorities: list[ClientAuthorityInput]
+    campaign_message_package_id: str
+    message_version: int
+    message: CampaignMessageInput
+    offer: OfferVersionInput
+    method: MethodVersionInput
+    stage_owner: str
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
 class AssetVersionResponse(BaseModel):
     """One exact asset version pinned or approved for a stage."""
 

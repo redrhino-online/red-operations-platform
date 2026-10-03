@@ -22,19 +22,26 @@ from redops.api.schemas import (
     RecordStageFiveGateRequest,
     RecordStageFourGateRequest,
     RecordStageOneGateRequest,
+    RecordStageSixGateRequest,
     RecordStageThreeGateRequest,
     RecordStageTwoGateRequest,
     RecordStageZeroGateRequest,
+)
+from redops.contexts.commercial.domain.entities import (
+    CampaignMessage,
+    OfferVersion,
 )
 from redops.contexts.commercial.domain.errors import CommercialError
 from redops.contexts.commercial.domain.value_objects import (
     AvatarProfile,
     BusinessSnapshot,
+    CampaignMessagePackage,
     CurrencyInventory,
     CurrencyPackage,
     DeliverySpecification,
     DiagnosisPackage,
     DiagnosticPackage,
+    MethodReference,
     MillionDollarMessage,
     OfferFunnelAudit,
     OfferPackage,
@@ -46,6 +53,7 @@ from redops.contexts.engagement.application.commands import (
     RecordStageFiveGateCommand,
     RecordStageFourGateCommand,
     RecordStageOneGateCommand,
+    RecordStageSixGateCommand,
     RecordStageThreeGateCommand,
     RecordStageTwoGateCommand,
     RecordStageZeroGateCommand,
@@ -54,6 +62,7 @@ from redops.contexts.engagement.application.handlers import (
     RecordStageFiveGateHandler,
     RecordStageFourGateHandler,
     RecordStageOneGateHandler,
+    RecordStageSixGateHandler,
     RecordStageThreeGateHandler,
     RecordStageTwoGateHandler,
     RecordStageZeroGateHandler,
@@ -94,12 +103,14 @@ from redops.contexts.knowledge.domain.value_objects import (
 )
 from redops.contexts.method.domain.entities import (
     DiagnosticModel,
+    MethodVersion,
     SignatureSolution,
 )
 from redops.contexts.method.domain.errors import MethodError
 from redops.contexts.method.domain.value_objects import (
     PrimaryCurrency,
     ProfitPyramidLevel,
+    SemanticVersion,
     SignatureStep,
     TransformationPhase,
 )
@@ -1136,6 +1147,273 @@ def record_stage_five_gate(
         )
         ledger = repository.load(template, tenant_id)
         decision = RecordStageFiveGateHandler().handle(command, ledger=ledger)
+        repository.append(decision)
+        run_repository.save(stage_run)
+    except (
+        CommercialError,
+        EngagementError,
+        GovernanceError,
+        MethodError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return {
+        "stage_number": decision.stage_number,
+        "template_version": decision.template_version,
+        "checkpoint": decision.checkpoint,
+        "disposition": decision.disposition.value,
+        "reviewer": decision.reviewer,
+        "scope": decision.scope,
+        "tenant_id": decision.tenant_id,
+        "decided_on": decision.decided_on.isoformat(),
+        "next_action": decision.next_action,
+        "required_assets": [
+            {
+                "asset_id": asset.asset_id,
+                "version": asset.version,
+            }
+            for asset in decision.required_assets
+        ],
+    }
+
+
+@router.post("/clients/{tenant_id}/stages/6/gate", status_code=201)
+def record_stage_six_gate(
+    tenant_id: str,
+    body: RecordStageSixGateRequest,
+    repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
+    run_repository: StageRunRepository = Depends(get_stage_run_repository),
+) -> dict[str, Any]:
+    """Record the stage 6 "Campaign Message Approved" gate through the use case.
+
+    SPEC.md section 6: the API calls the use case and never mutates persistence
+    directly. This route maps the typed request to the Engagement
+    ``RecordStageSixGateCommand``, loads the tenant's ledger through the
+    ``GateLedgerRepository`` port, runs ``RecordStageSixGateHandler`` and appends
+    the resulting ``GateDecision``. Stage 6 depends on stage 5, so governance
+    refuses the decision unless the ledger already holds a passing stage 5
+    decision (SPEC.md section 4). The stage 6 ``StageRun`` is loaded-or-created
+    and upserted through the ``StageRunRepository`` port in the same operation, so
+    its assigned owner, status and timestamps stay durable alongside the decision.
+
+    The route re-states the approved method and the production ready stage 5 offer
+    from the request because no ``MethodVersion`` or offer store is exposed over
+    the API yet; the reviewed message is then approved against them so the
+    "Campaign Message Approved" congruence (avatar, currency, problem, promise,
+    method, product and CTA agree) is proven by the domain, not asserted. Every
+    integrity rule -- canonical kinds, exact versions, owner/approver authority,
+    the message-method-offer congruence and the tenant boundary -- is enforced by
+    the domain; a rejection is a named 422 and never a partial write. The path
+    tenant, not the body, is the authoritative client scope. Stage 6 carries no
+    claims: the checkpoint turns on the message's congruence with the approved
+    method and offer, not external customer evidence.
+    """
+
+    template = stage_zero_to_ten_template()
+    try:
+        workspace = ClientWorkspace(
+            workspace_id=body.workspace_id,
+            tenant_id=tenant_id,
+            authorities=tuple(
+                ClientAuthority(actor=entry.actor, authority=entry.authority)
+                for entry in body.authorities
+            ),
+        )
+        solution = SignatureSolution(
+            solution_id=body.offer.delivery.signature_solution.solution_id,
+            tenant_id=tenant_id,
+            transformation_map=(
+                body.offer.delivery.signature_solution.transformation_map
+            ),
+            process_inventory=tuple(
+                body.offer.delivery.signature_solution.process_inventory
+            ),
+            phases=tuple(
+                TransformationPhase(
+                    phase_id=phase.phase_id,
+                    tenant_id=tenant_id,
+                    name=phase.name,
+                    steps=tuple(
+                        SignatureStep(
+                            step_id=step.step_id,
+                            tenant_id=tenant_id,
+                            name=step.name,
+                            starting_state=step.starting_state,
+                            final_state=step.final_state,
+                            inputs=tuple(step.inputs),
+                            actions=tuple(step.actions),
+                            outputs=tuple(step.outputs),
+                        )
+                        for step in phase.steps
+                    ),
+                )
+                for phase in body.offer.delivery.signature_solution.phases
+            ),
+            starting_state=body.offer.delivery.signature_solution.starting_state,
+            final_state=body.offer.delivery.signature_solution.final_state,
+            narrative=body.offer.delivery.signature_solution.narrative,
+            visual=body.offer.delivery.signature_solution.visual,
+        )
+        semantic_version = SemanticVersion(
+            major=body.method.semantic_version.major,
+            minor=body.method.semantic_version.minor,
+            patch=body.method.semantic_version.patch,
+        )
+        method = MethodVersion(
+            method_id=body.method.method_id,
+            tenant_id=tenant_id,
+            parent_method=body.method.parent_method,
+            semantic_version=semantic_version,
+            stages=tuple(body.method.stages),
+            currency=body.method.currency,
+            claims=frozenset(body.method.claims),
+            primary_currency=PrimaryCurrency(
+                tenant_id=tenant_id,
+                currency=body.method.primary_currency.currency,
+                audience=body.method.primary_currency.audience,
+                current_measure=body.method.primary_currency.current_measure,
+                desired_measure=body.method.primary_currency.desired_measure,
+                mechanism=body.method.primary_currency.mechanism,
+            ),
+            diagnostic_model=DiagnosticModel(
+                model_id=body.method.diagnostic_model.model_id,
+                tenant_id=tenant_id,
+                name=body.method.diagnostic_model.name,
+                levels=tuple(
+                    ProfitPyramidLevel(
+                        level_id=level.level_id,
+                        tenant_id=tenant_id,
+                        name=level.name,
+                        observable_measures=tuple(level.observable_measures),
+                        symptoms=tuple(level.symptoms),
+                        behaviors=tuple(level.behaviors),
+                        problems=tuple(level.problems),
+                    )
+                    for level in body.method.diagnostic_model.levels
+                ),
+                progression=body.method.diagnostic_model.progression,
+                qualification_logic=body.method.diagnostic_model.qualification_logic,
+                visual=body.method.diagnostic_model.visual,
+                explanatory_copy=body.method.diagnostic_model.explanatory_copy,
+            ),
+            signature_solution=solution,
+        ).approve(
+            approved_by=body.method.approved_by,
+            intended_use=body.method.intended_use,
+            on=body.method.approved_on,
+        )
+        method_reference = MethodReference(
+            method_id=body.method.method_id,
+            version=semantic_version,
+            intended_use=body.method.intended_use,
+        )
+        delivery = DeliverySpecification(
+            delivery_id=body.offer.delivery.delivery_id,
+            tenant_id=tenant_id,
+            signature_solution=solution,
+            delivery_model=body.offer.delivery.delivery_model,
+            duration=body.offer.delivery.duration,
+            modules=tuple(body.offer.delivery.modules),
+            responsibilities=tuple(body.offer.delivery.responsibilities),
+            support_cadence=body.offer.delivery.support_cadence,
+            step_deliveries=tuple(
+                StepDelivery(
+                    step_id=row.step_id,
+                    tenant_id=tenant_id,
+                    action=row.action,
+                    actor=row.actor,
+                    deliverable=row.deliverable,
+                    timing=row.timing,
+                    measure=row.measure,
+                )
+                for row in body.offer.delivery.step_deliveries
+            ),
+            outcome_measures=tuple(body.offer.delivery.outcome_measures),
+            pricing_payments=body.offer.delivery.pricing_payments,
+            scope=body.offer.delivery.scope,
+            guarantee_decision=body.offer.delivery.guarantee_decision,
+            eligibility=body.offer.delivery.eligibility,
+            offer_stack=tuple(body.offer.delivery.offer_stack),
+        )
+        offer = OfferVersion(
+            offer_id=body.offer.offer_id,
+            tenant_id=tenant_id,
+            audience=body.offer.audience,
+            promise=body.offer.promise,
+            eligibility=body.offer.eligibility,
+            price_hypothesis=body.offer.price_hypothesis,
+            method_refs=(method_reference,),
+            owner=body.offer.owner,
+            delivery_specification=delivery,
+        ).require_production_ready((method,))
+        message = CampaignMessage(
+            message_id=body.message.message_id,
+            tenant_id=tenant_id,
+            offer=offer,
+            owner=body.message.owner,
+            avatar=body.message.avatar,
+            currency=body.message.currency,
+            problem=body.message.problem,
+            promise=body.message.promise,
+            cta=body.message.cta,
+            method_reference=method_reference,
+            product_offer_id=body.message.product_offer_id,
+            problem_hierarchy=tuple(body.message.problem_hierarchy),
+            desired_outcome=body.message.desired_outcome,
+            proof_objections=tuple(body.message.proof_objections),
+            story=body.message.story,
+            method_explanation=body.message.method_explanation,
+            lead_magnet=body.message.lead_magnet,
+            hook=body.message.hook,
+            angles=tuple(body.message.angles),
+            landing_message=body.message.landing_message,
+            authority_amplifier_outline=body.message.authority_amplifier_outline,
+        ).approve((method,))
+        package = CampaignMessagePackage(
+            package_id=body.campaign_message_package_id,
+            tenant_id=tenant_id,
+            message=message,
+            message_version=body.message_version,
+        )
+        stage_run = run_repository.load(
+            template.version, workspace.workspace_id, 6, tenant_id
+        )
+        if stage_run is None:
+            stage_run = StageRun(
+                engagement=workspace.workspace_id,
+                stage_number=6,
+                template_version=template.version,
+                assigned_owner=body.stage_owner,
+                tenant_id=tenant_id,
+            )
+        stage_run.record_activity(
+            actor=body.stage_owner,
+            reason="stage 6 campaign message work began",
+            on=body.on,
+            correlation_id=body.correlation_id,
+        )
+        command = RecordStageSixGateCommand(
+            template=template,
+            workspace=workspace,
+            package=package,
+            stage_run=stage_run,
+            approver=body.approver,
+            scope=body.scope,
+            checkpoint_evidence=body.checkpoint_evidence,
+            rationale=body.rationale,
+            assigned_owner=body.assigned_owner,
+            due_on=body.due_on,
+            on=body.on,
+            correlation_id=body.correlation_id,
+            proposed_by=body.proposed_by,
+            next_action=body.next_action,
+        )
+        ledger = repository.load(template, tenant_id)
+        decision = RecordStageSixGateHandler().handle(command, ledger=ledger)
         repository.append(decision)
         run_repository.save(stage_run)
     except (

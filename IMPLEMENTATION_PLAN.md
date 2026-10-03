@@ -4,7 +4,78 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T172133Z (Ralph cycle, this run): selected item was the HTTP
+- Cycle 2026-10-03T172338Z (Ralph cycle, this run): selected item was the HTTP
+  route that exposes the stage 6 "Campaign Message Approved" gate. The prior
+  cycle named it the highest priority ready next item: the `StageSixGateAssembler`
+  /`StageSixGateRecorder`, the `RecordStageSixGateCommand`
+  /`RecordStageSixGateHandler` and the Commercial `CampaignMessagePackage` (which
+  projects the reviewed `CampaignMessage` onto `CANONICAL_MESSAGE_KINDS`) all
+  exist, but only stages 0 through 5 had write routes, so the canonical 0-10 API
+  surface stopped at stage 5 and DoD condition 1 stayed unreachable. It outranked
+  the stage 7 route (which depends on it) and the `ClientProcess` canon gap (a
+  methodology-owner decision), because gate visibility through the real use case
+  is the pipeline backbone.
+- Outcome: new `POST /red/clients/{tenant_id}/stages/6/gate` in
+  `backend/redops/api/routes.py`, mapping the typed request to the Commercial
+  `CampaignMessagePackage` and running `RecordStageSixGateHandler` through
+  `get_gate_ledger_repository` and `get_stage_run_repository`, mirroring the stage
+  5 route. New request schemas in `backend/redops/api/schemas.py`:
+  `SemanticVersionInput`, `MethodVersionInput`, `OfferVersionInput`,
+  `CampaignMessageInput`, `RecordStageSixGateRequest`. Because no `MethodVersion`
+  or offer store is exposed over the API yet, the route re-states the approved
+  method (its locked stage 2 primary currency, stage 3 diagnostic model and stage
+  4 Signature Solution) and the production ready stage 5 offer from the request,
+  then calls the domain's `CampaignMessage.approve` so the "Campaign Message
+  Approved" congruence (avatar, currency, problem, promise, method, product and
+  CTA agree) is proven by `CampaignMessageAlignmentPolicy`, not asserted. The
+  route computes no rule: canonical kinds, exact versions, approver authority,
+  the production-ready offer dependency, the message-method-offer congruence and
+  the stage 5 prerequisite stay enforced by the domain, and errors map to a named
+  422. Stage 6 carries no claims, because the checkpoint turns on the message's
+  congruence with the approved method and offer rather than external customer
+  evidence (canon files 06, 15, 24 and 25-28; SPEC.md section 12.3).
+- Evidence: `tests/unit/test_stage_six_gate_route.py` (6) pass: stages 0 through 5
+  are seeded through their own routes, then a passing stage 6 decision pins the
+  twelve canonical message kinds at version 1, the stage 6 run persists COMPLETE
+  with its owner, a stage 6 gate with no passing stage 5 is refused, a message
+  whose promise conflicts with its offer is refused without a write, an
+  unauthorized approver is refused without a write, and the decision is invisible
+  to another tenant. `make check` green: 1697 passed, 1 skipped, 632 subtests;
+  pyflakes clean.
+- New findings: the stage 6 route exposes a real integrity limitation -- the API
+  boundary accepts a caller-supplied method approval (`approved_by`,
+  `intended_use`, `approved_on`) because no `MethodVersion`/offer read model or
+  store is exposed, so the "approved method" dependency is data, not a durable
+  governance record. Stages 0-5 already re-state their upstream approved content
+  the same way, so this is consistent, but a method/offer store plus an exact
+  version lookup is the durable fix. The prerequisite refusal shape is unchanged
+  (`GateDecisionError` from `GateIntegrityPolicy` via `GateDecision.from_gate`).
+  The persisted `GateDecision.required_assets` carry the canonical kind as
+  `asset_id`. `make done` still fails at step 2 (`tests/e2e` absent), so DoD 1 is
+  not met.
+- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate routes
+  and a repeated gate POST after COMPLETE returns 422; RLS remains WHERE-clause
+  only (ADR 0004); no `MethodVersion`/offer store behind the API; the stage 0-10
+  e2e suite (DoD 1, Q30) and the migration deployment step (separate GitOps chart)
+  are absent from this repo.
+- Highest priority ready next item: expose the stage 7 "Authority Amplifier
+  Approved" gate by `POST /red/clients/{tenant_id}/stages/7/gate`, mapping a typed
+  request to the Commercial `AuthorityAmplifierPackage` and running
+  `RecordStageSevenGateHandler` through the ledger and stage run ports, mirroring
+  the stage 6 route (stage 7's dual approval -- script and supported claims before
+  visual production, then final creative acceptance -- is enforced by the domain).
+  Prerequisites: the `StageSevenGateAssembler`/`StageSevenGateRecorder`,
+  `RecordStageSevenGateCommand`/`RecordStageSevenGateHandler` and
+  `AuthorityAmplifierPackage` (all present), the stage 6 route (done), and a
+  passing stage 6 decision in the ledger (enforced by governance). This advances
+  the stage 0-10 API surface toward DoD 1. Alternative: the `ClientProcess` design
+  artifact from the canon gap register, if a methodology-owner decision is
+  preferred; or a durable `MethodVersion`/offer store so the gates stop
+  re-stating upstream approvals.
+
+### Prior cycle (2026-10-03T172133Z)
+
+- Cycle 2026-10-03T172133Z: selected item was the HTTP
   route that exposes the stage 5 "Offer Locked" gate. The prior cycle named it
   the highest priority ready next item: the `StageFiveGateAssembler`
   /`StageFiveGateRecorder`, the `RecordStageFiveGateCommand`
@@ -495,7 +566,7 @@ stalls:
 | Q20 | Stage 3 model gate API surface (done 2026-10-03T171835Z; `POST /red/clients/{tenant_id}/stages/3/gate`) | pipeline | Q19 | Diagnostic Model Approved |
 | Q21 | Stage 4 IP package gate plus ThirteenTransformations wiring | pipeline | Q20 | IP Architecture Locked |
 | Q22 | Stage 5 productize gate API surface (done 2026-10-03T172133Z; `POST /red/clients/{tenant_id}/stages/5/gate`); ProductProgram wiring remains | pipeline | Q21 | Offer Locked |
-| Q23 | Stage 6 message gate plus ContentCrusher and roadmap wiring | pipeline | Q22 | Campaign Message Approved |
+| Q23 | Stage 6 message gate plus ContentCrusher and roadmap wiring (gate API surface done 2026-10-03T172338Z; `POST /red/clients/{tenant_id}/stages/6/gate`; ContentCrusher and roadmap wiring remains) | pipeline | Q22 | Campaign Message Approved |
 | Q24 | Stage 7 Authority Amplifier dual approval (script before visual) | pipeline | Q23 | script approval then creative acceptance |
 | Q25 | Stage 8 integrate plus the enrollment and client-process asset and Funnel Complete | pipeline | Q24 | funnel dry run passes |
 | Q26 | Stage 9 QA plus compliance gate kinds | pipeline | Q25 | Launch Approved; Ready for Traffic |
