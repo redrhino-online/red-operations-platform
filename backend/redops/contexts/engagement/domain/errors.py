@@ -414,3 +414,13 @@ class UnsourcedIntakeEvidenceError(EngagementError):
     Knowledge claim of the same client; an unsourced, merely derived or proposed,
     or foreign claim cannot support it.
     """
+
+
+class UnscopedClientWorkspaceError(EngagementError):
+    """A client workspace store was read or written without a tenant.
+
+    SPEC.md sections 3 and 9 make a ClientWorkspace the tenant root and require
+    every tenant resource and query to carry ``tenant_id``. Listing or resolving
+    a workspace without a client would either leak across clients or create an
+    orphaned record, so the store refuses an unscoped read or write.
+    """

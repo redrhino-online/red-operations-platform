@@ -93,8 +93,14 @@ class MigrationRunnerTests(unittest.TestCase):
                 self.assertIsNotNone(cursor.fetchone()[0])
                 cursor.execute("SELECT to_regclass('public.workflow_runs')")
                 self.assertIsNotNone(cursor.fetchone()[0])
+                cursor.execute(
+                    "SELECT to_regclass('public.client_workspaces')"
+                )
+                self.assertIsNotNone(cursor.fetchone()[0])
+                cursor.execute("SELECT to_regclass('public.source_records')")
+                self.assertIsNotNone(cursor.fetchone()[0])
                 cursor.execute("SELECT version_num FROM alembic_version")
-                self.assertEqual(cursor.fetchone()[0], "0009_workflow_runs")
+                self.assertEqual(cursor.fetchone()[0], "0011_source_records")
 
 
 if __name__ == "__main__":  # pragma: no cover

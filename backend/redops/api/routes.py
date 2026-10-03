@@ -15,12 +15,16 @@ from collections.abc import Iterator
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from redops.api.schemas import (
     AuthorityAmplifierInput,
     CampaignMessageInput,
     ClaimInput,
+    ClientWorkspaceListResponse,
+    ClientWorkspaceResponse,
+    CreateClientWorkspaceRequest,
+    CreateSourceRecordRequest,
     EngagementProductionViewResponse,
     FunnelIntegrationInput,
     LaunchQAInput,
@@ -37,6 +41,8 @@ from redops.api.schemas import (
     RecordStageThreeGateRequest,
     RecordStageTwoGateRequest,
     RecordStageZeroGateRequest,
+    SourceRecordListResponse,
+    SourceRecordResponse,
 )
 from redops.contexts.commercial.application.ports import (
     CampaignMessageRepository,
@@ -123,8 +129,12 @@ from redops.contexts.engagement.application.handlers import (
     RecordStageTwoGateHandler,
     RecordStageZeroGateHandler,
 )
+from redops.contexts.engagement.application.ports import ClientWorkspaceStore
 from redops.contexts.engagement.domain.entities import ClientWorkspace
 from redops.contexts.engagement.domain.errors import EngagementError
+from redops.contexts.engagement.infrastructure.repositories import (
+    client_workspace_store_from_env,
+)
 from redops.contexts.engagement.domain.value_objects import (
     ClientAuthority,
     IntakeAsset,
@@ -191,8 +201,12 @@ from redops.contexts.governance.infrastructure.repositories import (
     gate_ledger_repository_from_env,
     stage_run_repository_from_env,
 )
-from redops.contexts.knowledge.domain.entities import Claim
+from redops.contexts.knowledge.application.ports import SourceRecordStore
+from redops.contexts.knowledge.domain.entities import Claim, SourceRecord
 from redops.contexts.knowledge.domain.errors import KnowledgeError
+from redops.contexts.knowledge.infrastructure.repositories import (
+    source_record_store_from_env,
+)
 from redops.contexts.knowledge.domain.value_objects import (
     ProvenanceClass,
     SourceCitation,
@@ -3084,3 +3098,211 @@ def get_workflow_run(
             for index, transition in enumerate(transitions, start=1)
         ],
     }
+
+
+def get_client_workspace_store() -> Iterator[ClientWorkspaceStore]:
+    """Provide the configured client workspace seam to the API (SPEC.md §6).
+
+    SPEC.md section 3 makes the ClientWorkspace the tenant root every
+    client-owned resource attaches to, so the ``/clients`` surface must read and
+    write the same durable store the API and worker processes share. The
+    dependency owns one adapter for the request and releases any connection it
+    opened when the request ends; the store is chosen once from ``DATABASE_URL``,
+    and a set-but-unusable configuration raises before the route runs, so a
+    deployment cannot mistake a process-local workspace store for a durable one.
+    """
+
+    store = client_workspace_store_from_env(os.environ.get("DATABASE_URL"))
+    try:
+        yield store
+    finally:
+        store.close()
+
+
+def get_source_record_store() -> Iterator[SourceRecordStore]:
+    """Provide the configured source record seam to the API (SPEC.md §6).
+
+    SPEC.md section 3 keeps a source record as the immutable original a claim
+    cites, so the ``/clients/{id}/sources`` surface must read and write the same
+    durable store the API and worker processes share. The dependency owns one
+    adapter for the request and releases any connection it opened when the
+    request ends; the store is chosen once from ``DATABASE_URL``, and a
+    set-but-unusable configuration raises before the route runs, so a deployment
+    cannot mistake a process-local source store for a durable one.
+    """
+
+    store = source_record_store_from_env(os.environ.get("DATABASE_URL"))
+    try:
+        yield store
+    finally:
+        store.close()
+
+
+def _workspace_payload(workspace: ClientWorkspace) -> dict[str, Any]:
+    """Project a stored workspace onto the response shape, computing no rule."""
+
+    return {
+        "workspace_id": workspace.workspace_id,
+        "tenant_id": workspace.tenant_id,
+        "lifecycle": workspace.lifecycle.value,
+        "authorities": [
+            {"actor": entry.actor, "authority": entry.authority}
+            for entry in workspace.authorities
+        ],
+        "children": list(workspace.children),
+    }
+
+
+@router.get("/clients", response_model=ClientWorkspaceListResponse)
+def list_client_workspaces(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose workspaces are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    store: ClientWorkspaceStore = Depends(get_client_workspace_store),
+) -> ClientWorkspaceListResponse:
+    """List one client tenant's workspaces (SPEC.md sections 3, 7 and 9).
+
+    SPEC.md section 7 lists ``/clients`` and requires list endpoints to enforce
+    client access and pagination; SPEC.md section 9 requires every tenant
+    resource query to carry ``tenant_id``. The tenant is a required query
+    parameter, not an optional filter, so the endpoint cannot produce a
+    portfolio-wide read across clients; the store read is tenant scoped and a
+    blank tenant is refused by the domain seam. Pagination is applied after the
+    tenant-scoped read so a page is stable.
+    """
+
+    workspaces = store.list(tenant_id)
+    page = workspaces[offset : offset + limit]
+    return ClientWorkspaceListResponse(
+        tenant_id=tenant_id,
+        total=len(workspaces),
+        limit=limit,
+        offset=offset,
+        workspaces=[_workspace_payload(workspace) for workspace in page],
+    )
+
+
+@router.post(
+    "/clients", status_code=201, response_model=ClientWorkspaceResponse
+)
+def create_client_workspace(
+    body: CreateClientWorkspaceRequest,
+    store: ClientWorkspaceStore = Depends(get_client_workspace_store),
+) -> ClientWorkspaceResponse:
+    """Create the stage 0 client workspace tenant root (SPEC.md section 3).
+
+    SPEC.md section 6 requires the API to call a use case through ports rather
+    than mutate a store directly; the route maps the typed request to a domain
+    ``ClientWorkspace``, which enforces its own invariants -- an opaque id, the
+    tenant and a duplicate-free non-empty authority registry -- and then persists
+    it through the port. The workspace tenant comes from the body because it is
+    being created, not resolved; a refusal is a named 422 and never a partial
+    write (SPEC.md sections 3, 4 and 9).
+    """
+
+    try:
+        workspace = ClientWorkspace(
+            workspace_id=body.workspace_id,
+            tenant_id=body.tenant_id,
+            authorities=tuple(
+                ClientAuthority(actor=entry.actor, authority=entry.authority)
+                for entry in body.authorities
+            ),
+        )
+        store.save(workspace)
+    except (EngagementError, ValueError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return _workspace_payload(workspace)
+
+
+@router.get(
+    "/clients/{tenant_id}/sources", response_model=SourceRecordListResponse
+)
+def list_source_records(
+    tenant_id: str,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    store: SourceRecordStore = Depends(get_source_record_store),
+) -> SourceRecordListResponse:
+    """List one client tenant's immutable source records (SPEC.md sections 3, 7, 9).
+
+    SPEC.md section 7 lists ``/clients/{id}/sources`` and requires pagination;
+    SPEC.md section 9 requires every query to carry the client scope. The path
+    tenant is the authoritative scope and the store read is tenant scoped, so
+    another client's sources are unreadable here.
+    """
+
+    sources = store.list(tenant_id)
+    page = sources[offset : offset + limit]
+    return SourceRecordListResponse(
+        tenant_id=tenant_id,
+        total=len(sources),
+        limit=limit,
+        offset=offset,
+        sources=[
+            {
+                "source_id": source.source_id,
+                "tenant_id": source.tenant_id,
+                "locator": source.locator,
+                "checksum": source.checksum,
+                "captured_on": source.captured_on,
+                "access_rule": source.access_rule,
+            }
+            for source in page
+        ],
+    )
+
+
+@router.post(
+    "/clients/{tenant_id}/sources",
+    status_code=201,
+    response_model=SourceRecordResponse,
+)
+def create_source_record(
+    tenant_id: str,
+    body: CreateSourceRecordRequest,
+    store: SourceRecordStore = Depends(get_source_record_store),
+) -> SourceRecordResponse:
+    """Ingest one immutable source record a claim can cite (SPEC.md section 3).
+
+    SPEC.md section 3 keeps the original immutable and its tenant on every
+    resource; SPEC.md section 11 requires source attribution to survive
+    ingestion. The path tenant, not the body, is the authoritative client scope,
+    so a caller cannot record a source under another client's tenant. The domain
+    value object enforces the required locator, checksum, capture time and access
+    rule and the store refuses a different same-key body, so an original is never
+    silently rewritten; a refusal is a named 422 or 409 and never a partial
+    write.
+    """
+
+    try:
+        source = SourceRecord(
+            source_id=body.source_id,
+            tenant_id=tenant_id,
+            locator=body.locator,
+            checksum=body.checksum,
+            captured_on=body.captured_on,
+            access_rule=body.access_rule,
+        )
+        store.save(source)
+    except KnowledgeError as exc:
+        status = 409 if type(exc).__name__ == "SourceRecordImmutableError" else 422
+        raise HTTPException(
+            status_code=status,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return SourceRecordResponse(
+        source_id=source.source_id,
+        tenant_id=source.tenant_id,
+        locator=source.locator,
+        checksum=source.checksum,
+        captured_on=source.captured_on,
+        access_rule=source.access_rule,
+    )

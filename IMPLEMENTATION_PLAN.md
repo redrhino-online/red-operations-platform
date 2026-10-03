@@ -4,7 +4,79 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T185701Z (Ralph cycle, this run): selected item was Q15, the
+- Cycle 2026-10-03T190017Z (Ralph cycle, this run): selected item was Q9, the
+  REST `/clients` and `/clients/{id}/sources` surface (dependencies Q6/Q7 met).
+  It outranked the alternatives for these reasons. The stage 0-10 pipeline is
+  the product backbone and its API gates already exist for every stage, but the
+  stage 0 client workspace and the immutable source records claims cite had no
+  persistence and no read/write surface, so the pipeline's tenant root was
+  re-synthesised from a request body on every call instead of resolved from a
+  durable store (SPEC.md sections 3, 4 and 7). Q9 is the last ready backend
+  surface before the UI and is the prerequisite for Q17 (stage 0 route hardened
+  to resolve the stored workspace and authority registry rather than trust a
+  repeated body) and Q10-Q14. The `frontend/` shell Q32 was rejected this cycle:
+  the DoD gate script `[5/6]` passes on the mere existence of `frontend/` plus
+  the absence of the string `OpenExecutive`, so landing only a shell with no
+  section 8 screens would prematurely turn `make done` green and stop the loop
+  while condition 6 (all screens render, Q45) is still far off. Q28 stage 8-10
+  required kinds stay blocked on the named methodology-owner placement decision,
+  and the workflow start/approve write route still needs a definition registry
+  and a `WorkflowStepExecutor` adapter (Q16).
+- Outcome: new `ClientWorkspaceStore` port
+  (`backend/redops/contexts/engagement/application/ports.py`) with
+  `InMemoryClientWorkspaceStore` and `PostgresClientWorkspaceStore` plus
+  `client_workspace_store_from_env` and a payload mapper in
+  `contexts/engagement/infrastructure/`, and new `SourceRecordStore` port with
+  the same adapter pair in `contexts/knowledge/infrastructure/`. Migrations
+  `0010_client_workspaces` and `0011_source_records` create
+  `client_workspaces(tenant_id NOT NULL, workspace_id, workspace JSONB,
+  UNIQUE(tenant_id, workspace_id))` and
+  `source_records(tenant_id NOT NULL, source_id, source JSONB,
+  UNIQUE(tenant_id, source_id))`. `backend/redops/api/routes.py` adds
+  `GET /red/clients?tenant_id=&limit=&offset=` (tenant required as a query
+  parameter, never an optional filter, so no portfolio-wide read), `POST
+  /red/clients` (workspace tenant from the body, since it is being created),
+  `GET /red/clients/{tenant_id}/sources` and `POST
+  /red/clients/{tenant_id}/sources` (path tenant authoritative). The store
+  refuses an unscoped read or write (`UnscopedClientWorkspaceError`,
+  `UnscopedSourceRecordError`) and a rewritten original
+  (`SourceRecordImmutableError`, served as 409); a stored row is re-validated
+  through the aggregate on load.
+- Evidence: `make check` -> 2028 passed, 2 skipped, 684 subtests; pyflakes
+  clean. New `tests/unit/engagement/test_client_workspace_store.py` (in-memory
+  plus PostgreSQL: round-trip, lifecycle/transition reload, paused resume,
+  stored copy independent of later caller mutation, tenant scoping, unscoped
+  refusal, mapper re-validation), `tests/unit/knowledge/test_source_record_store.py`
+  (immutability, ordering, tenant scoping, unscoped refusal) and
+  `tests/unit/engagement/test_clients_route.py` (8 route tests: create/list,
+  tenant scoping, required tenant param, blank-authority 422, source create/list,
+  path-tenant scoping, rewrite 409, pagination). `tests/unit/shared/test_migrate.py`
+  now asserts both new tables and alembic head `0011_source_records`. `make done`
+  still fails only [5/6] (`frontend/` missing, Q32); [1/6]-[4/6] pass.
+- New findings: the stage 0-10 gate routes still build `ClientWorkspace` from the
+  request body (for example `record_stage_zero_gate`), so the authority registry
+  a gate approves against is caller-supplied rather than the persisted workspace;
+  Q17 is now unblocked and is the next gate-integrity step. The system has no
+  aggregate now lacking a durable store among the stage 0-10 assets.
+- Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
+  be started as a shell only, or it would falsely satisfy `make done` [5/6]; Q28
+  stage 8-10 required kinds blocked on the named methodology-owner placement
+  decision; Q16 idempotency keys blocked on a workflow write route; Q3 agent
+  registration blocked on the ADR 0006 / vendor-edit tension; Q4 live smoke needs
+  `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: Q17, harden the stage 0 intake route to
+  resolve the persisted `ClientWorkspace` and its authority registry through the
+  new `ClientWorkspaceStore` instead of trusting the request body, so the
+  "Production Ready" gate approves against the real client authorities and owner
+  registry (SPEC.md sections 3, 4 and 11). Then Q10-Q14 (remaining REST
+  resources) and the `frontend/` screens Q32-Q45. Required owner input for the
+  pipeline: the stage 8/9/10 canon placement decision; approver for any wired
+  kind: the client designated authority; blocked downstream dependency: the
+  stage 9 gate.
+
+### Prior cycle (2026-10-03T185701Z)
+
+- Cycle 2026-10-03T185701Z (Ralph cycle): selected item was Q15, the
   REST `/workflows/{id}` polling read — `GET
   /red/clients/{tenant_id}/workflows/{run_id}` — the workflow engine's entry
   point and the named prerequisite for Q32 (`frontend/`, the only failing DoD
@@ -2423,10 +2495,10 @@ stalls:
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
 | Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key. Done 2026-10-03T184450Z: `tests/unit/agents/test_live_openrouter_smoke.py` skips unless `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE` are set, then drives one live call through `ForkProviderModelGateway.from_fork_registry()` plus `LoggingModelGateway` and asserts the section 6 attribution; executing it awaits a real key |
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). REST `/workflows/{id}` polling read landed 2026-10-03T185701Z (Q15). The fork `workflows/resumer.py` adapter was reassessed and rejected as mis-specified: the resumer is an 809-line fork polling loop, not a per-step executor, so RED's `WorkflowStepExecutor` seam is served by connector adapters (Q16), not a resumer shim |
-| Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z) |
+| Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z). The stage 0 `ClientWorkspace` and the knowledge `SourceRecord` stores completed with Q9 2026-10-03T190017Z (`0010_client_workspaces`, `0011_source_records`) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
 | Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams |
-| Q9 | REST `/clients` and `/clients/{id}/sources` | api | Q7 | route tests, tenant scoping, pagination |
+| Q9 | REST `/clients` and `/clients/{id}/sources` (done 2026-10-03T190017Z; `GET /red/clients?tenant_id=&limit=&offset=` and `POST /red/clients`, `GET`/`POST /red/clients/{tenant_id}/sources`; durable `ClientWorkspaceStore` and `SourceRecordStore` ports with in-memory and PostgreSQL adapters and migrations `0010_client_workspaces`/`0011_source_records`; tenant is a required query parameter, an unscoped read/write or a rewritten source is refused) | api | Q7 | route tests `tests/unit/engagement/test_clients_route.py` (8), adapter tests `tests/unit/engagement/test_client_workspace_store.py` and `tests/unit/knowledge/test_source_record_store.py` |
 | Q10 | REST `/claims`, `/methods` | api | Q9 | route tests |
 | Q11 | REST `/offers`, `/builds` | api | Q10 | route tests |
 | Q12 | REST `/approvals`, `/decisions` with exact version approval | api | Q11 | version specific approval |

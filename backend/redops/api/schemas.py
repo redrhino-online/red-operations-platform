@@ -1338,3 +1338,80 @@ class EngagementProductionViewResponse(BaseModel):
     progress: PipelineProgressResponse
     stages: list[StageProductionViewResponse]
     metric_reporting: list[MetricReportingResponse]
+
+
+class CreateClientWorkspaceRequest(BaseModel):
+    """Create the stage 0 client workspace tenant root (SPEC.md section 3).
+
+    The caller supplies the opaque workspace id, the client tenant and at least
+    one named authority. The domain refuses a blank id or tenant or an empty or
+    duplicate authority registry, so the transport carries no rule (SPEC.md
+    section 6).
+    """
+
+    workspace_id: str
+    tenant_id: str
+    authorities: list[ClientAuthorityInput]
+
+
+class ClientAuthorityResponse(BaseModel):
+    """A named actor and the authority they hold in a client workspace."""
+
+    actor: str
+    authority: str
+
+
+class ClientWorkspaceResponse(BaseModel):
+    """One client workspace's identity, authorities and engagement state."""
+
+    workspace_id: str
+    tenant_id: str
+    lifecycle: str
+    authorities: list[ClientAuthorityResponse]
+    children: list[str]
+
+
+class ClientWorkspaceListResponse(BaseModel):
+    """A paginated page of one client tenant's workspaces."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    workspaces: list[ClientWorkspaceResponse]
+
+
+class CreateSourceRecordRequest(BaseModel):
+    """Ingest one immutable source record a claim can cite (SPEC.md section 3).
+
+    The caller supplies the original's locator, checksum, capture time and access
+    rule. The domain refuses a missing field so a source cannot be recorded
+    without the evidence a future retrieval must verify (SPEC.md section 6).
+    """
+
+    source_id: str
+    locator: str
+    checksum: str
+    captured_on: date
+    access_rule: str
+
+
+class SourceRecordResponse(BaseModel):
+    """One immutable source record, re-validated through the value object."""
+
+    source_id: str
+    tenant_id: str
+    locator: str
+    checksum: str
+    captured_on: date
+    access_rule: str
+
+
+class SourceRecordListResponse(BaseModel):
+    """A paginated page of one client tenant's source records."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    sources: list[SourceRecordResponse]

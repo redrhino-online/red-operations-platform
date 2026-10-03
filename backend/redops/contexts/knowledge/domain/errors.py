@@ -27,3 +27,23 @@ class ClaimProvenanceError(InvalidClaimError):
 
     SPEC.md section 3: "Derived and Proposed cannot silently become Known".
     """
+
+
+class UnscopedSourceRecordError(KnowledgeError):
+    """A source record store was read or written without a tenant.
+
+    SPEC.md sections 3 and 9 make a SourceRecord a client resource and require
+    every tenant resource and query to carry ``tenant_id``. Storing or resolving
+    one without a client would either leak across clients or create an orphaned
+    record, so the store refuses an unscoped read or write.
+    """
+
+
+class SourceRecordImmutableError(InvalidSourceRecordError):
+    """An immutable source record was re-stated with different contents.
+
+    SPEC.md section 3: "Original is immutable and retrievable to authorized
+    users." A source record pinned by a checksum cannot be rewritten under the
+    same id; a corrected capture is a new record, so the stored original a claim
+    points at is never silently replaced.
+    """
