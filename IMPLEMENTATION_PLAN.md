@@ -4,84 +4,100 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:04:06Z (Ralph cycle 91).
-- Selected item: build the Operations notification delivery policy
-  (`QuietHours`, `Notification`, `NotificationState`,
-  `NotificationDeliveryPolicy` and `delivered_intervention_keys`) that turns the
-  command center intervention cards into deduplicated, owner-routed
-  notifications, suppresses a delivery inside an owner's quiet hours as a
-  recorded suppression rather than a silent drop, and does not deliver a card
-  twice across query evaluations (SPEC.md section 7, "Notifications are
-  deduplicated and respect owner and quiet hours"). Cycle 90 built the
-  intervention cards with their stable dedup key and owner, so this next
-  Operations read was the plan's named highest priority ready next item. This
-  outranks the improvement loop (still a larger Phase 5 item), the per-kind stage
-  9 through 10 content schemas (a methodology-owner decision) and the
-  stage-parameterized gate refactor (quality only, no new capability).
+- Cycle timestamp: 2026-10-03T05:05:23Z (Ralph cycle 92).
+- Selected item: build the Measurement improvement loop (`ImprovementProposal`,
+  `ImprovementApproval`, `ImprovementOutcome`, `ImprovementState` and the
+  approval-gated `ImprovementApprovalPolicy` / `ImprovementMeasurementPolicy`) in
+  a new Measurement bounded context (SPEC.md section 3 names Measurement as the
+  context for metric, baseline, observation and experiment records), so a stage
+  10 optimization stays a proposal until a named human owner approves it, then
+  records a measured before-and-after grounded on an established same-tenant
+  baseline, keeping the observed movement an observation rather than a causal
+  conclusion. The canon optimization discipline (canon files 23 and 24: optimize
+  only after a baseline of metrics exists, change one variable at a time, log the
+  change so the movement can be read) shapes the single lever, evidence and
+  measurement-plan fields. This was the plan's named highest priority ready next
+  item after cycle 91. It outranks the per-kind stage 9 through 10 content
+  schemas (a methodology-owner decision), the Operations delivery adapter (still
+  blocked on the storage ADR) and the stage-parameterized gate refactor (quality
+  only, no new capability).
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: 22 new behavioral tests in
-  `tests/unit/operations/test_notification_policy.py`: an open card outside quiet
-  hours is delivered; a card inside quiet hours is suppressed with a recorded
-  reason; quiet hours crossing midnight suppress on both sides; the window is
-  half open at its start and end; an owner without a preference is delivered; a
-  preference for another owner does not suppress; each open card notifies once;
-  a previously delivered key is not notified again across evaluations; duplicate
-  cards in one batch produce one notification; the same subject under a different
-  reason is not deduplicated; a suppressed card is not treated as delivered and
-  re-delivers later; a dismissed card and a resolved card are not notified; quiet
-  hours require an owner, real time bounds and a non-zero window; duplicate
-  preferences for one owner are refused; a delivered notification cannot carry a
-  suppression reason; a suppressed notification must carry one; the
-  identification fields are required; a notification is immutable and its key
-  matches the intervention key. Running `PYTHONPATH=backend python3 -m unittest
-  discover -s tests -p 'test_*.py'` reports 988 passed, up from 966.
-  `python3 -m pyflakes` on the changed modules and the new test file is clean.
-  `ruff` and `mypy` remain uninstalled.
-- New findings: notification delivery is platform operations behavior, not a
-  canon method artifact, and the supplied canon contains no notification or
-  alerting material, so no canonical shape is required and no new canon gap is
-  recorded (SPEC.md section 12.4 shapes method artifacts, not queues or
-  reminders). Deduplication and quiet-hour suppression are deliberately distinct:
-  a delivered card is remembered so it is never sent twice, while a suppressed
-  card is not remembered as delivered so it becomes deliverable once the owner is
-  out of quiet hours. Quiet-hour preferences remain caller-supplied because
-  Operations owns reminders and queues (SPEC.md section 3) and no real operator
-  schedule may be invented; the same owner appearing twice is refused instead of
-  picking one window. The policy reads only open cards, so a dismissed or
-  resolved intervention never notifies.
+- Evidence: 26 new behavioral tests in
+  `tests/unit/measurement/test_improvement_loop.py`: a grounded proposal starts
+  proposed; identity, tenant, proposer, owner, subject, lever, evidence and
+  measurement-plan fields are required; a proposal cannot be grounded on another
+  tenant's, a draft, or a review-required baseline; the proposer cannot also be
+  the named approving owner; a proposal is immutable; the named owner's approval
+  moves it to approved; anyone else's approval is refused; a rejected proposal
+  cannot be approved; an already-approved proposal cannot be approved twice; an
+  approval requires an authority and intended use; an approved improvement
+  records a measured outcome; an unapproved or rejected proposal cannot be
+  measured; a cross-tenant or cross-baseline outcome is refused; the measured
+  improvement keeps its before and after observations; the outcome requires
+  identity, tenant, summary and date; before and after share a tenant and subject;
+  the before must be an observation and the after cannot be a causal conclusion;
+  the outcome is immutable. Running `PYTHONPATH=backend python3 -m unittest
+  discover -s tests -p 'test_*.py'` reports 1014 passed, up from 988.
+  `python3 -m pyflakes` on the new modules and test file is clean. `ruff` and
+  `mypy` remain uninstalled.
+- New findings: the improvement loop is a stage 10 optimization rule, not a canon
+  gap; canon files 23 and 24 inform its shape (baseline-before-optimization, one
+  variable at a time, a logged change), so the proposal names one lever and the
+  outcome records two observations. `PerformanceBaseline`,
+  `MilestoneObservation` and `PerformanceClaim` remain in the Execution context
+  from prior cycles while the improvement loop lives in the new Measurement
+  context (SPEC.md section 3), importing the execution baseline as grounded
+  evidence; reconciling the baseline's home is a future refactor for a named
+  owner. The improvement outcome deliberately admits only observations, so a
+  causal conclusion still has to pass `PerformanceClaimPolicy` with an
+  established baseline and an adequate sample. Optimization is refused without a
+  prior established baseline, matching the canon's "you need a baseline of
+  metrics" rule; proposals and outcomes are refused across tenants (SPEC.md
+  sections 3, 4 and 11).
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
   graph assumed in cycle 56, scheduler/worker topology, the client-designated
-  approver identities, and pilot metric targets. The intervention cards and the
-  notification policy now exist in pure domain code, but the Operations delivery
-  adapter, the durable notification log and the command center screen all still
-  depend on the storage ADR; the notification policy's `already_delivered` set is
-  caller-supplied precisely so it can be persisted by any adapter later. No fork
-  or cluster facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or
-  `argocd` present.
-- Highest priority ready next item: build the Measurement improvement loop
-  (`ImprovementProposal`, `ImprovementOutcome` and an approval-gated improvement
-  policy) so that a stage 10 optimization stays a proposal until a named human
-  owner approves it, then records a measured before-and-after grounded on an
-  established same-tenant baseline, keeping an observed movement distinct from a
-  causal conclusion (SPEC.md section 4, Phase 5 exit "one improvement is approved
-  and measured" and section 11, "performance recommendations require evidence and
-  owner approval before material changes"). The `PerformanceBaseline`,
-  `MilestoneObservation` and `PerformanceClaim` values already exist and no
-  storage is required, so this is the readiest pure-domain item and it advances
-  the stage 10 objective that "campaign activation alone does not complete an
-  engagement" (SPEC.md section 4). Pipeline mapping: stage 10 Optimization;
-  required asset the measured before/after evidence; checkpoint the owner
-  approval of the improvement; approver the named human owner; downstream
-  dependency the future command center improvement view. This outranks the
-  per-kind stage 9 through 10 content schemas (a methodology-owner decision) and
-  the stage-parameterized gate refactor (quality only, no new capability).
-- Deferred cross-context items: the Measurement improvement loop (now the ready
-  next item) and the Operations delivery adapter plus durable notification log
-  (blocked on the storage ADR); per-kind stage 9 through 10 asset content schemas;
-  a stage-parameterized gate recorder/handler refactor now that eleven identical
+  approver identities, and pilot metric targets. The improvement loop exists in
+  pure domain code, but its persistence, the Operations delivery adapter and the
+  durable notification log still depend on the storage ADR. The
+  `PerformanceClaim` observations carry no numeric value yet because the metric
+  registry is not built. No fork or cluster facts invented; no `docs/`, fork
+  checkout, `kubectl`, `helm`, or `argocd` present.
+- Highest priority ready next item: build the Measurement metric registry
+  (`MetricDefinition` and `MeasurementRecord`, SPEC.md section 3 aggregate "metric
+  definition, window, baseline, observation, source" and Phase 5 "metric registry,
+  event instrumentation, observations and experiment records"; canon files 23 and
+  24 inform the metric set and the baseline-before-optimization rule), so stage 10
+  observations attach to a typed, versioned metric with a window and source and
+  the Governance production view's `METRICS` reporting dimension has a context to
+  source it from. It is pure domain, needs no storage, and it supplies the typed
+  metric the improvement loop currently names only as a free-text subject; it
+  outranks the per-kind stage 9 through 10 content schemas (a methodology-owner
+  decision), the Operations delivery adapter (blocked on the storage ADR) and the
+  stage-parameterized gate refactor (quality only, no new capability). Pipeline
+  mapping: stage 10 Optimization/Measurement; required asset the metric definition
+  and its observation records; owner the Insight and Performance domain.
+- Deferred cross-context items: the Measurement metric registry
+  (`MetricDefinition` and `MeasurementRecord`, now the ready next item), the
+  Operations delivery adapter plus durable notification log (blocked on the
+  storage ADR); per-kind stage 9 through 10 asset content schemas; a
+  stage-parameterized gate recorder/handler refactor now that eleven identical
   shapes are proven; and all persistence, blocked on the storage ADR.
+  [DONE 2026-10-03 (Ralph cycle 92): built the Measurement improvement loop
+  (`ImprovementProposal`, `ImprovementApproval`, `ImprovementOutcome`,
+  `ImprovementState`, `ImprovementApprovalPolicy` and
+  `ImprovementMeasurementPolicy`) in a new Measurement bounded context so a stage
+  10 optimization stays a proposal until its named owner approves it, then records
+  a measured before-and-after as two observations grounded on the same established
+  same-tenant baseline, keeping the movement distinct from a causal conclusion
+  (SPEC.md section 4, "performance recommendations require evidence and owner
+  approval before material changes"; Phase 5, "one improvement is approved and
+  measured"; canon files 23 and 24 inform the baseline-before-optimization and
+  one-variable-at-a-time discipline); verified by
+  `tests/unit/measurement/test_improvement_loop.py` (26 tests), so the stage 10
+  optimization loop now exists as pure domain code and the engagement can stay in
+  Optimization after launch rather than ending at activation.]
   [DONE 2026-10-03 (Ralph cycle 91): built the Operations notification delivery
   policy (`QuietHours`, `Notification`, `NotificationState`,
   `NotificationDeliveryPolicy`, `delivered_intervention_keys`) that delivers each
@@ -281,7 +297,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 
 - Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 13, 14, 21, 24 — between stages 8 and 10 — status: candidate, needs named-owner decision on a Sell/Enroll stage.
 - Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: candidate.
-- Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension.
+- Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, but the dashboard, the forecast and the bid-up/bid-down and split-test logging remain candidates; the ready metric registry is the spec-named first step.
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: candidate.
 - Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: candidate.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: candidate.
@@ -388,7 +404,7 @@ CI gate order: format and types, domain and application tests, adapter contracts
 7. Implement stages 4 and 5 from grounded Signature Solution to offer approval. [DONE 2026-10-02 (Ralph cycle 14): commercial `OfferVersion` requires an accountable owner and `OfferChangeImpactPolicy` discovers dependent offers from an approved method change and marks them review required, so the SPEC.md section 11 "changing a method version identifies dependents" acceptance test is met by a real aggregate; verified by `tests/unit/commercial/test_offer_change_impact.py`. DONE 2026-10-02 (Ralph cycle 22): Method `SignatureStep`, `TransformationPhase` and frozen `SignatureSolution` require exactly three phases and nine steps, a process inventory, transformation map, narrative and visual, one continuous chain of named stages, and declared starting/final states that are the ends of that chain, so the stage 4 "IP Architecture Locked" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_signature_solution.py`. DONE 2026-10-02 (Ralph cycle 23): `MethodVersion` pins the exact tenant-checked stage 4 `SignatureSolution`, refuses approval without it, rejects a cross-tenant pin, and drops the pin on `revised`, so an approved method must carry its locked stage 4 structure; verified by `tests/unit/method/test_method_dependencies.py`. DONE 2026-10-02 (Ralph cycle 24): commercial `StepDelivery` and `DeliverySpecification` require every locked stage 4 method step to carry an action, actor, deliverable, timing and measure, record the full stage 5 asset package, and reject a missing or extra method step, a duplicate delivery, a foreign-tenant method or step delivery, and any missing package field, so the stage 5 "Offer Locked" checkpoint rule is met by a real value; verified by `tests/unit/commercial/test_delivery_specification.py`. DONE 2026-10-02 (Ralph cycle 25): `OfferVersion` pins the tenant-checked stage 5 `DeliverySpecification`, refuses production readiness without it, and `revised` drops the delivery specification and readiness (including when the method reference changes) so an approved offer must carry a complete stage 5 delivery package; verified by `tests/unit/commercial/test_offer_version.py` with a shared fixture in `tests/unit/commercial/fixtures.py`. DONE 2026-10-02 (Ralph cycle 26): `OfferReadinessPolicy` refuses production readiness when the stage 5 `DeliverySpecification.signature_solution` is not equal to the `SignatureSolution` pinned by an approved method reference, so a stage 5 package cannot describe a different transformation than the approved stage 4 method; verified by `tests/unit/commercial/test_offer_version.py`. DONE 2026-10-03 (Ralph cycle 76): Engagement `StageFourGateAssembler`, `StageFourGateRecorder`, `RecordStageFourGateCommand` and `RecordStageFourGateHandler` wire the stage 4 "IP Architecture Locked" `GateDecision` end to end, binding the reviewed `SignaturePackage` to the workspace tenant and authority registry, issuing one exact-version approval per required kind, writing the durable decision, and closing the stage 4 `StageRun`; stage 4 depends on stage 3, so the ledger must already hold a passing stage 3 decision; verified by `tests/unit/engagement/test_record_stage_four_gate.py` (22 tests). DONE 2026-10-03 (Ralph cycle 77): the Commercial `OfferPackage` bridge (canon 11, 12) projects the reviewed stage 5 `DeliverySpecification` onto the twelve canonical kinds as exact `StageAssetVersion` evidence; verified by `tests/unit/commercial/test_offer_package.py` (10 tests). DONE 2026-10-03 (Ralph cycle 78): Engagement `StageFiveGateAssembler`, `StageFiveGateRecorder`, `RecordStageFiveGateCommand` and `RecordStageFiveGateHandler` wire the stage 5 "Offer Locked" `GateDecision` end to end, binding the reviewed `OfferPackage` to the workspace tenant and authority registry, issuing one exact-version approval per required kind, writing the durable decision, and closing the stage 5 `StageRun`; stage 5 depends on stage 4, so the ledger must already hold a passing stage 4 decision; verified by `tests/unit/engagement/test_record_stage_five_gate.py` (22 tests). The stage 6 reviewed-asset bridge remains.]
 8. Implement stages 6 and 7 with message congruence and script approval before creative production. [DONE 2026-10-02 (Ralph cycle 27): commercial `CampaignMessage` records the stage 6 asset package, requires each message field, and rejects a cross-tenant offer at construction; `CampaignMessageAlignmentPolicy` refuses the "Campaign Message Approved" checkpoint unless the message is grounded on a production ready stage 5 offer and its avatar, promise, product, method, currency and problem agree with the offer and the approved method's locked stage 2 primary currency and stage 3 diagnostic model, so Phase 4's "campaign message conflicting with the offer blocks approval" example is met by a real aggregate; verified by `tests/unit/commercial/test_campaign_message.py`. DONE 2026-10-02 (Ralph cycle 28): Production `AuthorityAmplifier` records the canonical Promise, Proof, Problems, Steps, Context, Action script and the full stage 7 visual/video package, requires at least one proof claim, and rejects a cross-tenant stage 6 message at construction; `AuthorityAmplifierPolicy` refuses script approval unless the message is approved and the method is an approved dependency, and flags proof claims not backed by a known, directly sourced Knowledge claim; visual production and creative acceptance both refuse before script approval and creative acceptance also requires the complete visual package, so Phase 4's "visual Authority Amplifier production cannot be authorized by an unapproved script" and "unsupported proof is flagged" examples are met by a real aggregate; verified by `tests/unit/production/test_authority_amplifier.py`. Stage 7 wiring into a governance `GateDecision` remains, blocked on the asset-version representation decision.] DONE 2026-10-03 (Ralph cycle 79): built the Commercial `CampaignMessagePackage` bridge (canon-informed, SPEC.md section 12.3 stage 6 files 06, 15, 24, 25-28) projecting the reviewed stage 6 `CampaignMessage` onto the twelve canonical stage 6 kinds as exact `StageAssetVersion` evidence; verified by `tests/unit/commercial/test_campaign_message_package.py` (10 tests), so the stage 6 gate is now assembleable. DONE 2026-10-03 (Ralph cycle 80): wired the stage 6 "Campaign Message Approved" `GateDecision` end to end with `StageSixGateAssembler`, `StageSixGateRecorder`, `RecordStageSixGateCommand` and `RecordStageSixGateHandler`, plus named errors `NotStageSixGateError`, `StageRunNotStageSixError` and `CampaignMessageNotApprovedError`, refusing an unapproved message so the congruence checkpoint cannot be bypassed, binding the reviewed `CampaignMessagePackage` to the workspace tenant and authority registry and closing the stage 6 `StageRun` from the durable decision; verified by `tests/unit/engagement/test_record_stage_six_gate.py` (24 tests), so stage 6 can now close. DONE 2026-10-03 (Ralph cycle 81): built the Production `AuthorityAmplifierPackage` bridge (canon-informed, SPEC.md section 12.3 stage 7 files 13-18, 28) projecting the reviewed stage 7 `AuthorityAmplifier` onto the nine canonical stage 7 kinds as exact `StageAssetVersion` evidence and refusing an amplifier without its visual package, so the stage 7 gate is now assembleable; verified by `tests/unit/production/test_authority_amplifier_package.py` (12 tests). DONE 2026-10-03 (Ralph cycle 82): wired the stage 7 "Authority Amplifier Approved" `GateDecision` end to end with `StageSevenGateAssembler`, `StageSevenGateRecorder`, `RecordStageSevenGateCommand` and `RecordStageSevenGateHandler`, plus named errors `NotStageSevenGateError`, `StageRunNotStageSevenError` and `AuthorityAmplifierNotApprovedError`, refusing an amplifier without final creative acceptance (the second of the two stage 7 approvals) so the checkpoint cannot be bypassed, binding the reviewed `AuthorityAmplifierPackage` to the workspace tenant and authority registry and closing the stage 7 `StageRun` from the durable decision; verified by `tests/unit/engagement/test_record_stage_seven_gate.py` (24 tests), so stage 7 can now close and stage 8 is unblocked pending its reviewed-asset bridge.
 9. Implement stages 8 and 9 with complete prospect path and three part QA. [DONE 2026-10-02 (Ralph cycle 29): Execution `FunnelIntegration` records the complete stage 8 asset package, is grounded on the approved stage 7 `AuthorityAmplifier`, and rejects a cross-tenant amplifier at construction; `FunnelCompletionPolicy` refuses "Funnel Complete" unless the amplifier has creative acceptance and a same-tenant `ProspectPathDryRun` routed every capture, engagement and conversion handoff exactly once with a reliable record and named owner, so Phase 4's "failed prospect routing prevents Funnel Complete" example is met by a real aggregate; verified by `tests/unit/execution/test_funnel_integration.py`. DONE 2026-10-02 (Ralph cycle 30): Execution `LaunchQA` records the full stage 9 check set, requires an owner and a designated human authority distinct from the owner, is grounded on the completed stage 8 `FunnelIntegration`, and rejects a cross-tenant funnel at construction; `LaunchApprovedPolicy` refuses "Launch Approved" unless the funnel is complete, every canonical check is present, every critical-path check passed (payment and dashboard may be excepted with a named owner), and the designated authority authorizes traffic, and `TrafficAuthorization` reports readiness rather than live traffic, so Phase 4's "failed message, technical or commercial QA prevents Launch Approved" example is met by a real aggregate; verified by `tests/unit/execution/test_launch_qa.py`. Stage 8 and 9 wiring into a governance `GateDecision` remain, blocked on the asset-version representation decision. DONE 2026-10-03 (Ralph cycle 83): built the Execution `FunnelIntegrationPackage` bridge (canon-informed, SPEC.md section 12.3 stage 8 files 13, 14, 21, 22) projecting the reviewed stage 8 `FunnelIntegration` onto the thirteen canonical stage 8 kinds as exact `StageAssetVersion` evidence and refusing a funnel that has not passed Funnel Complete; verified by `tests/unit/execution/test_funnel_integration_package.py` (12 tests), so the stage 8 "Funnel Complete" gate is now assembleable and its `GateDecision` wiring is the next step. DONE 2026-10-03 (Ralph cycle 84): wired the stage 8 "Funnel Complete" `GateDecision` end to end with `StageEightGateAssembler`, `StageEightGateRecorder`, `RecordStageEightGateCommand` and `RecordStageEightGateHandler`, plus named errors `NotStageEightGateError` and `StageRunNotStageEightError` (canon-informed, SPEC.md section 12.3 stage 8 files 13, 14, 21, 22), binding the reviewed `FunnelIntegrationPackage` to the workspace tenant and authority registry, issuing one exact-version approval per canonical kind and closing the stage 8 `StageRun`; verified by `tests/unit/engagement/test_record_stage_eight_gate.py` (22 tests), so stage 8 can now close and stage 9 is unblocked pending its reviewed-asset bridge. DONE 2026-10-03 (Ralph cycle 85): built the Execution `LaunchQAPackage` bridge (canon-informed, SPEC.md section 12.3 stage 9 files 01, 08, 21, 22, 24) projecting the reviewed stage 9 `LaunchQA` onto the sixteen canonical stage 9 kinds as exact `StageAssetVersion` evidence, with a `CANONICAL_LAUNCH_KIND_CHECKS` map covering every `QACheckKind` exactly once and refusing a QA that has not passed Launch Approved; verified by `tests/unit/execution/test_launch_qa_package.py` (13 tests), so the stage 9 "Launch Approved" gate is now assembleable and its `GateDecision` wiring is the next step. DONE 2026-10-03 (Ralph cycle 86): wired the stage 9 "Launch Approved" `GateDecision` end to end with `StageNineGateAssembler`, `StageNineGateRecorder`, `RecordStageNineGateCommand` and `RecordStageNineGateHandler`, plus named errors `NotStageNineGateError` and `StageRunNotStageNineError` (canon-informed, SPEC.md section 12.3 stage 9 files 01, 08, 21, 22, 24), binding the reviewed `LaunchQAPackage` to the workspace tenant and authority registry, issuing one exact-version approval per canonical kind and closing the stage 9 `StageRun`; verified by `tests/unit/engagement/test_record_stage_nine_gate.py` (22 tests), so stage 9 can now close and the stage 10 reviewed-asset bridge is the next step.]
-10. Implement stage 10 baseline, command center and improvement loop. [DONE 2026-10-02 (Ralph cycle 31): Execution `PerformanceBaseline` records the full stage 10 asset package and the distinct first-qualified-traffic, lead, appointment and sale milestones as observed or pending, is grounded on the stage 9 `LaunchQA`, and rejects a cross-tenant QA or milestone at construction; `PerformanceBaselinePolicy` refuses "Performance Baseline Established" unless the launch QA is `READY_FOR_TRAFFIC`, every canonical milestone is recorded, and first qualified traffic is observed, so Phase 5's "launch alone cannot complete the engagement" example is met by a real aggregate; `MilestoneObservation` forbids fabricating a pending observation, and `PerformanceClaim` / `PerformanceClaimPolicy` keep observations distinct from causal conclusions (causal needs an established same-tenant baseline and an adequate caller-supplied sample, and a low-sample movement can be recorded as an interpretation), so Phase 5's milestone-distinctness, missing-baseline and low-sample examples are met; verified by `tests/unit/execution/test_performance_baseline.py`. DONE 2026-10-02 (Ralph cycle 33): pure Governance `PipelineProgress` reports verified progress as the count of approved stage gates derived from the durable `GateLedger` plus caller-supplied verified post-launch milestones, reports activity separately, revokes a gate when a later non-passing decision supersedes it, and rejects negative counts or approved gates exceeding total gates, so SPEC.md section 4's "Display progress as approved gates and verified post launch milestones, never as tasks checked off" is met by a real value; verified by `tests/unit/governance/test_pipeline_progress.py`. DONE 2026-10-03 (Ralph cycle 87): built the Execution `PerformanceBaselinePackage` bridge projecting the reviewed stage 10 baseline onto the twelve canonical kinds. DONE 2026-10-03 (Ralph cycle 88): wired the stage 10 "Performance Baseline Established" `GateDecision` end to end (`StageTenGateAssembler`, `StageTenGateRecorder`, `RecordStageTenGateCommand`, `RecordStageTenGateHandler`), so all eleven gates of the canonical 0-10 template now have a write path; verified by `tests/unit/engagement/test_record_stage_ten_gate.py` (22 tests). Command center intervention ranking is DONE 2026-10-03 (Ralph cycle 90): built the pure Operations `Intervention` card and `InterventionRankingPolicy` ranking blocked critical path, overdue approvals, failed live journeys and nearing commitments with explainable surfacing, dismissal with rationale and deduplication (SPEC.md section 7); verified by `tests/unit/operations/test_intervention_ranking.py` (18 tests). The notification/quiet-hours policy and the improvement loop remain.]
+10. Implement stage 10 baseline, command center and improvement loop. [DONE 2026-10-02 (Ralph cycle 31): Execution `PerformanceBaseline` records the full stage 10 asset package and the distinct first-qualified-traffic, lead, appointment and sale milestones as observed or pending, is grounded on the stage 9 `LaunchQA`, and rejects a cross-tenant QA or milestone at construction; `PerformanceBaselinePolicy` refuses "Performance Baseline Established" unless the launch QA is `READY_FOR_TRAFFIC`, every canonical milestone is recorded, and first qualified traffic is observed, so Phase 5's "launch alone cannot complete the engagement" example is met by a real aggregate; `MilestoneObservation` forbids fabricating a pending observation, and `PerformanceClaim` / `PerformanceClaimPolicy` keep observations distinct from causal conclusions (causal needs an established same-tenant baseline and an adequate caller-supplied sample, and a low-sample movement can be recorded as an interpretation), so Phase 5's milestone-distinctness, missing-baseline and low-sample examples are met; verified by `tests/unit/execution/test_performance_baseline.py`. DONE 2026-10-02 (Ralph cycle 33): pure Governance `PipelineProgress` reports verified progress as the count of approved stage gates derived from the durable `GateLedger` plus caller-supplied verified post-launch milestones, reports activity separately, revokes a gate when a later non-passing decision supersedes it, and rejects negative counts or approved gates exceeding total gates, so SPEC.md section 4's "Display progress as approved gates and verified post launch milestones, never as tasks checked off" is met by a real value; verified by `tests/unit/governance/test_pipeline_progress.py`. DONE 2026-10-03 (Ralph cycle 87): built the Execution `PerformanceBaselinePackage` bridge projecting the reviewed stage 10 baseline onto the twelve canonical kinds. DONE 2026-10-03 (Ralph cycle 88): wired the stage 10 "Performance Baseline Established" `GateDecision` end to end (`StageTenGateAssembler`, `StageTenGateRecorder`, `RecordStageTenGateCommand`, `RecordStageTenGateHandler`), so all eleven gates of the canonical 0-10 template now have a write path; verified by `tests/unit/engagement/test_record_stage_ten_gate.py` (22 tests). Command center intervention ranking is DONE 2026-10-03 (Ralph cycle 90): built the pure Operations `Intervention` card and `InterventionRankingPolicy` ranking blocked critical path, overdue approvals, failed live journeys and nearing commitments with explainable surfacing, dismissal with rationale and deduplication (SPEC.md section 7); verified by `tests/unit/operations/test_intervention_ranking.py` (18 tests). The notification/quiet-hours policy is DONE 2026-10-03 (Ralph cycle 91); verified by `tests/unit/operations/test_notification_policy.py` (22 tests). The improvement loop is DONE 2026-10-03 (Ralph cycle 92): built the Measurement `ImprovementProposal`, `ImprovementApproval`, `ImprovementOutcome` and the approval-gated policies so an optimization stays a proposal until its named owner approves it and is then measured as two observations grounded on an established same-tenant baseline, keeping the movement distinct from a causal conclusion (SPEC.md section 4; Phase 5 "one improvement is approved and measured"; canon files 23 and 24); verified by `tests/unit/measurement/test_improvement_loop.py` (26 tests). The metric registry (next ready item) remains.]
 11. Complete operational security, backup, GitOps and acceptance drills.
 
 ## Risks and decisions
