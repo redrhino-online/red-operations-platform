@@ -18,10 +18,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from redops.api.schemas import (
+    AuthorityAmplifierInput,
     CampaignMessageInput,
+    ClaimInput,
     EngagementProductionViewResponse,
     MethodVersionInput,
     OfferVersionInput,
+    RecordStageEightGateRequest,
     RecordStageFiveGateRequest,
     RecordStageFourGateRequest,
     RecordStageOneGateRequest,
@@ -54,6 +57,7 @@ from redops.contexts.commercial.domain.value_objects import (
     StepDelivery,
 )
 from redops.contexts.engagement.application.commands import (
+    RecordStageEightGateCommand,
     RecordStageFiveGateCommand,
     RecordStageFourGateCommand,
     RecordStageOneGateCommand,
@@ -64,6 +68,7 @@ from redops.contexts.engagement.application.commands import (
     RecordStageZeroGateCommand,
 )
 from redops.contexts.engagement.application.handlers import (
+    RecordStageEightGateHandler,
     RecordStageFiveGateHandler,
     RecordStageFourGateHandler,
     RecordStageOneGateHandler,
@@ -80,6 +85,16 @@ from redops.contexts.engagement.domain.value_objects import (
     IntakeAsset,
     IntakeAssetKind,
     IntakePackage,
+)
+from redops.contexts.execution.domain.entities import FunnelIntegration
+from redops.contexts.execution.domain.errors import ExecutionError
+from redops.contexts.execution.domain.value_objects import (
+    FunnelAssetPackage,
+    FunnelIntegrationPackage,
+    HandoffKind,
+    HandoffOutcome,
+    HandoffRecord,
+    ProspectPathDryRun,
 )
 from redops.contexts.governance.application.ports import (
     GateLedgerRepository,
@@ -343,6 +358,87 @@ def _approve_method_offer_message(
         authority_amplifier_outline=message_body.authority_amplifier_outline,
     ).approve((method,))
     return method, method_reference, offer, message
+
+
+def _approve_authority_amplifier(
+    tenant_id: str,
+    *,
+    method: MethodVersion,
+    message: CampaignMessage,
+    amplifier_body: AuthorityAmplifierInput,
+    claims_body: list[ClaimInput],
+) -> AuthorityAmplifier:
+    """Rebuild the approved stage 7 Authority Amplifier.
+
+    SPEC.md section 3: production requires approved dependencies, and the stage 8
+    funnel grounds on the stage 7 amplifier that received creative acceptance. No
+    amplifier store is exposed over the API yet, so the caller supplies the
+    reviewed amplifier and its two approvals, and the domain re-proves the
+    canonical script order, the grounded proof (every proof claim must be a claim
+    of the approved method backed by a known, directly sourced knowledge claim) and
+    the script-before-visuals-before-creative sequence -- rather than the
+    transport layer asserting them. Sharing this builder keeps the stage 7 and
+    stage 8 routes from drifting in how they re-state that upstream dependency.
+    """
+
+    script = tuple(
+        ScriptSection(
+            kind=ScriptSectionKind(entry.kind),
+            content=entry.content,
+        )
+        for entry in amplifier_body.script
+    )
+    visuals = VisualProductionPackage(
+        storyboard=amplifier_body.visuals.storyboard,
+        brand_treatment=amplifier_body.visuals.brand_treatment,
+        presentation=amplifier_body.visuals.presentation,
+        speaker_notes=amplifier_body.visuals.speaker_notes,
+        recording=amplifier_body.visuals.recording,
+        edited_video=amplifier_body.visuals.edited_video,
+        hosted_video=amplifier_body.visuals.hosted_video,
+        player_assets=amplifier_body.visuals.player_assets,
+    )
+    claims = tuple(
+        Claim(
+            claim_id=entry.claim_id,
+            tenant_id=tenant_id,
+            statement=entry.statement,
+            provenance=ProvenanceClass(entry.provenance),
+            citations=frozenset(
+                SourceCitation(
+                    citation.source_id,
+                    citation.checksum,
+                    citation.location,
+                )
+                for citation in entry.citations
+            ),
+            confidence_note=entry.confidence_note,
+        )
+        for entry in claims_body
+    )
+    return (
+        AuthorityAmplifier(
+            amplifier_id=amplifier_body.amplifier_id,
+            tenant_id=tenant_id,
+            message=message,
+            owner=amplifier_body.owner,
+            script=script,
+            proof_claim_ids=frozenset(amplifier_body.proof_claim_ids),
+        )
+        .approve_script(
+            approved_by=amplifier_body.script_approval.approved_by,
+            intended_use=amplifier_body.script_approval.intended_use,
+            on=amplifier_body.script_approval.approved_on,
+            approved_methods=(method,),
+            claims=claims,
+        )
+        .produce_visuals(package=visuals)
+        .approve_creative(
+            approved_by=amplifier_body.creative_approval.approved_by,
+            intended_use=amplifier_body.creative_approval.intended_use,
+            on=amplifier_body.creative_approval.approved_on,
+        )
+    )
 
 
 @router.get("/health")
@@ -1543,63 +1639,12 @@ def record_stage_seven_gate(
             offer_body=body.offer,
             message_body=body.message,
         )
-        script = tuple(
-            ScriptSection(
-                kind=ScriptSectionKind(entry.kind),
-                content=entry.content,
-            )
-            for entry in body.amplifier.script
-        )
-        visuals = VisualProductionPackage(
-            storyboard=body.amplifier.visuals.storyboard,
-            brand_treatment=body.amplifier.visuals.brand_treatment,
-            presentation=body.amplifier.visuals.presentation,
-            speaker_notes=body.amplifier.visuals.speaker_notes,
-            recording=body.amplifier.visuals.recording,
-            edited_video=body.amplifier.visuals.edited_video,
-            hosted_video=body.amplifier.visuals.hosted_video,
-            player_assets=body.amplifier.visuals.player_assets,
-        )
-        claims = tuple(
-            Claim(
-                claim_id=entry.claim_id,
-                tenant_id=tenant_id,
-                statement=entry.statement,
-                provenance=ProvenanceClass(entry.provenance),
-                citations=frozenset(
-                    SourceCitation(
-                        citation.source_id,
-                        citation.checksum,
-                        citation.location,
-                    )
-                    for citation in entry.citations
-                ),
-                confidence_note=entry.confidence_note,
-            )
-            for entry in body.claims
-        )
-        amplifier = (
-            AuthorityAmplifier(
-                amplifier_id=body.amplifier.amplifier_id,
-                tenant_id=tenant_id,
-                message=message,
-                owner=body.amplifier.owner,
-                script=script,
-                proof_claim_ids=frozenset(body.amplifier.proof_claim_ids),
-            )
-            .approve_script(
-                approved_by=body.amplifier.script_approval.approved_by,
-                intended_use=body.amplifier.script_approval.intended_use,
-                on=body.amplifier.script_approval.approved_on,
-                approved_methods=(method,),
-                claims=claims,
-            )
-            .produce_visuals(package=visuals)
-            .approve_creative(
-                approved_by=body.amplifier.creative_approval.approved_by,
-                intended_use=body.amplifier.creative_approval.intended_use,
-                on=body.amplifier.creative_approval.approved_on,
-            )
+        amplifier = _approve_authority_amplifier(
+            tenant_id,
+            method=method,
+            message=message,
+            amplifier_body=body.amplifier,
+            claims_body=body.claims,
         )
         package = AuthorityAmplifierPackage(
             package_id=body.amplifier_package_id,
@@ -1647,6 +1692,177 @@ def record_stage_seven_gate(
     except (
         CommercialError,
         EngagementError,
+        GovernanceError,
+        MethodError,
+        ProductionError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return {
+        "stage_number": decision.stage_number,
+        "template_version": decision.template_version,
+        "checkpoint": decision.checkpoint,
+        "disposition": decision.disposition.value,
+        "reviewer": decision.reviewer,
+        "scope": decision.scope,
+        "tenant_id": decision.tenant_id,
+        "decided_on": decision.decided_on.isoformat(),
+        "next_action": decision.next_action,
+        "required_assets": [
+            {
+                "asset_id": asset.asset_id,
+                "version": asset.version,
+            }
+            for asset in decision.required_assets
+        ],
+    }
+
+
+@router.post("/clients/{tenant_id}/stages/8/gate", status_code=201)
+def record_stage_eight_gate(
+    tenant_id: str,
+    body: RecordStageEightGateRequest,
+    repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
+    run_repository: StageRunRepository = Depends(get_stage_run_repository),
+) -> dict[str, Any]:
+    """Record the stage 8 "Funnel Complete" gate through the use case.
+
+    SPEC.md section 6: the API calls the use case and never mutates persistence
+    directly. This route maps the typed request to the Engagement
+    ``RecordStageEightGateCommand``, loads the tenant's ledger through the
+    ``GateLedgerRepository`` port, runs ``RecordStageEightGateHandler`` and appends
+    the resulting ``GateDecision``. Stage 8 depends on stage 7, so governance
+    refuses the decision unless the ledger already holds a passing stage 7
+    decision (SPEC.md section 4). The stage 8 ``StageRun`` is loaded-or-created and
+    upserted through the ``StageRunRepository`` port in the same operation.
+
+    SPEC.md section 4, stage 8 "Integrate" and its "Funnel Complete" checkpoint:
+    a test prospect completes capture, engagement and conversion handoffs with
+    reliable records and ownership (canon files 13, 14, 21 and 22 per SPEC.md
+    section 12.3). The route rebuilds the reviewed funnel, grounds it on the
+    rebuilt approved stage 7 amplifier and drives ``mark_funnel_complete`` with the
+    prospect path dry run, so the ``FunnelCompletionPolicy`` -- not the transport
+    layer -- decides whether the thirteen canonical kinds may be pinned as passing
+    evidence. The route re-states the approved method, production ready offer,
+    approved stage 6 message and approved amplifier because no store is exposed
+    over the API yet; every integrity rule -- the funnel's own completion, the
+    grounded stage 7 dependency, the canonical kinds, exact versions,
+    owner/approver authority and the tenant boundary -- stays enforced by the
+    domain, and a rejection is a named 422 and never a partial write. The path
+    tenant, not the body, is the authoritative client scope.
+    """
+
+    template = stage_zero_to_ten_template()
+    try:
+        workspace = ClientWorkspace(
+            workspace_id=body.workspace_id,
+            tenant_id=tenant_id,
+            authorities=tuple(
+                ClientAuthority(actor=entry.actor, authority=entry.authority)
+                for entry in body.authorities
+            ),
+        )
+        method, _method_reference, _offer, message = _approve_method_offer_message(
+            tenant_id,
+            method_body=body.method,
+            offer_body=body.offer,
+            message_body=body.message,
+        )
+        amplifier = _approve_authority_amplifier(
+            tenant_id,
+            method=method,
+            message=message,
+            amplifier_body=body.amplifier,
+            claims_body=body.claims,
+        )
+        assets = FunnelAssetPackage(
+            campaign_architecture=body.funnel.assets.campaign_architecture,
+            pages=body.funnel.assets.pages,
+            forms=body.funnel.assets.forms,
+            qualification=body.funnel.assets.qualification,
+            booking=body.funnel.assets.booking,
+            sequences=body.funnel.assets.sequences,
+            crm=body.funnel.assets.crm,
+            tags=body.funnel.assets.tags,
+            automation=body.funnel.assets.automation,
+            analytics=body.funnel.assets.analytics,
+            tracking=body.funnel.assets.tracking,
+            sales_handoff=body.funnel.assets.sales_handoff,
+            sops=body.funnel.assets.sops,
+        )
+        dry_run = ProspectPathDryRun(
+            dry_run_id=body.funnel.dry_run.dry_run_id,
+            tenant_id=tenant_id,
+            handoffs=tuple(
+                HandoffRecord(
+                    kind=HandoffKind(entry.kind),
+                    outcome=HandoffOutcome(entry.outcome),
+                    tenant_id=tenant_id,
+                    record_id=entry.record_id,
+                    owner=entry.owner,
+                    detail=entry.detail,
+                )
+                for entry in body.funnel.dry_run.handoffs
+            ),
+        )
+        funnel = FunnelIntegration(
+            integration_id=body.funnel.integration_id,
+            tenant_id=tenant_id,
+            amplifier=amplifier,
+            owner=body.funnel.owner,
+            assets=assets,
+        ).mark_funnel_complete(dry_run)
+        package = FunnelIntegrationPackage(
+            package_id=body.funnel_package_id,
+            tenant_id=tenant_id,
+            funnel=funnel,
+            funnel_version=body.funnel_version,
+        )
+        stage_run = run_repository.load(
+            template.version, workspace.workspace_id, 8, tenant_id
+        )
+        if stage_run is None:
+            stage_run = StageRun(
+                engagement=workspace.workspace_id,
+                stage_number=8,
+                template_version=template.version,
+                assigned_owner=body.stage_owner,
+                tenant_id=tenant_id,
+            )
+        stage_run.record_activity(
+            actor=body.stage_owner,
+            reason="stage 8 funnel integration work began",
+            on=body.on,
+            correlation_id=body.correlation_id,
+        )
+        command = RecordStageEightGateCommand(
+            template=template,
+            workspace=workspace,
+            package=package,
+            stage_run=stage_run,
+            approver=body.approver,
+            scope=body.scope,
+            checkpoint_evidence=body.checkpoint_evidence,
+            rationale=body.rationale,
+            assigned_owner=body.assigned_owner,
+            due_on=body.due_on,
+            on=body.on,
+            correlation_id=body.correlation_id,
+            proposed_by=body.proposed_by,
+            next_action=body.next_action,
+        )
+        ledger = repository.load(template, tenant_id)
+        decision = RecordStageEightGateHandler().handle(command, ledger=ledger)
+        repository.append(decision)
+        run_repository.save(stage_run)
+    except (
+        CommercialError,
+        EngagementError,
+        ExecutionError,
         GovernanceError,
         MethodError,
         ProductionError,

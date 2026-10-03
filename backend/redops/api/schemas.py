@@ -665,6 +665,114 @@ class RecordStageSevenGateRequest(BaseModel):
     next_action: str = ""
 
 
+class FunnelAssetPackageInput(BaseModel):
+    """The stage 8 required funnel asset package (SPEC.md section 4, stage 8).
+
+    SPEC.md section 4, stage 8 "Integrate": the required asset package is the
+    campaign architecture, pages, forms, qualification, booking, sequences, CRM,
+    tags, automation, analytics, tracking, sales handoff and SOPs. The domain
+    refuses a blank artifact, so a missing deliverable cannot be represented as a
+    completed stage 8 funnel.
+    """
+
+    campaign_architecture: str
+    pages: str
+    forms: str
+    qualification: str
+    booking: str
+    sequences: str
+    crm: str
+    tags: str
+    automation: str
+    analytics: str
+    tracking: str
+    sales_handoff: str
+    sops: str
+
+
+class HandoffRecordInput(BaseModel):
+    """One capture, engagement or conversion handoff of the stage 8 dry run.
+
+    The "Funnel Complete" checkpoint requires reliable records and ownership, so
+    the domain refuses a routed handoff without a record reference and any
+    handoff without an owner; the transport model only carries the observed
+    values.
+    """
+
+    kind: str
+    outcome: str
+    record_id: str = ""
+    owner: str
+    detail: str = ""
+
+
+class ProspectPathDryRunInput(BaseModel):
+    """The stage 8 test prospect path dry run (SPEC.md section 4, stage 8).
+
+    Records the capture, engagement and conversion handoffs. The domain refuses
+    a repeated handoff kind and completes the funnel only when every canonical
+    handoff is present exactly once and routed.
+    """
+
+    dry_run_id: str
+    handoffs: list[HandoffRecordInput]
+
+
+class FunnelIntegrationInput(BaseModel):
+    """The reviewed stage 8 funnel before its "Funnel Complete" checkpoint.
+
+    Carries the funnel identity, owner, the thirteen required assets and the
+    prospect path dry run. The route grounds the funnel on the rebuilt approved
+    stage 7 amplifier and drives ``mark_funnel_complete``, so the domain, not the
+    transport layer, decides whether the funnel may be pinned as passing
+    evidence.
+    """
+
+    integration_id: str
+    owner: str
+    assets: FunnelAssetPackageInput
+    dry_run: ProspectPathDryRunInput
+
+
+class RecordStageEightGateRequest(BaseModel):
+    """The stage 8 "Funnel Complete" gate request (SPEC.md section 4).
+
+    The caller supplies the reviewed funnel and its prospect path dry run, the
+    approved stage 7 amplifier the funnel grounds on (rebuilt from the approved
+    method, production ready offer and approved stage 6 message), the known claims
+    that support the amplifier proof, the workspace authority registry and the
+    decision metadata. The route builds the canonical gate from these through the
+    use case; it deliberately accepts no pre-built gate, so the tenant boundary,
+    approver authority, owner authority and exact-version evidence cannot be
+    bypassed. Stage 8 depends on a passing stage 7 decision already in the ledger.
+    Unlike stages 2 through 6 the funnel checkpoint turns on its own same-tenant
+    prospect path, not external customer claims; claims remain only because the
+    amplified stage 7 dependency must still be rebuilt and re-proved.
+    """
+
+    workspace_id: str
+    authorities: list[ClientAuthorityInput]
+    funnel_package_id: str
+    funnel_version: int
+    message: CampaignMessageInput
+    offer: OfferVersionInput
+    method: MethodVersionInput
+    amplifier: AuthorityAmplifierInput
+    claims: list[ClaimInput] = Field(default_factory=list)
+    funnel: FunnelIntegrationInput
+    stage_owner: str
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
 class AssetVersionResponse(BaseModel):
     """One exact asset version pinned or approved for a stage."""
 

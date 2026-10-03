@@ -4,7 +4,74 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T172603Z (Ralph cycle, this run): selected item was the HTTP
+- Cycle 2026-10-03T172823Z (Ralph cycle, this run): selected item was the HTTP
+  route that exposes the stage 8 "Funnel Complete" gate. The prior cycle named it
+  the highest priority ready next item: the `StageEightGateAssembler` /
+  `StageEightGateRecorder`, the `RecordStageEightGateCommand` /
+  `RecordStageEightGateHandler` and the Execution `FunnelIntegrationPackage` all
+  exist, but only stages 0 through 7 had write routes, so the canonical 0-10 API
+  surface stopped at stage 7 and DoD condition 1 stayed unreachable. It outranked
+  the stage 9 route (which depends on it) and the `ClientProcess` canon gap (a
+  methodology-owner decision), because gate visibility through the real use case
+  is the pipeline backbone.
+- Outcome: new `POST /red/clients/{tenant_id}/stages/8/gate` in
+  `backend/redops/api/routes.py`, mapping the typed request to the Execution
+  `FunnelIntegrationPackage` and running `RecordStageEightGateHandler` through
+  `get_gate_ledger_repository` and `get_stage_run_repository`, mirroring the stage
+  7 route. New request schemas in `backend/redops/api/schemas.py`:
+  `FunnelAssetPackageInput`, `HandoffRecordInput`, `ProspectPathDryRunInput`,
+  `FunnelIntegrationInput`, `RecordStageEightGateRequest`. The route grounds the
+  reviewed `FunnelIntegration` on the approved stage 7 amplifier and drives
+  `mark_funnel_complete` with the prospect path dry run, so the domain's
+  `FunnelCompletionPolicy` -- not the transport layer -- decides whether the
+  thirteen canonical kinds may be pinned as passing evidence. The route computes
+  no rule: the funnel's own completion, the grounded stage 7 dependency, the
+  canonical kinds, exact versions, owner/approver authority, the stage 7
+  prerequisite and the tenant boundary stay enforced by the domain, and errors map
+  to a named 422. Stage 8 carries claims only because the amplified stage 7
+  dependency must still be rebuilt and re-proved (SPEC.md section 4, stage 8;
+  canon files 13, 14, 21 and 22 per section 12.3).
+- Evidence: `tests/unit/test_stage_eight_gate_route.py` (6) pass: stages 0
+  through 7 are seeded through their own routes (reusing the stage 7 test's
+  payload builders so the suites cannot drift), then a passing stage 8 decision
+  pins the thirteen canonical funnel kinds at version 1, the stage 8 run persists
+  COMPLETE with its owner, a stage 8 gate with no passing stage 7 is refused, a
+  failed conversion handoff prevents completion with `FunnelIncompleteError` and
+  no write, an unauthorized approver is refused with no write, and the decision is
+  invisible to another tenant. `uv run pytest -q` green: 1709 passed, 1 skipped,
+  632 subtests; `uv run pyflakes backend tests` clean.
+- New findings: the stage 7 amplifier construction was extracted into a shared
+  module-level `_approve_authority_amplifier`, now used by the stage 7 and stage 8
+  routes, proving it reusable without behaviour change so stages 9 and 10 can
+  reuse it the same way. The API-boundary integrity limitation is unchanged: the
+  caller supplies the approved method/offer/message/amplifier and their approval
+  metadata because no read model or store is exposed, so the "approved dependency"
+  is data, not a durable governance record. `make done` still fails at step 2
+  (`tests/e2e` absent), so DoD 1 is not met.
+- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate routes
+  and a repeated gate POST after COMPLETE returns 422; RLS remains WHERE-clause
+  only (ADR 0004); no `MethodVersion`/offer store behind the API; the stage 0-10
+  e2e suite (DoD 1, Q30) and the migration deployment step (separate GitOps chart)
+  are absent from this repo.
+- Highest priority ready next item: expose the stage 9 "Launch Approved" gate by
+  `POST /red/clients/{tenant_id}/stages/9/gate`, mapping a typed request to the
+  Execution `LaunchQAPackage` and running `RecordStageNineGateHandler` through the
+  ledger and stage run ports, reusing `_approve_method_offer_message` and
+  `_approve_authority_amplifier` and mirroring the stage 8 route (stage 9's
+  prerequisite is a passing stage 8 decision; the checkpoint requires every
+  critical path QA check to pass, exceptions to have owners, a reviewed compliance
+  package and the designated human authority to authorize traffic).
+  Prerequisites: the `StageNineGateAssembler`/`StageNineGateRecorder`,
+  `RecordStageNineGateCommand`/`RecordStageNineGateHandler` and `LaunchQAPackage`
+  (all present), the stage 8 route (done), and a passing stage 8 decision in the
+  ledger (enforced by governance). This advances the stage 0-10 API surface toward
+  DoD 1. Alternative: the `ClientProcess` design artifact from the canon gap
+  register, if a methodology-owner decision is preferred; or a durable
+  `MethodVersion`/offer store so the gates stop re-stating upstream approvals.
+
+### Prior cycle (2026-10-03T172603Z)
+
+- Cycle 2026-10-03T172603Z: selected item was the HTTP
   route that exposes the stage 7 "Authority Amplifier Approved" gate. The prior
   cycle named it the highest priority ready next item: the
   `StageSevenGateAssembler` / `StageSevenGateRecorder`, the
