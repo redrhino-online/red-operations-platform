@@ -4,6 +4,46 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T165342Z (Ralph cycle, this run): selected item was the
+  production-view query use case in the Governance application layer. The prior
+  cycle projected durable `StageRun` records into the pure
+  `EngagementProductionView`, but nothing loaded the ledger and per-stage runs
+  from the repositories, so the read model had no production caller. SPEC.md
+  section 4 requires the production view to answer, per client, who is
+  accountable and what approval is next, and section 6 requires a use case to
+  compose the view through ports. It outranked a read route (which depends on
+  it) and the `ClientProcess` canon-gap slice because gate visibility over
+  durable state is the pipeline backbone.
+- Outcome: new `backend/redops/contexts/governance/application/queries.py`:
+  `EngagementProductionViewQuery` (template, engagement, tenant, `on`, milestone
+  and activity counts, typed metric rows) and
+  `GetEngagementProductionViewHandler`, which loads the tenant's `GateLedger`
+  through `GateLedgerRepository`, loops the template's stages loading each
+  `StageRun` through `StageRunRepository`, and returns
+  `EngagementProductionView.from_ledger`. It holds no rule of its own: the
+  domain view still enforces projection, tenant boundary and dependency
+  integrity.
+- Evidence: `tests/unit/governance/test_production_view_query.py` (6) pass;
+  domain suite 1652 run / 15 skipped (unittest on py3.10); `pyflakes
+  backend/redops tests` clean.
+- New findings: no HTTP read route exposes the view yet; the handler is
+  exercised only by the new tests. `StageRunRepository.load` reads one stage at a
+  time, so an engagement-wide view loops the template's stages (acceptable at 11
+  stages; a batch port is a later optimization only if measured).
+- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate route
+  and a repeated stage 0 gate POST after COMPLETE returns 422; RLS remains
+  WHERE-clause only (ADR 0004); the migration deployment step needs the separate
+  GitOps chart (not in this repository).
+- Highest priority ready next item: expose the production view by a read route
+  (`GET /red/clients/{tenant_id}/engagements/{engagement}/production-view`),
+  wiring `get_gate_ledger_repository` and `get_stage_run_repository`, a response
+  schema, and a route test. Prerequisites: this cycle's query use case (done) and
+  the ledger and stage run repository ports and env factories (done). If a
+  methodology-owner decision is preferred instead, the `ClientProcess` design
+  artifact from the canon gap register is the alternative.
+
+### Prior cycle (2026-10-03T155456Z)
+
 - Cycle 2026-10-03T155456Z (Ralph cycle, this run): selected item was to project
   the durable `StageRun` into the production view. SPEC.md section 3 makes
   `StageRun` the stage-progress aggregate (assigned owner, status, entered and
