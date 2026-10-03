@@ -4,6 +4,80 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T172603Z (Ralph cycle, this run): selected item was the HTTP
+  route that exposes the stage 7 "Authority Amplifier Approved" gate. The prior
+  cycle named it the highest priority ready next item: the
+  `StageSevenGateAssembler` / `StageSevenGateRecorder`, the
+  `RecordStageSevenGateCommand` / `RecordStageSevenGateHandler` and the Production
+  `AuthorityAmplifierPackage` all exist, but only stages 0 through 6 had write
+  routes, so the canonical 0-10 API surface stopped at stage 6 and DoD condition 1
+  stayed unreachable. It outranked the stage 8 route (which depends on it) and the
+  `ClientProcess` canon gap (a methodology-owner decision), because gate
+  visibility through the real use case is the pipeline backbone.
+- Outcome: new `POST /red/clients/{tenant_id}/stages/7/gate` in
+  `backend/redops/api/routes.py`, mapping the typed request to the Production
+  `AuthorityAmplifierPackage` and running `RecordStageSevenGateHandler` through
+  `get_gate_ledger_repository` and `get_stage_run_repository`, mirroring the stage
+  6 route. New request schemas in `backend/redops/api/schemas.py`:
+  `ScriptSectionInput`, `VisualProductionPackageInput`,
+  `AmplifierApprovalInput`, `AuthorityAmplifierInput`,
+  `RecordStageSevenGateRequest`. Because no `MethodVersion`, offer or message
+  store is exposed over the API yet, the stage 6 route's large method/offer/message
+  re-statement was extracted into a shared module-level builder
+  `_approve_method_offer_message` now used by both the stage 6 and stage 7 routes,
+  so the two cannot drift. The stage 7 route rebuilds the reviewed amplifier and
+  drives the two distinct approvals in canonical order -- `approve_script` (the
+  `AuthorityAmplifierPolicy` only permits it when the message is approved, the
+  method is an approved dependency and every proof claim is a known, directly
+  sourced claim of that method), then `produce_visuals`, then `approve_creative` --
+  so the script-before-visuals-before-creative order and the grounded-proof rule
+  are proven by the domain, not asserted. The route computes no rule: canonical
+  script order, grounded proof, approval sequence, canonical kinds, exact versions,
+  approver authority, the stage 6 prerequisite and the tenant boundary stay
+  enforced by the domain, and errors map to a named 422. Stage 7 carries claims
+  (unlike stages 2-6) because the checkpoint requires known, directly sourced
+  proof (SPEC.md section 4, stage 7; canon files 13-18 and 28 per section 12.3).
+- Evidence: `tests/unit/test_stage_seven_gate_route.py` (6) pass: stages 0 through
+  6 are seeded through their own routes (reusing the stage 6 test's payload
+  builders so the suites cannot drift), then a passing stage 7 decision pins the
+  nine canonical amplifier kinds at version 1, the stage 7 run persists COMPLETE
+  with its owner, a stage 7 gate with no passing stage 6 is refused, a proof claim
+  that is not a known source-backed method claim is refused with
+  `UnsupportedProofError` and no write, an unauthorized approver is refused with
+  no write, and the decision is invisible to another tenant. The reworked stage 6
+  route still passes its own 6 tests. `uv run pytest -q` green: 1703 passed, 1
+  skipped, 632 subtests; `uv run pyflakes backend tests` clean.
+- New findings: extracting the shared method/offer/message builder proved the
+  stage 6 route's construction is reusable without behaviour change, so stages 8
+  through 10 can reuse it the same way. The API-boundary integrity limitation is
+  unchanged: the caller supplies the approved method/offer/message/amplifier and
+  their approval metadata because no read model or store is exposed, so the
+  "approved dependency" is data, not a durable governance record; a
+  `MethodVersion`/offer store plus exact-version lookup remains the durable fix.
+  `make done` still fails at step 2 (`tests/e2e` absent), so DoD 1 is not met.
+- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate routes
+  and a repeated gate POST after COMPLETE returns 422; RLS remains WHERE-clause
+  only (ADR 0004); no `MethodVersion`/offer store behind the API; the stage 0-10
+  e2e suite (DoD 1, Q30) and the migration deployment step (separate GitOps chart)
+  are absent from this repo.
+- Highest priority ready next item: expose the stage 8 "Funnel Complete" gate by
+  `POST /red/clients/{tenant_id}/stages/8/gate`, mapping a typed request to the
+  Execution `FunnelIntegrationPackage` and running
+  `RecordStageEightGateHandler` through the ledger and stage run ports, reusing
+  `_approve_method_offer_message` and mirroring the stage 7 route (stage 8's
+  prerequisite is a passing stage 7 decision; the checkpoint turns on a
+  same-tenant prospect path dry run rather than external claims). Prerequisites:
+  the `StageEightGateAssembler`/`StageEightGateRecorder`,
+  `RecordStageEightGateCommand`/`RecordStageEightGateHandler` and
+  `FunnelIntegrationPackage` (all present), the stage 7 route (done), and a
+  passing stage 7 decision in the ledger (enforced by governance). This advances
+  the stage 0-10 API surface toward DoD 1. Alternative: the `ClientProcess` design
+  artifact from the canon gap register, if a methodology-owner decision is
+  preferred; or a durable `MethodVersion`/offer store so the gates stop
+  re-stating upstream approvals.
+
+### Prior cycle (2026-10-03T172338Z)
+
 - Cycle 2026-10-03T172338Z (Ralph cycle, this run): selected item was the HTTP
   route that exposes the stage 6 "Campaign Message Approved" gate. The prior
   cycle named it the highest priority ready next item: the `StageSixGateAssembler`

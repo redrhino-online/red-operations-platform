@@ -566,6 +566,105 @@ class RecordStageSixGateRequest(BaseModel):
     next_action: str = ""
 
 
+class ScriptSectionInput(BaseModel):
+    """One section of the stage 7 script, carried in its canonical order.
+
+    SPEC.md section 4, stage 7 "Produce": the approved script is Promise, Proof,
+    Problems, Steps, Context, Action. The domain refuses a missing or out-of-order
+    section, so this transport model only carries the kind and content.
+    """
+
+    kind: str
+    content: str
+
+
+class VisualProductionPackageInput(BaseModel):
+    """The stage 7 visual and video assets produced after script approval.
+
+    The package carries the storyboard, brand treatment, presentation, speaker
+    notes, recording, edited and hosted video and player assets; the domain
+    refuses a blank artifact so a missing deliverable cannot be represented as a
+    completed stage 7 package.
+    """
+
+    storyboard: str
+    brand_treatment: str
+    presentation: str
+    speaker_notes: str
+    recording: str
+    edited_video: str
+    hosted_video: str
+    player_assets: str
+
+
+class AmplifierApprovalInput(BaseModel):
+    """One version-scoped stage 7 approval, either script or creative.
+
+    Stage 7 has two distinct approvals; the domain stores them separately so
+    script approval alone never constitutes final creative acceptance.
+    """
+
+    approved_by: str
+    intended_use: str
+    approved_on: date
+
+
+class AuthorityAmplifierInput(BaseModel):
+    """The reviewed stage 7 Authority Amplifier (SPEC.md section 4, stage 7).
+
+    Carries the amplifier identity, owner, six canonical script sections, the
+    proof claim ids the script stands on, the visual production package and the
+    two distinct approvals. The domain enforces the canonical script order, the
+    grounded proof and the script-before-visuals-before-creative approval
+    sequence, so the transport layer only carries the reviewed values.
+    """
+
+    amplifier_id: str
+    owner: str
+    script: list[ScriptSectionInput]
+    proof_claim_ids: list[str]
+    visuals: VisualProductionPackageInput
+    script_approval: AmplifierApprovalInput
+    creative_approval: AmplifierApprovalInput
+
+
+class RecordStageSevenGateRequest(BaseModel):
+    """The stage 7 "Authority Amplifier Approved" gate request (SPEC.md section 4).
+
+    The caller supplies the reviewed amplifier, the approved stage 6 message, the
+    approved method and production ready offer the amplifier grounds on, the
+    known claims that support its proof, the workspace authority registry and the
+    decision metadata. The route builds the canonical gate from these through the
+    use case; it deliberately accepts no pre-built gate, so the tenant boundary,
+    the script-before-visuals-before-creative approval order, approver authority
+    and exact-version evidence cannot be bypassed. Stage 7 depends on a passing
+    stage 6 decision already in the ledger. The amplifier carries claims because
+    the checkpoint requires every proof claim to be a claim of the approved
+    method backed by a known, directly sourced knowledge claim.
+    """
+
+    workspace_id: str
+    authorities: list[ClientAuthorityInput]
+    amplifier_package_id: str
+    amplifier_version: int
+    message: CampaignMessageInput
+    offer: OfferVersionInput
+    method: MethodVersionInput
+    amplifier: AuthorityAmplifierInput
+    claims: list[ClaimInput] = Field(default_factory=list)
+    stage_owner: str
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
 class AssetVersionResponse(BaseModel):
     """One exact asset version pinned or approved for a stage."""
 
