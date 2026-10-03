@@ -4,6 +4,77 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T184450Z (Ralph cycle, this run): selected item was queue Q4,
+  the env-gated live OpenRouter smoke test (SPEC.md sections 6 and 13 condition
+  5; implementation plan Q4). Q4 is the highest ready item whose prerequisites
+  are met: Q2 landed the live `ForkProviderModelGateway` adapter in the prior
+  cycle, so the seam exists and the smoke is the queue's next
+  dependency-satisfied item. It outranked the alternatives for these reasons.
+  The stage 8-10 canon required-kind wiring (Q28) is still blocked on the named
+  methodology-owner placement decision (`EnrollmentPlan`, `ClientProcess`,
+  `SwimlanesPlan` between the stage 8 "Funnel Complete" gate and a later stage
+  9/10 gate), and the task forbids making that decision unattended. The Next.js
+  `frontend/` shell (DoD condition 6, Q32) is blocked on the workflow engine Q5
+  via Q15, and Q5 is a multi-cycle adaptation of the fork's workflow/resumer
+  substrate, so it is not the smallest completable item. The pipeline backbone
+  is complete through stage 10 at the gate routes, so there was no smaller
+  gate-integrity defect with satisfied prerequisites. Q4 closes the last
+  section 13 condition 5 gap that is implementable without a credential: before
+  this cycle the real provider path had an adapter but no test that exercised it
+  end to end. Alternatives rejected: another canon asset outside the stage order
+  (post-stage-10 assets do not block the pipeline) and the REST resource routes
+  Q9-Q14 (ready but surface, not DoD blocking).
+- Outcome: new env-gated test
+  `tests/unit/agents/test_live_openrouter_smoke.py`. It skips unless
+  `OPENROUTER_API_KEY` is set and `REDOP_LIVE_OPENROUTER_SMOKE` is truthy, then
+  drives one live call through `ForkProviderModelGateway.from_fork_registry()`
+  (max_tokens=16, model overridable by `REDOP_SMOKE_MODEL`, default
+  `claude-haiku-4-5`) wrapped by `LoggingModelGateway`, and asserts the section
+  6 attribution survives the live path: non-empty text, the request's model,
+  prompt version, trace id and context references, non-negative usage, and a
+  `redops.agents.model` INFO record carrying the trace id, model and tenant and
+  never the prompt or response text. `setUp`/`tearDown` set and restore
+  `OPENROUTER_ENABLED`/`EXEC_EMAIL_ADDRESS` and reset the fork registry
+  singleton so the smoke never leaks provider or env state. The explicit opt-in
+  is a deliberate safety deviation from the plan's "skipped without a key"
+  wording: a live call spends money, and gating only on the key would turn every
+  `make check` into a paid call for a developer with a key in their shell.
+- Evidence: `make check` -> 1959 passed, 2 skipped (the smoke is the second
+  skip), 680 subtests; pyflakes clean. The gate is an AND, proven by three runs:
+  opt-in only (no key) skips, key only (no opt-in) skips, and both set with an
+  unreachable `OPENROUTER_BASE_URL` runs the live chain and fails on
+  `httpx.ConnectTimeout` instead of skipping, so the test body really reaches
+  the provider seam. `make done` clears [1/6]-[4/6] and still fails [5/6]
+  (`frontend/` missing, Q32).
+- New findings: section 13 condition 5 now has the offline fake (Q1), the live
+  adapter and attribution log (Q2), and the live smoke (Q4); the only piece that
+  cannot be completed here is executing the smoke, which needs a real
+  `OPENROUTER_API_KEY`. The fork's `get_settings()` constructs `Settings()` on
+  every call (not cached) and requires `EXEC_EMAIL_ADDRESS`, so the smoke sets
+  it in `setUp`; `OPENROUTER_ENABLED=true` is required for routing and is set
+  per test, not globally. The unresolved Q3 architecture tension remains: ADR
+  0006 registers RED agents through the fork's `orchestrator/router.py` while
+  DoD condition 7 requires zero vendor edits; that is a named-owner/architecture
+  decision, not a Q4 blocker.
+- Blockers: the Q28 stage 8/9/10 required-kind placement decision (named-owner);
+  `frontend/` (DoD condition 6, Q32) blocked on Q5 via Q15; request idempotency
+  (Q16) blocked on the same; RLS is a WHERE clause only (ADR 0004); the
+  condition 3 retrieval, background worker and artifact-URL layers are unbuilt;
+  Q3 agent registration blocked on the ADR 0006 versus vendor-edit tension; Q4's
+  live call needs an `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: the Q5 workflow engine slice (versioned
+  definition, durable run state, approval wait survives a restart, idempotent
+  effects), the single most useful unblocker for the last failing DoD
+  checkpoint; it unblocks Q15 -> Q32 and the SPEC.md section 11 "restarting
+  worker preserves a waiting workflow" acceptance scenario. It is larger than
+  one bounded item, so the next cycle should take its smallest independently
+  verifiable slice (durable run state persisted before side effects with a
+  resume test). Required owner input for the pipeline: the stage 8/9/10 canon
+  placement decision; approver for any wired kind: the client designated
+  authority; blocked downstream dependency: the stage 9 gate.
+
+### Prior cycle (2026-10-03T184310Z)
+
 - Cycle 2026-10-03T184310Z (Ralph cycle, this run): selected item was queue Q2,
   the live RED LLM adapter that satisfies the `ModelGateway` port, wraps the
   fork's provider registry, and logs model, prompt version, context references,
@@ -2138,7 +2209,7 @@ stalls:
 | Q1 | Deterministic fake model gateway (port plus test adapter) | agents | — | unit test; agents run offline. Done 2026-10-03T183929Z: `backend/redops/agents/` (`ModelGateway` port, `ModelRequest`/`ModelUsage`/`ModelResponse`, `DeterministicFakeModelGateway`) verified by `tests/unit/agents/test_model_gateway.py` (13 tests) |
 | Q2 | RED LLM adapter logs model, prompt version, usage, trace id | agents | Q1 | adapter contract test. Done 2026-10-03T184310Z: `ForkProviderModelGateway` wraps the fork's `get_provider` behind `ModelGateway`; `LoggingModelGateway` logs tenant/model/prompt version/trace id/context refs/tokens without prompt text; `ModelGatewayRuntimeError` guards a running loop. Verified by `tests/unit/agents/test_llm_gateway.py` (12 tests). Live smoke remains Q4 |
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
-| Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key |
+| Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key. Done 2026-10-03T184450Z: `tests/unit/agents/test_live_openrouter_smoke.py` skips unless `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE` are set, then drives one live call through `ForkProviderModelGateway.from_fork_registry()` plus `LoggingModelGateway` and asserts the section 6 attribution; executing it awaits a real key |
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
