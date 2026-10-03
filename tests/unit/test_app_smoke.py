@@ -58,3 +58,23 @@ class AppSmokeTest(unittest.TestCase):
         }
 
         self.assertIn("/openexecutive", mounted)
+
+    def test_gate_ledger_dependency_defaults_to_the_process_local_adapter(
+        self,
+    ) -> None:
+        import os
+
+        from redops.api.routes import get_gate_ledger_repository
+        from redops.contexts.governance.infrastructure.repositories import (
+            InMemoryGateLedgerRepository,
+        )
+
+        previous = os.environ.pop("DATABASE_URL", None)
+        try:
+            repository = next(get_gate_ledger_repository())
+            self.assertIsInstance(
+                repository, InMemoryGateLedgerRepository
+            )
+        finally:
+            if previous is not None:
+                os.environ["DATABASE_URL"] = previous

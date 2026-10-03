@@ -200,6 +200,23 @@ class PostgresGateLedgerRepositoryTests(unittest.TestCase):
         self.assertIsNone(ledger.decision_for(0))
         self.assertEqual((), ledger.decisions_for(0))
 
+    def test_the_factory_builds_the_postgres_adapter_from_a_database_url(
+        self,
+    ) -> None:
+        from redops.contexts.governance.infrastructure.repositories import (
+            PostgresGateLedgerRepository,
+            gate_ledger_repository_from_env,
+        )
+
+        repository = gate_ledger_repository_from_env(DATABASE_URL)
+        try:
+            self.assertIsInstance(repository, PostgresGateLedgerRepository)
+            self.assertIsNone(
+                repository.load(self.template, TENANT).decision_for(0)
+            )
+        finally:
+            repository.close()
+
     def test_a_recorded_passing_gate_survives_a_reload_with_exact_versions(
         self,
     ) -> None:

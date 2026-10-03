@@ -60,3 +60,14 @@ class GateLedgerRepository(abc.ABC):
         not itself decide whether a decision is valid; ``load`` replays through
         the domain ledger so integrity is enforced on the canonical aggregate.
         """
+
+    def close(self) -> None:
+        """Release any resource the adapter owns for the caller's request.
+
+        A durable adapter holds a connection; a process-local adapter holds
+        nothing. The default is a no-op, so the lifecycle concern stays with the
+        adapter that needs it rather than leaking into the port's data contract
+        (SPEC.md section 6).
+        """
+
+        return None

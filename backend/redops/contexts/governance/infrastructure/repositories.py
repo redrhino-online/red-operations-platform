@@ -37,6 +37,17 @@ except ImportError:  # pragma: no cover - taken on the domain-only interpreter
     Jsonb = None  # type: ignore[assignment]
 
 
+class GateLedgerConfigurationError(RuntimeError):
+    """The gate ledger store was configured without a usable driver.
+
+    A set ``DATABASE_URL`` is an explicit instruction to use the durable store
+    (ADR 0003). Silently falling back to the process-local adapter would accept
+    and report gate decisions that vanish on restart, so a missing psycopg
+    driver is a configuration error rather than a degraded mode (SPEC.md
+    sections 3, 4 and 9).
+    """
+
+
 class InMemoryGateLedgerRepository(GateLedgerRepository):
     """Append-only, process-local gate decision store keyed by client and template."""
 
@@ -64,6 +75,11 @@ class InMemoryGateLedgerRepository(GateLedgerRepository):
                 "decision is a client resource and cannot be stored unscoped"
             )
         self._decisions.append(decision)
+
+    def close(self) -> None:
+        """A process-local store owns no external resource to release."""
+
+        return None
 
 
 def _require_tenant_id(value: str, operation: str) -> None:
@@ -152,3 +168,34 @@ class PostgresGateLedgerRepository(GateLedgerRepository):
                 ),
             )
         self._connection.commit()
+
+    def close(self) -> None:
+        """Release the connection the adapter holds for the request."""
+
+        self._connection.close()
+
+
+def gate_ledger_repository_from_env(
+    database_url: str | None,
+) -> GateLedgerRepository:
+    """Select the gate ledger adapter from configuration (ADR 0003).
+
+    With a ``DATABASE_URL`` the durable PostgreSQL adapter is used so approved
+    gate progress survives a restart and is shared across the API and worker
+    processes (SPEC.md sections 3 and 4); without one the process-local
+    reference adapter keeps local development and the domain-only test
+    interpreter working. A set but unusable configuration raises
+    ``GateLedgerConfigurationError`` so a deployment cannot mistake a
+    non-durable ledger for a durable one. The caller owns the returned adapter's
+    lifecycle and calls ``close`` when the request ends.
+    """
+
+    if database_url is None or not database_url.strip():
+        return InMemoryGateLedgerRepository()
+    if psycopg is None:
+        raise GateLedgerConfigurationError(
+            "DATABASE_URL is set but no PostgreSQL driver is installed; install "
+            "the app dependencies (psycopg[binary]) or unset DATABASE_URL to "
+            "use the process-local gate ledger"
+        )
+    return PostgresGateLedgerRepository(psycopg.connect(database_url))

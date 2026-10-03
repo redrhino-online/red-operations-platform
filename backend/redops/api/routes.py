@@ -10,6 +10,8 @@ enforced and tested.
 
 from __future__ import annotations
 
+import os
+from collections.abc import Iterator
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,7 +36,7 @@ from redops.contexts.governance.domain.entities import StageRun
 from redops.contexts.governance.domain.errors import GovernanceError
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
 from redops.contexts.governance.infrastructure.repositories import (
-    InMemoryGateLedgerRepository,
+    gate_ledger_repository_from_env,
 )
 from redops.contexts.knowledge.domain.entities import Claim
 from redops.contexts.knowledge.domain.errors import KnowledgeError
@@ -45,17 +47,27 @@ from redops.contexts.knowledge.domain.value_objects import (
 
 router = APIRouter(prefix="/red", tags=["red"])
 
-# The reference adapter stands in for the durable PostgreSQL adapter (ADR 0003)
-# until it lands. It is provided through an overridable dependency so the API is
-# wired to the ``GateLedgerRepository`` port, not to a concrete store, and tests
-# can substitute a fresh tenant-scoped ledger.
-_GATE_LEDGER_REPOSITORY: GateLedgerRepository = InMemoryGateLedgerRepository()
+# The adapter is selected from configuration through an overridable dependency
+# so the API is wired to the ``GateLedgerRepository`` port, not to a concrete
+# store. ADR 0003 gives RED durable gate records: when ``DATABASE_URL`` is set
+# the process serving traffic records into PostgreSQL, and without it (local
+# development, the domain-only test interpreter) the process-local reference
+# adapter stands in.
+def get_gate_ledger_repository() -> Iterator[GateLedgerRepository]:
+    """Provide the configured gate ledger seam to the API (SPEC.md section 6).
 
+    The dependency owns one adapter for the request and releases any connection
+    it opened when the request ends, so a durable write is committed per gate
+    (SPEC.md sections 3 and 4). The store is chosen once from ``DATABASE_URL``;
+    a request cannot silently downgrade to the process-local ledger, because a
+    set-but-unusable configuration raises before the route runs.
+    """
 
-def get_gate_ledger_repository() -> GateLedgerRepository:
-    """Provide the durable gate ledger seam to the API (SPEC.md section 6)."""
-
-    return _GATE_LEDGER_REPOSITORY
+    repository = gate_ledger_repository_from_env(os.environ.get("DATABASE_URL"))
+    try:
+        yield repository
+    finally:
+        repository.close()
 
 
 @router.get("/health")
