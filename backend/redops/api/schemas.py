@@ -1501,3 +1501,89 @@ class MethodVersionListResponse(BaseModel):
     limit: int
     offset: int
     methods: list[MethodVersionResponse]
+
+
+class MethodReferenceResponse(BaseModel):
+    """One exact method dependency an offer pins."""
+
+    method_id: str
+    version: str
+    intended_use: str
+
+
+class OfferVersionResponse(BaseModel):
+    """One production ready offer version, read from the durable offer store.
+
+    SPEC.md section 3 makes production require approved dependencies and section
+    4 keeps an approved version identifiable. The read surface projects the
+    offer's identity, its pinned method references and its readiness; the exact
+    asset content is retrieved through the gate seam, not re-declared here.
+    """
+
+    offer_id: str
+    tenant_id: str
+    audience: str
+    promise: str
+    eligibility: str
+    price_hypothesis: str
+    owner: str
+    state: str
+    is_production_ready: bool
+    method_refs: list[MethodReferenceResponse]
+    review_reason: str | None
+
+
+class OfferListResponse(BaseModel):
+    """A paginated page of one client tenant's production ready offers."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    offers: list[OfferVersionResponse]
+
+
+class CreateBuildRequest(BaseModel):
+    """Record one production work item with a named owner and next action.
+
+    SPEC.md section 3 makes a BuildObject the unit of production work and its
+    invariant is that an active build always has an owner and a next action; the
+    aggregate refuses a blank owner or next action. A new build starts Identified
+    and is not an approval or a gate: it is a proposal (SPEC.md section 5).
+    """
+
+    build_id: str
+    tenant_id: str
+    build_type: str
+    purpose: str
+    audience: str
+    owner: str
+    next_action: str
+    refs: list[str] = Field(default_factory=list)
+
+
+class BuildObjectResponse(BaseModel):
+    """One production work item, re-validated through the domain aggregate."""
+
+    build_id: str
+    tenant_id: str
+    build_type: str
+    purpose: str
+    audience: str
+    owner: str
+    next_action: str
+    state: str
+    is_active: bool
+    is_blocked: bool
+    blockers: list[str]
+    refs: list[str]
+
+
+class BuildListResponse(BaseModel):
+    """A paginated page of one client tenant's production work items."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    builds: list[BuildObjectResponse]

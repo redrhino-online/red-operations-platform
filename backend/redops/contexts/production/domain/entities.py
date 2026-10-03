@@ -49,9 +49,14 @@ class BuildObject:
     next action. Every state change is recorded with actor, reason, timestamp,
     old and new state, and a correlation ID; illegal transitions are rejected
     rather than silently coerced.
+
+    SPEC.md section 3 also makes every child resource belong to exactly one
+    client and section 9 requires ``tenant_id`` on every tenant resource, so a
+    build carries its client tenant and cannot be stored or read unscoped.
     """
 
     build_id: str
+    tenant_id: str
     build_type: str
     purpose: str
     audience: str
@@ -66,6 +71,7 @@ class BuildObject:
 
     def __post_init__(self) -> None:
         _require_text(self.build_id, "build id")
+        _require_text(self.tenant_id, "build tenant id")
         _require_text(self.build_type, "build type")
         _require_text(self.purpose, "build purpose")
         _require_text(self.audience, "build audience")

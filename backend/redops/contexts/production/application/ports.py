@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import abc
 
-from redops.contexts.production.domain.entities import AuthorityAmplifier
+from redops.contexts.production.domain.entities import (
+    AuthorityAmplifier,
+    BuildObject,
+)
 
 
 class AuthorityAmplifierRepository(abc.ABC):
@@ -35,6 +38,34 @@ class AuthorityAmplifierRepository(abc.ABC):
     @abc.abstractmethod
     def save(self, amplifier: AuthorityAmplifier) -> None:
         """Store an approved amplifier, refusing a different same-id body."""
+
+    def close(self) -> None:
+        """A default no-op so a process-local adapter need not implement it."""
+
+
+class BuildObjectRepository(abc.ABC):
+    """Seam for a client's production work items, keyed by client and build id.
+
+    SPEC.md section 3 makes a BuildObject the unit of production work and its
+    invariant is that an active build always has an owner and a next action, so
+    the build board always answers who is accountable and what happens next. A
+    build is a live aggregate whose lifecycle transitions append to its recorded
+    history (SPEC.md section 4), so the store resolves and updates the current
+    snapshot per ``(tenant_id, build_id)`` rather than treating it as immutable.
+    ``close`` releases any connection the adapter opened.
+    """
+
+    @abc.abstractmethod
+    def get(self, tenant_id: str, build_id: str) -> BuildObject | None:
+        """Return the client's current build snapshot, or ``None`` if unknown."""
+
+    @abc.abstractmethod
+    def list(self, tenant_id: str) -> tuple[BuildObject, ...]:
+        """Return the client's builds, ordered by build id."""
+
+    @abc.abstractmethod
+    def save(self, build: BuildObject) -> None:
+        """Store the client's current build snapshot under its build id."""
 
     def close(self) -> None:
         """A default no-op so a process-local adapter need not implement it."""

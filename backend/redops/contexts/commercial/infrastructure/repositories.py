@@ -84,6 +84,16 @@ class InMemoryOfferVersionRepository(OfferVersionRepository):
         _require_offer_tenant(tenant_id, "read")
         return self._offers.get((tenant_id, offer_id))
 
+    def list(self, tenant_id: str) -> tuple[OfferVersion, ...]:
+        _require_offer_tenant(tenant_id, "read")
+        return tuple(
+            self._offers[key]
+            for key in sorted(
+                (key for key in self._offers if key[0] == tenant_id),
+                key=lambda key: key[1],
+            )
+        )
+
     def save(self, offer: OfferVersion) -> None:
         _require_offer_tenant(offer.tenant_id, "write")
         if not offer.is_production_ready:
@@ -148,6 +158,21 @@ class PostgresOfferVersionRepository(OfferVersionRepository):
         if row is None:
             return None
         return offer_from_payload(row[0])
+
+    def list(self, tenant_id: str) -> tuple[OfferVersion, ...]:
+        _require_offer_tenant(tenant_id, "read")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT offer
+                FROM offer_versions
+                WHERE tenant_id = %s
+                ORDER BY offer_id
+                """,
+                (tenant_id,),
+            )
+            rows = cursor.fetchall()
+        return tuple(offer_from_payload(row[0]) for row in rows)
 
     def save(self, offer: OfferVersion) -> None:
         _require_offer_tenant(offer.tenant_id, "write")

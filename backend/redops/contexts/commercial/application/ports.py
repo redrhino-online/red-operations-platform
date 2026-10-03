@@ -37,6 +37,10 @@ class OfferVersionRepository(abc.ABC):
         """Return the exact production ready offer, or ``None`` if unknown."""
 
     @abc.abstractmethod
+    def list(self, tenant_id: str) -> tuple[OfferVersion, ...]:
+        """Return the tenant's production ready offers, ordered by offer id."""
+
+    @abc.abstractmethod
     def save(self, offer: OfferVersion) -> None:
         """Store a production ready offer, refusing a different same-id body."""
 

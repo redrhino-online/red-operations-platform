@@ -19,21 +19,27 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from redops.api.schemas import (
     AuthorityAmplifierInput,
+    BuildListResponse,
+    BuildObjectResponse,
     CampaignMessageInput,
     ClaimInput,
     ClaimListResponse,
     ClaimResponse,
     ClientWorkspaceListResponse,
     ClientWorkspaceResponse,
+    CreateBuildRequest,
     CreateClaimRequest,
     CreateClientWorkspaceRequest,
     CreateSourceRecordRequest,
     EngagementProductionViewResponse,
     FunnelIntegrationInput,
     LaunchQAInput,
+    MethodReferenceResponse,
     MethodVersionInput,
     MethodVersionListResponse,
+    OfferListResponse,
     OfferVersionInput,
+    OfferVersionResponse,
     RecordStageEightGateRequest,
     RecordStageFiveGateRequest,
     RecordStageFourGateRequest,
@@ -252,10 +258,16 @@ from redops.contexts.method.infrastructure.repositories import (
 )
 from redops.contexts.production.application.ports import (
     AuthorityAmplifierRepository,
+    BuildObjectRepository,
 )
-from redops.contexts.production.domain.entities import AuthorityAmplifier
+from redops.contexts.production.domain.entities import (
+    AuthorityAmplifier,
+    BuildObject,
+)
 from redops.contexts.production.domain.errors import (
     AuthorityAmplifierVersionConflictError,
+    BuildTenantBoundaryError,
+    InvalidBuildError,
     ProductionError,
 )
 from redops.contexts.production.domain.value_objects import (
@@ -266,6 +278,7 @@ from redops.contexts.production.domain.value_objects import (
 )
 from redops.contexts.production.infrastructure.repositories import (
     authority_amplifier_repository_from_env,
+    build_object_repository_from_env,
 )
 from redops.workflows.application.ports import WorkflowRunStore
 from redops.workflows.infrastructure.repositories import (
@@ -410,6 +423,27 @@ def get_offer_version_repository() -> Iterator[OfferVersionRepository]:
     """
 
     repository = offer_version_repository_from_env(
+        os.environ.get("DATABASE_URL")
+    )
+    try:
+        yield repository
+    finally:
+        repository.close()
+
+
+def get_build_object_repository() -> Iterator[BuildObjectRepository]:
+    """Provide the production work item seam to the API (SPEC.md section 6).
+
+    SPEC.md section 3 makes a BuildObject the unit of production work and section
+    7 lists ``/builds``, so the surface must read and write the same durable store
+    the build board and worker share. The dependency owns one adapter for the
+    request and releases any connection it opened when the request ends; the store
+    is chosen once from ``DATABASE_URL``, and a set-but-unusable configuration
+    raises before the route runs, so a deployment cannot mistake a process-local
+    build store for a durable one.
+    """
+
+    repository = build_object_repository_from_env(
         os.environ.get("DATABASE_URL")
     )
     try:
@@ -3647,3 +3681,150 @@ def list_method_versions(
         offset=offset,
         methods=[_method_payload(method) for method in page],
     )
+
+
+def _method_reference_payload(reference: Any) -> MethodReferenceResponse:
+    """Project one pinned method dependency of an offer, computing no rule."""
+
+    return MethodReferenceResponse(
+        method_id=reference.method_id,
+        version=str(reference.version),
+        intended_use=reference.intended_use,
+    )
+
+
+def _offer_payload(offer: OfferVersion) -> OfferVersionResponse:
+    """Project a stored production ready offer, computing no rule."""
+
+    return OfferVersionResponse(
+        offer_id=offer.offer_id,
+        tenant_id=offer.tenant_id,
+        audience=offer.audience,
+        promise=offer.promise,
+        eligibility=offer.eligibility,
+        price_hypothesis=offer.price_hypothesis,
+        owner=offer.owner,
+        state=offer.state.value,
+        is_production_ready=offer.is_production_ready,
+        method_refs=[
+            _method_reference_payload(reference)
+            for reference in offer.method_refs
+        ],
+        review_reason=offer.review_reason,
+    )
+
+
+@router.get("/offers", response_model=OfferListResponse)
+def list_offer_versions(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose approved offers are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repository: OfferVersionRepository = Depends(get_offer_version_repository),
+) -> OfferListResponse:
+    """List one client tenant's production ready offers (SPEC.md sections 3, 7, 9).
+
+    SPEC.md section 7 lists ``/offers`` and requires pagination; SPEC.md section 9
+    requires every query to carry the client scope. The tenant is a required query
+    parameter and the repository read is tenant scoped, so another client's offers
+    are unreadable here. The route is read-only: an offer becomes production ready
+    through the stage 5 "Offer Locked" gate and a direct write here would let a
+    caller confer the readiness the offer's approved method dependencies own
+    (SPEC.md sections 3 and 4), so no offer write path is exposed.
+    """
+
+    offers = repository.list(tenant_id)
+    page = offers[offset : offset + limit]
+    return OfferListResponse(
+        tenant_id=tenant_id,
+        total=len(offers),
+        limit=limit,
+        offset=offset,
+        offers=[_offer_payload(offer) for offer in page],
+    )
+
+
+def _build_payload(build: BuildObject) -> BuildObjectResponse:
+    """Project a stored production work item, computing no rule."""
+
+    return BuildObjectResponse(
+        build_id=build.build_id,
+        tenant_id=build.tenant_id,
+        build_type=build.build_type,
+        purpose=build.purpose,
+        audience=build.audience,
+        owner=build.owner,
+        next_action=build.next_action,
+        state=build.state.value,
+        is_active=build.is_active,
+        is_blocked=build.is_blocked,
+        blockers=sorted(build.blockers),
+        refs=sorted(build.refs),
+    )
+
+
+@router.get("/builds", response_model=BuildListResponse)
+def list_builds(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose production builds are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repository: BuildObjectRepository = Depends(get_build_object_repository),
+) -> BuildListResponse:
+    """List one client tenant's production work items (SPEC.md sections 3, 7, 9).
+
+    SPEC.md section 7 lists ``/builds`` and requires pagination, and SPEC.md
+    section 3 makes a BuildObject the unit of production work whose invariant is
+    that an active build always has an owner and a next action. The tenant is a
+    required query parameter and the repository read is tenant scoped, so another
+    client's builds are unreadable here. Pagination is applied after the
+    tenant-scoped read so a page is stable.
+    """
+
+    builds = repository.list(tenant_id)
+    page = builds[offset : offset + limit]
+    return BuildListResponse(
+        tenant_id=tenant_id,
+        total=len(builds),
+        limit=limit,
+        offset=offset,
+        builds=[_build_payload(build) for build in page],
+    )
+
+
+@router.post("/builds", status_code=201, response_model=BuildObjectResponse)
+def create_build(
+    body: CreateBuildRequest,
+    repository: BuildObjectRepository = Depends(get_build_object_repository),
+) -> BuildObjectResponse:
+    """Record one production work item as an Identified proposal (SPEC.md section 3).
+
+    SPEC.md section 3 makes an active build always carry an owner and a next
+    action, and section 5 keeps agent and caller output a proposal rather than an
+    implicit grant of authority. The route constructs the aggregate, so a blank
+    owner, purpose or next action is refused by the domain as a named 422 and the
+    build starts Identified; it is not a gate and it approves nothing. The tenant
+    is carried on the aggregate and the store refuses an unscoped write.
+    """
+
+    try:
+        build = BuildObject(
+            build_id=body.build_id,
+            tenant_id=body.tenant_id,
+            build_type=body.build_type,
+            purpose=body.purpose,
+            audience=body.audience,
+            owner=body.owner,
+            next_action=body.next_action,
+            refs=frozenset(body.refs),
+        )
+        repository.save(build)
+    except (InvalidBuildError, BuildTenantBoundaryError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return _build_payload(build)

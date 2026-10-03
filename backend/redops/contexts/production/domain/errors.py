@@ -83,3 +83,22 @@ class AuthorityAmplifierVersionTenantBoundaryError(ProductionError):
     its tenant on every command and query; storing or resolving one without a
     client would either leak across clients or create an orphaned record.
     """
+
+
+class BuildTenantBoundaryError(ProductionError):
+    """A client's BuildObject was read or written without a tenant.
+
+    SPEC.md sections 3 and 9 make a build a client resource that must carry its
+    tenant on every command and query; storing, listing or resolving one without a
+    client would either leak across clients or create an orphaned record.
+    """
+
+
+class BuildConfigurationError(RuntimeError):
+    """The BuildObject store was configured without a usable driver.
+
+    A set ``DATABASE_URL`` is an explicit instruction to use the durable store
+    (ADR 0003). Silently falling back to the process-local adapter would accept a
+    build that vanishes on restart, so a missing psycopg driver is a configuration
+    error rather than a degraded mode (SPEC.md sections 3 and 9).
+    """

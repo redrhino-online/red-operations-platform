@@ -26,6 +26,7 @@ SCRIPT_V1 = "authority-amplifier-script@1"
 def build_object(**overrides) -> BuildObject:
     values = {
         "build_id": "build-1",
+        "tenant_id": "3fmindset",
         "build_type": "authority-amplifier-video",
         "purpose": "stage 7 creative",
         "audience": "3f prospects",
@@ -49,6 +50,10 @@ class BuildInvariantTests(unittest.TestCase):
     def test_active_build_without_an_owner_is_rejected(self):
         with self.assertRaises(InvalidBuildError):
             build_object(owner="")
+
+    def test_build_without_a_tenant_is_rejected(self):
+        with self.assertRaises(InvalidBuildError):
+            build_object(tenant_id="   ")
 
     def test_active_build_without_a_next_action_is_rejected(self):
         with self.assertRaises(InvalidBuildError):

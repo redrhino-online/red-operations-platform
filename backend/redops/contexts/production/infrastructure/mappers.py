@@ -30,10 +30,15 @@ from redops.contexts.commercial.infrastructure.mappers import (
     campaign_message_from_payload,
     campaign_message_to_payload,
 )
-from redops.contexts.production.domain.entities import AuthorityAmplifier
+from redops.contexts.production.domain.entities import (
+    AuthorityAmplifier,
+    BuildObject,
+)
 from redops.contexts.production.domain.value_objects import (
     AmplifierApproval,
     AuthorityAmplifierState,
+    BuildState,
+    BuildTransition,
     ScriptSection,
     ScriptSectionKind,
     VisualProductionPackage,
@@ -169,4 +174,82 @@ def authority_amplifier_from_payload(
         ),
         state=AuthorityAmplifierState(str(payload["state"])),
         review_reason=payload.get("review_reason"),
+    )
+
+
+def _build_transition_to_payload(transition: BuildTransition) -> dict[str, Any]:
+    return {
+        "actor": transition.actor,
+        "reason": transition.reason,
+        "occurred_at": transition.occurred_at.isoformat(),
+        "old_state": transition.old_state.value,
+        "new_state": transition.new_state.value,
+        "correlation_id": transition.correlation_id,
+    }
+
+
+def _build_transition_from_payload(
+    payload: Mapping[str, Any],
+) -> BuildTransition:
+    return BuildTransition(
+        actor=str(payload["actor"]),
+        reason=str(payload["reason"]),
+        occurred_at=date.fromisoformat(str(payload["occurred_at"])),
+        old_state=BuildState(str(payload["old_state"])),
+        new_state=BuildState(str(payload["new_state"])),
+        correlation_id=str(payload["correlation_id"]),
+    )
+
+
+def build_to_payload(build: BuildObject) -> dict[str, Any]:
+    """Serialise a build and its append-only transition history.
+
+    SPEC.md section 4 requires every transition to record actor, reason,
+    timestamp, old and new state and correlation id, so the full history is
+    emitted and a reload cannot drop a transition and make an illegal state look
+    reachable. The client tenant is emitted so a reload re-validates the
+    ``ClientWorkspace`` ownership invariant (SPEC.md section 3).
+    """
+
+    return {
+        "build_id": build.build_id,
+        "tenant_id": build.tenant_id,
+        "build_type": build.build_type,
+        "purpose": build.purpose,
+        "audience": build.audience,
+        "owner": build.owner,
+        "next_action": build.next_action,
+        "state": build.state.value,
+        "blockers": sorted(build.blockers),
+        "refs": sorted(build.refs),
+        "transitions": [
+            _build_transition_to_payload(transition)
+            for transition in build.transitions
+        ],
+    }
+
+
+def build_from_payload(payload: Mapping[str, Any]) -> BuildObject:
+    """Rebuild a build from a stored payload for re-validation.
+
+    Construction re-runs the aggregate invariants, so a payload that storage
+    cannot legally hold (a blank identity or tenant, an active build with no owner
+    or next action) raises here rather than being read back as a live build.
+    """
+
+    return BuildObject(
+        build_id=str(payload["build_id"]),
+        tenant_id=str(payload["tenant_id"]),
+        build_type=str(payload["build_type"]),
+        purpose=str(payload["purpose"]),
+        audience=str(payload["audience"]),
+        owner=str(payload["owner"]),
+        next_action=str(payload["next_action"]),
+        state=BuildState(str(payload["state"])),
+        blockers=frozenset(str(entry) for entry in payload.get("blockers", [])),
+        refs=frozenset(str(entry) for entry in payload.get("refs", [])),
+        _transitions=[
+            _build_transition_from_payload(entry)
+            for entry in payload.get("transitions", [])
+        ],
     )

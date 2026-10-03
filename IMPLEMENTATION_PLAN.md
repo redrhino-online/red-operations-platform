@@ -4,6 +4,60 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T193035Z (Ralph cycle, this run): selected item was Q11, the
+  tenant-scoped REST surface for `/offers` and `/builds` (prerequisite Q10 met).
+  Q17-Q27 closed the caller-supplied-authority defect across every stage 0-10
+  gate, so no gate-integrity item is ready (Q28 is blocked on the named
+  methodology-owner placement decision). Q11 outranks the remaining alternatives
+  because it is the next product-backbone step of SPEC.md section 7 and it closed
+  a real persistence gap: SPEC.md section 3 names `BuildObject` as a required
+  aggregate and the ClientWorkspace invariant makes every child resource belong to
+  exactly one client, but the Production `BuildObject` had no `tenant_id`, no
+  store and no migration, so Q6's "every named aggregate is durable" claim was
+  false for builds. The `frontend/` shell Q32 was again rejected: the DoD [5/6]
+  script passes on `frontend/` merely existing with no `OpenExecutive` string, so
+  a screens-less shell would falsely turn `make done` green while condition 6
+  (Q45) is far off.
+- Outcome: `BuildObject` now carries a required `tenant_id` (SPEC.md sections 3
+  and 9). New Production `BuildObjectRepository` port with `get`/`list`/`save`,
+  `build_to_payload`/`build_from_payload` mapper preserving the append-only
+  transition history, in-memory and PostgreSQL adapters, `BuildConfigurationError`
+  and `BuildTenantBoundaryError`, and migration `0013_build_objects` (upsert per
+  `(tenant_id, build_id)` because a build is a live aggregate). New routes
+  `GET /red/offers` and `GET`/`POST /red/builds`: offers are a tenant-scoped,
+  paginated read over the existing offer store, deliberately read-only because an
+  offer becomes production ready through the stage 5 "Offer Locked" gate and a
+  direct write would let a caller confer readiness governance owns (SPEC.md
+  sections 3 and 4); builds are a tenant-scoped paginated list plus a create that
+  records an Identified proposal, not a gate.
+- Evidence: `make check` -> 2105 passed, 2 skipped, 686 subtests; pyflakes clean.
+  New tests `tests/unit/production/test_build_object_store.py`,
+  `tests/unit/production/test_builds_route.py`,
+  `tests/unit/production/test_build_object_postgres.py` and
+  `tests/unit/commercial/test_offers_route.py`; `tests/unit/production/test_build_object.py`
+  now covers the blank-tenant refusal; `tests/unit/shared/test_migrate.py` pins
+  head `0013_build_objects` and the `build_objects` table. `make done` still fails
+  only [5/6] (`frontend/` missing, Q32); [1/6]-[4/6] pass.
+- New findings: `BuildObject` had no tenant, so it could not be a tenant-scoped
+  child resource of a `ClientWorkspace`; its store's write guard is now
+  defense-in-depth because the aggregate refuses a blank tenant at construction.
+  `/offers` exposes no write path, so the offer surface cannot be used to bypass
+  the stage 5 gate.
+- Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
+  land shell-only; Q28 stage 8-10 required kinds blocked on the named
+  methodology-owner placement decision; Q16 idempotency keys blocked on a
+  workflow write route; Q3 agent registration blocked on the ADR 0006 /
+  vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: Q12, REST `/approvals` and `/decisions`
+  (prereq Q11 done). Required asset: the governance approval queue and decision
+  log exposed through tenant-scoped routes with exact version approval; stage 8-10
+  gate / "exact version approval"; checkpoint: none (API surface, not a gate);
+  approver: none (no gate decides). Blocked downstream dependency: Q13-Q14 chain
+  from it; then the stage 0-10 e2e Q30 and the `frontend/` screens Q32-Q45.
+
+### Prior cycle (2026-10-03T192641Z)
+
 - Cycle 2026-10-03T192641Z (Ralph cycle, this run): selected item was Q10, the
   tenant-scoped REST surface for `/claims` and `/methods` (prerequisite Q9 met).
   Q17-Q27 closed the caller-supplied-authority defect across every stage 0-10
@@ -3041,12 +3095,12 @@ stalls:
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
 | Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key. Done 2026-10-03T184450Z: `tests/unit/agents/test_live_openrouter_smoke.py` skips unless `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE` are set, then drives one live call through `ForkProviderModelGateway.from_fork_registry()` plus `LoggingModelGateway` and asserts the section 6 attribution; executing it awaits a real key |
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). REST `/workflows/{id}` polling read landed 2026-10-03T185701Z (Q15). The fork `workflows/resumer.py` adapter was reassessed and rejected as mis-specified: the resumer is an 809-line fork polling loop, not a per-step executor, so RED's `WorkflowStepExecutor` seam is served by connector adapters (Q16), not a resumer shim |
-| Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z). The stage 0 `ClientWorkspace` and the knowledge `SourceRecord` stores completed with Q9 2026-10-03T190017Z (`0010_client_workspaces`, `0011_source_records`) |
+| Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z). The stage 0 `ClientWorkspace` and the knowledge `SourceRecord` stores completed with Q9 2026-10-03T190017Z (`0010_client_workspaces`, `0011_source_records`); the Production `BuildObject` store completed with Q11 2026-10-03T193035Z (`0013_build_objects`, which also added the required `tenant_id` the aggregate lacked) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
 | Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams |
 | Q9 | REST `/clients` and `/clients/{id}/sources` (done 2026-10-03T190017Z; `GET /red/clients?tenant_id=&limit=&offset=` and `POST /red/clients`, `GET`/`POST /red/clients/{tenant_id}/sources`; durable `ClientWorkspaceStore` and `SourceRecordStore` ports with in-memory and PostgreSQL adapters and migrations `0010_client_workspaces`/`0011_source_records`; tenant is a required query parameter, an unscoped read/write or a rewritten source is refused) | api | Q7 | route tests `tests/unit/engagement/test_clients_route.py` (8), adapter tests `tests/unit/engagement/test_client_workspace_store.py` and `tests/unit/knowledge/test_source_record_store.py` |
 | Q10 | REST `/claims`, `/methods` (done 2026-10-03T192641Z; `GET`/`POST /red/claims` and `GET /red/methods`, tenant required on GET and path/body-scoped to the tenant; new durable Knowledge `ClaimStore` port with in-memory and PostgreSQL adapters and migration `0012_claims`; the claim create route verifies every citation against the same tenant's stored immutable `SourceRecord` by id and checksum, and the claim store refuses a same-id non-append-only re-statement; `MethodVersionRepository.list` added so `/methods` is a tenant-scoped paginated read of approved methods, left read-only because approval is gate-owned. Tests `tests/unit/knowledge/test_claim_store.py`, `tests/unit/knowledge/test_claims_route.py`, `tests/unit/method/test_methods_route.py`) | api | Q9 | route tests |
-| Q11 | REST `/offers`, `/builds` | api | Q10 | route tests |
+| Q11 | REST `/offers`, `/builds` (done 2026-10-03T193035Z; `GET /red/offers` and `GET`/`POST /red/builds`, tenant required on every read and carried on the create body; `BuildObject` now requires a `tenant_id` (SPEC.md sections 3 and 9); new Production `BuildObjectRepository` port with in-memory and PostgreSQL adapters and migration `0013_build_objects` (upsert per `(tenant_id, build_id)`); `/offers` is a tenant-scoped paginated read over the existing offer store, left read-only because production readiness is gate-owned; `/builds` list is tenant-scoped and paginated and create records an Identified proposal. Tests `tests/unit/commercial/test_offers_route.py`, `tests/unit/production/test_build_object_store.py`, `tests/unit/production/test_builds_route.py`, `tests/unit/production/test_build_object_postgres.py`) | api | Q10 | route tests |
 | Q12 | REST `/approvals`, `/decisions` with exact version approval | api | Q11 | version specific approval |
 | Q13 | REST `/journeys`, `/measurements` | api | Q12 | route tests |
 | Q14 | REST `/opportunities`, `/interventions` | api | Q13 | route tests |
