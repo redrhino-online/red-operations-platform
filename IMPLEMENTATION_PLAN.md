@@ -4,70 +4,80 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:52:41Z (Ralph cycle 117).
-- Selected item: build the canon's Swimlanes channel model (canon files 13, 14,
-  33 and 34) as a pure, cross-cutting planning asset over the stage 8
-  `FunnelIntegration` for stages 8 to 10. SPEC.md section 12.5 records it as a
-  canon gap ("recover stalled prospects across all channels, not only digital
-  ads") and section 12.3 maps canon files 13, 14, 33 and 34 onto stages 8 and 10.
-  It was the named highest priority ready next item after cycle 116. It outranks
-  the enrollment and sales call (canon 00, 13, 14, 21, 24), which needs a
-  named-owner Sell/Enroll stage decision and the absent canon files 19 and 20,
-  and the thirteen transformations (canon 09, 10), which needs a
-  methodology-owner gate-contract decision, because the Swimlanes is an asset over
-  the existing stage 8 funnel that needs only its cited canon files and no
-  named-owner pipeline change.
+- Cycle timestamp: 2026-10-03T05:54:46Z (Ralph cycle 118).
+- Selected item: build the canon's thirteen transformations (canon files 09 and
+  10) as a pure Method structure asset over the stage 4 `SignatureSolution`. SPEC.md
+  section 12.5 records the thirteen transformations -- the overall shift, the three
+  phase shifts and the nine step-level from/to pairs titled from the Million Dollar
+  Message -- as a canon gap at stage 4, and section 12.3 maps canon files 09 and 10
+  onto stage 4. It was the named highest priority ready next item after cycle 117.
+  It outranks the enrollment and sales call (canon 00, 13, 14, 21, 24), which the
+  plan previously treated as needing a named-owner Sell/Enroll stage decision, and
+  the remaining audience and retargeting delivery assets, which still need a
+  named-owner decision on where they belong, because the thirteen transformations
+  ground directly on the existing stage 4 solution and change no gate contract.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: the canon Swimlanes now lives in the Execution bounded context
-  (`backend/redops/contexts/execution/domain/swimlanes.py`) with the named
-  `InvalidSwimlanesError`, `SwimlanesTenantBoundaryError`,
-  `SwimlanesDependencyError`, `SwimlaneCoverageError` and
-  `SwimlanesObservationError`. `SwimlaneChannel` types exactly the canon's five
-  channels (messages, ads, human outreach, offline and direct mail, content;
-  SPEC.md section 12.5), `SwimlaneMove` names the channel, the stalled step, the
-  distinct next step, the vehicle and the one action it presents and refuses a
-  move that keeps the prospect on the same step (canon file 13: "wherever they're
-  stuck, we're going to gently move them to the next step"), and `SwimlanesPlan`
-  binds a named owner and the same-tenant stage 8 `FunnelIntegration` to at least
-  one typed move, reporting covered and missing canon channels and never being an
-  observation. `SwimlaneCoveragePolicy.require_all_channels` refuses a plan that
-  relies on too few channels (canon file 34: "you can't be single source
-  dependent"). New behavioral coverage: 15 tests in
-  `tests/unit/execution/test_swimlanes.py`. Running
+- Evidence: the canon thirteen transformations now live in the Method bounded
+  context (`backend/redops/contexts/method/domain/transformations.py`) with
+  `Transformation`, `TransformationScope` and `ThirteenTransformations` and the
+  named errors `InvalidTransformationError`,
+  `TransformationTenantBoundaryError`, `TransformationDependencyError`,
+  `TransformationCoverageError`, `TransformationMismatchError` and
+  `TransformationObservationError`. `TransformationScope` types the canon's three
+  scopes (overall, phase, step); a `Transformation` is a titled from/to shift that
+  refuses a blank identity, scope, target, title or state and a no-op shift (canon
+  file 09: "there should be a from and a to for each step in your signature
+  solution. 13 transformations"); `ThirteenTransformations` binds the Million
+  Dollar Message, the same-tenant stage 4 `SignatureSolution`, exactly one overall
+  shift (titled with the Million Dollar Message because "your whole million dollar
+  message is one transformation", canon file 09, and moving between the solution's
+  declared starting and final states), exactly three phase shifts and exactly nine
+  step shifts (13 total), each matching the solution's own phase and step start and
+  final states (canon file 10: "from point A to point B"), refuses a
+  missing/extra/duplicate/non-typed shift, a shift naming a phase or step the
+  solution does not have, a cross-tenant solution or shift, and a set not grounded
+  on a typed solution, and is never an observation. It is a method structure asset,
+  not a new required stage 4 gate kind (a methodology-owner decision, SPEC.md
+  section 12.5). New behavioral coverage: 31 tests in
+  `tests/unit/method/test_transformations.py`. Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1342 passed, up from 1327. `python3 -m pyflakes backend/redops tests`
-  is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the Swimlanes lives in Execution rather than Commercial Design
-  because Commercial cannot import the Execution `FunnelIntegration` without a
-  cycle (`production` imports `commercial`, `execution` imports `production`, so
-  `commercial -> execution` would close the loop). Cross-cutting assets that
-  ground on the stage 8 funnel therefore belong to Execution. The plan is a
-  planning overlay, not a required gate kind; wiring it into the production view,
-  the command center or a stage kind is a bounded follow-up and a methodology-owner
-  decision.
+  reports 1373 passed, up from 1342. `python3 -m pyflakes backend/redops tests` is
+  clean. `ruff` and `mypy` remain uninstalled.
+- New findings: grounding each shift on the locked solution's own states means a
+  transformation cannot be fabricated independently of the method structure the
+  stage 4 gate approved. The existing `SignatureStep` already carried
+  starting/final states but had no Million-Dollar-Message-anchored titled view, so
+  this completes the canon's "13 transformations" over the same solution without
+  changing the stage 4 gate contract. A newly identified ready path: SPEC.md
+  section 12.5 explicitly allows the enrollment and sales call to fit as "explicit
+  stage 8/9 assets" as an alternative to "a candidate dedicated Sell/Enroll step",
+  so enrollment does not require the named-owner stage decision the plan previously
+  assumed.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
-  facto `backend/redops`), storage strategy given the SQLite reality, tenant
-  model given slot-based single-active-client isolation, the lifecycle transition
-  graph assumed in cycle 56, scheduler/worker topology, the client-designated
-  approver identities, and pilot metric targets. Persistence and the Operations
-  delivery adapter still depend on the storage ADR; the stage 9 compliance
-  projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: build the canon's thirteen transformations
-  (canon files 09 and 10) as a pure Method value object over the stage 4
-  `SignatureSolution` -- the overall shift, the three phase shifts and the nine
-  step-level from/to pairs titled from the Million Dollar Message, kept a method
-  structure asset rather than a new required stage 4 gate kind (a
-  methodology-owner decision on the gate contract). SPEC.md section 4 stage 4
-  names the transformation map and starting/final states but not the explicit
-  thirteen from/to pairs, and section 12.5 records the thirteen transformations as
-  a canon gap. It outranks the enrollment and sales call (canon 00, 13, 14, 21,
-  24), which needs a named-owner Sell/Enroll stage decision and the absent canon
-  files 19 and 20, and the remaining audience/reach assets (syndication schedule,
-  ten-second-view audience campaign, invisible opt-in, banner specs), which are
-  delivery and operations assets that still need a named-owner decision on where
-  they belong. Prerequisite: read canon files 09 and 10 before shaping, and ground
-  it on the same-tenant stage 4 `SignatureSolution` without changing the stage 4
-  gate contract.
+  facto `backend/redops`), storage strategy given the SQLite reality, tenant model
+  given slot-based single-active-client isolation, the lifecycle transition graph
+  assumed in cycle 56, scheduler/worker topology, the client-designated approver
+  identities, and pilot metric targets. Persistence and the Operations delivery
+  adapter still depend on the storage ADR; the stage 9 compliance projection still
+  needs a named-owner decision on a canonical kind.
+- Highest priority ready next item: build the canon's enrollment and sales call
+  (canon files 00, 13, 14, 21, 24) as an explicit stage 8/9 asset rather than a new
+  Sell/Enroll stage, using the path SPEC.md section 12.5 already permits -- the
+  pre-call homework qualifier, the enrollment call frame (examine, prescribe,
+  prognosis), the acceptance and rejection ("red velvet rope") criteria and the
+  live payment and checkout handoff that converts an engaged prospect into a client
+  with a defined, authority-preserving process. It outranks the remaining audience
+  and retargeting delivery assets (the ten-second-view audience campaign, the
+  syndication schedule, the invisible opt-in and banner specs) because enrollment
+  sits on the critical path between stage 8 and stage 10 and the SPEC.md section
+  12.5 asset route avoids a named-owner stage change, while those delivery assets
+  are operations surface with a narrower pipeline effect. Prerequisite: read canon
+  files 00, 13, 14, 21 and 24 before shaping, ground the asset on a same-tenant
+  stage 8 `FunnelIntegration` in Execution (Commercial cannot import Execution
+  without a production-commercial-execution cycle), keep it an asset inside the
+  existing stage 8/9 package rather than a required gate kind, and record that
+  canon files 19 and 20 remain absent (SPEC.md section 12.6) so the artifact is
+  documented as a gap rather than canon-complete.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; a stage-parameterized gate recorder/handler refactor;
@@ -75,6 +85,20 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   (methodology-owner decision); wiring the Swimlanes plan into the production
   view, the command center or a stage 8/10 kind (methodology-owner decision); and
   all persistence.
+  [DONE 2026-10-03 (Ralph cycle 118): built the canon's thirteen transformations
+  as the pure Method `Transformation`, `TransformationScope` and
+  `ThirteenTransformations` -- the set binds the Million Dollar Message and the
+  same-tenant stage 4 `SignatureSolution` to exactly one overall shift (titled with
+  the Million Dollar Message and moving between the solution's declared starting
+  and final states), exactly three phase shifts and exactly nine step shifts
+  (thirteen total), each matching the solution's own phase and step start and final
+  states, and refuses a blank or no-op shift, a missing/extra/duplicate/non-typed
+  shift, a shift naming a phase or step the solution does not have, a cross-tenant
+  solution or shift and a set not grounded on a typed solution, and is never an
+  observation (SPEC.md section 12.5; canon files 09 and 10); verified by
+  `tests/unit/method/test_transformations.py` (31 tests, full suite 1373 passed),
+  so the stage 4 method structure now carries the canon's explicit titled from/to
+  transformations without changing the stage 4 gate contract.]
   [DONE 2026-10-03 (Ralph cycle 117): built the canon's Swimlanes channel model as
   the pure Execution `SwimlaneChannel`, `SwimlaneMove` and `SwimlanesPlan` -- the
   channel type is exactly the canon's five channels (messages, ads, human
@@ -590,14 +614,14 @@ The reference model canon is the licensed source reference for the shape, intent
 
 This register tracks canon-described assets and steps the stage 0 to 10 template does not yet represent. Each entry: candidate, canon files, target stage, intended use, status, and whether it is a candidate pipeline change that needs a named-owner decision. Seed entries are in SPEC.md section 12.5. Adding or renaming a pipeline stage is a named-owner decision; implementing a candidate as an asset inside an existing stage is not.
 
-- Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 13, 14, 21, 24 — between stages 8 and 10 — status: candidate, needs named-owner decision on a Sell/Enroll stage.
+- Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 13, 14, 21, 24 — between stages 8 and 10 — status: candidate, needs a named-owner decision on a dedicated Sell/Enroll stage; note that SPEC.md section 12.5 also permits it as "explicit stage 8/9 assets", a route that avoids the stage decision and makes the asset ready as the next item. Canon files 19 and 20 remain absent (SPEC.md section 12.6), so a first build would be an extracted-shape asset recorded as a documented gap, as the cycle 111 nurture lifecycle did.
 - Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: implemented 2026-10-03 (Ralph cycle 111) as the Commercial Design `NurturePlan` (`NurtureAudienceState`, `NurtureModality`, `NurtureMessage`, `NurtureSequence`), which grounds each message on a step of a same-tenant stage 4 `SignatureSolution`, uses the 5P modality (ping is the one-question survey), re-engages non-openers with distinct headlines and binds the sequences to a named owner. SPEC.md section 12.6 warns the dedicated email/follow-up module is absent from the supplied canon, so the shape is extracted from the covered files and recorded as a documented gap; wiring it into a required stage kind remains a named-owner decision.
 - Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93 built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate. Cycle 106 completed that slice: the METRICS dimension now reports each registered metric's newest observed figure and a measured movement via `metric_reporting_views`. Cycle 107 built the canon's forecast equation (`FunnelMetricRole`, `FunnelFigure`, `FunnelEconomics`, `FunnelForecast`, `funnel_figure`) so the metrics matrix unit economics exist before real data and a forecast stays distinct from an observed result.   Cycle 108 built the canon's scaling rule (`LearningPhase`, `ScalingAction`, `ScalingRecommendation`, `AdScalingPolicy`), so the dashboard can now turn an observed cost per lead into an owner-approved scale, hold, bid-up-the-funnel or pause-and-review recommendation. Cycle 109 built the canon's split-test logging (`SplitTestMode`, `SplitTestChange`, `SplitTest`), so a stage 10 optimization logs the one variable it changes (bound to the approved improvement's lever) before reading the result. This candidate is now fully implemented; no remaining scope.
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: partially implemented 2026-10-03 (Ralph cycle 115) as the Commercial Design `ContentRoadmap` (`ContentBeat`, `ContentChannel`, `ContentTopic`, `ContentDistributionPolicy`), which maps each step of a same-tenant stage 4 `SignatureSolution` to content topics that follow the Authority Amplifier beat order and reach the canon's minimum blog, YouTube and Facebook channels, binds a named owner and reports the steps it covers and misses. Remaining candidate: the ten-second-view audience campaign, the syndication/recycling schedule and the content measurement loop (canon files 29-31) are delivery and operations assets outside this planning artifact and still need a named-owner decision on where they belong.
 - Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 110) as the Measurement `RetargetingPlan` (`TrackingCode`, `ConversionGoal`, `RetargetingAudience`, `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep`), which orders the canon's tracking code, conversion goals, retargeting lists and focused campaigns and binds them to one tenant and a named owner; the canon's effective-ads step is covered by the stage 10 `SplitTest` and its metrics step by the `MetricDefinition` registry. Remaining candidate: the canon's invisible opt-in offer and banner-ad spec/swipe-file assets are delivery assets outside this planning artifact and still need a named-owner decision on where they belong.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: implemented 2026-10-03 (Ralph cycle 94) as the Execution `CompliancePackage` (`ComplianceAssetKind`, `ComplianceAsset`, `ComplianceWaiver`) with the `ComplianceRequiredPolicy` gating `LaunchQA` traffic authorization, so "Launch Approved" needs every required asset or a live owned waiver; projecting the compliance assets onto their own canonical stage 9 gate kind remains a candidate that needs a named-owner decision.
 - Positioning and decision tools (Target Market Matchmaker, awareness levels, Funnel Finder) — canon 00, 04, 13, 14 — stages 1 and 2 — status: implemented 2026-10-03 (Ralph cycle 112) for the market awareness levels as the Commercial Design `MarketAwarenessMap` (`MarketAwarenessLevel`), which types the stage 1 `awareness-map` kind with the canon's five levels, requires research evidence and message requirements, rejects a retarget level that is not strictly further down the funnel, and projects to exact `StageAssetVersion` evidence; implemented 2026-10-03 (Ralph cycle 113) for the Target Market Matchmaker as the Commercial Design `TargetMarketCandidate` and `TargetMarketMatchmaker`, which narrows at least two canon-judged candidates to the one to serve now, grounds the chosen market on a same-tenant `MarketAwarenessMap`, and has `TargetMarketMatchPolicy.require_servable` refuse a market whose awareness position is not initially targetable; and implemented 2026-10-03 (Ralph cycle 114) for the Funnel Finder as the Commercial Design `FunnelProfile`, `FunnelType`, `OfferPriceBand` and `FunnelFinder`, which chooses one of the canon's funnel types from the four canon factors, narrows at least two considered types to the selected one with a rationale, and has `FunnelSelectionPolicy.require_price_fit` refuse a high-ticket offer with a self-serve funnel and a low-ticket offer with the sales-call CAC funnel (canon 13, 14). No candidate remains in this gap. Wiring the awareness map, the match or the finder into the `AvatarProfile`, the stage 1 `DiagnosisPackage`, the stage 6 `CampaignMessage` or the stage 8 `FunnelIntegration` is a bounded follow-up; none is a required gate kind yet (a methodology-owner decision).
-- Thirteen transformations (the overall shift, three phase shifts and nine step-level from/to pairs, titled from the million dollar message) — canon 09, 10 — stage 4 — status: candidate; the SPEC stage 4 package names named stages, starting/final states and narrative but not the explicit 13 from/to transformations, so adding a required kind or field is a methodology-owner decision on the gate contract.
+- Thirteen transformations (the overall shift, three phase shifts and nine step-level from/to pairs, titled from the million dollar message) — canon 09, 10 — stage 4 — status: implemented 2026-10-03 (Ralph cycle 118) as the pure Method `Transformation`, `TransformationScope` and `ThirteenTransformations`, which ground on a same-tenant stage 4 `SignatureSolution`, require exactly one overall shift titled with the Million Dollar Message, three phase shifts and nine step shifts (thirteen total), match each shift's from/to states to the solution's own states, and refuse a missing/extra/duplicate shift, a shift naming a phase or step the solution does not have, a no-op shift and a cross-tenant solution or shift, and never represent the structure as an observation. It is a method structure asset, not a new required stage 4 gate kind; wiring it into the `SignaturePackage` bridge or a required kind remains a bounded follow-up and a methodology-owner decision.
 - Umbrella planning (Online Business Launch Map, Bulletproof Business Plan) — canon 00, 01 — over stages 0 to 10 — status: implemented 2026-10-03 (Ralph cycle 116) as the new Portfolio `UmbrellaPlan` (`LaunchMapSection`, `UmbrellaSection`, `BusinessTarget`, `QuarterlyReview`), which binds a named owner, a same-tenant `ClientWorkspace` and a versioned `StageTemplate` to exactly the canon's four launch-map sections (Foundation, Signature Solution, Funnel, Floodgates) covering every template stage exactly once, requires at least one specific measurable business target and an ordered 90-day revisit history, and has `UmbrellaReviewPolicy.require_current` refuse an overdue plan. Mapping the canon's four strategy parts onto stages 0-2/3-5/6-9/10 is a documented intentional deviation from the canon's 12-week calendar. Wiring the plan into the production view or a required gate kind remains a bounded follow-up and a methodology-owner decision.
 - Swimlanes channel model — canon 13, 14, 33, 34 — cross-cutting stages 8 to 10 — status: implemented 2026-10-03 (Ralph cycle 117) as the pure Execution `SwimlanesPlan` (`SwimlaneChannel`, `SwimlaneMove`), which types the canon's five channels (messages, ads, human outreach, offline and direct mail, content), maps each stalled funnel step to a distinct next step with a vehicle and one action, grounds on a same-tenant stage 8 `FunnelIntegration`, binds a named owner and reports the channels it covers and misses, and has `SwimlaneCoveragePolicy.require_all_channels` refuse a single-source plan (canon file 34: "you can't be single source dependent"). It lives in Execution because Commercial cannot import the Execution `FunnelIntegration` without a production-commercial-execution import cycle. Wiring it into the production view, the command center or a stage 8/10 kind remains a bounded follow-up and a methodology-owner decision, so it stays a planning asset rather than a required gate kind.
 - Missing canon files 19 and 20; promised sales/enrollment and email/follow-up modules absent — status: unresolved, request from license owner.

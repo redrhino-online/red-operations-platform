@@ -94,3 +94,76 @@ class InvalidSignatureSolutionError(MethodError):
     must form one continuous chain, and the declared starting and final states
     must be the ends of that chain.
     """
+
+
+class TransformationError(MethodError):
+    """Base class for canon thirteen transformations rule violations."""
+
+
+class InvalidTransformationError(TransformationError, ValueError):
+    """A Transformation or ThirteenTransformations violates an invariant.
+
+    SPEC.md section 12.5 records the canon's thirteen transformations -- the
+    overall shift, the three phase shifts and the nine step-level from/to pairs,
+    titled from the Million Dollar Message (canon files 09 and 10) -- as a canon
+    gap at stage 4. The canon states "there should be a from and a to for each
+    step in your signature solution. 13 transformations" (canon file 09), so a
+    shift with a blank identity, scope, title or state, or a shift that does not
+    actually move the client between two distinct states, cannot be represented
+    as one of the thirteen transformations.
+    """
+
+
+class TransformationTenantBoundaryError(TransformationError):
+    """The transformations mixed in a solution or shift from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. The
+    thirteen transformations are a stage 4 asset over one client's Signature
+    Solution, so the set and every shift must belong to the tenant of the
+    solution it describes.
+    """
+
+
+class TransformationDependencyError(TransformationError):
+    """The thirteen transformations were not grounded on a typed stage 4 solution.
+
+    SPEC.md section 12.5 places the thirteen transformations at stage 4, where
+    the Signature Solution already carries the three phases, nine steps and
+    starting/final states. The transformations must therefore be grounded on a
+    typed, same-tenant ``SignatureSolution`` rather than a free-text reference,
+    so their shifts cannot be fabricated independently of the method structure.
+    """
+
+
+class TransformationCoverageError(TransformationError):
+    """The thirteen transformations do not cover the solution exactly.
+
+    The canon requires one overall shift, one shift per phase and one shift per
+    step, thirteen in total (canon file 09: "13 transformations"), against the
+    solution's three phases and nine steps (SPEC.md section 4, stage 4). A missing
+    phase or step shift, an extra shift, a duplicated shift or a shift that names
+    a phase or step the solution does not have makes the set an incomplete or
+    self-declared view rather than the solution's transformations.
+    """
+
+
+class TransformationMismatchError(TransformationError):
+    """A transformation's from/to states do not match the solution it describes.
+
+    The canon defines each transformation as the actual from-point and
+    to-point of the solution or one of its phases or steps (canon file 09: "a
+    from and a to for each step"; canon file 10: "from point A to point B"). A
+    shift whose states differ from the solution's own starting/final states, a
+    phase's end states or a step's starting/final states would describe a
+    transformation the locked solution does not contain.
+    """
+
+
+class TransformationObservationError(TransformationError):
+    """The thirteen transformations were asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The canon
+    treats the transformations as the method structure that content and sales
+    material live inside (canon files 09 and 10), not a measured movement, so the
+    structure is never an observation.
+    """
