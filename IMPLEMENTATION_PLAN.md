@@ -20,53 +20,58 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   Reality differs from the original SPEC assumptions: SQLite plus embedded
   ChromaDB (not PostgreSQL), slot-based single-active-client isolation (not
   concurrent multi-tenancy), and a single-instance scheduler.
-- Current cycle (2026-10-03, Ralph cycle 135): selected item was the first staged
-  step of the `redops` port into the fork — the pure Governance domain layer, the
-  fork inventory/context map's recommended next action.
-- Outcome: completed and verified. The Governance bounded context now lives in
-  the fork at `packages/core/openexecutive/redops/contexts/governance/domain/`
-  (`errors`, `value_objects`, `entities`, `policies`, `templates`) and the
-  planning repository's 17 governance test modules were ported to
-  `packages/core/tests/unit/redops/governance/` with import paths rewritten to
-  `openexecutive.redops`.
-- Evidence: `uv run pytest tests/unit/redops/ -q` → 252 passed, 65 subtests
+- Current cycle (2026-10-03, Ralph cycle 136): selected item was to port the
+  Knowledge bounded context's pure domain layer, then the Engagement pure domain
+  layer it unblocks. The plan named Engagement as next, but Knowledge is a
+  prerequisite (see new findings); porting Knowledge alone would leave the named
+  item broken, so both went into this one bounded port.
+- Outcome: completed and verified. Knowledge now lives in the fork at
+  `packages/core/openexecutive/redops/contexts/knowledge/domain/` (errors,
+  value_objects, entities, policies) with its two test modules at
+  `packages/core/tests/unit/redops/knowledge/`; Engagement's pure domain lives at
+  `.../contexts/engagement/domain/` (errors, value_objects, entities, policies)
+  with `test_client_workspace`, `test_intake_package` and
+  `test_gate_approver_authority` at `.../tests/unit/redops/engagement/`. All
+  import paths rewritten to `openexecutive.redops`. This brings the tenant root
+  `ClientWorkspace`, the stage 0 `IntakePackage`/`IntakeAsset` package and its
+  `ProductionReadyPolicy`, the `WorkspaceLifecyclePolicy`, the gate owner and
+  approver authority policies, the immutable `SourceRecord` and provenance-typed
+  `Claim`, and the shared `sourced_claim_ids` evidence rule into the fork.
+- Evidence: `uv run pytest tests/unit/redops/ -q` → 321 passed, 85 subtests
   passed; `uv run ruff check openexecutive/` → clean; `uv run mypy
-  openexecutive/` → Success, 343 source files. The port carries the whole gate
-  integrity core: version-pinned `GateDecision`, append-only `GateLedger`,
-  `StageGate`/`ApprovalRequest`/`StageRun`/`PipelineProgress`, the canonical
-  stage 0-10 `StageTemplate`, and the canon-informed production view and observed
-  metric reporting (canon files 23, 24). Two fork-toolchain adaptations, both
-  behavior preserving: ruff's py311 rules replaced `typing.Iterable`/`Mapping`
-  with `collections.abc`, and the ledger's stage-definition lookup was bound once
-  so the fork's mypy accepts the non-None narrow.
-- New findings: the fork's `make lint` now covers `openexecutive/redops/`, so
-  py310 code ported from the planning repository needs py311 ruff cleanup.
-  `redops` is a new module under `packages/core/openexecutive/`, so the fork's
-  arch-docs gate (`scripts/pr_checks.py`) expects an architecture section; this
-  cycle records an `Arch-Docs: n/a` waiver because the ported domain has no route
-  or runtime behavior yet, and the architecture section is deferred until it
-  does. The prior dual-commit blocker is resolved: `ralph_cycle.sh` commits fork
-  code and this repository's plan in their own repositories. The owner also
-  confirmed the language/layer split (fork `docs/adr/0007`): RED domain,
-  application, infrastructure and API logic stays Python in the fork's
-  `openexecutive.redops`, and TypeScript is limited to the Next.js UI/command
-  center — no RED business logic in TypeScript.
-- Blockers: the storage, tenant-isolation, scheduler-topology and
+  openexecutive/` → Success, 355 source files. `python3 scripts/pr_checks.py
+  --base HEAD` → no-stubs and tests-present pass; arch-doc-drift is covered by
+  the `Arch-Docs: n/a` waiver because the ported pure domain has no route or
+  runtime behavior yet.
+- New findings: the plan's claim that Engagement's domain "imports only the
+  now-ported Governance domain" was incomplete. `ProductionReadyPolicy` and the
+  gate owner/approver authority policies depend on Knowledge's `Claim` and the
+  shared `sourced_claim_ids` rule ("Known cannot be sourced without a direct
+  source"), so Knowledge is a prerequisite for the stage 0 Production Ready
+  checkpoint and was ported first this cycle. Engagement's
+  `domain/assemblies.py` (stage gate assemblers and recorders, 1616 lines) was
+  deliberately NOT ported: it imports the Commercial, Execution, Knowledge and
+  Production contexts, so it is a cross-context bridge that belongs with the
+  application layer and waits on those contexts. `test_gate_owner_authority`,
+  `test_stage_*_gate_assembly` and `test_record_stage_*_gate` depend on
+  assemblies and are likewise deferred.
+- Blockers: unchanged. The storage, tenant-isolation, scheduler-topology and
   agent-registration ADRs still need the RED principal's explicit acceptance
   before any real client data; the `redops` application/API/UI wiring is
-  unstarted; and the remaining contexts (Engagement, Knowledge, Method,
-  Commercial, Production, Execution, Measurement, Portfolio, Operations) are not
-  yet in the fork. No fork or cluster facts invented.
-- Highest priority ready next item: continue the `redops` port with the
-  Engagement context's pure domain layer (`ClientWorkspace` tenant root and the
-  intake package), because Engagement is the tenant root every other context
-  references and its domain imports only the now-ported Governance domain
-  (`StageAssetVersion`, `StageRun`, `StageTemplate`). Prerequisites: accepted
-  code-location ADR (done); ported Governance domain (done); no storage
-  dependency for the pure domain. Deferred: the Engagement application layer
-  (depends on Commercial/Execution/Knowledge/Production), the remaining
-  contexts, the persistence port (storage ADR), the application/API/UI wiring,
-  and RED agent registration (agent-registration ADR).
+  unstarted; and the remaining contexts (Method, Commercial, Production,
+  Execution, Measurement, Portfolio, Operations) are not yet in the fork.
+- Highest priority ready next item: port the Method context's pure domain layer
+  (`PrimaryCurrency`, `ProfitPyramidLevel`/`DiagnosticModel`, the three-phase
+  nine-step `SignatureSolution`, `Transformation` and the `MethodVersion`
+  aggregate), because stages 2 to 5 method artifacts are the next pipeline gate
+  after stages 0 and 1 and Method imports only its own modules plus the
+  now-ported Governance/Knowledge. Prerequisites: accepted code-location ADR
+  (done); ported Governance domain (done); ported Knowledge domain (done); no
+  storage dependency for the pure domain. Deferred: Engagement `assemblies.py`
+  and the Engagement application layer (depends on Commercial/Execution/
+  Production/Knowledge), the remaining contexts, the persistence port (storage
+  ADR), the application/API/UI wiring, and RED agent registration
+  (agent-registration ADR).
 
 ## Canon reference and gap register
 
