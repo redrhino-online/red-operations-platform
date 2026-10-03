@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from redops.api.schemas import (
     EngagementProductionViewResponse,
     RecordStageOneGateRequest,
+    RecordStageThreeGateRequest,
     RecordStageTwoGateRequest,
     RecordStageZeroGateRequest,
 )
@@ -30,17 +31,20 @@ from redops.contexts.commercial.domain.value_objects import (
     CurrencyInventory,
     CurrencyPackage,
     DiagnosisPackage,
+    DiagnosticPackage,
     MillionDollarMessage,
     OfferFunnelAudit,
     PositioningDecision,
 )
 from redops.contexts.engagement.application.commands import (
     RecordStageOneGateCommand,
+    RecordStageThreeGateCommand,
     RecordStageTwoGateCommand,
     RecordStageZeroGateCommand,
 )
 from redops.contexts.engagement.application.handlers import (
     RecordStageOneGateHandler,
+    RecordStageThreeGateHandler,
     RecordStageTwoGateHandler,
     RecordStageZeroGateHandler,
 )
@@ -78,8 +82,12 @@ from redops.contexts.knowledge.domain.value_objects import (
     ProvenanceClass,
     SourceCitation,
 )
+from redops.contexts.method.domain.entities import DiagnosticModel
 from redops.contexts.method.domain.errors import MethodError
-from redops.contexts.method.domain.value_objects import PrimaryCurrency
+from redops.contexts.method.domain.value_objects import (
+    PrimaryCurrency,
+    ProfitPyramidLevel,
+)
 
 router = APIRouter(prefix="/red", tags=["red"])
 
@@ -664,6 +672,138 @@ def record_stage_two_gate(
         )
         ledger = repository.load(template, tenant_id)
         decision = RecordStageTwoGateHandler().handle(command, ledger=ledger)
+        repository.append(decision)
+        run_repository.save(stage_run)
+    except (
+        CommercialError,
+        EngagementError,
+        GovernanceError,
+        MethodError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return {
+        "stage_number": decision.stage_number,
+        "template_version": decision.template_version,
+        "checkpoint": decision.checkpoint,
+        "disposition": decision.disposition.value,
+        "reviewer": decision.reviewer,
+        "scope": decision.scope,
+        "tenant_id": decision.tenant_id,
+        "decided_on": decision.decided_on.isoformat(),
+        "next_action": decision.next_action,
+        "required_assets": [
+            {
+                "asset_id": asset.asset_id,
+                "version": asset.version,
+            }
+            for asset in decision.required_assets
+        ],
+    }
+
+
+@router.post("/clients/{tenant_id}/stages/3/gate", status_code=201)
+def record_stage_three_gate(
+    tenant_id: str,
+    body: RecordStageThreeGateRequest,
+    repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
+    run_repository: StageRunRepository = Depends(get_stage_run_repository),
+) -> dict[str, Any]:
+    """Record the stage 3 "Diagnostic Model Approved" gate through the use case.
+
+    SPEC.md section 6: the API calls the use case and never mutates persistence
+    directly. This route maps the typed request to the Engagement
+    ``RecordStageThreeGateCommand``, loads the tenant's ledger through the
+    ``GateLedgerRepository`` port, runs ``RecordStageThreeGateHandler`` and
+    appends the resulting ``GateDecision``. Stage 3 depends on stage 2, so
+    governance refuses the decision unless the ledger already holds a passing
+    stage 2 decision (SPEC.md section 4). The stage 3 ``StageRun`` is
+    loaded-or-created and upserted through the ``StageRunRepository`` port in the
+    same operation, so its assigned owner, status and timestamps stay durable
+    alongside the decision. Every integrity rule -- canonical kinds, exact
+    versions, owner/approver authority, adjacent-level observable
+    distinguishability and the tenant boundary -- is enforced by the domain; a
+    rejection is a named 422 and never a partial write. The path tenant, not the
+    body, is the authoritative client scope. Stage 3 carries no claims: the
+    checkpoint turns on the model's own observable differences, not external
+    customer evidence.
+    """
+
+    template = stage_zero_to_ten_template()
+    try:
+        workspace = ClientWorkspace(
+            workspace_id=body.workspace_id,
+            tenant_id=tenant_id,
+            authorities=tuple(
+                ClientAuthority(actor=entry.actor, authority=entry.authority)
+                for entry in body.authorities
+            ),
+        )
+        package = DiagnosticPackage(
+            package_id=body.diagnostic_package_id,
+            tenant_id=tenant_id,
+            model=DiagnosticModel(
+                model_id=body.model.model_id,
+                tenant_id=tenant_id,
+                name=body.model.name,
+                levels=tuple(
+                    ProfitPyramidLevel(
+                        level_id=level.level_id,
+                        tenant_id=tenant_id,
+                        name=level.name,
+                        observable_measures=tuple(level.observable_measures),
+                        symptoms=tuple(level.symptoms),
+                        behaviors=tuple(level.behaviors),
+                        problems=tuple(level.problems),
+                    )
+                    for level in body.model.levels
+                ),
+                progression=body.model.progression,
+                qualification_logic=body.model.qualification_logic,
+                visual=body.model.visual,
+                explanatory_copy=body.model.explanatory_copy,
+            ),
+            model_version=body.model.version,
+        )
+        stage_run = run_repository.load(
+            template.version, workspace.workspace_id, 3, tenant_id
+        )
+        if stage_run is None:
+            stage_run = StageRun(
+                engagement=workspace.workspace_id,
+                stage_number=3,
+                template_version=template.version,
+                assigned_owner=body.stage_owner,
+                tenant_id=tenant_id,
+            )
+        stage_run.record_activity(
+            actor=body.stage_owner,
+            reason="stage 3 diagnostic modeling work began",
+            on=body.on,
+            correlation_id=body.correlation_id,
+        )
+        command = RecordStageThreeGateCommand(
+            template=template,
+            workspace=workspace,
+            package=package,
+            stage_run=stage_run,
+            approver=body.approver,
+            scope=body.scope,
+            checkpoint_evidence=body.checkpoint_evidence,
+            rationale=body.rationale,
+            assigned_owner=body.assigned_owner,
+            due_on=body.due_on,
+            on=body.on,
+            correlation_id=body.correlation_id,
+            proposed_by=body.proposed_by,
+            next_action=body.next_action,
+        )
+        ledger = repository.load(template, tenant_id)
+        decision = RecordStageThreeGateHandler().handle(command, ledger=ledger)
         repository.append(decision)
         run_repository.save(stage_run)
     except (

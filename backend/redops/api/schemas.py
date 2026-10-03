@@ -231,6 +231,70 @@ class RecordStageTwoGateRequest(BaseModel):
     next_action: str = ""
 
 
+class ProfitPyramidLevelInput(BaseModel):
+    """One reviewed stage 3 Profit Pyramid level (SPEC.md section 4, stage 3).
+
+    Every level carries observable measures, symptoms, behaviors and problems,
+    so a prospect can recognize which level they are on. The domain rejects a
+    level that leaves any observable dimension unspecified.
+    """
+
+    level_id: str
+    name: str
+    observable_measures: list[str]
+    symptoms: list[str]
+    behaviors: list[str]
+    problems: list[str]
+
+
+class DiagnosticModelInput(BaseModel):
+    """The reviewed stage 3 diagnostic model and its exact version.
+
+    The model records the ordered Profit Pyramid levels, its progression and
+    qualification logic, and the required visual and explanatory copy. The
+    version is positive so the gate can pin the reviewed model exactly.
+    """
+
+    model_id: str
+    version: int
+    name: str
+    levels: list[ProfitPyramidLevelInput]
+    progression: str
+    qualification_logic: str
+    visual: str
+    explanatory_copy: str
+
+
+class RecordStageThreeGateRequest(BaseModel):
+    """The stage 3 "Diagnostic Model Approved" gate request (SPEC.md section 4).
+
+    The caller supplies the reviewed model values, the workspace authority
+    registry and the decision metadata. The route builds the canonical gate from
+    these through the use case; it deliberately accepts no pre-built gate, so
+    approver authority and exact-version evidence cannot be bypassed. Stage 3
+    depends on a passing stage 2 decision already in the ledger. The model
+    carries no claims: the "Diagnostic Model Approved" checkpoint turns on
+    adjacent-level observable distinguishability, which the domain enforces,
+    rather than external customer evidence.
+    """
+
+    workspace_id: str
+    authorities: list[ClientAuthorityInput]
+    diagnostic_package_id: str
+    model: DiagnosticModelInput
+    stage_owner: str
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
 class AssetVersionResponse(BaseModel):
     """One exact asset version pinned or approved for a stage."""
 

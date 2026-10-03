@@ -4,7 +4,59 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T171703Z (Ralph cycle, this run): selected item was the HTTP
+- Cycle 2026-10-03T171835Z (Ralph cycle, this run): selected item was the HTTP
+  route that exposes the stage 3 "Diagnostic Model Approved" gate. The prior
+  cycle named it the highest priority ready next item: the
+  `StageThreeGateAssembler`/`StageThreeGateRecorder`, the
+  `RecordStageThreeGateCommand`/`RecordStageThreeGateHandler` and the durable
+  ledger/run ports all exist, but only stages 0, 1 and 2 had write routes, so the
+  canonical 0-10 API surface stopped at stage 2 and DoD condition 1 stayed
+  unreachable. It outranked the stage 4 route (which depends on it) and the
+  `ClientProcess` canon gap (a methodology-owner decision), because gate
+  visibility through the real use case is the pipeline backbone.
+- Outcome: new `POST /red/clients/{tenant_id}/stages/3/gate` in
+  `backend/redops/api/routes.py`, mapping the typed request to the Commercial
+  `DiagnosticPackage` (`DiagnosticModel` and its `ProfitPyramidLevel` levels) and
+  running `RecordStageThreeGateHandler` through `get_gate_ledger_repository` and
+  `get_stage_run_repository`, mirroring the stage 2 route. New request schemas
+  in `backend/redops/api/schemas.py`: `ProfitPyramidLevelInput`,
+  `DiagnosticModelInput`, `RecordStageThreeGateRequest`. The route computes no
+  rule: canonical kinds, exact versions, approver authority, adjacent-level
+  observable distinguishability, the model tenant boundary and the stage 2
+  prerequisite stay enforced by the domain. Stage 3 errors map to a named 422,
+  including the Commercial and Method error families. Stage 3 carries no claims,
+  because the "Diagnostic Model Approved" checkpoint turns on the model's own
+  observable differences rather than external customer evidence.
+- Evidence: `tests/unit/test_stage_three_gate_route.py` (5) pass: stages 0, 1 and
+  2 are seeded through their own routes, then a passing stage 3 decision pins the
+  ten canonical diagnostic kinds at version 1, the stage 3 run persists COMPLETE
+  with its owner, a stage 3 gate with no passing stage 2 is refused, an
+  unauthorized approver is refused without a write, and the decision is invisible
+  to another tenant. `make check` green: 1680 passed, 1 skipped, 632 subtests;
+  pyflakes clean.
+- New findings: unchanged from the prior cycle for the prerequisite refusal shape
+  (`GateDecisionError` from `GateIntegrityPolicy` via `GateDecision.from_gate`,
+  not `UnsatisfiedPrerequisiteError`). The persisted
+  `GateDecision.required_assets` carry the canonical kind as `asset_id`.
+  `make done` still fails at step 2 (`tests/e2e` absent), so DoD 1 is not met.
+- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate
+  routes and a repeated gate POST after COMPLETE returns 422; RLS remains
+  WHERE-clause only (ADR 0004); the stage 0-10 e2e suite (DoD 1, Q30) and the
+  migration deployment step (separate GitOps chart) are absent from this repo.
+- Highest priority ready next item: expose the stage 4 "IP Architecture Locked"
+  gate by `POST /red/clients/{tenant_id}/stages/4/gate`, mapping a typed request
+  to `RecordStageFourGateCommand` and running `RecordStageFourGateHandler`
+  through the ledger and stage run ports, mirroring the stage 3 route.
+  Prerequisites: the `StageFourGateAssembler`/`StageFourGateRecorder` and
+  `RecordStageFourGateHandler` (done), the stage 3 route (done), and a passing
+  stage 3 decision in the ledger (enforced by governance). This advances the
+  stage 0-10 API surface toward DoD 1. Alternative: the `ClientProcess` design
+  artifact from the canon gap register, if a methodology-owner decision is
+  preferred.
+
+### Prior cycle (2026-10-03T171703Z)
+
+- Cycle 2026-10-03T171703Z (Ralph cycle): selected item was the HTTP
   route that exposes the stage 2 "Currency Locked" gate. The prior cycle named
   it the highest priority ready next item: the `StageTwoGateAssembler`
   /`StageTwoGateRecorder`, the `RecordStageTwoGateCommand`
@@ -35,30 +87,10 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   unauthorized approver is refused without a write, and the decision is invisible
   to another tenant. `make check` green: 1675 passed, 1 skipped, 632 subtests;
   pyflakes clean.
-- New findings: unchanged from the prior cycle for the prerequisite refusal shape
-  (`GateDecisionError` from `GateIntegrityPolicy` via `GateDecision.from_gate`,
-  not `UnsatisfiedPrerequisiteError`). The persisted
-  `GateDecision.required_assets` carry the canonical kind as `asset_id`.
-  `make done` still fails at step 2 (`tests/e2e` absent), so DoD 1 is not met.
-- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate
-  routes and a repeated gate POST after COMPLETE returns 422; RLS remains
-  WHERE-clause only (ADR 0004); the stage 0-10 e2e suite (DoD 1, Q30) and the
-  migration deployment step (separate GitOps chart) are absent from this repo.
-- Highest priority ready next item: expose the stage 3 "Diagnostic Model
-  Approved" gate by `POST /red/clients/{tenant_id}/stages/3/gate`, mapping a
-  typed request to `RecordStageThreeGateCommand` and running
-  `RecordStageThreeGateHandler` through the ledger and stage run ports,
-  mirroring the stage 2 route. Prerequisites: the
-  `StageThreeGateAssembler`/`StageThreeGateRecorder` and
-  `RecordStageThreeGateHandler` (done), the stage 2 route (done), and a passing
-  stage 2 decision in the ledger (enforced by governance). This advances the
-  stage 0-10 API surface toward DoD 1. Alternative: the `ClientProcess` design
-  artifact from the canon gap register, if a methodology-owner decision is
-  preferred.
 
 ### Prior cycle (2026-10-03T165834Z)
 
-- Cycle 2026-10-03T165834Z (Ralph cycle, this run): selected item was the HTTP
+- Cycle 2026-10-03T165834Z (Ralph cycle): selected item was the HTTP
   route that exposes the stage 1 "Avatar Locked" gate. The plan's prior cycle
   named this as the highest priority ready next item: the `StageOneGateAssembler`
   /`StageOneGateRecorder`, the `RecordStageOneGateCommand`
@@ -349,7 +381,7 @@ stalls:
 | Q17 | Stage 0 intake route hardened plus workspace and authority (API surface) | pipeline | Q9 | stage 0 gate e2e |
 | Q18 | Stage 1 diagnosis gate assembly from the built assets | pipeline | Q17 | Avatar Locked decision |
 | Q19 | Stage 2 currency gate API surface | pipeline | Q8, Q18 | Currency Locked decision |
-| Q20 | Stage 3 model gate API surface | pipeline | Q19 | Diagnostic Model Approved |
+| Q20 | Stage 3 model gate API surface (done 2026-10-03T171835Z; `POST /red/clients/{tenant_id}/stages/3/gate`) | pipeline | Q19 | Diagnostic Model Approved |
 | Q21 | Stage 4 IP package gate plus ThirteenTransformations wiring | pipeline | Q20 | IP Architecture Locked |
 | Q22 | Stage 5 productize gate plus ProductProgram wiring | pipeline | Q21 | Offer Locked |
 | Q23 | Stage 6 message gate plus ContentCrusher and roadmap wiring | pipeline | Q22 | Campaign Message Approved |
