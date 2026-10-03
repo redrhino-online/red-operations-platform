@@ -95,7 +95,11 @@ class ImprovementOutcome:
     baseline of real metrics must exist before optimizing, one variable changes at
     a time, and placeholder figures are not real metrics until measured over
     enough instances. A placeholder record therefore cannot serve as a measured
-    before or after, and the two observations must be distinct.
+    before or after, and the two observations must be distinct. The canon also
+    waits before reading how a change performed (canon file 24: "I wait 10 days to
+    see how it does"), so the before window must end before the after window
+    starts; an after-state observed before or during its own before-state is not a
+    movement.
     """
 
     outcome_id: str
@@ -158,6 +162,14 @@ class ImprovementOutcome:
             raise ImprovementObservationError(
                 "an improvement outcome measures the movement between two "
                 "distinct observations"
+            )
+        if self.before.window.end >= self.after.window.start:
+            raise ImprovementObservationError(
+                "an improvement outcome must read the after window only once the "
+                "before window has ended: the before window "
+                f"({self.before.window.start} to {self.before.window.end}) must "
+                f"end before the after window starts "
+                f"({self.after.window.start})"
             )
 
     def observations(

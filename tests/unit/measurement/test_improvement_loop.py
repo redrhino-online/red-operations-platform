@@ -14,16 +14,22 @@ a time so the movement can be attributed (canon files 23 and 24):
   grounded on that same baseline for the same tenant.
 - The recorded movement is an observation, kept distinct from a causal
   conclusion (SPEC.md section 3 Measurement invariant).
+- The before observation window must end before the after window starts, so a
+  recorded movement is temporally sound and an after-state is never read from
+  before or during its own before-state (canon file 24: wait before reading how
+  the change did).
 """
 
 import unittest
 from dataclasses import FrozenInstanceError
+from datetime import date
 
 from redops.contexts.measurement.domain.entities import ImprovementProposal
 from redops.contexts.measurement.domain.errors import (
     ImprovementAuthorityError,
     ImprovementDependencyError,
     ImprovementNotApprovedError,
+    ImprovementObservationError,
     ImprovementOutcomeSupportError,
     ImprovementStateError,
     InvalidImprovementError,
@@ -32,6 +38,7 @@ from redops.contexts.measurement.domain.errors import (
 from redops.contexts.measurement.domain.value_objects import (
     ImprovementState,
     MeasurementBasis,
+    MeasurementWindow,
 )
 from redops.contexts.execution.domain.value_objects import ClaimKind
 
@@ -292,6 +299,49 @@ class ImprovementOutcomeTests(unittest.TestCase):
 
         with self.assertRaises(ImprovementObservationError):
             improvement_outcome(before=shared, after=shared)
+
+    def test_the_before_window_must_end_before_the_after_window_starts(self):
+        with self.assertRaises(ImprovementObservationError):
+            improvement_outcome(
+                before=measurement_record(
+                    record_id="measure-before-3f",
+                    value=12.0,
+                    window=MeasurementWindow(
+                        start=date(2026, 9, 18), end=date(2026, 10, 1)
+                    ),
+                ),
+                after=measurement_record(
+                    record_id="measure-after-3f",
+                    value=8.0,
+                    window=MeasurementWindow(
+                        start=date(2026, 9, 4), end=date(2026, 9, 17)
+                    ),
+                ),
+            )
+
+    def test_the_before_and_after_windows_cannot_overlap(self):
+        with self.assertRaises(ImprovementObservationError):
+            improvement_outcome(
+                before=measurement_record(
+                    record_id="measure-before-3f",
+                    value=12.0,
+                    window=MeasurementWindow(
+                        start=date(2026, 9, 18), end=date(2026, 10, 1)
+                    ),
+                ),
+                after=measurement_record(
+                    record_id="measure-after-3f",
+                    value=8.0,
+                    window=MeasurementWindow(
+                        start=date(2026, 9, 25), end=date(2026, 10, 8)
+                    ),
+                ),
+            )
+
+    def test_the_default_outcome_observes_after_the_before_window(self):
+        outcome = improvement_outcome()
+
+        self.assertLess(outcome.before.window.end, outcome.after.window.start)
 
     def test_a_placeholder_measurement_cannot_be_an_observation(self):
         from redops.contexts.measurement.domain.errors import (

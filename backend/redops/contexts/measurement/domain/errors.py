@@ -35,9 +35,11 @@ class ImprovementObservationError(MeasurementError, ValueError):
     baseline, observation, source" and its invariant keeps observations distinct
     from causal conclusions. The canon's optimization discipline (canon files 23
     and 24) warns that placeholder figures are not real metrics until measured
-    over enough instances, so the before-and-after of a measured improvement must
-    be observed ``MeasurementRecord`` values attached to the improvement's metric
-    over an explicit window, not free-text statements or placeholder figures.
+    over enough instances and waits before reading how a change performed, so the
+    before-and-after of a measured improvement must be observed
+    ``MeasurementRecord`` values attached to the improvement's metric over an
+    explicit window, not free-text statements or placeholder figures, and the
+    before window must end before the after window starts.
     """
 
 

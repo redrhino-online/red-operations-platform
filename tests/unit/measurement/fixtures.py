@@ -9,6 +9,8 @@ test data only and carry no behavior.
 
 from __future__ import annotations
 
+from datetime import date
+
 from redops.contexts.measurement.domain.entities import ImprovementProposal
 from redops.contexts.measurement.domain.value_objects import (
     ImprovementApproval,
@@ -78,6 +80,9 @@ def improvement_outcome(
                 tenant_id=tenant_id,
                 record_id="measure-before-3f",
                 value=12.0,
+                window=MeasurementWindow(
+                    start=date(2026, 9, 18), end=date(2026, 10, 1)
+                ),
             )
             if before is None
             else before
@@ -88,6 +93,9 @@ def improvement_outcome(
                 tenant_id=tenant_id,
                 record_id="measure-after-3f",
                 value=8.0,
+                window=MeasurementWindow(
+                    start=date(2026, 10, 2), end=date(2026, 10, 2)
+                ),
             )
             if after is None
             else after

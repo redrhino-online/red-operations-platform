@@ -4,52 +4,45 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:13:24Z (Ralph cycle 96).
-- Selected item: ground the stage 10 improvement outcome's before and after on
-  typed observed `MeasurementRecord`s of the proposal's registered metric (via
-  `MeasurementRecord.as_observation`) instead of two free `PerformanceClaim`s, so
-  a measured optimization cites a window, basis, sample and source and can never
-  rest on a placeholder or free-text figure (SPEC.md section 3 Measurement
-  aggregate "metric definition, window, baseline, observation, source" and
-  invariant "observations are distinct from causal conclusions"; section 4 stage
-  10 "performance recommendations require evidence and owner approval before
-  material changes"; Phase 5 "one improvement is approved and measured"; canon
-  files 23 and 24: a baseline of real metrics before optimizing, one variable at
-  a time, placeholder figures are not real metrics, and wait before reading the
-  result). This was the plan's named highest priority ready next item after cycle
-  95. It outranks the advertising and forecast dashboard (a downstream feature),
-  the Operations delivery adapter (blocked on the storage ADR), the stage 9
-  compliance projection (needs a named-owner decision on a canonical kind) and
-  the stage-parameterized gate refactor (quality only), because it closes the
-  last free-text hole in the stage 10 evidence chain without changing the
-  pipeline shape.
+- Cycle timestamp: 2026-10-03T05:15:50Z (Ralph cycle 97).
+- Selected item: enforce that a stage 10 improvement outcome's *before*
+  observation window ends before its *after* window starts (via the existing
+  named `ImprovementObservationError`), so a measured optimization reads its
+  after-state only once its before-state window has closed and overlapping
+  windows are refused. This continues cycle 96's typed-measurement grounding and
+  applies the canon's "wait 10 days to see how it does" discipline (canon files
+  23 and 24) to the outcome windows, using the `MeasurementWindow` closed-range
+  invariant (SPEC.md section 3, Measurement aggregate "metric definition, window,
+  baseline, observation, source"; section 4 stage 10; Phase 5 "one improvement is
+  approved and measured"). It was this plan's named highest priority ready next
+  item after cycle 96. It outranks the advertising and forecast dashboard (a
+  downstream feature), the Operations delivery adapter (blocked on the storage
+  ADR), the stage 9 compliance projection (needs a named-owner decision on a
+  canonical kind) and the stage-parameterized gate refactor (quality only),
+  because it closes the last temporal hole in the stage 10 movement chain without
+  a new artifact, stage or decision.
 - Outcome: completed and verified (single item; no second item started).
 - Evidence: behavioral coverage in
-  `tests/unit/measurement/test_improvement_loop.py`: an outcome's before and
-  after are typed `MeasurementRecord`s attached to the outcome's registered
-  metric; a placeholder record cannot be a measured before or after; the two
-  observations must be distinct; a record attached to another metric identity or
-  version is refused; `ImprovementOutcome.observations()` projects the records
-  onto baseline-citing `PerformanceClaim`s of kind OBSERVATION; and
-  `ImprovementMeasurementPolicy` grounds the outcome on the approved baseline and
-  refuses a placeholder or foreign/other-version record. Running
+  `tests/unit/measurement/test_improvement_loop.py`: an outcome whose before
+  window ends on or after its after window starts is refused with the named
+  `ImprovementObservationError` (an after observed before its before), overlapping
+  before/after windows are refused, and the default grounded outcome asserts
+  `before.window.end < after.window.start`; the shared `improvement_outcome`
+  fixture now builds a closed before window (2026-09-18 to 2026-10-01) and a
+  distinct after window (2026-10-02). Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1074 passed, up from 1073. `python3 -m pyflakes backend/redops tests`
+  reports 1077 passed, up from 1074. `python3 -m pyflakes backend/redops tests`
   is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: `ImprovementOutcome.before`/`.after` are now
-  `MeasurementRecord`s, so each side of the stage 10 movement carries an explicit
-  window, basis, sample and source; `ImprovementOutcome.observations(baseline_id)`
-  is the single projection to `PerformanceClaim` and refuses a blank baseline; a
-  new named `ImprovementObservationError` covers a non-record, non-observed or
-  identical before/after, and `ImprovementMeasurementPolicy` now checks the
-  records directly (observed basis, same metric identity and version, same
-  tenant) before projecting them onto the approved baseline. Because a frozen
-  `ImprovementOutcome` cannot be built with a placeholder record, the policy's
-  placeholder check is defense in depth. The stage 10 `PerformanceBaseline`
-  remains the gate-grounded artifact; the registry metric and its observed
-  records are the typed evidence inside the optimization loop. No fork or cluster
-  facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or `argocd`
-  present.
+- New findings: `ImprovementOutcome.__post_init__` now orders the two typed
+  `MeasurementRecord` windows, so a frozen outcome cannot represent an
+  after-state observed before or during its own before-state; because
+  `ImprovementMeasurementPolicy` only accepts an `ImprovementOutcome`, the
+  temporal rule is enforced before any outcome reaches the measured state. The
+  stage 10 improvement loop therefore now requires a closed, ordered movement:
+  distinct observed records on one registered metric version, over a before
+  window that ends before the after window begins, grounded on the approved
+  baseline. No fork or cluster facts invented; no `docs/`, fork checkout,
+  `kubectl`, `helm`, or `argocd` present.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -57,24 +50,35 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: require the improvement outcome's before
-  window to end before its after window starts and keep the two windows distinct,
-  via a named `ImprovementObservationError`, so a measured stage 10 movement is
-  temporally sound and cannot report an after-state observed before its
-  before-state, matching the canon's "wait before reading how it did" discipline
-  (canon files 23 and 24) and the `MeasurementWindow` closed-range invariant. It
-  outranks the advertising and forecast dashboard (a downstream feature), the
-  Operations delivery adapter (blocked on the storage ADR) and the
-  stage-parameterized gate refactor (quality only), because it is the direct
-  dependency-enforcement continuation of this cycle and needs no new artifact.
-  Prerequisite: satisfied (this cycle's typed `MeasurementRecord` before/after and
-  `ImprovementOutcome.observations`).
+- Highest priority ready next item: require that a measured improvement's after
+  window begins on or after its named owner's approval date, via
+  `ImprovementMeasurementPolicy` and a named error, so a stage 10 movement cannot
+  be observed before the change it measures was authorized (SPEC.md section 4,
+  "performance recommendations require evidence and owner approval before
+  material changes"; canon files 23 and 24: apply the single change, then wait to
+  read the result). It outranks the advertising and forecast dashboard (a
+  downstream feature), the Operations delivery adapter (blocked on the storage
+  ADR) and the stage-parameterized gate refactor (quality only), because it is
+  the direct dependency-enforcement continuation of this cycle and needs no new
+  artifact. Prerequisite: satisfied (approved improvement with its `approved_on`
+  date and this cycle's ordered typed after record).
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; the advertising and forecast dashboard; a
   stage-parameterized gate recorder/handler refactor; projecting the compliance
   package onto a canonical stage 9 gate kind (methodology-owner decision); and
   all persistence.
+  [DONE 2026-10-03 (Ralph cycle 97): ordered the stage 10 improvement outcome's
+  observation windows -- `ImprovementOutcome.__post_init__` now refuses an
+  outcome whose before window ends on or after its after window starts with the
+  named `ImprovementObservationError`, so an overlapping or reversed before/after
+  cannot represent a measured movement (SPEC.md section 3 Measurement aggregate
+  and `MeasurementWindow`; section 4 stage 10; canon files 23 and 24: wait before
+  reading how the change did); verified by the new
+  `ImprovementOutcomeTests` temporal tests and the updated `improvement_outcome`
+  fixture in `tests/unit/measurement/test_improvement_loop.py` (40 tests, full
+  suite 1077 passed), so a stage 10 optimization must read its after-state only
+  after its before-state window has closed.]
   [DONE 2026-10-03 (Ralph cycle 96): grounded the stage 10 improvement outcome
   on typed observed measurements -- `ImprovementOutcome.before` and `.after` are
   now `MeasurementRecord`s attached to the outcome's registered `MetricDefinition`,
