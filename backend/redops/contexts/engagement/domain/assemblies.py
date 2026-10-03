@@ -22,11 +22,18 @@ from __future__ import annotations
 from datetime import date
 from typing import Iterable
 
+from redops.contexts.commercial.domain.policies import (
+    AvatarLockedPolicy,
+    DiagnosisEvidencePolicy,
+)
+from redops.contexts.commercial.domain.value_objects import DiagnosisPackage
 from redops.contexts.engagement.domain.entities import ClientWorkspace
 from redops.contexts.engagement.domain.errors import (
     GateApproverNotAuthorizedError,
     GateAuthorRequiredError,
+    NotStageOneGateError,
     NotStageZeroGateError,
+    TenantBoundaryError,
 )
 from redops.contexts.engagement.domain.policies import (
     GateApproverAuthorityPolicy,
@@ -48,6 +55,7 @@ from redops.contexts.governance.domain.value_objects import (
 from redops.contexts.knowledge.domain.entities import Claim
 
 STAGE_ZERO = 0
+STAGE_ONE = 1
 
 
 class StageZeroGateAssembler:
@@ -147,6 +155,149 @@ class StageZeroGateRecorder:
                 actor=approver,
                 on=on,
                 rationale=f"stage 0 asset {asset} approved for {scope}",
+            )
+            gate.record_asset_approval(request)
+        gate.state = GateState.APPROVED
+        decision = GateDecision.from_gate(
+            gate,
+            ledger=ledger,
+            reviewer=approver,
+            scope=scope,
+            checkpoint_evidence=checkpoint_evidence,
+            disposition=GateDisposition.APPROVED,
+            rationale=rationale,
+            on=on,
+            assigned_owner=assigned_owner,
+            due_on=due_on,
+            next_action=next_action,
+        )
+        ledger.record(decision)
+        return decision
+
+
+class StageOneGateAssembler:
+    """Builds and validates the canonical stage 1 "Avatar Locked" gate.
+
+    SPEC.md section 4, stage 1 "Diagnose" and its "Avatar Locked" checkpoint: a
+    stranger can recognize who the customer is, what matters, and why now, and the
+    stage is complete only when its required assets exist, pass the checkpoint,
+    and receive approval for downstream use. The Commercial ``DiagnosisPackage``
+    (cycle 69) projects the three reviewed stage 1 values (``AvatarProfile``,
+    ``BusinessSnapshot``, ``OfferFunnelAudit``) onto the nine canonical stage 1
+    asset kinds as exact ``StageAssetVersion`` evidence, and the canon maps stage
+    1 to files 02, 03 and 04 (SPEC.md section 12.3).
+
+    This assembler composes the pieces so a caller cannot hand an unvalidated
+    stage 1 gate to ``GateDecision.from_gate``: the reviewed values are checked
+    against same-tenant, directly sourced claims (``AvatarLockedPolicy`` and
+    ``DiagnosisEvidencePolicy``), the gate is pinned from the template's exact
+    stage 1 asset package, and the designated approver is bound to the workspace
+    authority registry (``GateApproverAuthorityPolicy``). It is a pure domain
+    service: it returns a gate and mutates nothing, invokes no persistence, and
+    never invents a concrete approver identity or authority role (SPEC.md section
+    11).
+    """
+
+    def assemble(
+        self,
+        *,
+        template: StageTemplate,
+        workspace: ClientWorkspace,
+        package: DiagnosisPackage,
+        approver: str,
+        claims: Iterable[Claim],
+        proposed_by: str | None = None,
+    ) -> StageGate:
+        if package.tenant_id != workspace.tenant_id:
+            raise TenantBoundaryError(
+                f"diagnosis package {package.package_id!r} belongs to tenant "
+                f"{package.tenant_id!r}, not workspace tenant "
+                f"{workspace.tenant_id!r}"
+            )
+        evidence = tuple(claims)
+        AvatarLockedPolicy().require_locked(package.avatar, evidence)
+        DiagnosisEvidencePolicy().require_business_snapshot_sourced(
+            package.business_snapshot, evidence
+        )
+        DiagnosisEvidencePolicy().require_offer_funnel_audit_sourced(
+            package.offer_funnel_audit, evidence
+        )
+        gate = StageGate.from_assets(
+            template,
+            STAGE_ONE,
+            tenant_id=workspace.tenant_id,
+            assets=package.stage_asset_versions(),
+        )
+        gate.approver = approver
+        gate.proposed_by = proposed_by
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        return gate
+
+
+class StageOneGateRecorder:
+    """Records the passing stage 1 "Avatar Locked" gate decision.
+
+    SPEC.md section 4: a passing gate pins "the exact evidence and intended
+    downstream use", approval is version specific, and the author cannot
+    impersonate the approver. Given the gate ``StageOneGateAssembler`` already
+    validated, this pure-domain path issues one version-specific
+    ``ApprovalRequest`` per required asset on behalf of the gate's author, has the
+    workspace's designated approver approve each one, records them on the gate,
+    and stores the immutable ``GateDecision`` in the durable ``GateLedger``. It
+    refuses a gate for another stage, an absent author or approver, an approver
+    who holds no authority on the workspace, and an assigned work owner who holds
+    no authority on the workspace, so the stage 1 rubric can never approve an
+    unrelated asset package, a self-issued approval or an unaccountable owner
+    (SPEC.md sections 3, 4, 5 and 11). Because stage 1 depends on stage 0,
+    ``GateDecision.from_gate`` and ``GateLedger.record`` refuse a passing decision
+    until the ledger holds a passing stage 0 decision, so a failed prerequisite
+    blocks dependent authorization (SPEC.md section 4). It mutates only the gate
+    it is given and the ledger; it never invents a concrete human identity.
+    """
+
+    def record(
+        self,
+        *,
+        gate: StageGate,
+        workspace: ClientWorkspace,
+        ledger: GateLedger,
+        scope: str,
+        checkpoint_evidence: str,
+        rationale: str,
+        assigned_owner: str,
+        due_on: date,
+        on: date,
+        next_action: str = "",
+    ) -> GateDecision:
+        if gate.stage_number != STAGE_ONE:
+            raise NotStageOneGateError(
+                f"stage 1 recording path cannot record a decision for stage "
+                f"{gate.stage_number}"
+            )
+        author = gate.proposed_by
+        if not author or not author.strip():
+            raise GateAuthorRequiredError(
+                "stage 1 recording requires the gate's author so an approval "
+                "request has a requester distinct from the designated approver"
+            )
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        GateOwnerAuthorityPolicy().require(assigned_owner, workspace)
+        approver = gate.approver
+        if not approver or not approver.strip():
+            raise GateApproverNotAuthorizedError(
+                "stage 1 recording requires the gate's designated approver"
+            )
+        for asset in sorted(gate.required_assets, key=str):
+            request = ApprovalRequest(
+                asset=asset,
+                scope=scope,
+                requested_by=author,
+                approver=approver,
+            )
+            request.approve(
+                actor=approver,
+                on=on,
+                rationale=f"stage 1 asset {asset} approved for {scope}",
             )
             gate.record_asset_approval(request)
         gate.state = GateState.APPROVED

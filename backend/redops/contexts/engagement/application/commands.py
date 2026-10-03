@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
+from redops.contexts.commercial.domain.value_objects import DiagnosisPackage
 from redops.contexts.engagement.domain.entities import ClientWorkspace
 from redops.contexts.engagement.domain.value_objects import IntakePackage
 from redops.contexts.governance.domain.entities import StageRun
@@ -39,6 +40,42 @@ class RecordStageZeroGateCommand:
     template: StageTemplate
     workspace: ClientWorkspace
     package: IntakePackage
+    claims: tuple[Claim, ...]
+    stage_run: StageRun
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
+@dataclass(frozen=True)
+class RecordStageOneGateCommand:
+    """Request to assemble and record the stage 1 "Avatar Locked" gate.
+
+    The command carries the reviewed ``DiagnosisPackage`` (the bridge that
+    projects the three stage 1 values onto the nine canonical kinds), the
+    workspace authority registry, the supporting ``Claim`` set and the exact
+    decision metadata; it deliberately carries no ``StageGate``. The use case
+    builds the canonical gate itself from the package, so a caller cannot
+    substitute a hand-built gate and skip the sourced-evidence, approver-authority
+    and owner-authority checks (SPEC.md sections 3, 4 and 6).
+
+    It also carries the stage 1 ``StageRun`` to close. Recording a passing gate
+    and completing the stage are one application operation, so the durable
+    ``GateDecision`` and the stage status cannot drift apart. Stage 1 depends on
+    stage 0, so the passing stage 0 decision must already be present in the
+    ``GateLedger`` the use case is given (SPEC.md section 4).
+    """
+
+    template: StageTemplate
+    workspace: ClientWorkspace
+    package: DiagnosisPackage
     claims: tuple[Claim, ...]
     stage_run: StageRun
     approver: str
