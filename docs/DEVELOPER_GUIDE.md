@@ -148,6 +148,26 @@ PYTHONPATH=backend vendor/openexecutive/packages/core/.venv/bin/python -m pytest
 Open item: the domain runs on Python 3.10 here while the app requires >=3.11.
 Reconcile them when an app-wide test runner is standardized.
 
+### Local validation with docker compose
+
+Validate persistence and the app locally before anything reaches the cluster.
+**The cluster receives only tested, shippable code.** `docker-compose.yml` brings
+up the same PostgreSQL major version the deployment runs, so RED's repository
+adapters and migrations are exercised against a real database without touching
+Atlas:
+
+```bash
+docker compose up -d postgres                      # postgres:16.4-alpine
+export DATABASE_URL=postgresql://redops:redops@localhost:5432/redops
+uv sync                                            # app venv (psycopg + alembic)
+uv run pytest tests/ -q                            # integration tests use DATABASE_URL
+docker compose down                                # add -v to wipe the volume
+```
+
+Adminer is available at http://localhost:8080 for inspection. The app's
+`pyproject.toml` declares `psycopg[binary]`, `alembic` and `uvicorn` so the
+PostgreSQL adapter and the RED entry point can be run locally.
+
 ---
 
 ## 6. The OpenExecutive dependency

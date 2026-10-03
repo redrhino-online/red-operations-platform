@@ -1,0 +1,39 @@
+# Local development and validation only.
+#
+# Brings up the same PostgreSQL major version the redop deployment runs, so RED's
+# persistence adapters and migrations can be validated locally without touching
+# the cluster. The cluster receives only tested, shippable code.
+#
+#   docker compose up -d postgres
+#   export DATABASE_URL=postgresql://redops:redops@localhost:5432/redops
+#
+# Adminer (http://localhost:8080) is optional for inspecting the database.
+name: redop-dev
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_DB: redops
+      POSTGRES_USER: redops
+      POSTGRES_PASSWORD: redops
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U redops -d redops"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  adminer:
+    image: adminer:4
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

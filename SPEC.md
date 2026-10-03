@@ -10,7 +10,7 @@ Primary users: RED principal, production manager, specialists, client approvers,
 
 Success criteria for pilot: a production engagement progresses through the stage 0 to 10 gate contract defined below; each stage produces an approved asset or explicit exception before dependent work is released; an asset can be traced to its source and approved method; a complete journey passes a prospect path dry run; the command center identifies missing assets, blockers, and owners; an approved change reports affected downstream assets; first qualified traffic establishes a performance baseline and begins optimization rather than ending the engagement.
 
-Out of scope for the first release: autonomous financial commitments, autonomous public publishing, unreviewed testimonials or performance claims, a general knowledge graph database, fully autonomous campaign optimization, and capability agents 10 and 11 until their charters are supplied. The existing VP descriptions remain proposals for domain responsibilities, not evidence of currently staffed departments.
+Out of scope for the first release: autonomous financial commitments, autonomous public publishing, unreviewed testimonials or performance claims, a general knowledge graph database, and fully autonomous campaign optimization. Capability agents 10 and 11 are chartered (see section 5) but proposal-only with no execution permissions. The existing VP descriptions remain proposals for domain responsibilities, not evidence of currently staffed departments.
 
 ## 2. Fork baseline and disposition
 
@@ -101,7 +101,14 @@ Every agent has a versioned charter, allowed tools, input schema, output schema,
 | Insight and Performance | measurement and evaluation | baseline, review, recommendation | unsupported causal conclusion |
 | IP Portfolio Development | derivative opportunity | roadmap, investment case | investment and launch |
 
-Reserve capability slots 10 and 11 with no execution permissions. Agent suggestions must include source IDs, unsupported assumptions, proposed next action, owner, and confidence explanation. Tool policies allow internal drafting, retrieval, and reversible queue changes within authority. External publication, spending, client commitments, destructive data operations, and substantive IP approvals require designated human action. Guard prompt injection by treating ingested client material as data, limiting retrieval to the active client, and validating tool calls outside model output.
+Capability slots 10 and 11 are chartered (charters in `docs/agents/`), proposal-only with no execution permissions:
+
+| Agent | Owns | Main outputs | Must escalate |
+| --- | --- | --- | --- |
+| Client Success and Engagement Health (slot 10) | engagement health, at-risk engagements, renewal and expansion triggers | engagement health view, risk signal, renewal opportunity, intervention card | at-risk critical path, overdue gates, missed targets, spend or scope change |
+| Assurance, Risk and Compliance (slot 11) | risk register, compliance evidence, data-handling obligations, cross-pipeline assurance, audit readiness | risk, compliance finding, assurance review, audit export | missing compliance evidence, data leaving the agreed boundary, security or isolation failures, legal judgment |
+
+Agent suggestions must include source IDs, unsupported assumptions, proposed next action, owner, and confidence explanation. Tool policies allow internal drafting, retrieval, and reversible queue changes within authority. External publication, spending, client commitments, destructive data operations, and substantive IP approvals require designated human action. Guard prompt injection by treating ingested client material as data, limiting retrieval to the active client, and validating tool calls outside model output.
 
 ## 6. Application architecture
 

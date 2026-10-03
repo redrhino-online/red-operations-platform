@@ -4,7 +4,14 @@ version = "0.1.0"
 description = "RED Operations Platform: RED's extension of the OpenExecutive system."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["openexecutive"]
+dependencies = [
+    "openexecutive",
+    # ADR 0003: RED's relational store is PostgreSQL. The driver and migration
+    # tool are app dependencies used by the persistence adapters.
+    "psycopg[binary]>=3.2",
+    "alembic>=1.13",
+    "uvicorn>=0.30",
+]
 
 [dependency-groups]
 dev = ["pytest>=8"]
