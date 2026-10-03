@@ -19,6 +19,7 @@ from redops.contexts.execution.domain.entities import (
 )
 from redops.contexts.execution.domain.errors import (
     ComplianceTenantBoundaryError,
+    EnrollmentDependencyError,
     ExpiredComplianceWaiverError,
     FunnelDependencyError,
     FunnelIncompleteError,
@@ -43,6 +44,7 @@ from redops.contexts.execution.domain.value_objects import (
     ProspectPathDryRun,
     TrafficAuthorization,
 )
+from redops.contexts.execution.domain.enrollment import EnrollmentPlan
 from redops.contexts.execution.domain.swimlanes import SwimlanesPlan
 
 
@@ -353,4 +355,25 @@ class SwimlaneCoveragePolicy:
                 f"swimlanes plan {plan.plan_id!r} does not use the canon channel "
                 f"set; missing {names}, and a single-source recovery plan is not "
                 "the canon's five-lane model"
+            )
+
+
+class EnrollmentReadinessPolicy:
+    """Refuses the enrollment call before the stage 8 funnel is complete.
+
+    SPEC.md section 12.5 places the enrollment and sales call between stages 8 and
+    10, after the prospect has gone through the integrated funnel (canon files 13
+    and 14: the enrollment call follows the Authority Amplifier and the scheduling
+    step). Running the call on a funnel that has not passed "Funnel Complete" would
+    convert a prospect through a path that is not yet known to route, so the policy
+    refuses it rather than letting a partial funnel authorize a client conversion.
+    It does not authorize spend, payment or external commitment (SPEC.md sections
+    4 and 9).
+    """
+
+    def require(self, plan: EnrollmentPlan) -> None:
+        if not plan.funnel.is_complete:
+            raise EnrollmentDependencyError(
+                f"enrollment plan {plan.plan_id!r} cannot run before its stage 8 "
+                f"funnel {plan.funnel.integration_id!r} has passed Funnel Complete"
             )

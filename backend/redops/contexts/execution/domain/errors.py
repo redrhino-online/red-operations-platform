@@ -252,6 +252,60 @@ class SwimlanesDependencyError(SwimlanesError):
     """
 
 
+class EnrollmentError(ExecutionError):
+    """Base class for canon enrollment and sales call rule violations."""
+
+
+class InvalidEnrollmentError(EnrollmentError, ValueError):
+    """An enrollment call step, homework, qualification, payment or plan violates an invariant.
+
+    SPEC.md section 12.5 records the canon's enrollment and sales call -- the pre-call
+    homework qualifier, the medical-style frame/examine/prescribe/prognosis call and
+    the acceptance and rejection ("red velvet rope") criteria -- as a canon gap
+    between stages 8 and 10, shaped by canon files 00, 06, 13, 14, 21 and 24. The
+    canon names a four-stage medical call ("there's analysis, there's kind of an
+    examination, a prescription, and a prognosis", canon file 00), a pre-call
+    homework that draws "a piece of my signature solution" and schedules "within 72
+    hours. No more than that" (canon file 21), the red velvet rope of who is
+    accepted and rejected (canon file 06) and a live payment captured over card or
+    PayPal (canon file 21). A blank identity, a missing or untyped field, a
+    duplicate question or criterion, a call window outside the canon bound, a
+    non-positive deposit, a payment not captured live, or a plan that does not
+    carry exactly the canon stages in order cannot be represented as an enrollment
+    plan.
+    """
+
+
+class EnrollmentDependencyError(EnrollmentError):
+    """An enrollment plan was not grounded on a typed, complete stage 8 funnel.
+
+    SPEC.md section 12.5 places the enrollment and sales call between stages 8 and
+    10, after the same-tenant stage 8 ``FunnelIntegration`` has passed "Funnel
+    Complete". A plan must therefore be grounded on a typed ``FunnelIntegration``,
+    and ``EnrollmentReadinessPolicy`` refuses to run the enrollment call before the
+    funnel it converts prospects through is complete.
+    """
+
+
+class EnrollmentTenantBoundaryError(EnrollmentError):
+    """An enrollment plan mixed in a funnel from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. An
+    enrollment plan belongs to the tenant of the stage 8 funnel it converts for, so
+    a plan cannot cross a tenant boundary.
+    """
+
+
+class EnrollmentObservationError(EnrollmentError):
+    """An enrollment plan was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The plan
+    describes the call that will run and the payment terms that will be offered,
+    while any enrolled prospect or collected payment stays a separate observed or
+    authorized record, so a plan is never an observation.
+    """
+
+
 class SwimlaneCoverageError(SwimlanesError):
     """A Swimlanes plan depends on too few channels to recover stalled prospects.
 
