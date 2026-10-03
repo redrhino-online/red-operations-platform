@@ -11,6 +11,8 @@ from redops.contexts.commercial.domain.errors import (
     CurrencyTenantBoundaryError,
     DiagnosisTenantBoundaryError,
     DiagnosticTenantBoundaryError,
+    FunnelFinderObservationError,
+    FunnelFinderTenantBoundaryError,
     InvalidAvatarProfileError,
     InvalidBusinessSnapshotError,
     InvalidCampaignMessagePackageError,
@@ -19,6 +21,7 @@ from redops.contexts.commercial.domain.errors import (
     InvalidDeliverySpecificationError,
     InvalidDiagnosisPackageError,
     InvalidDiagnosticPackageError,
+    InvalidFunnelFinderError,
     InvalidMarketAwarenessMapError,
     InvalidMillionDollarMessageError,
     InvalidNurtureError,
@@ -1768,4 +1771,173 @@ class TargetMarketMatchmaker:
         raise TargetMarketObservationError(
             f"target market match {claim_id!r} is a planning decision, not an "
             "observed result, and cannot be recorded as an observation"
+        )
+
+
+class OfferPriceBand(Enum):
+    """The banded pricing of an offer, a canon funnel finder factor.
+
+    SPEC.md section 12.5 records the positioning and decision tools as a canon
+    gap. The canon's funnel finder is based partly on "the pricing of your
+    offer" (canon file 13), with low-end products ("$5") and a high-ticket
+    consulting package ("$20,000") as the two stated extremes. The band is the
+    typed form of that factor so a selection can be checked against it.
+    """
+
+    LOW_TICKET = "low_ticket"
+    MID_TICKET = "mid_ticket"
+    HIGH_TICKET = "high_ticket"
+
+
+class FunnelType(Enum):
+    """The funnel types the canon funnel finder chooses among (canon files 13, 14).
+
+    The canon's funnel finder helps decide "which type of marketing system or
+    funnel to deploy" and enumerates the types it trains its community on:
+    liquid funnels to sell low-end products, local funnels to drive people into a
+    retail or professional services company, the CAC (coach, agency, consultant)
+    funnel, webinar funnels, quiz funnels and launch funnels (canon file 13).
+    """
+
+    LIQUID = "liquid"
+    LOCAL = "local"
+    CAC = "cac"
+    WEBINAR = "webinar"
+    QUIZ = "quiz"
+    LAUNCH = "launch"
+
+    @property
+    def requires_sales_conversation(self) -> bool:
+        """Whether the funnel converts through a scheduled sales call.
+
+        The canon's CAC funnel ends by getting the prospect "to schedule a call
+        and then ... conduct the call and then ... enroll them and charge them"
+        (canon file 13), unlike the low-end, self-serve and webinar funnels.
+        """
+        return self is FunnelType.CAC
+
+
+@dataclass(frozen=True)
+class FunnelProfile:
+    """The business profile the canon funnel finder selects a funnel for.
+
+    SPEC.md section 12.5 records the positioning and decision tools as a canon
+    gap. The canon's funnel finder is "based on the technical level ... how
+    experienced you are, the pricing of your offer ... And then the business
+    model" (canon file 13). The profile is frozen and reject-only, so a business
+    that leaves any of those factors unstated cannot be represented as a funnel
+    finder input.
+    """
+
+    profile_id: str
+    tenant_id: str
+    technical_level: str
+    experience: str
+    offer_price: OfferPriceBand
+    business_model: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("funnel profile id", self.profile_id),
+            ("funnel profile tenant id", self.tenant_id),
+            ("funnel profile technical level", self.technical_level),
+            ("funnel profile experience", self.experience),
+            ("funnel profile business model", self.business_model),
+        ):
+            if not value or not value.strip():
+                raise InvalidFunnelFinderError(f"{label} is required")
+        if not isinstance(self.offer_price, OfferPriceBand):
+            raise InvalidFunnelFinderError(
+                "a funnel profile requires a typed offer price band"
+            )
+
+
+@dataclass(frozen=True)
+class FunnelFinder:
+    """The canon's funnel finder selection for one client and one business.
+
+    SPEC.md section 12.5 records the funnel finder as part of the positioning and
+    decision tools canon gap, and section 12.3 places the pre-stage-8 selection
+    with canon files 13 and 14. The finder takes the funnel types the business
+    could deploy and selects the one that fits its technical level, experience,
+    offer price and business model (canon file 13). The finder is frozen and
+    reject-only, so fewer than two considered types, a duplicate type, a selected
+    type that is not among the considered types, or a cross-tenant profile cannot
+    be represented as a funnel decision.
+
+    It is a planning decision for the pre-stage-8 selection, not a new required
+    gate kind (a methodology-owner decision, SPEC.md section 12.5). It does not
+    authorize outreach or spend (SPEC.md sections 4 and 9) and it is never an
+    observation (SPEC.md section 3).
+    """
+
+    finder_id: str
+    tenant_id: str
+    profile: FunnelProfile
+    considered_types: tuple[FunnelType, ...]
+    selected_type: FunnelType
+    rationale: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("funnel finder id", self.finder_id),
+            ("funnel finder tenant id", self.tenant_id),
+            ("funnel finder rationale", self.rationale),
+        ):
+            if not value or not value.strip():
+                raise InvalidFunnelFinderError(f"{label} is required")
+        if not isinstance(self.profile, FunnelProfile):
+            raise InvalidFunnelFinderError(
+                "a funnel finder requires the typed business profile it decides for"
+            )
+        types = tuple(self.considered_types)
+        if len(types) < 2:
+            raise InvalidFunnelFinderError(
+                "the funnel finder requires at least two considered funnel types "
+                "to choose from"
+            )
+        seen: set[FunnelType] = set()
+        for funnel_type in types:
+            if not isinstance(funnel_type, FunnelType):
+                raise InvalidFunnelFinderError(
+                    "a considered funnel type must be one of the canon funnel types"
+                )
+            if funnel_type in seen:
+                raise InvalidFunnelFinderError(
+                    f"funnel finder {self.finder_id!r} considers duplicate funnel "
+                    f"type {funnel_type.value!r}"
+                )
+            seen.add(funnel_type)
+        if not isinstance(self.selected_type, FunnelType):
+            raise InvalidFunnelFinderError(
+                "a funnel finder must select one of the canon funnel types"
+            )
+        if self.selected_type not in seen:
+            raise InvalidFunnelFinderError(
+                f"funnel finder {self.finder_id!r} selects funnel type "
+                f"{self.selected_type.value!r}, which is not one of its considered "
+                "types"
+            )
+        if self.profile.tenant_id != self.tenant_id:
+            raise FunnelFinderTenantBoundaryError(
+                f"funnel finder {self.finder_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its profile {self.profile.profile_id!r} "
+                f"belongs to tenant {self.profile.tenant_id!r}"
+            )
+
+    @property
+    def is_decision(self) -> bool:
+        """A funnel finder is a planning decision, not activity."""
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a funnel selection as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The finder
+        decides which funnel to deploy, while any measured movement is a separate
+        observation, so a finder is never an observation.
+        """
+        raise FunnelFinderObservationError(
+            f"funnel finder {claim_id!r} is a planning decision, not an observed "
+            "result, and cannot be recorded as an observation"
         )

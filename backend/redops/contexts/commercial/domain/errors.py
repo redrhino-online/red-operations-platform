@@ -409,3 +409,47 @@ class TargetMarketObservationError(CommercialError):
     stays a separate observation, so a match is never an observation.
     """
 
+
+class InvalidFunnelFinderError(CommercialError, ValueError):
+    """A funnel profile or finder was built without its required content.
+
+    SPEC.md section 12.5 records the positioning and decision tools as a canon
+    gap. The canon's funnel finder decides which marketing system or funnel to
+    deploy from a business's technical level, experience, offer price and
+    business model (canon files 13 and 14), choosing one of the funnel types the
+    canon trains its community on (liquid, local, CAC, webinar, quiz, launch). A
+    profile missing a canon factor, or a finder with fewer than two considered
+    types, a duplicate type, an untyped selection or a selected type that is not
+    among the considered types cannot be represented as a funnel decision.
+    """
+
+
+class FunnelFinderTenantBoundaryError(CommercialError):
+    """A funnel finder mixed in a profile from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. The
+    business profile the funnel is selected for cannot cross a tenant boundary,
+    so a finder cannot cite another client's funnel profile.
+    """
+
+
+class FunnelFitError(CommercialError):
+    """A funnel finder chose a funnel type that does not fit the offer price.
+
+    The canon states that a sales-call funnel does not fit a low-ticket offer
+    ("it doesn't make sense to do a sales call to sell a product for $5") and
+    that a quick self-serve funnel does not fit a high-ticket consulting offer
+    ("it doesn't make sense to try to sell a $20,000 consulting package online
+    with a quick video sales letter") (canon file 13). A selection that pairs
+    those must be refused (SPEC.md sections 4 and 12.5).
+    """
+
+
+class FunnelFinderObservationError(CommercialError):
+    """A funnel finder was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The finder
+    is a planning decision about which funnel to deploy, while any measured
+    movement stays a separate observation, so a finder is never an observation.
+    """
+

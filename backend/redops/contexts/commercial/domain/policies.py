@@ -19,6 +19,7 @@ from redops.contexts.commercial.domain.entities import (
 from redops.contexts.commercial.domain.errors import (
     AvatarLockedError,
     CampaignMessageAlignmentError,
+    FunnelFitError,
     MarketAwarenessTargetingError,
     OfferReadinessError,
     TargetMarketMatchError,
@@ -27,10 +28,12 @@ from redops.contexts.commercial.domain.errors import (
 from redops.contexts.commercial.domain.value_objects import (
     AvatarProfile,
     BusinessSnapshot,
+    FunnelFinder,
     MarketAwarenessMap,
     MethodReference,
     OfferFunnelAudit,
     OfferImpactAssessment,
+    OfferPriceBand,
     TargetMarketMatchmaker,
 )
 from redops.contexts.knowledge.domain.entities import Claim
@@ -311,6 +314,36 @@ class TargetMarketMatchPolicy:
                 f"{match.selected_market_id!r}, but its awareness position "
                 f"{match.awareness_map.primary_level.value!r} is not an initial "
                 "target the canon will serve"
+            )
+
+
+class FunnelSelectionPolicy:
+    """Refuses a funnel finder selection that does not fit the offer price.
+
+    SPEC.md section 12.5 records the funnel finder as part of the positioning and
+    decision tools canon gap. The canon states that a sales-call funnel does not
+    fit a low-ticket offer ("it doesn't make sense to do a sales call to sell a
+    product for $5") and that a quick self-serve funnel does not fit a
+    high-ticket consulting offer ("it doesn't make sense to try to sell a $20,000
+    consulting package online with a quick video sales letter") (canon file 13).
+    A selection that pairs those cannot be deployed for this business (SPEC.md
+    sections 4 and 12.5).
+    """
+
+    def require_price_fit(self, finder: FunnelFinder) -> None:
+        band = finder.profile.offer_price
+        sales_call = finder.selected_type.requires_sales_conversation
+        if band is OfferPriceBand.HIGH_TICKET and not sales_call:
+            raise FunnelFitError(
+                f"funnel finder {finder.finder_id!r} selects "
+                f"{finder.selected_type.value!r}, a self-serve funnel, for a "
+                "high-ticket offer the canon sells through a conversation"
+            )
+        if band is OfferPriceBand.LOW_TICKET and sales_call:
+            raise FunnelFitError(
+                f"funnel finder {finder.finder_id!r} selects "
+                f"{finder.selected_type.value!r}, a sales-call funnel, for a "
+                "low-ticket offer the canon does not sell through a call"
             )
 
 
