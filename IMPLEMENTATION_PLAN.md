@@ -4,51 +4,56 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03 (Ralph cycle 2026-10-03T142816Z):
-- Selected item: the ready half of the plan's next gate-path item — a RED HTTP
-  route that records the stage 0 "Production Ready" gate through the
-  tenant-scoped `GateLedgerRepository` port and returns the pinned decision
-  (plan item (c)). Chosen over the durable PostgreSQL adapter (item (b)) because
-  (b) is still blocked: no PostgreSQL driver exists in any verified interpreter
-  and no migration scaffolding exists, so untested SQL would ship; (c) is
-  independently verifiable now with the in-memory reference adapter the port
-  already has, and it delivers the first API write path over the isolated seam
-  (SPEC.md sections 6, 7 and 11).
-- Outcome: `POST /red/clients/{tenant_id}/stages/0/gate` maps a typed
-  `RecordStageZeroGateRequest` to `RecordStageZeroGateCommand`, loads the
-  tenant's ledger through the port, runs `RecordStageZeroGateHandler`, appends
-  the durable decision and returns the pinned decision (exact per-kind asset
-  versions, disposition, reviewer, tenant). The path tenant, not the body, scopes
-  the ledger. `backend/redops/api/schemas.py` holds the entry-point schemas; the
-  route holds no domain rule and catches the domain's named errors as 422 so a
-  rejected request never writes. The repository is injected through the
-  overridable `get_gate_ledger_repository` dependency, so the durable adapter
-  (b) can replace it without touching the route.
-- Evidence: `tests/unit/test_stage_zero_gate_route.py` (4 tests: passing gate
-  records and pins exact versions; unauthorized approver is a named 422 with no
-  write; self-approved gate is a named 422; a recorded gate is not visible to
-  another client). 7 passed with the app smoke suite; domain suite 1612 passed,
-  2 skipped; `python3 -m pyflakes backend/redops tests` clean.
-- New findings: the governance `GateDecision.required_assets` is a
-  `frozenset[AssetVersionRef]` carrying only `(asset_id, version)`, where
-  `asset_id` is the canonical kind string, so the HTTP response exposes exact
-  `(kind, version)` evidence but not the instance-level asset id. The route
-  synthesizes the stage 0 `StageRun` (Working) from the request because no run
-  store exists yet; wiring the route to a real run store is a follow-up. The
-  in-memory ledger is process-local, so the route is only as durable as the
-  reference adapter until (b) lands.
-- Blockers: Tier 2 facts still hold (see Standing decisions). The durable
-  PostgreSQL adapter is still unwritten and its migration is uncommitted; no
-  PostgreSQL driver exists in the verified interpreters (the vendored core venv
-  has fastapi + pydantic only), though `psycopg[binary]`, `alembic` and
-  `uvicorn` are declared and the local compose PostgreSQL
-  (`redop-dev-postgres-1`) is up and healthy.
-- Highest priority ready next item: (b) the PostgreSQL `GateLedgerRepository`
-  adapter with a committed migration that includes `tenant_id`, validated
-  against the local compose database, so the route written this cycle becomes
-  durable. Prerequisites: a PostgreSQL driver in a verified interpreter (must be
-  installed via `uv sync` or a scoped venv) and migration scaffolding; the scoped
-  port and the route are done.
+- Cycle 2026-10-03 (Ralph cycle 2026-10-03T143218Z):
+- Selected item: plan item (b) — the durable PostgreSQL `GateLedgerRepository`
+  adapter and its committed migration (`0001_gate_decisions`), validated
+  against the local compose database. Chosen because it is the highest priority
+  ready next item and its blocker (no PostgreSQL driver available to validate
+  SQL) is now resolvable: a scoped CPython 3.12 venv created with `uv` and
+  `psycopg[binary]==3.3.6` + `alembic==1.20.0` runs the adapter contract against
+  the live `redop-dev-postgres-1` (PostgreSQL 16.4). This makes item (c)'s route
+  durable and takes gate integrity off a process-local ledger.
+- Outcome: `backend/redops/contexts/governance/infrastructure/repositories.py`
+  gains `PostgresGateLedgerRepository`, which loads only the requested tenant's
+  rows for the requested template version in append order and replays each
+  through `GateLedger.record`, and appends one committed row per decision while
+  refusing a blank tenant. `infrastructure/mappers.py` serialises and
+  deserialises the full `GateDecision` (exact required asset versions, per-asset
+  approvals, waiver, dependencies, blockers, tenant) so a reload re-validates
+  rather than trusts storage. The schema is Alembic-managed: `alembic.ini`,
+  `backend/redops/shared/persistence/migrations/env.py` (reads `DATABASE_URL`
+  and normalises it to the psycopg 3 dialect), and revision
+  `0001_gate_decisions` creating `gate_decisions` with a NOT NULL `tenant_id`
+  and a `(tenant_id, template_version, stage_number, id)` index (SPEC.md
+  sections 3, 6, 9 and 10).
+- Evidence: `tests/unit/governance/test_gate_ledger_postgres.py` (7 tests)
+  passes against the compose database: a fresh ledger is empty; a passing gate
+  survives a reload with its exact versions, approvals and tenant; history is
+  append-only and ordered; another client's rows are not replayed; append
+  refuses a tenantless decision; load requires a tenant; and a directly inserted
+  tampered row is rejected on reload with `AssetPackageMismatchError`. Domain
+  suite 1619 run / 9 skipped (the 7 new tests skip without psycopg or
+  `DATABASE_URL`); app smoke plus the stage 0 route 7 passed;
+  `python3 -m pyflakes backend/redops tests` clean.
+- New findings: the host has no repo-root `.venv` and `.venv/` is not in
+  `.gitignore`, although the developer guide instructs `uv sync`; ignoring
+  `.venv/` is a small ready hardening item. The adapter commits per append, so
+  transaction ownership across a multi-write use case is still undecided.
+  Row-level security (ADR 0004) is not applied yet; tenant scoping is the WHERE
+  clause plus the NOT NULL column. The route still synthesises the stage 0
+  `StageRun`; wiring a real run store remains a follow-up.
+- Blockers: none for the adapter. The running app does not yet invoke
+  `alembic upgrade head` (no migration Job or startup path) and the API
+  dependency still returns the in-memory adapter, so the route is durable in
+  tests but not yet in the process that serves traffic.
+- Highest priority ready next item: bind the API to the durable adapter — make
+  the FastAPI `get_gate_ledger_repository` dependency open a PostgreSQL
+  connection and return `PostgresGateLedgerRepository`, and add the
+  `alembic upgrade head` migration path the app and deployment run before
+  serving. Prerequisites: a reusable app environment with psycopg (a committed
+  `uv.lock` / standardized venv) so the route test can run against Postgres, a
+  request-scoped connection/transaction, and this cycle's adapter and migration
+  (both done).
 
 ### Standing decisions (unchanged this cycle)
 
