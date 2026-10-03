@@ -689,6 +689,7 @@ class StageRun:
     stage_number: int
     template_version: str
     assigned_owner: str
+    tenant_id: str = ""
     status: StageStatus = StageStatus.NOT_STARTED
     entered_at: date | None = None
     exited_at: date | None = None
@@ -707,6 +708,8 @@ class StageRun:
             raise ValueError("stage run template version is required")
         if not self.assigned_owner or not self.assigned_owner.strip():
             raise ValueError("stage run assigned owner is required")
+        if self.tenant_id and not self.tenant_id.strip():
+            raise ValueError("stage run tenant id, when carried, must be non-blank")
 
     @property
     def is_complete(self) -> bool:
@@ -715,6 +718,22 @@ class StageRun:
     @property
     def transitions(self) -> tuple[StageTransition, ...]:
         return tuple(self._transitions)
+
+    def restore_history(
+        self, transitions: tuple[StageTransition, ...]
+    ) -> None:
+        """Restore a persisted transition log on rehydration.
+
+        Infrastructure reconstructs a run by carrying its status, entered and
+        exited timestamps and pinned decisions explicitly, then restores the
+        append-only audit log through this seam. The transitions are not
+        replayed through the state machine -- doing so would re-run every
+        historical transition and could not represent a stage that has since
+        gone back for changes -- so the caller is responsible for a log that
+        matches the carried status (SPEC.md section 4: record actor, reason,
+        timestamp, old and new status, and correlation ID).
+        """
+        self._transitions = list(transitions)
 
     def record_activity(
         self, *, actor: str, reason: str, on: date, correlation_id: str

@@ -24,11 +24,14 @@ from typing import Any, Mapping
 from redops.contexts.governance.domain.entities import (
     ApprovalRequest,
     GateDecision,
+    StageRun,
 )
 from redops.contexts.governance.domain.value_objects import (
     ApprovalOutcome,
     AssetVersionRef,
     GateDisposition,
+    StageStatus,
+    StageTransition,
     Waiver,
 )
 
@@ -176,3 +179,97 @@ def decision_from_payload(payload: Mapping[str, Any]) -> GateDecision:
         ),
         tenant_id=str(payload.get("tenant_id", "")),
     )
+
+
+def _transition_to_payload(transition: StageTransition) -> dict[str, Any]:
+    return {
+        "actor": transition.actor,
+        "reason": transition.reason,
+        "occurred_at": transition.occurred_at.isoformat(),
+        "old_status": transition.old_status.value,
+        "new_status": transition.new_status.value,
+        "correlation_id": transition.correlation_id,
+    }
+
+
+def _transition_from_payload(payload: Mapping[str, Any]) -> StageTransition:
+    return StageTransition(
+        actor=str(payload["actor"]),
+        reason=str(payload["reason"]),
+        occurred_at=date.fromisoformat(str(payload["occurred_at"])),
+        old_status=StageStatus(str(payload["old_status"])),
+        new_status=StageStatus(str(payload["new_status"])),
+        correlation_id=str(payload["correlation_id"]),
+    )
+
+
+def stage_run_to_payload(run: StageRun) -> dict[str, Any]:
+    """Serialise a ``StageRun`` into the JSONB payload the table stores.
+
+    Every authority- and progress-bearing field is emitted -- the assigned
+    owner, status, entered and exited timestamps, the exact accepted or waived
+    ``GateDecision`` the stage completed on, and the full transition log -- so a
+    reloaded run reports the same verified progress and audit history rather
+    than a synthesised placeholder (SPEC.md sections 3 and 4). The nested
+    decisions reuse ``decision_to_payload``, so a run cannot round-trip a laxer
+    decision than the ledger stores.
+    """
+    return {
+        "engagement": run.engagement,
+        "stage_number": run.stage_number,
+        "template_version": run.template_version,
+        "assigned_owner": run.assigned_owner,
+        "tenant_id": run.tenant_id,
+        "status": run.status.value,
+        "entered_at": _date_to_text(run.entered_at),
+        "exited_at": _date_to_text(run.exited_at),
+        "accepted_decision": (
+            decision_to_payload(run.accepted_decision)
+            if run.accepted_decision is not None
+            else None
+        ),
+        "waiver_decision": (
+            decision_to_payload(run.waiver_decision)
+            if run.waiver_decision is not None
+            else None
+        ),
+        "transitions": [
+            _transition_to_payload(transition) for transition in run.transitions
+        ],
+    }
+
+
+def stage_run_from_payload(payload: Mapping[str, Any]) -> StageRun:
+    """Rebuild a ``StageRun`` from a stored payload.
+
+    Construction re-runs the aggregate invariants and the persisted transition
+    log is restored through ``restore_history`` so the audit history is not
+    replayed through the state machine. A payload storage cannot legally hold
+    (a blank owner, an unknown status, a versionless nested decision) raises
+    here rather than being read back as a completed stage.
+    """
+    accepted = payload.get("accepted_decision")
+    waiver = payload.get("waiver_decision")
+    run = StageRun(
+        engagement=str(payload["engagement"]),
+        stage_number=int(payload["stage_number"]),
+        template_version=str(payload["template_version"]),
+        assigned_owner=str(payload["assigned_owner"]),
+        tenant_id=str(payload.get("tenant_id", "")),
+        status=StageStatus(str(payload["status"])),
+        entered_at=_date_from_text(payload.get("entered_at")),
+        exited_at=_date_from_text(payload.get("exited_at")),
+        accepted_decision=(
+            decision_from_payload(accepted) if accepted is not None else None
+        ),
+        waiver_decision=(
+            decision_from_payload(waiver) if waiver is not None else None
+        ),
+    )
+    run.restore_history(
+        tuple(
+            _transition_from_payload(transition)
+            for transition in payload.get("transitions", ())
+        )
+    )
+    return run

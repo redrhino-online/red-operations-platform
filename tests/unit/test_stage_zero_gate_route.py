@@ -35,9 +35,13 @@ class StageZeroGateRouteTests(unittest.TestCase):
         try:
             from fastapi.testclient import TestClient
             from redops.api.app import create_app
-            from redops.api.routes import get_gate_ledger_repository
+            from redops.api.routes import (
+                get_gate_ledger_repository,
+                get_stage_run_repository,
+            )
             from redops.contexts.governance.infrastructure.repositories import (
                 InMemoryGateLedgerRepository,
+                InMemoryStageRunRepository,
             )
         except Exception as exc:  # pragma: no cover - depends on environment
             raise unittest.SkipTest(
@@ -46,12 +50,18 @@ class StageZeroGateRouteTests(unittest.TestCase):
         cls.test_client = TestClient
         cls.create_app = staticmethod(create_app)
         cls.dependency = staticmethod(get_gate_ledger_repository)
+        cls.run_dependency = staticmethod(get_stage_run_repository)
         cls.repository_class = staticmethod(InMemoryGateLedgerRepository)
+        cls.run_repository_class = staticmethod(InMemoryStageRunRepository)
 
     def setUp(self) -> None:
         self.app = self.create_app()
         self.repository = self.repository_class()
+        self.run_repository = self.run_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
+        self.app.dependency_overrides[self.run_dependency] = (
+            lambda: self.run_repository
+        )
         self.client = self.test_client(self.app)
 
     def tearDown(self) -> None:
@@ -147,6 +157,26 @@ class StageZeroGateRouteTests(unittest.TestCase):
             },
             {(kind.value, 1) for kind in self._canonical_kinds()},
         )
+
+    def test_the_stage_run_is_persisted_with_its_completion(self) -> None:
+        response = self.client.post(self.url(), json=self.payload())
+
+        self.assertEqual(response.status_code, 201, response.text)
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+        from redops.contexts.governance.domain.value_objects import StageStatus
+
+        run = self.run_repository.load(
+            stage_zero_to_ten_template().version, "ws-3f", 0, TENANT
+        )
+        self.assertIsNotNone(run)
+        self.assertEqual(StageStatus.COMPLETE, run.status)
+        self.assertEqual(OWNER, run.assigned_owner)
+        self.assertEqual(TENANT, run.tenant_id)
+        self.assertEqual(date(2026, 10, 2), run.entered_at)
+        self.assertEqual(date(2026, 10, 2), run.exited_at)
 
     @staticmethod
     def _canonical_kinds():

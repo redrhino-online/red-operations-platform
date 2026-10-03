@@ -31,12 +31,16 @@ from redops.contexts.engagement.domain.value_objects import (
     IntakeAssetKind,
     IntakePackage,
 )
-from redops.contexts.governance.application.ports import GateLedgerRepository
+from redops.contexts.governance.application.ports import (
+    GateLedgerRepository,
+    StageRunRepository,
+)
 from redops.contexts.governance.domain.entities import StageRun
 from redops.contexts.governance.domain.errors import GovernanceError
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
 from redops.contexts.governance.infrastructure.repositories import (
     gate_ledger_repository_from_env,
+    stage_run_repository_from_env,
 )
 from redops.contexts.knowledge.domain.entities import Claim
 from redops.contexts.knowledge.domain.errors import KnowledgeError
@@ -64,6 +68,23 @@ def get_gate_ledger_repository() -> Iterator[GateLedgerRepository]:
     """
 
     repository = gate_ledger_repository_from_env(os.environ.get("DATABASE_URL"))
+    try:
+        yield repository
+    finally:
+        repository.close()
+
+
+def get_stage_run_repository() -> Iterator[StageRunRepository]:
+    """Provide the configured stage run seam to the API (SPEC.md section 6).
+
+    The dependency owns one adapter for the request and releases any connection
+    it opened when the request ends. The store is chosen once from
+    ``DATABASE_URL``; a set-but-unusable configuration raises before the route
+    runs, so a deployment cannot mistake a process-local stage run store for a
+    durable one (SPEC.md sections 3 and 4).
+    """
+
+    repository = stage_run_repository_from_env(os.environ.get("DATABASE_URL"))
     try:
         yield repository
     finally:
@@ -104,6 +125,7 @@ def record_stage_zero_gate(
     tenant_id: str,
     body: RecordStageZeroGateRequest,
     repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
+    run_repository: StageRunRepository = Depends(get_stage_run_repository),
 ) -> dict[str, Any]:
     """Record the stage 0 "Production Ready" gate through the use case seam.
 
@@ -113,7 +135,11 @@ def record_stage_zero_gate(
     ``GateLedgerRepository`` port, runs ``RecordStageZeroGateHandler`` and
     appends the resulting ``GateDecision``. The response reports the pinned
     decision (exact asset versions, reviewer, disposition) the gate authorized
-    downstream use with. Every integrity rule -- canonical kinds, exact versions,
+    downstream use with. The stage 0 ``StageRun`` is loaded-or-created and
+    upserted through the ``StageRunRepository`` port in the same operation, so
+    the stage's assigned owner, status, entered/exited timestamps and transition
+    log are durable alongside the decision, not synthesised per request.
+    Every integrity rule -- canonical kinds, exact versions,
     owner/approver authority, sourced evidence and the tenant boundary -- is
     enforced by the domain; a rejection is a named 422 and never a partial write
     (SPEC.md sections 3, 4, 9 and 11). The path tenant, not the body, is the
@@ -164,13 +190,18 @@ def record_stage_zero_gate(
                 for asset in body.assets
             ),
         )
-        stage_run = StageRun(
-            engagement=workspace.workspace_id,
-            stage_number=0,
-            template_version=template.version,
-            assigned_owner=body.stage_owner,
+        stage_run = run_repository.load(
+            template.version, workspace.workspace_id, 0, tenant_id
         )
-        stage_run.start(
+        if stage_run is None:
+            stage_run = StageRun(
+                engagement=workspace.workspace_id,
+                stage_number=0,
+                template_version=template.version,
+                assigned_owner=body.stage_owner,
+                tenant_id=tenant_id,
+            )
+        stage_run.record_activity(
             actor=body.stage_owner,
             reason="stage 0 intake work began",
             on=body.on,
@@ -196,6 +227,7 @@ def record_stage_zero_gate(
         ledger = repository.load(template, tenant_id)
         decision = RecordStageZeroGateHandler().handle(command, ledger=ledger)
         repository.append(decision)
+        run_repository.save(stage_run)
     except (EngagementError, GovernanceError, KnowledgeError, ValueError) as exc:
         raise HTTPException(
             status_code=422,

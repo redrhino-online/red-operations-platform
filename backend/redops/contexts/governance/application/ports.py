@@ -21,7 +21,11 @@ from __future__ import annotations
 
 import abc
 
-from redops.contexts.governance.domain.entities import GateDecision, GateLedger
+from redops.contexts.governance.domain.entities import (
+    GateDecision,
+    GateLedger,
+    StageRun,
+)
 from redops.contexts.governance.domain.value_objects import StageTemplate
 
 
@@ -69,5 +73,59 @@ class GateLedgerRepository(abc.ABC):
         adapter that needs it rather than leaking into the port's data contract
         (SPEC.md section 6).
         """
+
+        return None
+
+
+class StageRunRepository(abc.ABC):
+    """Durable store of production ``StageRun`` progress per client and stage.
+
+    SPEC.md section 3 makes ``StageRun`` a core aggregate whose fields are the
+    engagement, stage number, template version, assigned owner, status and the
+    entered and exited timestamps, and section 4 requires a stage to complete
+    only through an accepted gate rather than activity, recording every
+    transition actor, reason, timestamp, old and new status, and correlation ID.
+    That progress cannot be reconstructed from the append-only ``GateDecision``
+    ledger alone -- a Working stage with no decision, its assigned owner and the
+    instant it was entered are not gate decisions -- so the stage run is stored
+    behind its own tenant-scoped port and survives a process restart, shared
+    across the API and worker processes (SPEC.md section 6).
+
+    The port is deliberately narrow: load the run for one client's engagement
+    and stage, or save one. It is keyed by tenant because every client resource
+    belongs to exactly one client and a run from one client's workspace must
+    never be read back into another's (SPEC.md sections 3 and 9).
+    """
+
+    @abc.abstractmethod
+    def load(
+        self,
+        template_version: str,
+        engagement: str,
+        stage_number: int,
+        tenant_id: str,
+    ) -> StageRun | None:
+        """Return the client's run for one engagement stage, or ``None``.
+
+        A missing run is a stage that has not been started, not an error. The
+        returned run carries the assigned owner, status, entered/exited
+        timestamps and restored transition log, so the production view reports
+        verified progress rather than a synthesised placeholder.
+        """
+
+    @abc.abstractmethod
+    def save(self, run: StageRun) -> None:
+        """Persist one run's current progress for its client.
+
+        A run that carries no tenant cannot be stored, because it would be a
+        client resource with no client to scope it to (SPEC.md sections 3 and
+        9). Saving upserts the run identified by (tenant, engagement, template
+        version, stage number); the status and timestamps are progress, so a
+        later save is the stage moving forward, not a new history -- the
+        append-only record of each move is the run's own transition log.
+        """
+
+    def close(self) -> None:
+        """Release any resource the adapter owns for the caller's request."""
 
         return None

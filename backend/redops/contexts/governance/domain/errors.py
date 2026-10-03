@@ -70,6 +70,18 @@ class CrossTenantGateError(GovernanceError, ValueError):
     """
 
 
+class CrossTenantStageRunError(GovernanceError, ValueError):
+    """A stage run was stored or read for the wrong client.
+
+    SPEC.md sections 3 and 9 require every tenant resource to carry a tenant id
+    and every query to be tenant scoped. A ``StageRun`` is a client resource: a
+    run stored for one client's engagement must never be read back into
+    another's, and a run with no tenant cannot be persisted as if it belonged to
+    a client. A durable load without a tenant key, or a save of an unscoped run,
+    is refused rather than silently answered with an empty or shared run.
+    """
+
+
 class AmbiguousAssetPackageError(AssetPackageMismatchError):
     """A package pins more than one version of the same asset kind.
 

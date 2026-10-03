@@ -299,5 +299,127 @@ class PostgresGateLedgerRepositoryTests(unittest.TestCase):
             self.repository.load(self.template, TENANT)
 
 
+@unittest.skipUnless(RUN, SKIP_REASON)
+class PostgresStageRunRepositoryTests(unittest.TestCase):
+    """The ``StageRunRepository`` contract against the real PostgreSQL schema."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        from alembic import command
+        from alembic.config import Config
+
+        cls._psycopg = importlib.import_module("psycopg")
+        config = Config(str(REPO_ROOT / "alembic.ini"))
+        config.set_main_option(
+            "script_location",
+            str(REPO_ROOT / "backend/redops/shared/persistence/migrations"),
+        )
+        config.set_main_option("sqlalchemy.url", DATABASE_URL)
+        command.upgrade(config, "head")
+        cls._connection = cls._psycopg.connect(DATABASE_URL)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._connection.close()
+
+    def setUp(self) -> None:
+        from redops.contexts.governance.infrastructure.repositories import (
+            PostgresStageRunRepository,
+        )
+
+        self.template = stage_zero_to_ten_template()
+        self.runs = PostgresStageRunRepository(self._connection)
+        self._connection.rollback()
+        with self._connection.cursor() as cursor:
+            cursor.execute("TRUNCATE stage_runs RESTART IDENTITY")
+        self._connection.commit()
+
+    def test_the_factory_builds_the_postgres_adapter_from_a_database_url(
+        self,
+    ) -> None:
+        from redops.contexts.governance.infrastructure.repositories import (
+            PostgresStageRunRepository,
+            stage_run_repository_from_env,
+        )
+
+        repository = stage_run_repository_from_env(DATABASE_URL)
+        try:
+            self.assertIsInstance(repository, PostgresStageRunRepository)
+            self.assertIsNone(
+                repository.load(self.template.version, "ws-3f", 0, TENANT)
+            )
+        finally:
+            repository.close()
+
+    def test_a_run_survives_a_reload_and_a_resave_upserts(self) -> None:
+        from redops.contexts.governance.domain.entities import StageRun
+        from redops.contexts.governance.domain.value_objects import StageStatus
+
+        run = StageRun(
+            engagement="ws-3f",
+            stage_number=0,
+            template_version=self.template.version,
+            assigned_owner=OWNER,
+            tenant_id=TENANT,
+        )
+        run.start(
+            actor=OWNER, reason="intake work began", on=ON, correlation_id=CORRELATION
+        )
+        self.runs.save(run)
+
+        reloaded = self.runs.load(self.template.version, "ws-3f", 0, TENANT)
+        self.assertEqual(StageStatus.WORKING, reloaded.status)
+        self.assertEqual(OWNER, reloaded.assigned_owner)
+        self.assertEqual(ON, reloaded.entered_at)
+        self.assertEqual(1, len(reloaded.transitions))
+
+        run.submit_for_review(
+            actor=OWNER,
+            reason="sent to review",
+            on=ON,
+            correlation_id=CORRELATION,
+        )
+        self.runs.save(run)
+
+        reloaded_again = self.runs.load(self.template.version, "ws-3f", 0, TENANT)
+        self.assertEqual(StageStatus.IN_REVIEW, reloaded_again.status)
+        self.assertEqual(2, len(reloaded_again.transitions))
+
+    def test_a_run_is_not_read_back_for_another_client(self) -> None:
+        from redops.contexts.governance.domain.entities import StageRun
+
+        run = StageRun(
+            engagement="ws-3f",
+            stage_number=0,
+            template_version=self.template.version,
+            assigned_owner=OWNER,
+            tenant_id=TENANT,
+        )
+        run.start(
+            actor=OWNER, reason="intake work began", on=ON, correlation_id=CORRELATION
+        )
+        self.runs.save(run)
+
+        self.assertIsNone(
+            self.runs.load(self.template.version, "ws-3f", 0, "client-other")
+        )
+
+    def test_save_refuses_an_unscoped_run(self) -> None:
+        from redops.contexts.governance.domain.entities import StageRun
+        from redops.contexts.governance.domain.errors import (
+            CrossTenantStageRunError,
+        )
+
+        run = StageRun(
+            engagement="ws-3f",
+            stage_number=0,
+            template_version=self.template.version,
+            assigned_owner=OWNER,
+        )
+
+        with self.assertRaises(CrossTenantStageRunError):
+            self.runs.save(run)
+
+
 if __name__ == "__main__":
     unittest.main()
