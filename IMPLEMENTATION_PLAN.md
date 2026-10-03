@@ -4,7 +4,74 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T175505Z (Ralph cycle, this run): selected item was the durable
+- Cycle 2026-10-03T175842Z (Ralph cycle, this run): selected item was the durable
+  `CampaignMessageRepository` for the Commercial context (port, mapper, migration
+  and PostgreSQL adapter) plus the resolve-not-restate rule for the stage 7 to 10
+  gates, the exact next item the prior cycle named (SPEC.md sections 3, 4, 6 and
+  9; queue Q6). The stage 7 to 10 routes re-stated the approved stage 6 message
+  from the request body, so a later gate could silently declare a different
+  message after the stage 6 "Campaign Message Approved" checkpoint. It outranked
+  the Next.js `frontend/` shell (DoD 6, blocked on the workflow engine Q5 via
+  Q15), the larger required-kind wiring (Q28, which changes every stage's asset
+  package and route) and the stage 7 amplifier store (the next re-stated asset
+  after the message). The loop prioritizes exact approved asset versions and
+  persistence over downstream features.
+- Outcome: new Commercial application port `CampaignMessageRepository`
+  (`backend/redops/contexts/commercial/application/ports.py`);
+  `campaign_message_to_payload`/`campaign_message_from_payload` in the Commercial
+  mapper round-trip the full approved message (state, pinned `MethodReference`,
+  all twelve canonical message parts and the nested grounding `OfferVersion`,
+  serialised through the existing `offer_to_payload`/`offer_from_payload` helpers
+  so the two shapes cannot drift). `InMemoryCampaignMessageRepository` and
+  `PostgresCampaignMessageRepository` refuse a non-approved message
+  (`CampaignMessageReadinessError`), a same-id different-body re-statement
+  (`CampaignMessageVersionConflictError`) and a blank tenant
+  (`CampaignMessageVersionTenantBoundaryError`). Migration
+  `0005_campaign_messages` creates `campaign_messages(id, tenant_id NOT NULL,
+  message_id, message JSONB, recorded_at, UNIQUE(tenant_id, message_id))`.
+  `api/routes.py::get_campaign_message_repository` is an env-selected generator
+  like the method and offer stores, and `_approve_method_offer_message` now
+  resolves the message: the first gate stores the approved candidate, a later gate
+  reuses the stored message, a different same-id body is refused (422). All five
+  stage 6 to 10 routes take the new dependency.
+- Evidence: `make check` -> 1840 passed, 1 skipped, 650 subtests; pyflakes clean.
+  New `tests/unit/commercial/test_campaign_message_repository.py` (7 plus 3
+  mapper tests) and `test_campaign_message_postgres.py` (8, against the compose
+  DB, exercising the real migration), a stage 6 re-statement refusal test in
+  `tests/unit/test_stage_six_gate_route.py`, an app-smoke message-dep default
+  test, and `tests/unit/shared/test_migrate.py` head now `0005_campaign_messages`.
+  The stage 7 to 10 route tests thread the message dep override. `make done`
+  clears [1/6]-[4/6] and still fails at [5/6] (`frontend/` missing).
+- New findings: the durable message store now satisfies DoD condition 4 for
+  `CampaignMessage`; the stage 6 message is tenant-scoped, immutable and shared
+  across processes, and stage 7 to 10 ground on it. The Authority Amplifier, the
+  funnel and launch QA are still re-stated from the request (no store), so the
+  resolve-not-restate rule for the stage 7 amplifier remains open. The offer
+  store and the message store both nest one aggregate inside another (the message
+  payload embeds the offer) and both round-trip through the same mapper helpers.
+- Blockers: `frontend/` (DoD condition 6, Q32) is blocked on the workflow engine
+  Q5 via Q15; request idempotency (Q16) blocked on the same; RLS is a WHERE clause
+  only (ADR 0004); no durable amplifier, funnel or launch-QA store; the condition
+  3 retrieval, background worker and artifact-URL layers are unbuilt; the
+  remaining canon gap register entries need named-owner decisions.
+- Highest priority ready next item: apply the same resolve-not-restate rule to
+  the stage 7 `AuthorityAmplifier` -- a durable amplifier store (port, mapper,
+  migration and adapter) so the stage 8 to 10 gates ground on the exact approved
+  stage 7 amplifier (its dual script-before-visual approval) instead of a
+  re-stated request body (SPEC.md sections 3, 4; DoD condition 1). Stage 7
+  "Authority Amplifier"; required asset: the approved `AuthorityAmplifier`
+  (checkpoint "Authority Amplifier Approved"; approver: script and creative
+  authorities per canon 21); blocked downstream dependency: the stage 8 Funnel
+  Complete gate. Prerequisite: none beyond the method, offer and message stores
+  now in place. The amplifier nests the approved `CampaignMessage` and the
+  approved method, so its mapper will reuse the message and method mappers.
+  Alternative gate-integrity item: wire the implemented canon assets as required
+  gate kinds (Q28) -- larger, changes the stage asset packages and routes. Canon
+  gap register unchanged this cycle; no new gap identified.
+
+### Prior cycle (2026-10-03T175505Z)
+
+- Cycle 2026-10-03T175505Z (Ralph cycle): selected item was the durable
   `OfferVersionRepository` for the Commercial context (port, mapper, migration and
   PostgreSQL adapter) plus the resolve-not-restate rule for the stage 6 to 10
   gates, the exact next item the prior cycle named (SPEC.md sections 3, 4, 6 and
@@ -1200,7 +1267,7 @@ stalls:
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
 | Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key |
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test |
-| Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models |
+| Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004) and campaign messages (0005); amplifier, funnel and launch-QA aggregates remain |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
 | Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams |
 | Q9 | REST `/clients` and `/clients/{id}/sources` | api | Q7 | route tests, tenant scoping, pagination |

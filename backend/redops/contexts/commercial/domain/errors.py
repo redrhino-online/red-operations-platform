@@ -287,6 +287,37 @@ class OfferVersionTenantBoundaryError(CommercialError):
     """
 
 
+class CampaignMessageReadinessError(CommercialError):
+    """An approved campaign message store was asked to hold an unapproved message.
+
+    SPEC.md sections 3 and 4: a passing gate pins the exact approved asset
+    version, so the stage 6 to 10 gates ground on the stage 6 ``CampaignMessage``
+    a prior gate approved at "Campaign Message Approved". A message that has not
+    passed that checkpoint cannot be stored as the exact approved version.
+    """
+
+
+class CampaignMessageVersionConflictError(CommercialError):
+    """An approved message was re-stated under the same id with different content.
+
+    SPEC.md sections 3 and 4: a passing gate pins the exact approved asset
+    version, and a later gate resolves that version rather than re-declaring it.
+    An approved message is immutable under its message id: a change must be a new
+    revision with its own identity, so a same-id request body that differs cannot
+    silently replace the message a prior gate grounded on.
+    """
+
+
+class CampaignMessageVersionTenantBoundaryError(CommercialError):
+    """An approved message was stored or resolved without a client scope.
+
+    SPEC.md sections 3 and 9 make ``tenant_id`` on every tenant resource and
+    query a hard invariant. An approved message is a client resource, so reading
+    or writing one without a non-blank tenant would leak across clients or create
+    an orphaned record.
+    """
+
+
 class InvalidCampaignMessagePackageError(CommercialError, ValueError):
     """A stage 6 reviewed asset package was built without identity or version.
 

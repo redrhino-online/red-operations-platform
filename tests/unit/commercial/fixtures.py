@@ -163,3 +163,12 @@ def campaign_message(offer: OfferVersion | None = None, **overrides) -> Campaign
     }
     values.update(overrides)
     return CampaignMessage(**values)
+
+
+def approved_campaign_message(
+    offer: OfferVersion | None = None, **overrides
+) -> CampaignMessage:
+    """An approved stage 6 message congruent with the approved method and offer."""
+
+    approved = approved_method()
+    return campaign_message(offer=offer, **overrides).approve((approved,))

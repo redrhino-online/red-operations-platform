@@ -42,6 +42,7 @@ class StageSixGateRouteTests(unittest.TestCase):
             from fastapi.testclient import TestClient
             from redops.api.app import create_app
             from redops.api.routes import (
+                get_campaign_message_repository,
                 get_gate_ledger_repository,
                 get_method_version_repository,
                 get_offer_version_repository,
@@ -59,6 +60,7 @@ class StageSixGateRouteTests(unittest.TestCase):
                 CANONICAL_INTAKE_KINDS,
             )
             from redops.contexts.commercial.infrastructure.repositories import (
+                InMemoryCampaignMessageRepository,
                 InMemoryOfferVersionRepository,
             )
             from redops.contexts.governance.infrastructure.repositories import (
@@ -78,6 +80,9 @@ class StageSixGateRouteTests(unittest.TestCase):
         cls.run_dependency = staticmethod(get_stage_run_repository)
         cls.method_dependency = staticmethod(get_method_version_repository)
         cls.offer_dependency = staticmethod(get_offer_version_repository)
+        cls.message_dependency = staticmethod(
+            get_campaign_message_repository
+        )
         cls.repository_class = staticmethod(InMemoryGateLedgerRepository)
         cls.run_repository_class = staticmethod(InMemoryStageRunRepository)
         cls.method_repository_class = staticmethod(
@@ -85,6 +90,9 @@ class StageSixGateRouteTests(unittest.TestCase):
         )
         cls.offer_repository_class = staticmethod(
             InMemoryOfferVersionRepository
+        )
+        cls.message_repository_class = staticmethod(
+            InMemoryCampaignMessageRepository
         )
         cls.intake_kinds = CANONICAL_INTAKE_KINDS
         cls.diagnosis_kinds = CANONICAL_DIAGNOSIS_KINDS
@@ -100,6 +108,7 @@ class StageSixGateRouteTests(unittest.TestCase):
         self.run_repository = self.run_repository_class()
         self.method_repository = self.method_repository_class()
         self.offer_repository = self.offer_repository_class()
+        self.message_repository = self.message_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
@@ -109,6 +118,9 @@ class StageSixGateRouteTests(unittest.TestCase):
         )
         self.app.dependency_overrides[self.offer_dependency] = (
             lambda: self.offer_repository
+        )
+        self.app.dependency_overrides[self.message_dependency] = (
+            lambda: self.message_repository
         )
         self.client = self.test_client(self.app)
 
@@ -772,6 +784,27 @@ class StageSixGateRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(
             response.json()["detail"]["error"], "OfferVersionConflictError"
+        )
+
+    def test_re_stating_the_approved_message_with_different_content_is_refused(
+        self,
+    ) -> None:
+        self.seed_stage_five()
+        self.assertEqual(
+            self.client.post(self.url(), json=self.payload()).status_code, 201
+        )
+
+        response = self.client.post(
+            self.url(),
+            json=self.payload(
+                message=self._message(story="a different owner story")
+            ),
+        )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"],
+            "CampaignMessageVersionConflictError",
         )
 
 

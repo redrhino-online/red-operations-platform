@@ -17,16 +17,26 @@ The stage 4 Signature Solution inside the delivery specification is serialised
 with the Method context's own mapper helper so the two contexts cannot drift on
 the shape of that shared asset.
 
-Canon: not applicable. This is a persistence mapper for an offer aggregate, not a
-method artifact, so no reference-model file informs its shape.
+An approved stage 6 ``CampaignMessage`` is serialised the same way: every
+authority-bearing field -- its grounding offer, its pinned ``MethodReference`` and
+all twelve canonical message parts -- round-trips through
+``CampaignMessage.__post_init__`` on load, and its nested offer reuses the offer
+mapper so the two cannot drift (SPEC.md sections 3 and 4).
+
+Canon: not applicable. This is a persistence mapper for a commercial aggregate,
+not a method artifact, so no reference-model file informs its shape.
 """
 
 from __future__ import annotations
 
 from typing import Any, Mapping
 
-from redops.contexts.commercial.domain.entities import OfferVersion
+from redops.contexts.commercial.domain.entities import (
+    CampaignMessage,
+    OfferVersion,
+)
 from redops.contexts.commercial.domain.value_objects import (
+    CampaignMessageState,
     DeliverySpecification,
     MethodReference,
     OfferState,
@@ -192,5 +202,83 @@ def offer_from_payload(payload: Mapping[str, Any]) -> OfferVersion:
         delivery_specification=(
             _delivery_from_payload(delivery) if delivery is not None else None
         ),
+        review_reason=payload.get("review_reason"),
+    )
+
+
+def campaign_message_to_payload(message: CampaignMessage) -> dict[str, Any]:
+    """Serialise an approved stage 6 message into the JSONB payload the table stores.
+
+    The nested grounding offer is emitted through ``offer_to_payload`` so the
+    message cannot drift from the offer shape, and the twelve canonical message
+    parts keep their declared order. ``state`` and ``review_reason`` are stored so
+    a reload re-validates the exact approved version rather than a laxer message.
+    """
+
+    return {
+        "message_id": message.message_id,
+        "tenant_id": message.tenant_id,
+        "offer": offer_to_payload(message.offer),
+        "owner": message.owner,
+        "avatar": message.avatar,
+        "currency": message.currency,
+        "problem": message.problem,
+        "promise": message.promise,
+        "cta": message.cta,
+        "method_reference": _method_ref_to_payload(message.method_reference),
+        "product_offer_id": message.product_offer_id,
+        "problem_hierarchy": list(message.problem_hierarchy),
+        "desired_outcome": message.desired_outcome,
+        "proof_objections": list(message.proof_objections),
+        "story": message.story,
+        "method_explanation": message.method_explanation,
+        "lead_magnet": message.lead_magnet,
+        "hook": message.hook,
+        "angles": list(message.angles),
+        "landing_message": message.landing_message,
+        "authority_amplifier_outline": message.authority_amplifier_outline,
+        "state": message.state.value,
+        "review_reason": message.review_reason,
+    }
+
+
+def campaign_message_from_payload(payload: Mapping[str, Any]) -> CampaignMessage:
+    """Rebuild an approved message from a stored payload for re-validation.
+
+    Construction re-runs the aggregate invariants. A payload that storage cannot
+    legally hold (a blank identity, a missing message part, a grounding offer from
+    another tenant) raises here rather than being read back as an approved
+    message.
+    """
+
+    return CampaignMessage(
+        message_id=str(payload["message_id"]),
+        tenant_id=str(payload["tenant_id"]),
+        offer=offer_from_payload(payload["offer"]),
+        owner=str(payload["owner"]),
+        avatar=str(payload["avatar"]),
+        currency=str(payload["currency"]),
+        problem=str(payload["problem"]),
+        promise=str(payload["promise"]),
+        cta=str(payload["cta"]),
+        method_reference=_method_ref_from_payload(payload["method_reference"]),
+        product_offer_id=str(payload["product_offer_id"]),
+        problem_hierarchy=tuple(
+            str(entry) for entry in payload["problem_hierarchy"]
+        ),
+        desired_outcome=str(payload["desired_outcome"]),
+        proof_objections=tuple(
+            str(entry) for entry in payload["proof_objections"]
+        ),
+        story=str(payload["story"]),
+        method_explanation=str(payload["method_explanation"]),
+        lead_magnet=str(payload["lead_magnet"]),
+        hook=str(payload["hook"]),
+        angles=tuple(str(entry) for entry in payload["angles"]),
+        landing_message=str(payload["landing_message"]),
+        authority_amplifier_outline=str(
+            payload["authority_amplifier_outline"]
+        ),
+        state=CampaignMessageState(str(payload["state"])),
         review_reason=payload.get("review_reason"),
     )

@@ -68,6 +68,9 @@ class StageTenGateRouteTests(unittest.TestCase):
         cls.offer_dependency = staticmethod(
             StageNineGateRouteTests.offer_dependency
         )
+        cls.message_dependency = staticmethod(
+            StageNineGateRouteTests.message_dependency
+        )
         cls.repository_class = staticmethod(
             StageNineGateRouteTests.repository_class
         )
@@ -80,6 +83,9 @@ class StageTenGateRouteTests(unittest.TestCase):
         cls.offer_repository_class = staticmethod(
             StageNineGateRouteTests.offer_repository_class
         )
+        cls.message_repository_class = staticmethod(
+            StageNineGateRouteTests.message_repository_class
+        )
         cls.baseline_kinds = CANONICAL_BASELINE_KINDS
 
     def setUp(self) -> None:
@@ -90,6 +96,7 @@ class StageTenGateRouteTests(unittest.TestCase):
         self.run_repository = self.run_repository_class()
         self.method_repository = self.method_repository_class()
         self.offer_repository = self.offer_repository_class()
+        self.message_repository = self.message_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
@@ -99,6 +106,9 @@ class StageTenGateRouteTests(unittest.TestCase):
         )
         self.app.dependency_overrides[self.offer_dependency] = (
             lambda: self.offer_repository
+        )
+        self.app.dependency_overrides[self.message_dependency] = (
+            lambda: self.message_repository
         )
         self.client = TestClient(self.app)
 

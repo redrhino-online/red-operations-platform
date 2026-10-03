@@ -132,3 +132,23 @@ class AppSmokeTest(unittest.TestCase):
         finally:
             if previous is not None:
                 os.environ["DATABASE_URL"] = previous
+
+    def test_campaign_message_dependency_defaults_to_the_process_local_adapter(
+        self,
+    ) -> None:
+        import os
+
+        from redops.api.routes import get_campaign_message_repository
+        from redops.contexts.commercial.infrastructure.repositories import (
+            InMemoryCampaignMessageRepository,
+        )
+
+        previous = os.environ.pop("DATABASE_URL", None)
+        try:
+            repository = next(get_campaign_message_repository())
+            self.assertIsInstance(
+                repository, InMemoryCampaignMessageRepository
+            )
+        finally:
+            if previous is not None:
+                os.environ["DATABASE_URL"] = previous
