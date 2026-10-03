@@ -721,3 +721,15 @@ class MarketReachError(CommercialError):
     """
 
 
+class MarketReachBoundaryError(CommercialError):
+    """A market reach confirmation mixed estimates that do not size one market.
+
+    SPEC.md sections 3 and 9 make ``tenant_id`` on every tenant resource and
+    query a hard invariant, and the canon confirms one market across more than
+    one network so you know you are "climbing the right mountain" (canon files
+    02 and 03). A confirmation whose estimates span more than one client, or that
+    includes something that is not a typed estimate, cannot be represented as one
+    market reach check.
+    """
+
+

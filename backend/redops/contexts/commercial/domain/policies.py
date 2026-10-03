@@ -23,6 +23,7 @@ from redops.contexts.commercial.domain.errors import (
     ContentSyndicationError,
     FunnelFitError,
     MarketAwarenessTargetingError,
+    MarketReachBoundaryError,
     MarketReachError,
     OfferReadinessError,
     TargetMarketMatchError,
@@ -479,8 +480,9 @@ class MarketReachPolicy:
     (canon README, the Market station, citing canon files 02 and 03). The canon
     also confirms the market across more than one network "in addition to
     Facebook ... just to make sure you're climbing the right mountain" (canon
-    file 03), so a single-platform litmus is not yet a confirmed reach check.
-    Both checks are caller-invoked, so the policy records a defensible stage 1
+    file 03), so a single-platform litmus is not yet a confirmed reach check and
+    a confirmation that mixes more than one client is not one market. Both
+    checks are caller-invoked, so the policy records a defensible stage 1
     market reach decision without inventing a universal audience floor.
     """
 
@@ -507,6 +509,20 @@ class MarketReachPolicy:
         self, estimates: Iterable[AudienceReachEstimate]
     ) -> None:
         estimates = tuple(estimates)
+        for estimate in estimates:
+            if not isinstance(estimate, AudienceReachEstimate):
+                raise MarketReachBoundaryError(
+                    "the canon confirms one market across networks, so a market "
+                    "reach confirmation requires typed audience reach estimates"
+                )
+        tenants = {estimate.tenant_id for estimate in estimates}
+        if len(tenants) > 1:
+            raise MarketReachBoundaryError(
+                "the canon confirms one market across networks so you know you "
+                f"are climbing the right mountain, but these estimates span "
+                f"{len(tenants)} clients, so they do not size one reachable "
+                "market"
+            )
         platforms = {estimate.platform for estimate in estimates}
         if len(platforms) < 2:
             raise MarketReachError(

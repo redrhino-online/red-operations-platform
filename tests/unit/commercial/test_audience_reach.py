@@ -29,6 +29,7 @@ from datetime import date
 from redops.contexts.commercial.domain.errors import (
     AudienceReachObservationError,
     InvalidAudienceReachError,
+    MarketReachBoundaryError,
     MarketReachError,
 )
 from redops.contexts.commercial.domain.policies import MarketReachPolicy
@@ -223,6 +224,24 @@ class MarketReachPolicyTests(unittest.TestCase):
             with self.subTest(estimates=estimates):
                 with self.assertRaises(MarketReachError):
                     MarketReachPolicy().require_multiplatform(estimates)
+
+    def test_a_multi_network_confirmation_must_size_one_client(self):
+        facebook = estimate()
+        linkedin = estimate(
+            estimate_id="reach-other-client-linkedin",
+            tenant_id="another-client",
+            platform=ResearchPlatform.LINKEDIN_SEARCH,
+            estimated_reach=90_000,
+        )
+
+        with self.assertRaises(MarketReachBoundaryError):
+            MarketReachPolicy().require_multiplatform((facebook, linkedin))
+
+    def test_a_multi_network_confirmation_requires_typed_estimates(self):
+        with self.assertRaises(MarketReachBoundaryError):
+            MarketReachPolicy().require_multiplatform(
+                (estimate(), "a LinkedIn search screenshot")
+            )
 
 
 if __name__ == "__main__":
