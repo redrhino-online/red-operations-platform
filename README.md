@@ -62,3 +62,18 @@ The next run reads the changed plan and picks again. The script runs one cycle a
 | `README.md` | Gives a quick map for people. The script does not need to read it. |
 
 OpenCode may also read the repo's own rules, code, tests, Git state, and past run notes to check what is true. The reference model canon and the RED training files are background sources for the product. They are not a license to claim that a client has approved a draft, and the canon is never an authority to spend, publish, or deploy.
+
+## 6. Publishing to Atlas
+
+The application is published to the Atlas Kubernetes cluster's Gitea forge. The `atlas` remote is the app's Gitea repository (`ssh://git@10.0.0.110:2222/atlas-admin/red-operations-platform.git`), not the platform/GitOps repo. The onboarding contract is the atlas repo's `.opencode/skills/atlas-deploy-app` skill.
+
+After each successful cycle the harness commits the change and then publishes it to `atlas` (`RALPH_PUSH_REMOTE`, default `atlas`; publishing is skipped if that remote is not configured). This publishes source only for now: the container build workflow, Helm chart, and Argo CD Application are deferred until the platform has a real HTTP service and `Dockerfile`, following the skill's build/tag/deploy flow.
+
+To publish manually or during development, push the branch, then tag a release to trigger the build:
+
+```bash
+git push atlas main
+git tag -a v0.1.0 -m "red-operations-platform v0.1.0" && git push atlas v0.1.0
+```
+
+The `origin` remote (GitHub) is separate and is pushed deliberately, not by the harness.

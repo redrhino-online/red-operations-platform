@@ -2,7 +2,8 @@
 
 # RED Operations Platform: exactly one OpenCode implementation cycle.
 # Usage: ./ralph_cycle.sh [repository-directory]
-# Optional environment: RALPH_SPEC, RALPH_PLAN, RALPH_CANON, RALPH_OPENCODE, RALPH_MODEL.
+# Optional environment: RALPH_SPEC, RALPH_PLAN, RALPH_CANON, RALPH_OPENCODE,
+# RALPH_MODEL, RALPH_PUSH_REMOTE (default: atlas).
 
 set -Eeuo pipefail
 
@@ -12,6 +13,7 @@ readonly SPEC_FILE="${RALPH_SPEC:-$SCRIPT_DIR/SPEC.md}"
 readonly PLAN_FILE="${RALPH_PLAN:-$SCRIPT_DIR/IMPLEMENTATION_PLAN.md}"
 readonly CANON_DIR="${RALPH_CANON:-$(cd "$SCRIPT_DIR/.." && pwd -P)/canon}"
 readonly OPENCODE_BIN="${RALPH_OPENCODE:-opencode}"
+readonly PUSH_REMOTE="${RALPH_PUSH_REMOTE:-atlas}"
 readonly RUN_DIR="$REPO_DIR/.ralph"
 readonly LOCK_DIR="$RUN_DIR/cycle.lock"
 
@@ -122,5 +124,18 @@ if [[ -n "$(git -C "$REPO_DIR" status --porcelain --untracked-files=all -- .)" ]
   printf 'ralph: committed cycle changes as %s\n' "$(git -C "$REPO_DIR" rev-parse --short HEAD)"
 else
   printf 'ralph: no repository changes to commit\n'
+fi
+
+# Publish to the delivery remote (Atlas Gitea) as changes are tested and
+# committed. Skipped when the remote is not configured.
+if git -C "$REPO_DIR" remote get-url "$PUSH_REMOTE" >/dev/null 2>&1; then
+  push_branch="$(git -C "$REPO_DIR" symbolic-ref --quiet --short HEAD || printf 'main')"
+  if git -C "$REPO_DIR" push "$PUSH_REMOTE" "HEAD:refs/heads/$push_branch"; then
+    printf 'ralph: published %s to %s\n' "$push_branch" "$PUSH_REMOTE"
+  else
+    die "failed to publish $push_branch to remote $PUSH_REMOTE"
+  fi
+else
+  printf 'ralph: publish remote %s not configured; skipping publish\n' "$PUSH_REMOTE"
 fi
 printf 'ralph: cycle finished; review repository diff and %s\n' "$LOG_FILE"
