@@ -299,6 +299,17 @@ Force an Argo sync:
 kubectl -n argocd annotate application redop argocd.argoproj.io/refresh=hard --overwrite
 ```
 
+Throw away onboarding at any time — `scripts/reset_redop_data.sh` clears the
+`/data` volume (onboarding session, company profile, people and approvers,
+episodic memory, ChromaDB index, credentials) and restarts the pods, then proves
+the org is empty through the API (`people == []`, no workspace role). The volume
+itself is kept, so Argo CD's self-heal never fights the reset:
+
+```bash
+make reset-hosted                              # interactive confirmation
+scripts/reset_redop_data.sh --yes              # non-interactive
+```
+
 Retrieve the generated app secrets (generated at first deploy):
 
 ```bash
@@ -369,6 +380,9 @@ python3 -m pyflakes backend/redops tests
 # one harness cycle, or a loop
 make run
 make loop n=5
+
+# wipe hosted onboarding data (asks to confirm)
+make reset-hosted
 
 # cluster
 export KUBECONFIG=~/.kube/atlas-admin.yaml

@@ -12,7 +12,7 @@ HELP_ALIASES := $(shell bash -c 's=help; for ((m=0;m<16;m++)); do out=; for ((i=
 
 COMMAND_ALIASES := $(RUN_ALIASES) $(LOOP_ALIASES) $(HELP_ALIASES)
 
-.PHONY: run loop help $(COMMAND_ALIASES)
+.PHONY: run loop help reset-hosted $(COMMAND_ALIASES)
 .DEFAULT_GOAL := help
 
 $(filter-out run,$(RUN_ALIASES)): run
@@ -23,10 +23,14 @@ help:
 	@printf '%s\n' \
 	  'make run                 Run one Ralph cycle' \
 	  'make loop n=5            Run five sequential Ralph cycles' \
-	  'make run REPO=../fork    Run against a Git checkout in another folder'
+	  'make run REPO=../fork    Run against a Git checkout in another folder' \
+	  'make reset-hosted        Wipe the hosted instance data (onboarding/people)'
 
 run:
 	@"$(RALPH)" "$(REPO)"
+
+reset-hosted:
+	@./scripts/reset_redop_data.sh
 
 loop:
 	@[[ "$(COUNT)" =~ ^[1-9][0-9]*$$ ]] || { printf 'Use: make loop n=5, where n is a positive whole number\n' >&2; exit 2; }
