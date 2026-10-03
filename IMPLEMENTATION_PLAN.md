@@ -4,7 +4,74 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T200006Z (Ralph cycle, this run): selected item was hardening
+- Cycle 2026-10-03T200255Z (Ralph cycle, this run): selected item was hardening
+  the prototype definition-of-done gate so DoD condition 5 (the agent provider
+  path, SPEC.md section 13) can no longer pass unverified. The gate `[1/6]`-`[6/6]`
+  never checked condition 5 at all: `[2/6]` ran the stage 0-10 e2e and the
+  section 11 acceptance coverage (conditions 1 and 2), but nothing asserted "a
+  deterministic fake model gateway drives the e2e; a separate live OpenRouter
+  smoke passes and the LLM adapter logs model, prompt version, usage and trace
+  id". The stage 0-10 e2e drives no agent or model path today (`tests/e2e` uses
+  no `ModelGateway`), so once conditions 2, 3, 6 and 9 were met `make done` could
+  have turned green with condition 5 absent entirely. It is the same class of
+  false stop condition the prior three cycles closed for `[5/6]`, `[3/6]` and
+  `[2/6]`, and it outranks starting Q32: Q32-Q45 are downstream dashboards, and
+  the task prioritizes missing gate integrity over downstream features. No ready
+  method-artifact or stage-gate item remained: Q28 stage 8-10 required kinds are
+  blocked on the named methodology-owner placement decision, Q29 is
+  domain-complete and tested, Q16 is blocked on a workflow write route and a
+  connector idempotency seam, Q3/Q4 are blocked on the ADR 0006 tension and a
+  live key, and Q8's remaining retrieval, worker and artifact-URL layers have no
+  seam yet.
+- Outcome: new standalone `scripts/check_provider_path_coverage.sh` enforces
+  condition 5 against a data-driven contract. `tests/unit/agents/covered-provider-
+  paths.txt` declares each of the three canonical condition 5 parts as `<part-id>
+  <test-file>` (repo-root relative) or `<part-id> uncovered <reason>`; every
+  canonical id (`deterministic-e2e`, `live-openrouter-smoke`, `attribution-log`)
+  must be declared exactly once, each covered file must exist and contain at least
+  one test, and any part still `uncovered` is a named failure listing every
+  uncovered part with its reason. `[2/6]` now runs it after the e2e suite and the
+  acceptance coverage check (`[2/6]` is relabeled "conditions 1, 2 and 5").
+  `attribution-log` is covered by `tests/unit/agents/test_llm_gateway.py`;
+  `deterministic-e2e` (no agent path in the e2e) and `live-openrouter-smoke` (paid,
+  env-gated human proof) are honestly `uncovered`, so condition 5 is unmet and the
+  gate fails. No product authority, gate decision or pipeline stage changed.
+- Evidence: `make check` -> 2257 passed, 2 skipped, 704 subtests; pyflakes clean.
+  New `tests/unit/shared/test_provider_path_coverage_check.py` (10 tests) covers a
+  complete suite passing, a missing directory, a missing manifest, an uncovered
+  part, an undeclared part, an unknown part, a duplicate part, a declared file
+  that is missing, a declared file with no test, and the real suite failing with
+  `deterministic-e2e` and `live-openrouter-smoke` named. `make done` still fails
+  at `[2/6]`, first at the section 11 acceptance coverage (condition 2) and then,
+  once that is closed, at the provider-path coverage (condition 5).
+- New findings: condition 5 was the last entirely unchecked DoD condition. Its
+  deterministic-e2e half is unmet because the stage 0-10 e2e is a pure REST gate
+  driver with no agent/model call; wiring an agent path into the e2e is blocked on
+  Q3 agent registration (the ADR 0006 fork-registration vs DoD condition 7
+  zero-vendor-edit tension). The live-smoke half is a paid, env-gated human proof
+  (Q4).
+- Blockers (unchanged): `frontend/` screens Q32-Q45 are the path to `make done`
+  condition 6; Q8's retrieval, worker and artifact-URL isolation coverage and the
+  condition 2 cross-client-retrieval scenario are blocked until the retrieval,
+  worker and artifact-serving seams exist; Q28 stage 8-10 required kinds blocked
+  on the named methodology-owner placement decision; Q16 idempotency keys (and the
+  condition 2 duplicate-delivery scenario) blocked on a workflow write route and a
+  connector seam; Q3 agent registration blocked on the ADR 0006 / vendor-edit
+  tension (and now also blocks condition 5's deterministic-e2e part); Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
+  deploy-only scenarios (GitOps revert, backup restore) need the Atlas cluster and
+  a chosen backup target.
+- Highest priority ready next item: Q32, the Next.js shell in `frontend/` plus
+  the RED theme and API client, now safe to start because `make done` cannot pass
+  on a screens-less shell (`[5/6]`), an API-only security suite (`[3/6]`), a
+  suite-less condition 2 (`[2/6]`) or an unproven provider path (condition 5).
+  Required asset: the Next.js app shell that consumes the complete SPEC.md section
+  7 REST surface; checkpoint: none (UI, not a gate); approver: none. Blocked
+  downstream dependency: Q33-Q45. The stage 0-10 e2e Q30 is already green.
+
+### Prior cycle (2026-10-03T200006Z)
+
+- Cycle 2026-10-03T200006Z (Ralph cycle, prior): selected item was hardening
   the prototype definition-of-done gate so DoD condition 2 (the section 11
   acceptance suite) can no longer pass unverified. `scripts/check_definition_of_
   done.sh` `[2/6]` ran only `tests/e2e` (condition 1); condition 2 ("the section
