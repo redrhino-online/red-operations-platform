@@ -36,12 +36,14 @@ from redops.contexts.commercial.domain.value_objects import (
 )
 from redops.contexts.engagement.domain.entities import ClientWorkspace
 from redops.contexts.engagement.domain.errors import (
+    AuthorityAmplifierNotApprovedError,
     CampaignMessageNotApprovedError,
     GateApproverNotAuthorizedError,
     GateAuthorRequiredError,
     NotStageFiveGateError,
     NotStageFourGateError,
     NotStageOneGateError,
+    NotStageSevenGateError,
     NotStageSixGateError,
     NotStageThreeGateError,
     NotStageTwoGateError,
@@ -66,6 +68,9 @@ from redops.contexts.governance.domain.value_objects import (
     StageTemplate,
 )
 from redops.contexts.knowledge.domain.entities import Claim
+from redops.contexts.production.domain.value_objects import (
+    AuthorityAmplifierPackage,
+)
 
 STAGE_ZERO = 0
 STAGE_ONE = 1
@@ -74,6 +79,7 @@ STAGE_THREE = 3
 STAGE_FOUR = 4
 STAGE_FIVE = 5
 STAGE_SIX = 6
+STAGE_SEVEN = 7
 
 
 class StageZeroGateAssembler:
@@ -1014,6 +1020,153 @@ class StageSixGateRecorder:
                 actor=approver,
                 on=on,
                 rationale=f"stage 6 asset {asset} approved for {scope}",
+            )
+            gate.record_asset_approval(request)
+        gate.state = GateState.APPROVED
+        decision = GateDecision.from_gate(
+            gate,
+            ledger=ledger,
+            reviewer=approver,
+            scope=scope,
+            checkpoint_evidence=checkpoint_evidence,
+            disposition=GateDisposition.APPROVED,
+            rationale=rationale,
+            on=on,
+            assigned_owner=assigned_owner,
+            due_on=due_on,
+            next_action=next_action,
+        )
+        ledger.record(decision)
+        return decision
+
+
+class StageSevenGateAssembler:
+    """Builds and validates the canonical stage 7 "Authority Amplifier Approved" gate.
+
+    SPEC.md section 4, stage 7 "Produce" and its "Authority Amplifier Approved"
+    checkpoint: "message and supported proof pass review before visual or video
+    production; final asset gives a credible next action", and the stage is
+    complete only when its required assets exist, pass the checkpoint, and receive
+    approval for downstream use. The Production ``AuthorityAmplifierPackage``
+    (cycle 81) projects the single reviewed ``AuthorityAmplifier`` -- the six
+    script sections in Promise, Proof, Problems, Steps, Context, Action order and
+    the eight visual assets (storyboard, brand treatment, presentation, speaker
+    notes, recording, edited and hosted video, player assets) -- onto the nine
+    canonical stage 7 asset kinds as exact ``StageAssetVersion`` evidence, and the
+    canon maps stage 7 to files 13-18 and 28 (SPEC.md section 12.3).
+
+    Unlike stages 2 through 5, the reviewed amplifier is not constructively
+    complete at construction: stage 7 has two distinct approvals, and
+    ``AuthorityAmplifier`` only proves the second one -- final creative
+    acceptance -- when it has passed ``approve_creative``, which itself requires
+    the earlier script approval and a complete visual package. This assembler
+    therefore refuses a package whose amplifier has not reached creative
+    acceptance, so a draft, script-approved or review-required amplifier can never
+    be pinned as passing stage 7 evidence. It also checks the reviewed package
+    against the workspace tenant, pins the gate from the template's exact stage 7
+    asset package, and binds the designated approver to the workspace authority
+    registry (``GateApproverAuthorityPolicy``). It is a pure domain service: it
+    returns a gate and mutates nothing, invokes no persistence, and never invents
+    a concrete approver identity or authority role (SPEC.md section 11).
+    """
+
+    def assemble(
+        self,
+        *,
+        template: StageTemplate,
+        workspace: ClientWorkspace,
+        package: AuthorityAmplifierPackage,
+        approver: str,
+        proposed_by: str | None = None,
+    ) -> StageGate:
+        if package.tenant_id != workspace.tenant_id:
+            raise TenantBoundaryError(
+                f"authority amplifier package {package.package_id!r} belongs to "
+                f"tenant {package.tenant_id!r}, not workspace tenant "
+                f"{workspace.tenant_id!r}"
+            )
+        if not package.amplifier.is_approved:
+            raise AuthorityAmplifierNotApprovedError(
+                f"authority amplifier {package.amplifier.amplifier_id!r} cannot "
+                "pass stage 7: it has not received final creative acceptance, the "
+                "second of the two stage 7 approvals"
+            )
+        gate = StageGate.from_assets(
+            template,
+            STAGE_SEVEN,
+            tenant_id=workspace.tenant_id,
+            assets=package.stage_asset_versions(),
+        )
+        gate.approver = approver
+        gate.proposed_by = proposed_by
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        return gate
+
+
+class StageSevenGateRecorder:
+    """Records the passing stage 7 "Authority Amplifier Approved" gate decision.
+
+    SPEC.md section 4: a passing gate pins "the exact evidence and intended
+    downstream use", approval is version specific, and the author cannot
+    impersonate the approver. Given the gate ``StageSevenGateAssembler`` already
+    validated, this pure-domain path issues one version-specific
+    ``ApprovalRequest`` per required asset on behalf of the gate's author, has the
+    workspace's designated approver approve each one, records them on the gate,
+    and stores the immutable ``GateDecision`` in the durable ``GateLedger``. It
+    refuses a gate for another stage, an absent author or approver, an approver
+    who holds no authority on the workspace, and an assigned work owner who holds
+    no authority on the workspace, so the stage 7 rubric can never approve an
+    unrelated asset package, a self-issued approval or an unaccountable owner
+    (SPEC.md sections 3, 4, 5 and 11). Because stage 7 depends on stage 6,
+    ``GateDecision.from_gate`` and ``GateLedger.record`` refuse a passing decision
+    until the ledger holds a passing stage 6 decision, so a failed prerequisite
+    blocks dependent authorization (SPEC.md section 4). It mutates only the gate
+    it is given and the ledger; it never invents a concrete human identity.
+    """
+
+    def record(
+        self,
+        *,
+        gate: StageGate,
+        workspace: ClientWorkspace,
+        ledger: GateLedger,
+        scope: str,
+        checkpoint_evidence: str,
+        rationale: str,
+        assigned_owner: str,
+        due_on: date,
+        on: date,
+        next_action: str = "",
+    ) -> GateDecision:
+        if gate.stage_number != STAGE_SEVEN:
+            raise NotStageSevenGateError(
+                f"stage 7 recording path cannot record a decision for stage "
+                f"{gate.stage_number}"
+            )
+        author = gate.proposed_by
+        if not author or not author.strip():
+            raise GateAuthorRequiredError(
+                "stage 7 recording requires the gate's author so an approval "
+                "request has a requester distinct from the designated approver"
+            )
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        GateOwnerAuthorityPolicy().require(assigned_owner, workspace)
+        approver = gate.approver
+        if not approver or not approver.strip():
+            raise GateApproverNotAuthorizedError(
+                "stage 7 recording requires the gate's designated approver"
+            )
+        for asset in sorted(gate.required_assets, key=str):
+            request = ApprovalRequest(
+                asset=asset,
+                scope=scope,
+                requested_by=author,
+                approver=approver,
+            )
+            request.approve(
+                actor=approver,
+                on=on,
+                rationale=f"stage 7 asset {asset} approved for {scope}",
             )
             gate.record_asset_approval(request)
         gate.state = GateState.APPROVED

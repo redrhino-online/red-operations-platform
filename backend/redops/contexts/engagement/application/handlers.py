@@ -11,6 +11,7 @@ from redops.contexts.engagement.application.commands import (
     RecordStageFiveGateCommand,
     RecordStageFourGateCommand,
     RecordStageOneGateCommand,
+    RecordStageSevenGateCommand,
     RecordStageSixGateCommand,
     RecordStageThreeGateCommand,
     RecordStageTwoGateCommand,
@@ -23,6 +24,8 @@ from redops.contexts.engagement.domain.assemblies import (
     StageFourGateRecorder,
     StageOneGateAssembler,
     StageOneGateRecorder,
+    StageSevenGateAssembler,
+    StageSevenGateRecorder,
     StageSixGateAssembler,
     StageSixGateRecorder,
     StageThreeGateAssembler,
@@ -37,6 +40,7 @@ from redops.contexts.engagement.domain.errors import (
     StageRunNotStageFiveError,
     StageRunNotStageFourError,
     StageRunNotStageOneError,
+    StageRunNotStageSevenError,
     StageRunNotStageSixError,
     StageRunNotStageThreeError,
     StageRunNotStageTwoError,
@@ -60,6 +64,7 @@ STAGE_THREE = 3
 STAGE_FOUR = 4
 STAGE_FIVE = 5
 STAGE_SIX = 6
+STAGE_SEVEN = 7
 
 
 class RecordStageZeroGateHandler:
@@ -703,5 +708,98 @@ class RecordStageSixGateHandler:
         ):
             raise StageRunNotCompletableError(
                 f"the stage 6 run is {stage_run.status.value!r} and cannot "
+                "complete; only an active Working or In Review run may close"
+            )
+
+
+class RecordStageSevenGateHandler:
+    """Assemble, record and close the stage 7 "Authority Amplifier Approved" gate.
+
+    SPEC.md section 4: a stage is complete only when its required assets exist,
+    pass a defined checkpoint, and receive approval for downstream use, and a
+    failed or expired prerequisite blocks dependent authorization until resolved.
+    The Engagement domain already owns both halves -- ``StageSevenGateAssembler``
+    validates the reviewed ``AuthorityAmplifierPackage`` against the workspace
+    tenant and the amplifier's final creative acceptance, and binds the approver,
+    and ``StageSevenGateRecorder`` issues the exact-version approvals and writes
+    the durable ``GateDecision`` -- but they are separate services a caller must
+    remember to chain. This use case chains them so the canonical assembly cannot
+    be bypassed by handing a hand-built gate to the recorder, and it closes the
+    stage 7 ``StageRun`` from the durable decision in the same operation (SPEC.md
+    sections 4 and 6).
+
+    The stage run is validated before the decision is written, because completing
+    a run whose state forbids COMPLETE would otherwise leave the ledger with a
+    passing decision for a stage that never closed. Stage 7 depends on stage 6, so
+    the handler is given a ``GateLedger`` that must already hold a passing stage 6
+    decision; governance refuses the stage 7 decision otherwise. The use case
+    mutates only the gate, the stage run and the ledger; it never invents a
+    concrete human identity.
+    """
+
+    def __init__(
+        self,
+        *,
+        assembler: StageSevenGateAssembler | None = None,
+        recorder: StageSevenGateRecorder | None = None,
+    ) -> None:
+        self._assembler = assembler or StageSevenGateAssembler()
+        self._recorder = recorder or StageSevenGateRecorder()
+
+    def handle(
+        self,
+        command: RecordStageSevenGateCommand,
+        *,
+        ledger: GateLedger,
+    ) -> GateDecision:
+        self._require_stage_seven_run(command.stage_run, command.template)
+        gate = self._assembler.assemble(
+            template=command.template,
+            workspace=command.workspace,
+            package=command.package,
+            approver=command.approver,
+            proposed_by=command.proposed_by,
+        )
+        decision = self._recorder.record(
+            gate=gate,
+            workspace=command.workspace,
+            ledger=ledger,
+            scope=command.scope,
+            checkpoint_evidence=command.checkpoint_evidence,
+            rationale=command.rationale,
+            assigned_owner=command.assigned_owner,
+            due_on=command.due_on,
+            on=command.on,
+            next_action=command.next_action,
+        )
+        command.stage_run.complete(
+            decision=decision,
+            ledger=ledger,
+            actor=command.approver,
+            reason=f"stage 7 {decision.checkpoint} accepted",
+            on=command.on,
+            correlation_id=command.correlation_id,
+        )
+        return decision
+
+    @staticmethod
+    def _require_stage_seven_run(
+        stage_run: StageRun, template: StageTemplate
+    ) -> None:
+        if stage_run.stage_number != STAGE_SEVEN:
+            raise StageRunNotStageSevenError(
+                f"the stage 7 closure cannot close a run for stage "
+                f"{stage_run.stage_number}"
+            )
+        if stage_run.template_version != template.version:
+            raise StageRunNotStageSevenError(
+                f"the stage 7 run is pinned to template version "
+                f"{stage_run.template_version!r}, not {template.version!r}"
+            )
+        if not StageTransitionPolicy().can_transition(
+            stage_run.status, StageStatus.COMPLETE
+        ):
+            raise StageRunNotCompletableError(
+                f"the stage 7 run is {stage_run.status.value!r} and cannot "
                 "complete; only an active Working or In Review run may close"
             )

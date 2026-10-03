@@ -293,6 +293,41 @@ class CampaignMessageNotApprovedError(EngagementError):
     """
 
 
+class NotStageSevenGateError(EngagementError):
+    """A stage 7 recording path was handed a gate for another stage.
+
+    SPEC.md section 4 makes stage 7 "Produce" the "Authority Amplifier Approved"
+    checkpoint after the stage 6 "Campaign Message Approved" gate. The stage 7
+    recording path pins and approves only the canonical stage 7 Authority
+    Amplifier gate; a gate for another stage must be recorded by that stage's own
+    path so the wrong asset package is never approved under the stage 7 rubric.
+    """
+
+
+class StageRunNotStageSevenError(EngagementError):
+    """A stage 7 closure was handed a StageRun for another stage or template.
+
+    SPEC.md sections 3 and 4 make a StageRun track one stage of one versioned
+    template. Completing a stage 7 gate must close the matching stage 7 run for
+    the same template version, so a run for another stage or version cannot be
+    closed by the stage 7 path and left showing verified progress the run does
+    not represent.
+    """
+
+
+class AuthorityAmplifierNotApprovedError(EngagementError):
+    """A stage 7 gate was assembled from an amplifier without creative acceptance.
+
+    SPEC.md section 4, stage 7 "Produce" and its "Authority Amplifier Approved"
+    checkpoint: stage 7 has two distinct approvals, the script and its supported
+    claims before visual production and then final creative acceptance. The
+    ``AuthorityAmplifier`` only proves the second approval once it has passed
+    ``approve_creative``; a script-approved or review-required amplifier must
+    never be projected into a passing stage 7 gate, or the stage would show a
+    checkpoint it never met.
+    """
+
+
 class StageRunNotCompletableError(EngagementError):
     """A stage 0 closure was handed a StageRun whose state cannot complete.
 

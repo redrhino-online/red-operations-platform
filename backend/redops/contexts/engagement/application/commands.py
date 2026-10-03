@@ -24,6 +24,9 @@ from redops.contexts.engagement.domain.value_objects import IntakePackage
 from redops.contexts.governance.domain.entities import StageRun
 from redops.contexts.governance.domain.value_objects import StageTemplate
 from redops.contexts.knowledge.domain.entities import Claim
+from redops.contexts.production.domain.value_objects import (
+    AuthorityAmplifierPackage,
+)
 
 
 @dataclass(frozen=True)
@@ -276,6 +279,46 @@ class RecordStageSixGateCommand:
     template: StageTemplate
     workspace: ClientWorkspace
     package: CampaignMessagePackage
+    stage_run: StageRun
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
+@dataclass(frozen=True)
+class RecordStageSevenGateCommand:
+    """Request to assemble and record the stage 7 "Authority Amplifier Approved" gate.
+
+    The command carries the reviewed ``AuthorityAmplifierPackage`` (the bridge
+    that projects the single stage 7 ``AuthorityAmplifier`` onto the nine
+    canonical kinds), the workspace authority registry and the exact decision
+    metadata; it deliberately carries no ``StageGate``. The use case builds the
+    canonical gate itself from the package, so a caller cannot substitute a
+    hand-built gate and skip the tenant-boundary, creative-acceptance,
+    approver-authority and owner-authority checks (SPEC.md sections 3, 4 and 6).
+    Unlike the stage 2 through 5 commands it carries no claims, because the
+    "Authority Amplifier Approved" checkpoint turns on the amplifier's own
+    two-stage approval -- script and supported proof before visual production,
+    then final creative acceptance -- which ``AuthorityAmplifier`` already
+    enforces, rather than on external customer evidence.
+
+    It also carries the stage 7 ``StageRun`` to close. Recording a passing gate
+    and completing the stage are one application operation, so the durable
+    ``GateDecision`` and the stage status cannot drift apart. Stage 7 depends on
+    stage 6, so the passing stage 6 decision must already be present in the
+    ``GateLedger`` the use case is given (SPEC.md section 4).
+    """
+
+    template: StageTemplate
+    workspace: ClientWorkspace
+    package: AuthorityAmplifierPackage
     stage_run: StageRun
     approver: str
     scope: str
