@@ -14,9 +14,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Iterable
 
+from redops.contexts.commercial.domain.value_objects import (
+    AvatarProfile,
+    DailyPromotionBudget,
+)
 from redops.contexts.execution.domain.value_objects import (
     ClaimKind,
     PerformanceClaim,
@@ -43,6 +48,7 @@ from redops.contexts.measurement.domain.errors import (
     InvalidRetargetingError,
     InvalidScalingRecommendationError,
     InvalidSplitTestError,
+    InvalidVideoViewAudienceError,
     MeasurementTenantBoundaryError,
     MeasurementWindowOpenError,
     RetargetingDependencyError,
@@ -60,6 +66,13 @@ from redops.contexts.measurement.domain.errors import (
     SplitTestTenantBoundaryError,
     SplitTestVariableError,
     SplitTestWindowOpenError,
+    VideoViewAudienceBudgetError,
+    VideoViewAudienceDependencyError,
+    VideoViewAudienceObjectiveError,
+    VideoViewAudienceObservationError,
+    VideoViewAudienceTargetCostError,
+    VideoViewAudienceTenantBoundaryError,
+    VideoViewAudienceWindowError,
 )
 
 if TYPE_CHECKING:
@@ -1742,3 +1755,354 @@ class RetargetingPlan:
             "and campaigns, not an observed result, and cannot be recorded as an "
             "observation"
         )
+
+
+MIN_VIDEO_VIEW_SECONDS: int = 10
+"""The canon's minimum meaningful ten-second view (canon file 30).
+
+Canon file 30: "I'm trying to pay 5 to 20 cents for people to watch 10 seconds
+of the video" and "10 seconds to start with"; a three-second view "is too small
+of a commitment to really gauge interest or engagement".
+"""
+
+MAX_VIDEO_VIEW_RETENTION_DAYS: int = 30
+"""The canon's longest retargeting lookback for a video-view audience.
+
+Canon file 30: retarget "people who have watched 10 seconds of the video in the
+last 30 days" and "I don't want to go out more than 30 days".
+"""
+
+
+class AudienceBuildingObjective(Enum):
+    """The objective a stage 10 audience campaign optimizes for (canon file 30).
+
+    The canon separates the objectives an audience campaign could chase -- page
+    post engagement, leads and conversions -- from the one it should use. Canon
+    file 30: "the goal of the campaign is not to generate leads, not to get
+    customers, not to get appointments... I'm gonna bid on video views", because
+    page post engagement "was too weak of engagement". Typing the objective lets a
+    campaign refuse any objective other than video views rather than an untyped
+    label that cannot be checked.
+    """
+
+    VIDEO_VIEWS = "video_views"
+    PAGE_POST_ENGAGEMENT = "page_post_engagement"
+    LEAD_GENERATION = "lead_generation"
+    CONVERSIONS = "conversions"
+
+
+@dataclass(frozen=True)
+class VideoViewWindow:
+    """The canon's ten-second view and thirty-day retention (canon file 30).
+
+    Canon file 30 defines the audience by a view threshold and a lookback window:
+    "10 second video views, 30 days is a good catch all", with the threshold a
+    minimum commitment ("10 seconds to start with"; three seconds is "too small of
+    a commitment") and thirty days the longest lookback ("I don't want to go out
+    more than 30 days"). It is frozen and reject-only, so a weaker or unbounded
+    window cannot be represented as the audience definition, while a stricter
+    window (a longer view or a shorter lookback) is allowed.
+    """
+
+    view_seconds: int
+    retention_days: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("video view seconds", self.view_seconds),
+            ("video view retention days", self.retention_days),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise VideoViewAudienceWindowError(
+                    f"the {label} must be an integer"
+                )
+        if self.view_seconds < MIN_VIDEO_VIEW_SECONDS:
+            raise VideoViewAudienceWindowError(
+                f"a video view window requires at least a "
+                f"{MIN_VIDEO_VIEW_SECONDS} second view, because a shorter view is "
+                "too small a commitment to gauge interest (canon file 30)"
+            )
+        if self.retention_days < 1:
+            raise VideoViewAudienceWindowError(
+                "a video view retention window must be at least one day so the "
+                "audience is bounded"
+            )
+        if self.retention_days > MAX_VIDEO_VIEW_RETENTION_DAYS:
+            raise VideoViewAudienceWindowError(
+                f"a video view retention window cannot exceed "
+                f"{MAX_VIDEO_VIEW_RETENTION_DAYS} days (canon file 30: do not go "
+                "out more than 30 days)"
+            )
+
+    @classmethod
+    def canon(cls) -> "VideoViewWindow":
+        """The canon's catch-all ten-second view over thirty days."""
+        return cls(
+            view_seconds=MIN_VIDEO_VIEW_SECONDS,
+            retention_days=MAX_VIDEO_VIEW_RETENTION_DAYS,
+        )
+
+    @property
+    def uses_canon_catch_all(self) -> bool:
+        """Whether this is exactly the canon's ten-second / thirty-day window."""
+        return (
+            self.view_seconds == MIN_VIDEO_VIEW_SECONDS
+            and self.retention_days == MAX_VIDEO_VIEW_RETENTION_DAYS
+        )
+
+
+@dataclass(frozen=True)
+class InterestTargeting:
+    """The canon's interest-stacked avatar targeting (canon file 30).
+
+    Canon file 30 builds the audience from the avatar's "interests, hobbies,
+    experts, software tools": "I'm going to have my avatar framework in front of
+    me" and target by "interests, likes, affinities, associations, publications",
+    combining several so the reach is qualified ("It's called interest stacking.
+    It's way more powerful"). The targeting is grounded on a same-tenant
+    ``AvatarProfile`` and stacks at least two distinct named interests, so it
+    cannot be an untyped guess or a single over-broad interest.
+    """
+
+    targeting_id: str
+    tenant_id: str
+    avatar: AvatarProfile
+    interests: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("interest targeting id", self.targeting_id),
+            ("interest targeting tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidVideoViewAudienceError(f"{label} is required")
+        if not isinstance(self.avatar, AvatarProfile):
+            raise VideoViewAudienceDependencyError(
+                "an audience campaign must target a typed avatar, not a "
+                "free-text persona"
+            )
+        if self.avatar.tenant_id != self.tenant_id:
+            raise VideoViewAudienceTenantBoundaryError(
+                f"interest targeting {self.targeting_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its avatar {self.avatar.avatar_id!r} "
+                f"belongs to tenant {self.avatar.tenant_id!r}"
+            )
+        if not isinstance(self.interests, tuple) or len(self.interests) < 2:
+            raise InvalidVideoViewAudienceError(
+                "interest stacking requires at least two named interests, because "
+                "one interest alone is too broad to qualify the audience (canon "
+                "file 30)"
+            )
+        seen: set[str] = set()
+        for interest in self.interests:
+            if not interest or not interest.strip():
+                raise InvalidVideoViewAudienceError(
+                    "a targeting interest must not be blank"
+                )
+            normalized = interest.strip().lower()
+            if normalized in seen:
+                raise InvalidVideoViewAudienceError(
+                    f"a targeting interest {interest!r} is repeated; interest "
+                    "stacking combines distinct interests"
+                )
+            seen.add(normalized)
+
+
+@dataclass(frozen=True)
+class VideoViewAudienceCampaign:
+    """The canon's ten-second-view audience building campaign (SPEC.md 12.5).
+
+    SPEC.md section 12.5 records the canon's ten-second-view audience campaign
+    (canon file 30) as the remaining planning asset of the audience-building and
+    content flywheel gap, and section 4 keeps external spend behind human
+    authorization. The campaign binds a named owner to a same-tenant avatar's
+    interest-stacked targeting, the canon's video-view window, a positive low
+    daily budget, a caller-supplied target cost per ten-second view, a same-tenant
+    tracking code and at least one existing retargeting list it builds for. It
+    refuses any objective other than video views, a blank identity, an untyped or
+    cross-tenant dependency and a non-positive target cost.
+
+    The campaign is a stage 10 plan, not a gate kind and not an authorization to
+    spend: launching it and any payment remain named human decisions (SPEC.md
+    sections 4 and 9). It is never an observed result; the audience size it later
+    reaches is a separate observation (SPEC.md section 3, Measurement invariant).
+    """
+
+    campaign_id: str
+    tenant_id: str
+    owner: str
+    name: str
+    objective: AudienceBuildingObjective
+    targeting: InterestTargeting
+    view_window: VideoViewWindow
+    daily_budget: DailyPromotionBudget
+    target_cost_per_view: Decimal
+    tracking_code: TrackingCode
+    retargeting_lists: tuple[RetargetingAudience, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("video view audience campaign id", self.campaign_id),
+            ("video view audience campaign tenant id", self.tenant_id),
+            ("video view audience campaign owner", self.owner),
+            ("video view audience campaign name", self.name),
+        ):
+            if not value or not value.strip():
+                raise InvalidVideoViewAudienceError(f"{label} is required")
+        if not isinstance(self.objective, AudienceBuildingObjective):
+            raise VideoViewAudienceObjectiveError(
+                "an audience campaign requires a named objective"
+            )
+        if self.objective is not AudienceBuildingObjective.VIDEO_VIEWS:
+            raise VideoViewAudienceObjectiveError(
+                f"an audience campaign objective {self.objective.value!r} cannot "
+                "build the warm video-view audience; the objective must be video "
+                "views, not leads, conversions or page post engagement (canon "
+                "file 30)"
+            )
+        if not isinstance(self.targeting, InterestTargeting):
+            raise VideoViewAudienceDependencyError(
+                "an audience campaign must be grounded on typed interest "
+                "targeting, not a free-text audience"
+            )
+        if self.targeting.tenant_id != self.tenant_id:
+            raise VideoViewAudienceTenantBoundaryError(
+                f"video view audience campaign {self.campaign_id!r} belongs to "
+                f"tenant {self.tenant_id!r}, but its targeting cites tenant "
+                f"{self.targeting.tenant_id!r}"
+            )
+        if not isinstance(self.view_window, VideoViewWindow):
+            raise VideoViewAudienceDependencyError(
+                "an audience campaign requires a typed video view window"
+            )
+        if not isinstance(self.daily_budget, DailyPromotionBudget):
+            raise VideoViewAudienceDependencyError(
+                "an audience campaign requires a typed daily promotion budget"
+            )
+        if not isinstance(self.target_cost_per_view, Decimal):
+            raise InvalidVideoViewAudienceError(
+                "a target cost per ten-second view must be a Decimal"
+            )
+        if self.target_cost_per_view <= 0:
+            raise InvalidVideoViewAudienceError(
+                "a target cost per ten-second view must be positive"
+            )
+        if not isinstance(self.tracking_code, TrackingCode):
+            raise VideoViewAudienceDependencyError(
+                "an audience campaign must be built on a typed tracking code, not "
+                "a free-text pixel"
+            )
+        if self.tracking_code.tenant_id != self.tenant_id:
+            raise VideoViewAudienceTenantBoundaryError(
+                f"video view audience campaign {self.campaign_id!r} belongs to "
+                f"tenant {self.tenant_id!r}, but its tracking code "
+                f"{self.tracking_code.code_id!r} belongs to tenant "
+                f"{self.tracking_code.tenant_id!r}"
+            )
+        if (
+            not isinstance(self.retargeting_lists, tuple)
+            or not self.retargeting_lists
+        ):
+            raise VideoViewAudienceDependencyError(
+                "an audience campaign must build for at least one existing "
+                "retargeting list, or the warm audience has no consumer"
+            )
+        for audience in self.retargeting_lists:
+            if not isinstance(audience, RetargetingAudience):
+                raise VideoViewAudienceDependencyError(
+                    "an audience campaign must build for typed retargeting lists, "
+                    "not a free-text audience"
+                )
+            if audience.tenant_id != self.tenant_id:
+                raise VideoViewAudienceTenantBoundaryError(
+                    f"video view audience campaign {self.campaign_id!r} cites "
+                    f"retargeting list {audience.audience_id!r} from another "
+                    "tenant"
+                )
+            if audience.tracking_code != self.tracking_code:
+                raise VideoViewAudienceDependencyError(
+                    f"video view audience campaign {self.campaign_id!r} cites "
+                    f"retargeting list {audience.audience_id!r} built on tracking "
+                    f"code {audience.tracking_code.code_id!r}, not the campaign's "
+                    f"tracking code {self.tracking_code.code_id!r}"
+                )
+
+    @property
+    def is_campaign(self) -> bool:
+        return True
+
+    @property
+    def retargeting_steps(self) -> tuple[str, ...]:
+        """The funnel steps of the existing retargeting lists this campaign warms."""
+        return tuple(audience.funnel_step for audience in self.retargeting_lists)
+
+    def builds_for(self, audience: RetargetingAudience) -> bool:
+        """Whether this campaign builds the warm audience for a retargeting list."""
+        return audience in self.retargeting_lists
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent an audience campaign as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The
+        campaign describes the targeting, budget and view window that will run,
+        while the audience size it later reaches is a separate observation, so a
+        campaign is never an observation.
+        """
+        raise VideoViewAudienceObservationError(
+            f"video view audience campaign {claim_id!r} is a plan of targeting, "
+            "budget and view window, not an observed result, and cannot be "
+            "recorded as an observation"
+        )
+
+
+class VideoViewAudiencePolicy:
+    """Refuses a stage 10 audience campaign outside the canon's spend bounds.
+
+    Canon file 30 starts the audience campaign at a low daily spend ("$5 a day...
+    I'll spend ten. Ten bucks a day") and calls "under 20 cents" per ten-second
+    view a rough viability metric, warning that a much higher cost means a problem
+    with the topic. The policy keeps a starting campaign low and its target cost
+    affordable; it never authorizes spend, which remains a named human decision
+    (SPEC.md sections 4 and 9).
+    """
+
+    @staticmethod
+    def require_low_daily_budget(
+        campaign: VideoViewAudienceCampaign, *, ceiling: Decimal
+    ) -> None:
+        if not isinstance(campaign, VideoViewAudienceCampaign):
+            raise VideoViewAudienceDependencyError(
+                "the low daily budget check requires a typed audience campaign"
+            )
+        if not isinstance(ceiling, Decimal) or ceiling <= 0:
+            raise InvalidVideoViewAudienceError(
+                "the low daily budget ceiling must be a positive Decimal"
+            )
+        if campaign.daily_budget.amount > ceiling:
+            raise VideoViewAudienceBudgetError(
+                f"video view audience campaign {campaign.campaign_id!r} starts at "
+                f"{campaign.daily_budget.amount} {campaign.daily_budget.currency} "
+                f"a day, above the low starting ceiling {ceiling}; the audience "
+                "campaign is for building a warm audience cheaply, not for "
+                "scaling spend (canon file 30)"
+            )
+
+    @staticmethod
+    def require_target_cost_below(
+        campaign: VideoViewAudienceCampaign, *, ceiling: Decimal
+    ) -> None:
+        if not isinstance(campaign, VideoViewAudienceCampaign):
+            raise VideoViewAudienceDependencyError(
+                "the target cost check requires a typed audience campaign"
+            )
+        if not isinstance(ceiling, Decimal) or ceiling <= 0:
+            raise InvalidVideoViewAudienceError(
+                "the target cost ceiling must be a positive Decimal"
+            )
+        if campaign.target_cost_per_view > ceiling:
+            raise VideoViewAudienceTargetCostError(
+                f"video view audience campaign {campaign.campaign_id!r} targets "
+                f"{campaign.target_cost_per_view} per ten-second view, above the "
+                f"viable ceiling {ceiling}; a higher cost signals a problem with "
+                "the topic (canon file 30)"
+            )

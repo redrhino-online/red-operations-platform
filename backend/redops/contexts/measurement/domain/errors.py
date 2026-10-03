@@ -507,3 +507,88 @@ class RetargetingObservationError(MeasurementError):
     observation and cannot be represented as one.
     """
 
+
+class InvalidVideoViewAudienceError(MeasurementError, ValueError):
+    """A ten-second-view audience campaign leaves a required field unspecified.
+
+    SPEC.md section 12.5 records the canon's ten-second-view audience campaign
+    (canon file 30) as part of the audience-building gap. The campaign names its
+    identity, owner, targeting, view window, daily budget, target cost and
+    tracking code. An artifact missing its identity, carrying a stack of fewer
+    than two interests, or naming a non-positive target cost cannot be a
+    traceable audience plan.
+    """
+
+
+class VideoViewAudienceDependencyError(MeasurementError):
+    """An audience campaign is missing a typed prerequisite.
+
+    The canon's audience campaign (canon file 30) is grounded on the client's
+    avatar interests, a view window, a live daily budget, a tracking code and the
+    existing retargeting lists it builds for. Each must be a typed value object,
+    not a free-text substitute, so the campaign composes from the assets that
+    already exist rather than duplicating the step-based retargeting lists.
+    """
+
+
+class VideoViewAudienceObjectiveError(MeasurementError):
+    """An audience campaign is not optimizing for video views.
+
+    Canon file 30: "the goal of the campaign is not to generate leads, not to get
+    customers, not to get appointments... I'm gonna bid on video views", because
+    page post engagement "was too weak of engagement". A campaign with any other
+    objective cannot build the warm video-view audience the retargeting lists
+    later segment.
+    """
+
+
+class VideoViewAudienceWindowError(MeasurementError, ValueError):
+    """An audience view window is outside the canon's bounds.
+
+    Canon file 30 sets the catch-all at a ten-second view retained for thirty
+    days: "10 seconds to start with" and "10 second video views, 30 days is a
+    good catch all". A weaker commitment (for example three seconds) is "too
+    small of a commitment to really gauge interest", and a lookback longer than
+    thirty days is refused. A stricter window (a longer view or shorter lookback)
+    is allowed.
+    """
+
+
+class VideoViewAudienceTenantBoundaryError(MeasurementError):
+    """An audience campaign cites another tenant's avatar, tracking code or list.
+
+    SPEC.md section 3: every tenant resource carries a tenant id and a query is
+    tenant scoped, so a client's audience campaign cannot be built from a
+    different client's avatar, pixel or retargeting list.
+    """
+
+
+class VideoViewAudienceBudgetError(MeasurementError):
+    """An audience campaign's starting daily budget is above the low ceiling.
+
+    Canon file 30 starts the audience campaign at a low spend ("$5 a day... I'll
+    spend ten. Ten bucks a day") using the same dollar-a-day strategy as canon
+    file 31. A starting budget above the caller's low ceiling is refused: the
+    campaign is for building a warm audience cheaply, not for scaling spend.
+    """
+
+
+class VideoViewAudienceTargetCostError(MeasurementError):
+    """An audience campaign's target cost per view is above the viable ceiling.
+
+    Canon file 30 calls "under 20 cents" per ten-second view "a really rough
+    metric" and warns that a much higher cost means "a problem with the topic". A
+    target above the caller's viability ceiling is refused so an unaffordable
+    audience campaign is not represented as viable.
+    """
+
+
+class VideoViewAudienceObservationError(MeasurementError):
+    """An audience campaign was projected as an observed result.
+
+    SPEC.md section 3, Measurement invariant keeps observations distinct from
+    conclusions. The audience campaign is a plan of targeting, budget and view
+    window, while the audience size it later reaches is a separate observation, so
+    it is never an observation and cannot be represented as one.
+    """
+
