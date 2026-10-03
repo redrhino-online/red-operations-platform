@@ -1,6 +1,6 @@
 # 5. Scheduler and worker topology: single instance, gated workers
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-03
 - Owner: RED principal
 

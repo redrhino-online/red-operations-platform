@@ -4,65 +4,37 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Architecture decision (2026-10-03, owner RED principal): the running
-  application is this repository, `redrhino-online/red-operations-platform`, and
-  cycles target it. RED code lives here under `backend/redops/` — RED's extension
-  of the OpenExecutive system. OpenExecutive is a pinned dependency, vendored as
-  the git submodule at `vendor/openexecutive/`, reused through ports and
-  composition, and kept close to upstream so updates stay cheap (ADR 0008, which
-  supersedes ADR 0002). TypeScript is UI-only (ADR 0007).
-- Cleanup done: the earlier attempt to write RED into the fork was reverted. The
-  fork no longer carries the ported `openexecutive.redops` module, its tests, or
-  RED docs (`docs/context_map.md`, `docs/adr/`, `docs/fork_inventory.md`); those
-  now live in this repository's `docs/`. The submodule now points at upstream
-  `SenteLabsAI/OpenExecutive`, pinned to release `v0.4.6` (`31e55338`); the
-  org fork is no longer used.
-- Prior cycle outcome: repository realigned to the app model (ADR 0008); the
-  submodule pointer advanced to the cleaned upstream pin (`31e55338`). Evidence:
-  `docs/adr/0008-red-lives-in-the-app.md`, `docs/context_map.md`,
-  `docs/fork_inventory.md`, `docs/adr/0001`-`0008`.
-- Current cycle (2026-10-03T12:27:59Z): selected item was the first slice of the
-  reuse layer named last cycle -- make the vendored `openexecutive` package
-  importable to this repository's backend and add a minimal RED FastAPI entry
-  point composed with the reused OpenExecutive shell, with a smoke test. It
-  outranks further domain work because the pure domain is complete and tested
-  while no RED entry point exists, and every later API, worker or gate route
-  needs this seam.
-- Outcome: done and verified. A root `pyproject.toml` declares the app project
-  (`requires-python >=3.11`) and consumes the vendored core as an editable path
-  dependency on `vendor/openexecutive/packages/core`. `backend/redops/api/` adds
-  the RED entry point (`create_app`, `app`) and a thin `/red` router
-  (`/red/health`, `/red/stages`). `create_app` includes the RED router and mounts
-  the reused OpenExecutive ASGI app at `/openexecutive`, importing it inside the
-  factory so the pure domain and RED routes never drag in the vendored package.
-- Evidence: `uv lock` resolved the path dependency and 158 packages in under a
-  second (`openexecutive 0.4.6`), confirming the declared seam; the smoke test
-  passes 3/3 under the vendored core venv (`PYTHONPATH=backend
-  vendor/openexecutive/packages/core/.venv/bin/python -m pytest
-  tests/unit/test_app_smoke.py -q`); the domain-only suite is unchanged at 1603
-  passed, 1 skipped (`PYTHONPATH=backend python3 -m unittest discover -s tests -p
-  'test_*.py'`), the smoke class skipping cleanly where FastAPI is absent;
-  `python3 -m pyflakes backend/redops tests` is clean.
-- New findings: the vendored core already ships a synced `.venv` (CPython 3.12)
-  from which `openexecutive.api.main:app` imports, so the reuse layer is
-  buildable and verifiable now without a full `uv sync` of the heavy optional
-  dependencies (torch, sentence-transformers). The app target is Python 3.11+
-  (the core's floor) while the pure domain still runs on this repo's Python 3.10;
-  the two must be reconciled when the app env becomes the standard test runner.
-  The resolution's `uv.lock` was intentionally not committed to keep this cycle's
-  diff to the seam; a committed lock belongs with the app-env setup decision.
-- Blockers: unchanged -- the storage, tenant-isolation, scheduler-topology and
-  agent-registration ADRs still await the RED principal before real client data.
-  The frontend scaffold is not started.
-- Highest priority ready next item: exercise the domain through the entry point
-  by wiring one gate path -- add a Governance application use case/query boundary
-  and an in-memory `GateLedger` repository port with an adapter, then a RED route
-  that records a stage 0 gate through the existing `RecordStageZeroGateHandler`,
-  with a behavioral test. It outranks read-only views because it advances the
-  product backbone (gate integrity, stage 0 "Production Ready") and proves the
-  onion (application port -> adapter -> entry point). Prerequisites: the reuse
-  seam (done this cycle); an in-memory adapter needs no storage decision, so
-  ADR 0003 still gates real persistence only.
+- Decision record (2026-10-03, owner RED principal): ADRs 0003-0006 are accepted.
+  0003 was amended per the owner: RED's persistence is PostgreSQL deployed as a
+  new container alongside the application in the app chart, with its data volume
+  on cluster PVs backed by truenas shares (`truenas-nfs`); OpenExecutive's own
+  SQLite/ChromaDB stores stay on `/data` unchanged. 0004 was amended: clients see
+  only their own workspace, operators see everything, case advocates get narrowed
+  views of assigned cases, and a client may run multiple concurrent
+  engagements/assets (no per-client cap). 0005 (single-instance scheduler) and
+  0006 (RED agents over OpenExecutive's specialist registry) accepted as written.
+- Outcome: chart deployed `redop-postgres` (pinned image, truenas-nfs PVC,
+  pg_isready readiness) plus a sealed `redop-postgres` secret (POSTGRES_PASSWORD,
+  DATABASE_URL) and the API now consumes `DATABASE_URL`; ADR statuses flipped;
+  guide table updated. Chart pushed to the platform repo (Gitea + GitHub).
+- Evidence: `docs/adr/0003` (rewritten), `docs/adr/0004` (rewritten),
+  `docs/adr/0005`/`0006` (Accepted); platform repo commit `7f21a65`; Argo CD
+  Application `redop` syncing the chart.
+- New findings: the hosted instance's CI promotion path works — the Gitea build
+  workflow commits tags into `apps/redop/chart/values.yaml` and Argo syncs. The
+  host is `redop.atlas.lan`, internal-only (Traefik ipAllowList 10.0.0.0/8), UI
+  auth disabled by the patched image. Postgres persistence unblocks RED
+  repositories; the OpenExec-internal SQLite remains a separate store.
+- Blockers: Tier 2 facts only the RED principal holds — approver/owner
+  identities, pilot metric targets and 3F launch scope, model-provider data
+  handling acceptance, app identity provider (UI auth is currently patched off),
+  backup target, external access path, capability agents 10/11 charters, canon
+  files 19/20.
+- Highest priority ready next item: wire one gate path through the entry point —
+  a Governance application port, a PostgreSQL-backed `GateLedger` repository
+  (now unblocked by ADR 0003), and a RED route recording a stage 0 gate via the
+  existing `RecordStageZeroGateHandler`, with a behavioral test. Prerequisites:
+  the reuse seam (done); Postgres container (deploying now).
 
 ## Canon reference and gap register
 

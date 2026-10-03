@@ -1,43 +1,51 @@
-# 4. Tenant isolation: one active engagement at a time for the pilot
+# 4. Tenancy: client-scoped views, operator full view, advocates, concurrent engagements
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-03
 - Owner: RED principal
 
 ## Context
 
-`SPEC.md` §1/§9 call for multiple isolated client workspaces, server-side RBAC
-with client membership, and cross-tenant access tests at every layer. The fork
-implements slot-based, single-active-client isolation (`clients/slots.py`):
-per-client SQLite tables are saved and restored, the vector store is rebuilt, and
-one client is active at a time. There is no concurrent multi-tenancy and no
-server-side cross-tenant RBAC.
+`SPEC.md` §1/§9 call for multiple isolated client workspaces and server-side RBAC.
+OpenExecutive implements slot-based, single-active-client isolation; there is no
+concurrent multi-tenancy and no cross-tenant RBAC. RED's needs differ in shape:
+operators must see everything, clients must see only their own, and some RED team
+members work a narrowed caseload.
 
-The pilot is one RED engagement (3F) with client approvers and read-limited
-collaborators.
+## Decision
 
-## Decision (proposed)
+- **Clients** see only their own workspace. Every client-scoped query is filtered
+  by tenant, enforced at the application boundary and in PostgreSQL (row-level
+  policies as defence in depth).
+- **Operators** (RED staff) see the full cross-client view — the portfolio command
+  center, all workspaces, all gates.
+- **Advocates** are RED team members assigned to specific cases with narrowed
+  views of the team's data (their assigned engagements only), not full operator
+  access.
+- **One active engagement per client is the default shape, not a limit.** A
+  long-term or enterprise client may have multiple engagements and multiple assets
+  in flight at once; the domain and data model must support that fan-out and must
+  not cap engagements per client.
 
-For the pilot, treat a RED `ClientWorkspace` as the fork's active slot and rely
-on slot isolation: one workspace active per process, with every query scoped to
-the active tenant and the workspace authority registry supplying named approvers
-and owners. Defer concurrent multi-tenant isolation and row-level security until
-a second simultaneous client is onboarded, and gate that step on a follow-up ADR
-and security tests at the API, retrieval, worker and artifact-URL layers.
+The hosted pilot keeps OpenExec's slot model (one active client per process) as
+an infrastructure constraint for a single engagement; it does not leak into RED's
+domain model. Removing that constraint for enterprise scale is a follow-up
+infrastructure decision.
 
 ## Consequences
 
-- The pilot ships on the existing slot model; no new tenancy substrate required.
-- Concurrent clients are explicitly out of scope for the pilot.
-- RED must still enforce same-tenant checks in the domain (every artifact carries
-  `tenant_id`, cross-tenant references are rejected) so the slot model is not the
-  only defence and a later substrate can build on it.
-- Security regression tests at the slot/workspace boundary are required before
-  real client data.
+- RED's data model keys every artifact by `tenant_id` and treats engagements as
+  per-client collections that may be many.
+- Roles are explicit: `client`, `advocate`, `operator`. Advocates' queries are
+  scoped to their assigned cases; operators' are not.
+- Isolation tests must cover all three roles at the API, repository, and
+  (later) row-policy layers.
+- OpenExec's slot isolation cannot serve the client-facing surface once more than
+  one client is live; a hosting ADR is required before that step.
 
 ## Alternatives considered
 
-- Build concurrent multi-tenancy now: rejected — significant new work with no
-  pilot need; the slot model is acceptable for a single engagement.
-- One deployment per client: deferred — possible later isolation boundary, but
-  operationally heavier than needed for the pilot.
+- Strict one-engagement-per-client: rejected — enterprise clients need
+  concurrent work.
+- Full multi-tenant infrastructure from day one: deferred — the pilot runs one
+  engagement; the domain model carries the tenancy, the host catches up.

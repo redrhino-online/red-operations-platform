@@ -1,42 +1,51 @@
-# 3. Storage strategy: keep SQLite and ChromaDB for the pilot
+# 3. Storage strategy: PostgreSQL container deployed with the app, on truenas PVs
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-03
 - Owner: RED principal
+- Supersedes: the earlier "keep SQLite for the pilot" proposal
 
 ## Context
 
-`SPEC.md` §3 assumed PostgreSQL with row-level security and PostgreSQL
-full-text/vector retrieval. The verified fork reality (`docs/fork_inventory.md`)
-is a single SQLite file for episodic memory, alerts and audit, plus embedded
-ChromaDB for vector retrieval. The scheduler claims due actions with
-`UPDATE … RETURNING` in that single file, and per-client state is saved and
-restored through `clients/slots.py`.
+`SPEC.md` §3 assumed PostgreSQL with row-level security. The verified OpenExecutive
+reality (`docs/fork_inventory.md`) is a single SQLite file for episodic memory,
+decisions and audit, plus embedded ChromaDB for retrieval. The Atlas cluster
+provides persistent volumes backed by truenas NFS shares (StorageClass
+`truenas-nfs`), which the hosted instance already uses for `/data`.
 
-RED's governance artifacts (`GateDecision`, `StageRun`, `ApprovalRequest`, the
-`GateLedger`) are currently pure domain and have no persistence. The pilot is a
-single RED engagement (3F), so concurrent multi-tenant load is not expected.
+## Decision
 
-## Decision (proposed)
+RED's persistence is **PostgreSQL, deployed as a new container alongside the
+application** in the app's chart, with its data volume on truenas-backed PVs
+(`truenas-nfs`). RED's aggregates (`GateLedger`, `StageRun`, `GateDecision`,
+`SourceRecord`, `Claim`, approvals, RED's audit trail) live there behind
+repository ports.
 
-Keep SQLite for the pilot as the durable store for workflow state, the audit
-trail, and RED's run and decision records, with ChromaDB for retrieval. Define
-repository ports so PostgreSQL remains a future adapter behind the same
-interface. Revisit before onboarding a second simultaneous client or before any
-requirement for concurrent writers.
+OpenExecutive's own internal stores stay as they are (SQLite episodic memory +
+ChromaDB on the `/data` PVC), keeping changes to the dependency minimal; a later
+decision may migrate OpenExec's internal memory to PostgreSQL. ChromaDB stays on
+the `/data` PV for retrieval.
+
+The chart ships the PostgreSQL container (image pinned, one instance for the
+pilot), its PVC on `truenas-nfs`, a `ClusterIP` service, and connection
+credentials as a SealedSecret. Schema changes ship as migrations committed with
+the code.
 
 ## Consequences
 
-- No migration project blocks the pilot; RED persistence reuses the fork's store.
-- The write path is single-instance (see ADR 0005); no horizontal writer scaling.
-- Row-level security is not available; tenant isolation relies on the slot model
-  and application-scoped queries (see ADR 0004).
-- A future Postgres migration is a repository-adapter swap plus a data migration;
-  keeping ports clean now is the cost of that option.
+- RED's gate and decision records are durable and queryable from the start, and
+  the production manager view, audit trail, and future worker processes share one
+  store.
+- Row-level policies are available for tenant isolation (see ADR 0004).
+- One PostgreSQL instance for the pilot; scaling/redundancy is a later decision.
+- The backup target is still open (truenas snapshots are the candidate); restore
+  drills must run before client data.
+- OpenExec's internal SQLite remains a second store; RED must not treat the two
+  as interchangeable.
 
 ## Alternatives considered
 
-- Migrate to PostgreSQL now: rejected for the pilot — large effort, unproven need
-  at single-engagement scale, and the fork's scheduler/slot logic assumes SQLite.
-- New append-only event store for RED decisions: deferred — the audit log plus
-  version-pinned decision records already give an append-only trail.
+- Keep SQLite for RED's domain too: rejected — the requirement is a relational
+  store with tenant isolation and multi-process access.
+- Hosted/managed PostgreSQL outside the cluster: rejected — the cluster's
+  truenas-backed PVs are the required backing.

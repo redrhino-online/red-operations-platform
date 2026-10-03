@@ -1,6 +1,6 @@
 # 6. RED agent registration over the specialist registry
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-03
 - Owner: RED principal
 

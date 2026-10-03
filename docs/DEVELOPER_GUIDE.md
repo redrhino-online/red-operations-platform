@@ -64,10 +64,10 @@ ADRs live in `docs/adr/`. Read them before changing direction.
 | --- | --- | --- |
 | 0001 | Record architecture decisions as numbered ADRs | Accepted |
 | 0002 | Place RED code inside the OpenExecutive fork | Superseded by 0008 |
-| 0003 | Storage: keep SQLite + ChromaDB for the pilot | Proposed |
-| 0004 | Tenant isolation: slot-based, single active engagement | Proposed |
-| 0005 | Scheduler/worker: single instance | Proposed |
-| 0006 | RED agents registered over OpenExecutive's specialist registry | Proposed |
+| 0003 | Storage: PostgreSQL container deployed with the app, data on truenas PVs | Accepted |
+| 0004 | Tenancy: client-scoped, operator full view, advocates, concurrent engagements | Accepted |
+| 0005 | Scheduler/worker: single instance | Accepted |
+| 0006 | RED agents registered over OpenExecutive's specialist registry | Accepted |
 | 0007 | Python core; TypeScript is UI-only | Accepted |
 | 0008 | RED lives in the app repo; OpenExecutive is a pinned dependency | Accepted |
 
@@ -77,8 +77,10 @@ but is silent on a method artifact's substance, the reference canon governs.
 Verified repository facts beat canon. The canon never authorizes a deploy, spend
 or client commitment.
 
-Proposed ADRs (0003-0006) still need the RED principal's explicit acceptance
-before real client data.
+ADRs 0003-0006 were accepted by the RED principal on 2026-10-03; 0003 was
+amended to require PostgreSQL as a new container deployed with the app, its
+data on truenas-backed PVs, and 0004 to require operator full view, advocate
+narrowed caseloads, and unlimited concurrent engagements per client.
 
 ---
 
@@ -98,7 +100,8 @@ version-pinned decision for that exact stage and template version; expired
 prerequisites block dependents.
 
 Everything RED currently has is pure domain (roughly 1,600 behavioral tests).
-There is no persistence yet; that is gated by ADR 0003 (storage).
+Domain persistence is unblocked (ADR 0003): PostgreSQL runs as a container in
+the app chart, data on truenas-backed PVs; repositories port onto it.
 
 Domain suite (Python 3.10 is the planning default, no FastAPI needed):
 
