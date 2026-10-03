@@ -1210,17 +1210,17 @@ class RecordStageTenGateRequest(BaseModel):
     milestone observations, the stage 9 launch QA the baseline grounds on (rebuilt
     from the approved stage 8 funnel and the traffic authorization), the approved
     stages 6-8 assets that the funnel re-grounds on, the known claims that support
-    the amplifier proof, the workspace authority registry and the decision
-    metadata. The route builds the canonical gate from these through the use case;
-    it deliberately accepts no pre-built gate, so the tenant boundary, approver
-    authority, owner authority and exact-version evidence cannot be bypassed.
-    Stage 10 depends on a passing stage 9 decision already in the ledger. The
-    checkpoint requires the stage 9 traffic authorization and first qualified
-    traffic observed, with later milestones shown as pending.
+    the amplifier proof and the decision metadata; the authority registry is
+    resolved from the durable workspace store, never the body. The route builds the
+    canonical gate from these through the use case; it deliberately accepts no
+    pre-built gate, so the tenant boundary, approver authority, owner authority and
+    exact-version evidence cannot be bypassed. Stage 10 depends on a passing stage
+    9 decision already in the ledger. The checkpoint requires the stage 9 traffic
+    authorization and first qualified traffic observed, with later milestones shown
+    as pending.
     """
 
     workspace_id: str
-    authorities: list[ClientAuthorityInput]
     baseline_package_id: str
     baseline_version: int
     message: CampaignMessageInput

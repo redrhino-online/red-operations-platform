@@ -206,10 +206,6 @@ class StageTenGateRouteTests(unittest.TestCase):
         nine = self._nine.payload()
         body = {
             "workspace_id": nine["workspace_id"],
-            "authorities": [
-                {"actor": OWNER, "authority": "production-owner"},
-                {"actor": APPROVER, "authority": "client-designated-authority"},
-            ],
             "baseline_package_id": "baseline-package-3f",
             "baseline_version": 1,
             "message": nine["message"],
@@ -375,6 +371,49 @@ class StageTenGateRouteTests(unittest.TestCase):
         response = self.client.post(
             self.url(), json=self.payload(approver="stranger")
         )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"],
+            "GateApproverNotAuthorizedError",
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(10))
+
+    def test_a_gate_without_a_registered_workspace_is_a_named_404(self) -> None:
+        self.seed_through_stage_nine()
+
+        response = self.client.post(
+            self.url(), json=self.payload(workspace_id="ws-unregistered")
+        )
+
+        self.assertEqual(response.status_code, 404, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"], "ClientWorkspaceNotFoundError"
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(10))
+
+    def test_the_gate_approves_against_the_persisted_registry(self) -> None:
+        # The body no longer carries authorities; the approver is authorized
+        # only if the persisted workspace registry names them. Seed through
+        # stage 9 with an authorized approver, then rebuild the store without a
+        # client-designated authority and the same stage 10 request is refused.
+        self.seed_through_stage_nine()
+        self.workspaces = self.workspace_store_class()
+        self.register_workspace(with_approver=False)
+
+        response = self.client.post(self.url(), json=self.payload())
 
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(
