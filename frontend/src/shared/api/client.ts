@@ -528,6 +528,36 @@ export interface MeasurementList {
   records: MeasurementRecord[];
 }
 
+// The portfolio opportunity register read (SPEC.md sections 3, 7 and 8; Q43).
+// Mirrors `OpportunityResponse`/`OpportunityListResponse` in `backend/redops/api/
+// schemas.py`. An opportunity is a proposal grounded on the exact same-tenant
+// `(asset_id, kind, version)` of the approved stage asset it expands, so the
+// source is always shown pinned; `state` is `proposed` until a human investment
+// authority acts, and the register never stores an approved investment.
+export interface PortfolioOpportunity {
+  tenant_id: string;
+  opportunity_id: string;
+  title: string;
+  kind: string;
+  source_asset_id: string;
+  source_kind: string;
+  source_version: number;
+  investment_case: string;
+  expected_outcome: string;
+  owner: string;
+  next_action: string;
+  captured_on: string;
+  state: string;
+}
+
+export interface OpportunityList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  opportunities: PortfolioOpportunity[];
+}
+
 // Tenant-scoped reads used by the first screens. Paths match `backend/redops/
 // api/routes.py` (router prefix `/red`).
 export class RedOperationsApi extends RedApiClient {
@@ -678,6 +708,20 @@ export class RedOperationsApi extends RedApiClient {
     params: ListParams = {},
   ): Promise<MeasurementList> {
     return this.get<MeasurementList>("/red/measurements", {
+      tenant_id: tenantId,
+      ...params,
+    });
+  }
+
+  // The portfolio opportunity register read (SPEC.md sections 3, 7 and 8;
+  // Q43). The tenant is a required query scope and the route is read-only; the
+  // register holds proposals only, so listing one approves no investment,
+  // spend or launch.
+  listOpportunities(
+    tenantId: string,
+    params: ListParams = {},
+  ): Promise<OpportunityList> {
+    return this.get<OpportunityList>("/red/opportunities", {
       tenant_id: tenantId,
       ...params,
     });

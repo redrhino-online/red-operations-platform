@@ -4,12 +4,12 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T203157Z (Ralph cycle, this run): selected item was Q42, the
-  performance review screen (SPEC.md sections 4 and 8 and 13 condition 6; queue
-  item Q42). It is the highest priority ready item: its only dependency Q41 is
-  done, and it is now the head of the Q42-Q45 chain for condition 6, the largest
-  unstarted DoD condition. It outranks alternatives: Q43-Q45 each depend on
-  Q42; Q28 stage 8-10 required kinds are still blocked on the named
+- Cycle 2026-10-03T203428Z (Ralph cycle, this run): selected item was Q43, the
+  portfolio opportunities screen (SPEC.md sections 3 and 8 and 13 condition 6;
+  queue item Q43). It is the highest priority ready item: its only dependency
+  Q42 is done, and it is now the head of the Q43-Q44 chain for condition 6, the
+  largest unstarted DoD condition. It outranks alternatives: Q44 depends on
+  Q43; Q28 stage 8-10 required kinds are still blocked on the named
   methodology-owner placement decision; Q16 needs a workflow write route and a
   connector seam; Q3/Q4 need the ADR 0006 resolution and a live key; Q8 layer
   coverage and the condition 2 cross-client-retrieval scenario have no
@@ -18,6 +18,73 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   scenarios. The canon gap register has no ready pipeline item: its remaining
   entries are implemented or are candidate pipeline additions awaiting a
   named-owner decision, so no canon-covered method artifact outranks this gate
+  work.
+- Outcome: new `frontend/src/features/portfolio-opportunities/` feature.
+  `PortfolioOpportunities.tsx` is a presentational view over the tenant-scoped
+  portfolio opportunity register (`GET /red/opportunities`, Q14): it groups each
+  proposal by the canon's two Grow effects (canon files 11 and 12; SPEC.md
+  section 12.3, entry point vs lifetime value) and shows, per proposal, its
+  state, its exact pinned grounding source (`source_asset_id@vN`, source kind),
+  expected outcome, investment case, named owner, next action and capture date.
+  It approves no investment and starts no spend or launch. The API client gained
+  the `PortfolioOpportunity`/`OpportunityList` types and `listOpportunities`;
+  the `/portfolio-opportunities` route binds the `portfolio-opportunities`
+  screen id now declared in `frontend/dod-screens.txt`. No backend route, gate
+  rule, approval authority or pipeline stage changed.
+- Evidence: `frontend/src/features/portfolio-opportunities/PortfolioOpportunities.test.tsx`
+  (7 tests) pins `groundingVersion`, the `byKind` Grow grouping, `isProposal`,
+  the rendered proposals with pinned grounding/owner, the empty register,
+  loading/error, and a stubbed-fetch screen read asserting the tenant-scoped
+  `/red/opportunities` path (1 fetch). `npm test` -> 11 files, 91 passed (7 new).
+  `npm run build` -> compiled, `/portfolio-opportunities` route emitted.
+  `make check` -> 2272 passed, 2 skipped, 706 subtests passed.
+  `bash scripts/check_frontend_build.sh frontend` -> exit 0.
+  `bash scripts/check_frontend_screens.sh frontend` -> still exit 1, now 1
+  remaining section 8 id (authority-settings; condition 6 needs Q44). `make
+  done` still fails first at `[2/6]` condition 2.
+- New findings: the `/red/opportunities` register route and its response already
+  exposed everything the screen needs (Q14), so Q43 needed no new backend route
+  and no new client read beyond `listOpportunities`. The register is
+  proposal-only by domain invariant (`OpportunityState.PROPOSED`), and the API
+  response flattens the source to `source_asset_id`/`source_kind`/
+  `source_version`, so the view renders the pinned version directly. No
+  dedicated tenant-scoped authority read was found in the client seam, so Q44
+  may need a new read route rather than a pure UI feature (unverified).
+- Blockers (unchanged): `frontend/` Q44 is the last path to DoD condition 6;
+  Q8's retrieval, worker and artifact-URL isolation coverage and the condition 2
+  cross-client-retrieval scenario are blocked until those seams exist; Q28 stage
+  8-10 required kinds blocked on the named methodology-owner placement decision;
+  Q16 idempotency keys blocked on a workflow write route and a connector seam;
+  Q3 agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
+  deploy-only scenarios need the Atlas cluster and a chosen backup target.
+- Highest priority ready next item: Q44, the authority settings screen (the last
+  section 8 screen for condition 6). Required asset: a read-only authority
+  settings view at a declared route showing the tenant-scoped designated
+  authorities and the approval scope each gate approves against (SPEC.md
+  sections 3, 4 and 8: "designated approver identity" and "authority registry a
+  gate approves against"), plus its browser test; checkpoint: none (UI, not a
+  gate); approver: none. Blocked downstream dependency: condition 6 close (then
+  conditions 3, 4, 5, 7, 8, 9). Prerequisite: Q43 (done this cycle). The read
+  seam is unverified: a new tenant-scoped authority/registry route may be
+  required (see New findings).
+
+### Prior cycle (2026-10-03T203157Z)
+
+- Selected item was Q42, the
+  performance review screen (SPEC.md sections 4 and 8 and 13 condition 6; queue
+  item Q42). It was the highest priority ready item: its only dependency Q41 was
+  done, and it was the head of the Q42-Q45 chain for condition 6, the largest
+  unstarted DoD condition. It outranked alternatives: Q43-Q45 each depended on
+  Q42; Q28 stage 8-10 required kinds were still blocked on the named
+  methodology-owner placement decision; Q16 needed a workflow write route and a
+  connector seam; Q3/Q4 needed the ADR 0006 resolution and a live key; Q8 layer
+  coverage and the condition 2 cross-client-retrieval scenario had no
+  retrieval/worker/artifact seam yet; Q47-Q50 needed the Atlas cluster. Q31 also
+  blocked condition 2 on a connector idempotency seam and the deploy-only
+  scenarios. The canon gap register had no ready pipeline item: its remaining
+  entries are implemented or are candidate pipeline additions awaiting a
+  named-owner decision, so no canon-covered method artifact outranked this gate
   work.
 - Outcome: new `frontend/src/features/performance-review/` feature.
   `PerformanceReview.tsx` is a presentational view over two tenant-scoped reads:
@@ -4461,7 +4528,7 @@ stalls:
 | Q40 | Workflow run detail | ui | Q39 | Done 2026-10-03T202643Z: `frontend/src/features/workflow-run/` (`WorkflowRunDetail.tsx` presentational with the `eventOrdinal`/`orderedTransitions` event-log helpers, `WorkflowRunDetailScreen.tsx` tenant-plus-run read, route `/workflow-run-detail`, `frontend/dod-screens.txt` declares the screen id) over `getWorkflowRun` (`GET /red/clients/{tenant_id}/workflows/{run_id}`). The client `WorkflowRunView` was corrected to the real route projection and gained `WorkflowRunTransition`. `npm run build` clean (`/workflow-run-detail` emitted), `npm test` 10 new passed (65 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 4 remaining screens |
 | Q41 | Launch readiness | ui | Q40 | Done 2026-10-03T202836Z: `frontend/src/features/launch-readiness/` (`LaunchReadiness.tsx` presentational with the `checksWithOutcome`/`criticalFailures`/`exceptions`/`isAuthorized` helpers, `LaunchReadinessScreen.tsx` tenant-scoped read, route `/launch-readiness`, `frontend/dod-screens.txt` declares the screen id) over `listLaunchQAs` (`GET /red/launch-qas`). That read is new: `LaunchQARepository` gained `list` (in-memory + PostgreSQL) and the route projects each QA's state, its checks (kind, outcome, evidence, owner, `is_critical_path`) and the pinned traffic authorization. The view surfaces the stage 9 state, critical-path failures, exceptions and the exact authorization; it authorizes no traffic. `npm run build` clean (`/launch-readiness` emitted), `npm test` 9 new passed (74 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 3 remaining screens |
 | Q42 | Performance review | ui | Q41 | Done 2026-10-03T203157Z: `frontend/src/features/performance-review/` (`PerformanceReview.tsx` presentational with the `baselineStage`/`baselinePins`/`milestoneStates` helpers, `PerformanceReviewScreen.tsx` parallel tenant-scoped read, route `/performance-review`, `frontend/dod-screens.txt` declares the screen id) over `getProductionView` (`GET /red/clients/{tenant}/engagements/{engagement}/production-view`) and `listMeasurements` (`GET /red/measurements?tenant_id=`). The view shows the stage 10 baseline gate state and exact pinned baseline asset versions, then the four distinct post-launch milestones mapped to the measured funnel steps with missing observations shown pending (a placeholder record stays pending, never a measurement). The client gained `MeasurementRecord`/`MeasurementList`/`MetricDefinitionSummary` and `listMeasurements`. `npm run build` clean (`/performance-review` emitted), `npm test` 10 new passed (84 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 2 remaining screens |
-| Q43 | Portfolio opportunities | ui | Q42 | browser test |
+| Q43 | Portfolio opportunities | ui | Q42 | Done 2026-10-03T203428Z: `frontend/src/features/portfolio-opportunities/` (`PortfolioOpportunities.tsx` presentational with the `groundingVersion`/`byKind`/`isProposal` helpers, `PortfolioOpportunitiesScreen.tsx` tenant-scoped read, route `/portfolio-opportunities`, `frontend/dod-screens.txt` declares the screen id) over `listOpportunities` (`GET /red/opportunities?tenant_id=`). The view groups proposals by the canon Grow effect (entry point vs lifetime value, canon files 11-12) and shows each proposal's state, exact pinned grounding source (`source_asset_id@vN`, source kind), expected outcome, investment case, owner, next action and capture date; it approves no investment. The client gained `PortfolioOpportunity`/`OpportunityList` and `listOpportunities`. `npm run build` clean (`/portfolio-opportunities` emitted), `npm test` 7 new passed (91 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 1 remaining screen |
 | Q44 | Authority settings | ui | Q43 | browser test |
 | Q45 | All screen browser suite | ui | Q44 | DoD 6. Condition 6 build/suite gate added 2026-10-03T201148Z: `scripts/check_frontend_build.sh` (run by `[5/6]` after `check_frontend_screens.sh`) requires `frontend/package.json` to declare `build` and `test` and runs both, so a green `[5/6]` requires the UI to compile and its browser suite to run, not merely exist. Red today: the shell declares no `test` script and ships no browser runner |
 | Q46 | RED branding sweep: Director, charters, UI copy, LICENSE and NOTICE | branding | Q32 | DoD 8; no OpenExecutive branding in the UI |

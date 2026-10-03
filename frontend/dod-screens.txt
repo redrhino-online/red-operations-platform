@@ -12,3 +12,4 @@ approval-inbox /approval-inbox
 workflow-run-detail /workflow-run-detail
 launch-readiness /launch-readiness
 performance-review /performance-review
+portfolio-opportunities /portfolio-opportunities
