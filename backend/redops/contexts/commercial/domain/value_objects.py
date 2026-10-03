@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -12,6 +13,11 @@ from redops.contexts.commercial.domain.errors import (
     ContentRoadmapFormatError,
     ContentRoadmapObservationError,
     ContentRoadmapTenantBoundaryError,
+    ContentSyndicationDependencyError,
+    ContentSyndicationFormatError,
+    ContentSyndicationObservationError,
+    ContentSyndicationTenantBoundaryError,
+    InvalidContentSyndicationError,
     CurrencyTenantBoundaryError,
     DiagnosisTenantBoundaryError,
     DiagnosticTenantBoundaryError,
@@ -2171,4 +2177,296 @@ class ContentRoadmap:
         raise ContentRoadmapObservationError(
             f"content roadmap {claim_id!r} is content to produce and publish, not "
             "an observed result, and cannot be recorded as an observation"
+        )
+
+
+class SyndicationChannel(Enum):
+    """The channels the canon syndicates a content asset to (canon file 31).
+
+    SPEC.md section 12.5 maps the content flywheel's syndication schedule to
+    stage 6 content assets and stage 10 audience operations. The canon syndicates
+    every asset "anywhere you can reach your audience": the email list, messenger
+    subscribers, the people who belong to your groups, LinkedIn, Twitter,
+    Facebook and the podcast feed (canon file 31). The channel is the typed form
+    of those distribution routes.
+    """
+
+    EMAIL = "email"
+    MESSENGER = "messenger"
+    SOCIAL_GROUP = "social_group"
+    LINKEDIN = "linkedin"
+    TWITTER = "twitter"
+    FACEBOOK = "facebook"
+    PODCAST = "podcast"
+
+
+class SyndicationCadence(Enum):
+    """How often one asset is re-syndicated on a channel (canon file 31).
+
+    The canon queues each asset to publish repeatedly: "put this on Twitter every
+    three hours. Put one of these on Facebook every other day, put one of these
+    on LinkedIn" (canon file 31). The cadence is the typed form of that recurring
+    schedule.
+    """
+
+    MULTIPLE_DAILY = "multiple_daily"
+    DAILY = "daily"
+    EVERY_OTHER_DAY = "every_other_day"
+    WEEKLY = "weekly"
+
+
+class RecycledFormat(Enum):
+    """The derivative formats a content asset is recycled into (canon file 31).
+
+    The canon's "bonus step" is to recycle a good asset into other formats: an
+    infographic that explains the post, lead magnets, content gateways, the audio
+    pulled out as a podcast, and a video series offered for an opt-in (canon file
+    31). The format is the typed form of those derivatives.
+    """
+
+    INFOGRAPHIC = "infographic"
+    LEAD_MAGNET = "lead_magnet"
+    CONTENT_GATEWAY = "content_gateway"
+    PODCAST_AUDIO = "podcast_audio"
+    OPT_IN_VIDEO = "opt_in_video"
+
+
+OWNED_SYNDICATION_CHANNELS: tuple[SyndicationChannel, ...] = (
+    SyndicationChannel.EMAIL,
+    SyndicationChannel.MESSENGER,
+    SyndicationChannel.SOCIAL_GROUP,
+)
+
+
+@dataclass(frozen=True)
+class ChannelSyndication:
+    """One channel and the cadence an asset is syndicated on it (canon 31).
+
+    A channel syndication pairs a typed ``SyndicationChannel`` with the recurring
+    ``SyndicationCadence`` the canon queues for that channel. It is frozen and
+    reject-only, so an untyped channel or cadence cannot be represented as part
+    of the schedule.
+    """
+
+    channel: SyndicationChannel
+    cadence: SyndicationCadence
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.channel, SyndicationChannel):
+            raise InvalidContentSyndicationError(
+                "a syndication channel must be a typed syndication channel"
+            )
+        if not isinstance(self.cadence, SyndicationCadence):
+            raise InvalidContentSyndicationError(
+                "a syndication cadence must be a typed syndication cadence"
+            )
+
+
+@dataclass(frozen=True)
+class DailyPromotionBudget:
+    """The canon's low fixed daily promotion spend for one asset (canon 30, 31).
+
+    The canon promotes every piece of content on the "dollar a day strategy",
+    started at "$5 a day" / "$3" minimum, and later cranks it up or down after
+    the learning phase rather than switching it off (canon files 30 and 31). The
+    budget is frozen and reject-only, so a non-positive amount, a missing
+    currency or a non-decimal amount cannot be represented as the promotion plan.
+    """
+
+    amount: Decimal
+    currency: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.amount, Decimal):
+            raise InvalidContentSyndicationError(
+                "a daily promotion budget amount must be a Decimal"
+            )
+        if self.amount <= 0:
+            raise InvalidContentSyndicationError(
+                "a daily promotion budget must be a positive daily amount"
+            )
+        if not isinstance(self.currency, str) or not self.currency.strip():
+            raise InvalidContentSyndicationError(
+                "a daily promotion budget currency is required"
+            )
+
+
+@dataclass(frozen=True)
+class TopicSyndication:
+    """How one roadmap topic is syndicated, promoted and recycled (canon 31).
+
+    SPEC.md section 12.5 records the content syndication and recycling schedule
+    as the remaining delivery asset of the audience-building and content flywheel
+    canon gap. A syndication distributes one Content Roadmap topic to at least
+    one typed channel on a per-channel cadence, promotes it on a positive daily
+    budget (canon 30) and recycles it into at least one typed derivative format
+    (canon 31). It is frozen and reject-only, so a blank topic, an untyped or
+    duplicate channel, an untyped or duplicate recycled format or an untyped
+    budget cannot be represented as part of the schedule.
+    """
+
+    topic_id: str
+    channels: tuple[ChannelSyndication, ...]
+    recycled_formats: tuple[RecycledFormat, ...]
+    promotion_budget: DailyPromotionBudget
+
+    def __post_init__(self) -> None:
+        if not self.topic_id or not self.topic_id.strip():
+            raise InvalidContentSyndicationError(
+                "a topic syndication topic id is required"
+            )
+        channels = tuple(self.channels)
+        if not channels:
+            raise InvalidContentSyndicationError(
+                "a topic syndication must name at least one channel it is "
+                "syndicated to"
+            )
+        seen_channels: set[SyndicationChannel] = set()
+        for entry in channels:
+            if not isinstance(entry, ChannelSyndication):
+                raise InvalidContentSyndicationError(
+                    "a topic syndication channel must be a typed channel "
+                    "syndication"
+                )
+            if entry.channel in seen_channels:
+                raise ContentSyndicationFormatError(
+                    f"topic syndication {self.topic_id!r} repeats channel "
+                    f"{entry.channel.value!r}"
+                )
+            seen_channels.add(entry.channel)
+        formats = tuple(self.recycled_formats)
+        if not formats:
+            raise InvalidContentSyndicationError(
+                "a topic syndication must recycle the asset into at least one "
+                "derivative format"
+            )
+        seen_formats: set[RecycledFormat] = set()
+        for fmt in formats:
+            if not isinstance(fmt, RecycledFormat):
+                raise InvalidContentSyndicationError(
+                    "a topic syndication recycled format must be a typed "
+                    "recycled format"
+                )
+            if fmt in seen_formats:
+                raise ContentSyndicationFormatError(
+                    f"topic syndication {self.topic_id!r} repeats recycled format "
+                    f"{fmt.value!r}"
+                )
+            seen_formats.add(fmt)
+        if not isinstance(self.promotion_budget, DailyPromotionBudget):
+            raise InvalidContentSyndicationError(
+                "a topic syndication must carry a typed daily promotion budget"
+            )
+
+
+@dataclass(frozen=True)
+class ContentSyndicationPlan:
+    """The canon's content syndication and recycling schedule for one client.
+
+    SPEC.md section 12.5 records the content syndication and recycling schedule as
+    the remaining delivery asset of the audience-building and content flywheel
+    canon gap and maps it to stage 6 content assets and stage 10 audience
+    operations. The plan distributes a same-tenant ``ContentRoadmap`` by
+    syndicating each planned topic to multiple channels on a cadence, promoting it
+    on a dollar-a-day budget and recycling it into derivatives (canon files 29,
+    30 and 31), binds the plan to a named owner and one tenant, and reports the
+    roadmap topics it does not yet syndicate. It is frozen and reject-only, so a
+    blank identity, an untyped or foreign roadmap, a duplicate or ungrounded
+    topic syndication cannot be represented as a schedule.
+
+    It is a stage 6/10 planning asset, not a new required gate kind (a
+    methodology-owner decision, SPEC.md section 12.5). It does not authorize
+    publishing or spend (SPEC.md sections 4 and 9) and it is never an observation
+    (SPEC.md section 3).
+    """
+
+    plan_id: str
+    tenant_id: str
+    owner: str
+    roadmap: ContentRoadmap
+    syndications: tuple[TopicSyndication, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("content syndication plan id", self.plan_id),
+            ("content syndication plan tenant id", self.tenant_id),
+            ("content syndication plan owner", self.owner),
+        ):
+            if not value or not value.strip():
+                raise InvalidContentSyndicationError(f"{label} is required")
+        if not isinstance(self.roadmap, ContentRoadmap):
+            raise ContentSyndicationDependencyError(
+                "a content syndication plan must distribute a typed Content "
+                "Roadmap"
+            )
+        if self.roadmap.tenant_id != self.tenant_id:
+            raise ContentSyndicationTenantBoundaryError(
+                f"content syndication plan {self.plan_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Content Roadmap "
+                f"{self.roadmap.roadmap_id!r} belongs to tenant "
+                f"{self.roadmap.tenant_id!r}"
+            )
+        if not self.syndications:
+            raise InvalidContentSyndicationError(
+                f"content syndication plan {self.plan_id!r} requires at least one "
+                "topic syndication"
+            )
+        topic_ids = {topic.topic_id for topic in self.roadmap.topics}
+        seen: set[str] = set()
+        for syndication in self.syndications:
+            if not isinstance(syndication, TopicSyndication):
+                raise InvalidContentSyndicationError(
+                    "a content syndication plan entry must be a typed topic "
+                    "syndication"
+                )
+            if syndication.topic_id in seen:
+                raise InvalidContentSyndicationError(
+                    f"content syndication plan {self.plan_id!r} contains duplicate "
+                    f"topic syndication {syndication.topic_id!r}"
+                )
+            seen.add(syndication.topic_id)
+            if syndication.topic_id not in topic_ids:
+                raise ContentSyndicationDependencyError(
+                    f"topic syndication {syndication.topic_id!r} distributes a "
+                    "topic the plan's Content Roadmap does not name"
+                )
+
+    @property
+    def covered_topics(self) -> tuple[str, ...]:
+        """The roadmap topics the plan already syndicates."""
+        syndicated = {entry.topic_id for entry in self.syndications}
+        return tuple(
+            topic.topic_id
+            for topic in self.roadmap.topics
+            if topic.topic_id in syndicated
+        )
+
+    def missing_topics(self) -> tuple[str, ...]:
+        """Roadmap topics the plan does not yet syndicate."""
+        syndicated = {entry.topic_id for entry in self.syndications}
+        return tuple(
+            topic.topic_id
+            for topic in self.roadmap.topics
+            if topic.topic_id not in syndicated
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_topics()
+
+    @property
+    def is_plan(self) -> bool:
+        """A content syndication plan is a plan, not activity or a result."""
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a content syndication plan as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The plan
+        describes the distribution that will happen, while any measured movement
+        is a separate observation, so a plan is never an observation.
+        """
+        raise ContentSyndicationObservationError(
+            f"content syndication plan {claim_id!r} is distribution to perform, "
+            "not an observed result, and cannot be recorded as an observation"
         )

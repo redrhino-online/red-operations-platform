@@ -521,3 +521,68 @@ class ContentRoadmapObservationError(CommercialError):
     observation.
     """
 
+
+class InvalidContentSyndicationError(CommercialError, ValueError):
+    """A content syndication plan or one of its parts was incomplete.
+
+    SPEC.md section 12.5 records the content syndication and recycling schedule
+    as the remaining delivery asset of the audience-building and content flywheel
+    canon gap, shaped by the canon's Content Blitz publish, promote and syndicate
+    training (canon files 29, 30 and 31). A syndication names the roadmap topic it
+    distributes, at least one typed channel with a per-channel cadence, at least
+    one recycled derivative format and a positive daily promotion budget; a plan
+    names its owner, the same-tenant Content Roadmap it distributes and at least
+    one syndication.
+    """
+
+
+class ContentSyndicationDependencyError(CommercialError):
+    """A content syndication was not grounded on the mapped Content Roadmap.
+
+    The canon syndicates the content assets the roadmap already planned, so a
+    plan must be grounded on a same-tenant Content Roadmap and every syndication
+    must distribute one of that roadmap's named topics. A syndication of a topic
+    the roadmap does not have cannot be represented as part of the schedule
+    (SPEC.md section 3).
+    """
+
+
+class ContentSyndicationTenantBoundaryError(CommercialError):
+    """A content syndication plan mixed in an asset from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. A
+    syndication plan and the Content Roadmap it distributes cannot cross a tenant
+    boundary.
+    """
+
+
+class ContentSyndicationFormatError(CommercialError):
+    """A content syndication broke the canon's distribution discipline.
+
+    The canon distributes one piece of content once per channel and recycles it
+    into distinct derivative formats (canon file 31), so a syndication that
+    repeats a channel or repeats a recycled format cannot be represented as the
+    schedule.
+    """
+
+
+class ContentSyndicationError(CommercialError):
+    """A content syndication plan left an asset in one place.
+
+    The canon syndicates every asset "anywhere you can reach your audience" and
+    warns that posting an asset once "you're losing 99% of the equity of the
+    asset you've created" (canon file 31). A plan that posts an asset to a single
+    channel, or only to borrowed social channels without an owned audience
+    channel, cannot build the retargetable audience the canon's content flywheel
+    depends on (SPEC.md sections 4 and 12.5).
+    """
+
+
+class ContentSyndicationObservationError(CommercialError):
+    """A content syndication plan was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. A syndication
+    plan is the distribution that will happen, while any measured movement stays
+    a separate observation, so a plan is never an observation.
+    """
+

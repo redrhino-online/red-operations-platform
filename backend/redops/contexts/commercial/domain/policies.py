@@ -20,6 +20,7 @@ from redops.contexts.commercial.domain.errors import (
     AvatarLockedError,
     CampaignMessageAlignmentError,
     ContentDistributionError,
+    ContentSyndicationError,
     FunnelFitError,
     MarketAwarenessTargetingError,
     OfferReadinessError,
@@ -30,6 +31,7 @@ from redops.contexts.commercial.domain.value_objects import (
     AvatarProfile,
     BusinessSnapshot,
     ContentRoadmap,
+    ContentSyndicationPlan,
     FunnelFinder,
     MINIMUM_PUBLISH_CHANNELS,
     MarketAwarenessMap,
@@ -37,6 +39,7 @@ from redops.contexts.commercial.domain.value_objects import (
     OfferFunnelAudit,
     OfferImpactAssessment,
     OfferPriceBand,
+    OWNED_SYNDICATION_CHANNELS,
     TargetMarketMatchmaker,
 )
 from redops.contexts.knowledge.domain.entities import Claim
@@ -427,4 +430,40 @@ class ContentDistributionPolicy:
                     f"{roadmap.roadmap_id!r} does not reach the canon minimum "
                     "publish channels; missing "
                     + ", ".join(channel.value for channel in missing)
+                )
+
+
+class ContentSyndicationPolicy:
+    """Refuses a content asset the canon would leave in one place.
+
+    SPEC.md section 12.5 records the content syndication and recycling schedule as
+    the remaining delivery asset of the audience-building and content flywheel
+    canon gap. The canon syndicates every asset "anywhere you can reach your
+    audience" and warns that posting an asset once "you're losing 99% of the
+    equity of the asset you've created" (canon file 31). A plan that posts an
+    asset to a single channel, or only to borrowed social channels without an
+    owned audience channel, cannot build the retargetable audience the canon's
+    content flywheel depends on (SPEC.md sections 4 and 12.5).
+    """
+
+    def require_multichannel(self, plan: ContentSyndicationPlan) -> None:
+        for syndication in plan.syndications:
+            channels = {entry.channel for entry in syndication.channels}
+            if len(channels) < 2:
+                raise ContentSyndicationError(
+                    f"topic syndication {syndication.topic_id!r} in plan "
+                    f"{plan.plan_id!r} syndicates to a single channel, so the "
+                    "canon's equity in the asset would be lost"
+                )
+
+    def require_owned_reach(self, plan: ContentSyndicationPlan) -> None:
+        owned = set(OWNED_SYNDICATION_CHANNELS)
+        for syndication in plan.syndications:
+            channels = {entry.channel for entry in syndication.channels}
+            if not channels & owned:
+                raise ContentSyndicationError(
+                    f"topic syndication {syndication.topic_id!r} in plan "
+                    f"{plan.plan_id!r} reaches no owned audience channel, so the "
+                    "canon's syndication would not reach the client's own list, "
+                    "messenger or groups"
                 )
