@@ -37,7 +37,35 @@ readonly RUN_DIR="$REPO_DIR/.ralph"
 readonly LOCK_DIR="$RUN_DIR/cycle.lock"
 
 die() { printf 'ralph: %s\n' "$*" >&2; exit 1; }
-release_lock() { rmdir "$LOCK_DIR" 2>/dev/null || true; }
+release_lock() { rm -rf "$LOCK_DIR"; }
+
+# Acquire the single-cycle lock. A lock whose recorded pid is gone (a hard kill,
+# host restart or OOM) is reclaimed instead of wedging the loop. A lock with no
+# pid younger than the grace period is treated as an acquisition in progress.
+acquire_lock() {
+  local grace="${RALPH_LOCK_GRACE:-120}" owner started age now
+  while true; do
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      printf '%s\n' "$$" > "$LOCK_DIR/pid"
+      printf '%s\n' "$(date -u +%FT%TZ)" > "$LOCK_DIR/started"
+      return 0
+    fi
+    owner=""
+    [[ -f "$LOCK_DIR/pid" ]] && owner="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+    if [[ -n "$owner" ]] && kill -0 "$owner" 2>/dev/null; then
+      die "another cycle is active (pid $owner); if that process is gone, remove $LOCK_DIR"
+    fi
+    now="$(date +%s)"
+    started="$(stat -c %Y "$LOCK_DIR" 2>/dev/null || printf '%s' "$now")"
+    age=$(( now - started ))
+    if [[ -z "$owner" && "$age" -lt "$grace" ]]; then
+      die "another cycle may be starting (lock age ${age}s); remove $LOCK_DIR if the process is gone"
+    fi
+    printf 'ralph: reclaiming stale lock at %s (owner %s not running, age %ss)\n' \
+      "$LOCK_DIR" "${owner:-unknown}" "$age" >&2
+    rm -rf "$LOCK_DIR"
+  done
+}
 
 push_to_remotes() { # $1=repo $2=branch $3=space-separated remote names
   local repo="$1" branch="$2" remotes="$3" remote pushed=0
@@ -82,7 +110,7 @@ mkdir -p "$(dirname "$GIT_EXCLUDE_FILE")"
 for excluded in '.ralph/' '.serena/'; do
   grep -qxF "$excluded" "$GIT_EXCLUDE_FILE" 2>/dev/null || printf '%s\n' "$excluded" >> "$GIT_EXCLUDE_FILE"
 done
-mkdir "$LOCK_DIR" 2>/dev/null || die "another cycle is active; if a process crashed, inspect and remove $LOCK_DIR"
+acquire_lock
 trap release_lock EXIT
 
 readonly RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
@@ -113,7 +141,25 @@ CANON_PATH=""
 CANON_REFERENCE="Canon (reference model materials): not available in this environment; proceed from the spec and plan only and do not invent method content."
 if [[ -d "$CANON_DIR" ]]; then
   CANON_PATH="$(cd "$CANON_DIR" && pwd -P)"
-  CANON_REFERENCE="Canon (reference model materials; the RED Method is its licensed implementation): $CANON_PATH"
+  CANON_HASH="$("$SCRIPT_DIR/scripts/canon_hash.sh" "$CANON_PATH" 2>/dev/null || true)"
+  CANON_LOCK="${RALPH_CANON_LOCK:-$SCRIPT_DIR/canon.lock}"
+  if [[ -n "$CANON_HASH" ]]; then
+    if [[ -f "$CANON_LOCK" ]]; then
+      pinned="$(awk 'NR==1{print $1}' "$CANON_LOCK")"
+      if [[ "$pinned" != "$CANON_HASH" ]]; then
+        if [[ "${RALPH_CANON_STRICT:-1}" == "1" ]]; then
+          die "canon content changed (pinned $pinned, now $CANON_HASH); re-pin with 'make canon-pin', or set RALPH_CANON_STRICT=0 to override"
+        fi
+        printf 'ralph: WARNING canon content changed (pinned %s, now %s) and RALPH_CANON_STRICT=0\n' "$pinned" "$CANON_HASH" >&2
+      fi
+    else
+      printf '%s %s\n' "$CANON_HASH" "$(date -u +%FT%TZ)" > "$CANON_LOCK"
+      printf 'ralph: pinned canon content %s to %s\n' "$CANON_HASH" "$CANON_LOCK" >&2
+    fi
+    CANON_REFERENCE="Canon (reference model materials; the RED Method is its licensed implementation): $CANON_PATH (content sha256 $CANON_HASH; pinned in canon.lock)"
+  else
+    CANON_REFERENCE="Canon (reference model materials; the RED Method is its licensed implementation): $CANON_PATH"
+  fi
 else
   printf 'ralph: canon reference directory not found at %s; proceeding without it\n' "$CANON_DIR" >&2
 fi

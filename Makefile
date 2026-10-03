@@ -19,6 +19,13 @@ export DATABASE_URL
 PUSH_REMOTES ?= origin
 FINAL_PUSH_REMOTES ?= origin atlas
 
+# A cycle that fails (for example a model or network hiccup, or a stale lock) is
+# retried at the same cycle number up to MAX_FAILURES consecutive times before
+# the loop halts, so one flaky run does not kill a long loop. RETRY_SLEEP is the
+# backoff in seconds between retries.
+MAX_FAILURES ?= 5
+RETRY_SLEEP ?= 15
+
 # Create case-insensitive command aliases while keeping the run logic in two targets.
 RUN_ALIASES := $(shell bash -c 's=run; for ((m=0;m<8;m++)); do out=; for ((i=0;i<3;i++)); do c=$${s:i:1}; if ((m & (1<<i))); then out+=$$(printf "%s" "$$c" | tr "[:lower:]" "[:upper:]"); else out+=$$c; fi; done; printf "%s " "$$out"; done')
 LOOP_ALIASES := $(shell bash -c 's=loop; for ((m=0;m<16;m++)); do out=; for ((i=0;i<4;i++)); do c=$${s:i:1}; if ((m & (1<<i))); then out+=$$(printf "%s" "$$c" | tr "[:lower:]" "[:upper:]"); else out+=$$c; fi; done; printf "%s " "$$out"; done')
@@ -26,7 +33,7 @@ HELP_ALIASES := $(shell bash -c 's=help; for ((m=0;m<16;m++)); do out=; for ((i=
 
 COMMAND_ALIASES := $(RUN_ALIASES) $(LOOP_ALIASES) $(HELP_ALIASES)
 
-.PHONY: run loop help check done reset-hosted $(COMMAND_ALIASES)
+.PHONY: run loop help check done canon-pin reset-hosted $(COMMAND_ALIASES)
 .DEFAULT_GOAL := help
 
 $(filter-out run,$(RUN_ALIASES)): run
@@ -40,6 +47,7 @@ help:
 	  'make run REPO=../fork    Run against a Git checkout in another folder' \
 	  'make check               Run the full test suite (with Postgres) and pyflakes' \
 	  'make done                Run the prototype definition-of-done gate (SPEC section 13)' \
+	  'make canon-pin           Pin the current reference canon content hash in canon.lock' \
 	  'make reset-hosted        Wipe the hosted instance data (onboarding/people)'
 
 run:
@@ -53,12 +61,16 @@ check:
 done:
 	@./scripts/check_definition_of_done.sh
 
+canon-pin:
+	@h="$$(./scripts/canon_hash.sh)"; printf '%s %s\n' "$$h" "$$(date -u +%FT%TZ)" > canon.lock; printf 'pinned canon: %s\n' "$$h"
+
 reset-hosted:
 	@./scripts/reset_redop_data.sh
 
 loop:
 	@[[ "$(COUNT)" =~ ^[1-9][0-9]*$$ ]] || { printf 'Use: make loop n=5, where n is a positive whole number\n' >&2; exit 2; }
-	@for ((cycle = 1; cycle <= $(COUNT); cycle++)); do \
+	@failures=0; cycle=1; \
+	while (( cycle <= $(COUNT) )); do \
 	  if [[ -e "$(REPO)/.ralph/STOP" ]]; then \
 	    printf 'Stop requested: %s exists; halting before cycle %s\n' "$(REPO)/.ralph/STOP" "$$cycle"; \
 	    break; \
@@ -74,5 +86,13 @@ loop:
 	    fi; \
 	    break; \
 	  fi; \
-	  if (( status != 0 )); then exit $$status; fi; \
+	  if (( status != 0 )); then \
+	    failures=$$(( failures + 1 )); \
+	    printf 'Cycle %s failed (status %s); failure %s of %s\n' "$$cycle" "$$status" "$$failures" "$(MAX_FAILURES)"; \
+	    if (( failures >= $(MAX_FAILURES) )); then printf 'Halting after %s consecutive failures\n' "$$failures"; exit $$status; fi; \
+	    sleep $(RETRY_SLEEP); \
+	    continue; \
+	  fi; \
+	  failures=0; \
+	  cycle=$$(( cycle + 1 )); \
 	done

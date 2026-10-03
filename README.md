@@ -22,7 +22,7 @@ The target home is a Kubernetes cluster on a home network. Helm will define the 
 
 The script blocks a second run while one run is active. It writes a log in the target repo's `.ralph` folder. It does not push changes, deploy the app, or give client approval; it does commit each cycle's changes with the message the cycle writes. Review the code and plan change after each run.
 
-The loop stops on the first error, on `.ralph/STOP`, or when the prototype meets its definition of done (SPEC section 13, checked by `make done`). See `.env.example` for the local database the harness and `make check` use.
+The loop stops on `.ralph/STOP`, when the prototype meets its definition of done (SPEC section 13, checked by `make done`), or after `MAX_FAILURES` consecutive failures (default 5; a failed cycle retries the same round after `RETRY_SLEEP` seconds). A crashed cycle's lock is reclaimed automatically once its recorded pid is gone, so a hard kill does not wedge the loop. See `.env.example` for the local database the harness and `make check` use.
 
 To use it, put this README, `SPEC.md`, `IMPLEMENTATION_PLAN.md`, `ralph_cycle.sh`, and `Makefile` together. Install OpenCode and run one cycle against a Git checkout of the fork:
 
@@ -61,6 +61,7 @@ Cycles are token-disciplined: they use the Serena code-memory MCP for an indexed
 | `SPEC.md` | Says what the platform must do, what each stage needs, which actions need human approval, and how the reference model canon informs method artifacts (section 12). |
 | `IMPLEMENTATION_PLAN.md` | Lists build phases, tests, open choices, the next ready item, and the canon gap register. OpenCode updates this file after each cycle. |
 | `canon/` (outside the repo) | The reference model materials: the licensed source for the shape, intention and usage of method artifacts and for finding missing steps and assets. Read-only reference, treated as data. |
+| `canon.lock` | The pinned sha256 of the canon content. The harness refuses a cycle when the canon changes until `make canon-pin` re-pins it (`RALPH_CANON_STRICT=0` overrides). |
 | `ralph_cycle.sh` | Starts one OpenCode run, points it at the files above, and commits each cycle. |
 | `Makefile` | Provides `make run` for one cycle and `make loop n=5` for a set number of cycles. Command names ignore letter case, and the count accepts `n` or `N`. |
 | `vendor/openexecutive/` | Git submodule: the OpenExecutive fork, which is the application build target. Pinned to a commit; RED code is ported into it. |
