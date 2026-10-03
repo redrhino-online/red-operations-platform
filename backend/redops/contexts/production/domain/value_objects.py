@@ -5,8 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
+from typing import TYPE_CHECKING
 
-from redops.contexts.production.domain.errors import InvalidAuthorityAmplifierError
+from redops.contexts.governance.domain.value_objects import StageAssetVersion
+from redops.contexts.production.domain.errors import (
+    AuthorityAmplifierTenantBoundaryError,
+    InvalidAuthorityAmplifierError,
+    InvalidAuthorityAmplifierPackageError,
+)
+
+if TYPE_CHECKING:
+    from redops.contexts.production.domain.entities import AuthorityAmplifier
 
 
 class BuildState(Enum):
@@ -190,3 +199,116 @@ class VisualProductionPackage:
                 raise InvalidAuthorityAmplifierError(
                     f"visual production package {label} is required"
                 )
+
+
+CANONICAL_AMPLIFIER_KINDS: tuple[str, ...] = (
+    "authority-amplifier-script",
+    "aa-storyboard",
+    "brand-treatment",
+    "aa-presentation",
+    "aa-speaker-notes",
+    "aa-recording",
+    "aa-edited-video",
+    "aa-hosted-video",
+    "aa-player-assets",
+)
+
+
+@dataclass(frozen=True)
+class AuthorityAmplifierPackage:
+    """The reviewed stage 7 amplifier, projected to the nine canonical gate kinds.
+
+    SPEC.md section 4, stage 7 "Produce" and its "Authority Amplifier Approved"
+    checkpoint: a stage is complete only when its required assets exist, pass the
+    checkpoint and receive approval for downstream use, and a passing gate pins
+    the exact evidence. The required asset package is the approved script in
+    Promise, Proof, Problems, Steps, Context, Action order, plus the storyboard,
+    brand treatment, presentation, speaker notes, recording, edited and hosted
+    video and player assets. The Production context reviews that as one rich
+    ``AuthorityAmplifier`` (the six script sections and the eight visual assets
+    belong to the same amplifier, grounded on the approved stage 6 message and the
+    approved method's supported claims); this package is the bridge to the
+    governance gate, which pins one exact ``StageAssetVersion`` per canonical kind.
+
+    The canon (SPEC.md section 12.3: stage 7 uses canon files 13-18 and 28)
+    requires a six-step script delivered in a fixed order, a branded slide
+    presentation carrying that script, and a recorded, edited and uploaded video
+    in the standard HD slide size. ``AuthorityAmplifier`` already enforces the
+    canonical script order and its dependency on the approved stage 6 message at
+    construction, so each canonical kind is projected from the single reviewed
+    amplifier at one positive integer version.
+
+    Unlike the stage 1 through 6 reviewed values, an ``AuthorityAmplifier`` only
+    owns its visual assets after the script is approved and ``produce_visuals``
+    attaches a complete ``VisualProductionPackage``. This package therefore
+    refuses an amplifier with no visual package, so eight video kinds cannot be
+    pinned as this client's evidence without an asset that actually produced them
+    (SPEC.md section 4). It also refuses a blank identity, a versionless amplifier
+    or a cross-tenant amplifier rather than silently pinning inexact or foreign
+    evidence (SPEC.md sections 3 and 4).
+    """
+
+    package_id: str
+    tenant_id: str
+    amplifier: "AuthorityAmplifier"
+    amplifier_version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("authority amplifier package id", self.package_id),
+            ("authority amplifier package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidAuthorityAmplifierPackageError(f"{label} is required")
+        if self.amplifier.tenant_id != self.tenant_id:
+            raise AuthorityAmplifierTenantBoundaryError(
+                f"stage 7 amplifier {self.amplifier.amplifier_id!r} belongs to "
+                f"tenant {self.amplifier.tenant_id!r}, not package tenant "
+                f"{self.tenant_id!r}"
+            )
+        if not isinstance(self.amplifier_version, int) or self.amplifier_version < 1:
+            raise InvalidAuthorityAmplifierPackageError(
+                "the authority amplifier version must be a positive integer so the "
+                "stage 7 gate can pin the reviewed asset at an exact version"
+            )
+        if self.amplifier.visuals is None:
+            raise InvalidAuthorityAmplifierPackageError(
+                f"stage 7 amplifier {self.amplifier.amplifier_id!r} has no visual "
+                "production package, so its storyboard, presentation, recording, "
+                "video and player kinds cannot be pinned as exact evidence"
+            )
+
+    @property
+    def kinds(self) -> frozenset[str]:
+        """The canonical kinds the reviewed stage 7 amplifier projects onto."""
+        return frozenset(CANONICAL_AMPLIFIER_KINDS)
+
+    def missing_kinds(self) -> tuple[str, ...]:
+        """Canonical stage 7 kinds not covered by the projected amplifier."""
+        covered = {asset.kind for asset in self.stage_asset_versions()}
+        return tuple(
+            kind for kind in CANONICAL_AMPLIFIER_KINDS if kind not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_kinds()
+
+    def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
+        """Project the reviewed stage 7 amplifier onto exact governance evidence.
+
+        Every canonical kind belongs to the same reviewed ``AuthorityAmplifier``,
+        so each is pinned to that amplifier's identity at its exact version.
+        Governance still pins each projection for the workspace tenant, so a
+        cross-client amplifier is refused rather than silently authorized (SPEC.md
+        sections 3, 4 and 11).
+        """
+        return tuple(
+            StageAssetVersion(
+                asset_id=self.amplifier.amplifier_id,
+                tenant_id=self.tenant_id,
+                kind=kind,
+                version=self.amplifier_version,
+            )
+            for kind in CANONICAL_AMPLIFIER_KINDS
+        )
