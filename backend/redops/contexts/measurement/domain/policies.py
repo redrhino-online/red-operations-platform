@@ -13,6 +13,7 @@ from redops.contexts.measurement.domain.entities import ImprovementProposal
 from redops.contexts.measurement.domain.errors import (
     ImprovementAuthorityError,
     ImprovementDependencyError,
+    ImprovementMetricMismatchError,
     ImprovementNotApprovedError,
     ImprovementOutcomeSupportError,
     ImprovementStateError,
@@ -91,6 +92,13 @@ class ImprovementMeasurementPolicy:
                 f"improvement {proposal.proposal_id!r} is grounded on tenant "
                 f"{proposal.baseline.tenant_id!r}, but the outcome belongs to "
                 f"tenant {outcome.tenant_id!r}"
+            )
+        if outcome.metric != proposal.metric:
+            raise ImprovementMetricMismatchError(
+                f"improvement {proposal.proposal_id!r} was approved against "
+                f"metric {proposal.metric.metric_id!r} version "
+                f"{proposal.metric.version}, but the outcome measures metric "
+                f"{outcome.metric.metric_id!r} version {outcome.metric.version}"
             )
         if not proposal.baseline.is_established:
             raise ImprovementDependencyError(

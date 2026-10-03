@@ -45,6 +45,7 @@ from .fixtures import (
     improvement_outcome,
     improvement_proposal,
     measured_improvement,
+    metric_definition,
 )
 
 
@@ -77,6 +78,7 @@ class ImprovementProposalTests(unittest.TestCase):
             improvement_proposal(
                 proposal_id="improve-foreign",
                 tenant_id="client-other",
+                metric=metric_definition(tenant_id="client-other"),
             )
 
     def test_a_proposal_cannot_be_grounded_on_a_draft_baseline(self):
@@ -107,6 +109,7 @@ class ImprovementProposalTests(unittest.TestCase):
                 proposal_id="improve-blank-lever",
                 tenant_id=TENANT,
                 baseline=established_baseline(),
+                metric=metric_definition(),
                 proposed_by="optimizer-agent",
                 owner="performance-owner",
                 subject="cost per lead",
@@ -197,6 +200,7 @@ class ImprovementMeasurementTests(unittest.TestCase):
 
         foreign = improvement_outcome(
             tenant_id="client-other",
+            metric=metric_definition(tenant_id="client-other"),
             before=performance_claim(
                 tenant_id="client-other", subject="cost per lead"
             ),
@@ -214,9 +218,13 @@ class ImprovementMeasurementTests(unittest.TestCase):
         from ..execution.fixtures import performance_claim
 
         foreign = improvement_outcome(
-            before=performance_claim(baseline_id="baseline-other"),
+            before=performance_claim(
+                subject="cost per lead", baseline_id="baseline-other"
+            ),
             after=performance_claim(
-                claim_id="after-3f", baseline_id="baseline-other"
+                claim_id="after-3f",
+                subject="cost per lead",
+                baseline_id="baseline-other",
             ),
         )
 
@@ -244,6 +252,7 @@ class ImprovementOutcomeTests(unittest.TestCase):
         values = {
             "outcome_id": base.outcome_id,
             "tenant_id": base.tenant_id,
+            "metric": base.metric,
             "before": base.before,
             "after": base.after,
             "measured_on": base.measured_on,
@@ -259,7 +268,9 @@ class ImprovementOutcomeTests(unittest.TestCase):
 
         with self.assertRaises(InvalidImprovementOutcomeError):
             improvement_outcome(
-                before=performance_claim(tenant_id="client-other")
+                before=performance_claim(
+                    tenant_id="client-other", subject="cost per lead"
+                )
             )
 
     def test_the_before_and_after_must_measure_the_same_subject(self):
@@ -302,6 +313,122 @@ class ImprovementOutcomeTests(unittest.TestCase):
 
         with self.assertRaises(FrozenInstanceError):
             outcome.summary = "tampered"
+
+
+class ImprovementMetricGroundingTests(unittest.TestCase):
+    """The improvement loop must run against a registered, versioned metric.
+
+    SPEC.md section 3 keys a Measurement aggregate by its metric definition and
+    keeps the stage 10 loop grounded on the cycle 93 registry, so an optimization
+    cannot be proposed or measured against a free-text metric. Canon files 23 and
+    24 make the typed funnel metric the lever an operator moves and warn against
+    reading a rate until real metrics exist, so the proposal and its before/after
+    observations pin the exact metric identity and version.
+    """
+
+    def test_a_proposal_is_pinned_to_a_registered_metric(self):
+        proposal = improvement_proposal()
+
+        self.assertEqual("metric-cost-per-lead", proposal.metric.metric_id)
+        self.assertEqual(1, proposal.metric.version)
+
+    def test_a_proposal_cannot_use_another_tenants_metric(self):
+        from redops.contexts.measurement.domain.errors import (
+            ImprovementMetricBoundaryError,
+        )
+
+        with self.assertRaises(ImprovementMetricBoundaryError):
+            improvement_proposal(
+                metric=metric_definition(
+                    metric_id="metric-foreign", tenant_id="client-other"
+                )
+            )
+
+    def test_a_proposal_subject_must_match_its_registered_metric(self):
+        from redops.contexts.measurement.domain.errors import (
+            ImprovementMetricError,
+        )
+
+        with self.assertRaises(ImprovementMetricError):
+            improvement_proposal(subject="lead volume")
+
+    def test_a_proposal_requires_a_registered_metric(self):
+        from redops.contexts.measurement.domain.errors import (
+            ImprovementMetricError,
+        )
+
+        with self.assertRaises(ImprovementMetricError):
+            improvement_proposal(metric="cost per lead")
+
+    def test_an_outcome_is_pinned_to_a_registered_metric(self):
+        outcome = improvement_outcome()
+
+        self.assertEqual("metric-cost-per-lead", outcome.metric.metric_id)
+        self.assertEqual(1, outcome.metric.version)
+
+    def test_an_outcome_subject_must_match_its_registered_metric(self):
+        from redops.contexts.measurement.domain.errors import (
+            InvalidImprovementOutcomeError,
+        )
+        from ..execution.fixtures import performance_claim
+
+        with self.assertRaises(InvalidImprovementOutcomeError):
+            improvement_outcome(
+                before=performance_claim(
+                    claim_id="before-3f",
+                    subject="lead volume",
+                    statement="lead volume was twelve",
+                ),
+                after=performance_claim(
+                    claim_id="after-3f",
+                    subject="lead volume",
+                    statement="lead volume was eight",
+                ),
+            )
+
+    def test_an_outcome_from_another_tenant_metric_is_refused(self):
+        from redops.contexts.measurement.domain.errors import (
+            InvalidImprovementOutcomeError,
+        )
+
+        with self.assertRaises(InvalidImprovementOutcomeError):
+            improvement_outcome(
+                metric=metric_definition(
+                    metric_id="metric-foreign", tenant_id="client-other"
+                )
+            )
+
+    def test_an_outcome_cannot_measure_against_a_different_metric(self):
+        from redops.contexts.measurement.domain.errors import (
+            ImprovementMetricMismatchError,
+        )
+
+        with self.assertRaises(ImprovementMetricMismatchError):
+            approved_improvement().record_outcome(
+                outcome=improvement_outcome(
+                    metric=metric_definition(metric_id="metric-lead-volume")
+                )
+            )
+
+    def test_an_outcome_cannot_measure_against_a_newer_metric_version(self):
+        from redops.contexts.measurement.domain.errors import (
+            ImprovementMetricMismatchError,
+        )
+
+        with self.assertRaises(ImprovementMetricMismatchError):
+            approved_improvement().record_outcome(
+                outcome=improvement_outcome(
+                    metric=metric_definition(version=2)
+                )
+            )
+
+    def test_a_measured_improvement_pins_the_approved_metric(self):
+        measured = measured_improvement()
+
+        self.assertEqual(
+            measured.metric.metric_id, measured.outcome.metric.metric_id
+        )
+        self.assertEqual(measured.metric.version, measured.outcome.metric.version)
 
 
 if __name__ == "__main__":

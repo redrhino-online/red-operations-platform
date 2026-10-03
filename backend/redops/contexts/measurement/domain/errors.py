@@ -37,6 +37,35 @@ class ImprovementDependencyError(MeasurementError):
     """
 
 
+class ImprovementMetricError(MeasurementError, ValueError):
+    """An improvement is not grounded on a registered, versioned metric.
+
+    SPEC.md section 3 keys a Measurement aggregate by its metric definition and
+    Phase 5 requires a metric registry, so an optimization cannot be proposed or
+    measured against a free-text metric. A proposal or outcome whose metric is
+    missing, untyped or whose subject disagrees with the registered metric name
+    cannot be a typed stage 10 improvement.
+    """
+
+
+class ImprovementMetricBoundaryError(MeasurementError):
+    """An improvement cites another tenant's registered metric.
+
+    SPEC.md section 3: every tenant resource carries a tenant id and a query is
+    tenant scoped, so an improvement cannot be grounded on a metric owned by a
+    different client.
+    """
+
+
+class ImprovementMetricMismatchError(MeasurementError):
+    """An outcome measures against a metric other than the approved one.
+
+    SPEC.md section 4: a passing gate pins the exact evidence and intended use,
+    so a measured improvement must use the exact metric identity and version its
+    proposal was approved against, not a redefined or different metric.
+    """
+
+
 class ImprovementAuthorityError(MeasurementError):
     """An improvement was not approved by its named human owner.
 

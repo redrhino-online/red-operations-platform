@@ -92,6 +92,7 @@ class ImprovementOutcome:
 
     outcome_id: str
     tenant_id: str
+    metric: MetricDefinition
     before: PerformanceClaim
     after: PerformanceClaim
     measured_on: date
@@ -105,6 +106,17 @@ class ImprovementOutcome:
         ):
             if not value or not value.strip():
                 raise InvalidImprovementOutcomeError(f"{label} is required")
+        if not isinstance(self.metric, MetricDefinition):
+            raise InvalidImprovementOutcomeError(
+                "an improvement outcome must name a registered, versioned metric "
+                "definition rather than a free-text metric"
+            )
+        if self.metric.tenant_id != self.tenant_id:
+            raise InvalidImprovementOutcomeError(
+                f"the improvement outcome metric {self.metric.metric_id!r} "
+                f"belongs to tenant {self.metric.tenant_id!r}, not outcome tenant "
+                f"{self.tenant_id!r}"
+            )
         if not isinstance(self.measured_on, date):
             raise InvalidImprovementOutcomeError(
                 "improvement outcome measured date is required"
@@ -115,6 +127,12 @@ class ImprovementOutcome:
                     f"the improvement outcome {label} observation belongs to "
                     f"tenant {claim.tenant_id!r}, not outcome tenant "
                     f"{self.tenant_id!r}"
+                )
+            if claim.subject != self.metric.name:
+                raise InvalidImprovementOutcomeError(
+                    f"the improvement outcome {label} observation subject "
+                    f"{claim.subject!r} does not match its registered metric "
+                    f"name {self.metric.name!r}"
                 )
         if self.before.subject != self.after.subject:
             raise InvalidImprovementOutcomeError(

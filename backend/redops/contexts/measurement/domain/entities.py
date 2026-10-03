@@ -15,12 +15,15 @@ from redops.contexts.execution.domain.entities import PerformanceBaseline
 from redops.contexts.measurement.domain.errors import (
     ImprovementAuthorityError,
     ImprovementDependencyError,
+    ImprovementMetricBoundaryError,
+    ImprovementMetricError,
     InvalidImprovementError,
 )
 from redops.contexts.measurement.domain.value_objects import (
     ImprovementApproval,
     ImprovementOutcome,
     ImprovementState,
+    MetricDefinition,
 )
 
 
@@ -34,7 +37,11 @@ class ImprovementProposal:
     and 24) is that a baseline of metrics must exist before optimizing and that
     one variable changes at a time, so the proposal names the single lever, the
     evidence behind it and the measurement plan, and is grounded on an
-    established same-tenant ``PerformanceBaseline``.
+    established same-tenant ``PerformanceBaseline``. The canon also treats the
+    funnel metric as the lever to move, so the proposal pins a same-tenant,
+    versioned ``MetricDefinition`` from the stage 10 registry and its subject is
+    that registered metric's name, rather than an untyped free-text metric
+    (SPEC.md section 3, Measurement aggregate).
 
     The proposal is frozen and starts PROPOSED. It becomes APPROVED only through
     the named owner's approval and MEASURED only after a grounded before-and-after
@@ -45,6 +52,7 @@ class ImprovementProposal:
     proposal_id: str
     tenant_id: str
     baseline: PerformanceBaseline
+    metric: MetricDefinition
     proposed_by: str
     owner: str
     subject: str
@@ -69,6 +77,24 @@ class ImprovementProposal:
         ):
             if not value or not value.strip():
                 raise InvalidImprovementError(f"{label} is required")
+        if not isinstance(self.metric, MetricDefinition):
+            raise ImprovementMetricError(
+                "an improvement proposal must name a registered, versioned "
+                "metric definition rather than a free-text metric"
+            )
+        if self.metric.tenant_id != self.tenant_id:
+            raise ImprovementMetricBoundaryError(
+                f"improvement proposal {self.proposal_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its metric "
+                f"{self.metric.metric_id!r} belongs to tenant "
+                f"{self.metric.tenant_id!r}"
+            )
+        if self.subject != self.metric.name:
+            raise ImprovementMetricError(
+                f"improvement proposal {self.proposal_id!r} subject "
+                f"{self.subject!r} does not match its registered metric name "
+                f"{self.metric.name!r}"
+            )
         if self.baseline.tenant_id != self.tenant_id:
             raise ImprovementDependencyError(
                 f"improvement proposal {self.proposal_id!r} is grounded on "

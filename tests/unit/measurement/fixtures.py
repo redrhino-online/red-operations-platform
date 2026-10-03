@@ -37,6 +37,7 @@ def improvement_proposal(baseline=None, **overrides) -> ImprovementProposal:
         "proposal_id": "improve-3f",
         "tenant_id": TENANT,
         "baseline": established_baseline() if baseline is None else baseline,
+        "metric": metric_definition(),
         "proposed_by": "optimizer-agent",
         "owner": "performance-owner",
         "subject": "cost per lead",
@@ -68,6 +69,7 @@ def improvement_outcome(**overrides) -> ImprovementOutcome:
     values = {
         "outcome_id": "outcome-3f",
         "tenant_id": TENANT,
+        "metric": metric_definition(),
         "before": performance_claim(
             claim_id="before-3f",
             subject="cost per lead",
