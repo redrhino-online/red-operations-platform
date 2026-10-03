@@ -41,12 +41,20 @@ from redops.contexts.measurement.domain.errors import (
     InvalidMetricReportingError,
     InvalidMetricWindowError,
     InvalidScalingRecommendationError,
+    InvalidSplitTestError,
     MeasurementTenantBoundaryError,
     MeasurementWindowOpenError,
     ScalingLearningPhaseError,
     ScalingObservationError,
     ScalingRecommendationObservationError,
     ScalingTenantBoundaryError,
+    SplitTestChangeError,
+    SplitTestDependencyError,
+    SplitTestLeverError,
+    SplitTestObservationError,
+    SplitTestTenantBoundaryError,
+    SplitTestVariableError,
+    SplitTestWindowOpenError,
 )
 
 if TYPE_CHECKING:
@@ -1122,3 +1130,175 @@ class ScalingRecommendation:
             "an observation"
         )
 
+
+class SplitTestMode(Enum):
+    """The canon's two ways to run a stage 10 split test (canon file 24).
+
+    Canon file 24 gives a limited-budget operator exactly two options: "I pause
+    the first ad, clone it and make the changes I want to make and run a new one
+    ... Or if I have the budget, I just run them both together. That's only two
+    ways you could possibly do it." Naming the mode keeps the change log honest
+    about whether the original was paused or both ran together.
+    """
+
+    PAUSE_AND_CLONE = "pause_and_clone"
+    RUN_CONCURRENT = "run_concurrent"
+
+
+@dataclass(frozen=True)
+class SplitTestChange:
+    """The single variable a stage 10 split test changes (canon files 22, 24).
+
+    Canon file 24: "I'm not going to change this headline and the image and the
+    button text. Why? Because how do I know what the hell worked?" The change
+    names exactly one variable and its before and after values, and the two values
+    must differ so the log records a real version change rather than a no-op.
+    """
+
+    variable: str
+    from_value: str
+    to_value: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("split test variable", self.variable),
+            ("split test before value", self.from_value),
+            ("split test after value", self.to_value),
+        ):
+            if not value or not value.strip():
+                raise InvalidSplitTestError(f"{label} is required")
+        if self.from_value == self.to_value:
+            raise SplitTestChangeError(
+                f"split test variable {self.variable!r} has identical before and "
+                "after values, so it records no change"
+            )
+
+
+@dataclass(frozen=True)
+class SplitTest:
+    """A logged stage 10 one-variable split test (SPEC.md section 4; canon 22-24).
+
+    SPEC.md section 4, stage 10 keeps the observed movement distinct from a
+    causal conclusion and requires owner approval before material changes. The
+    canon's split-test discipline (canon files 22, 23 and 24) logs what changed
+    before reading the result: start only once a baseline of metrics exists, change
+    one variable at a time, pause-and-clone or run both, and wait for the result
+    window to close ("I wait 10 days to see how it does"). The log is bound to the
+    staged optimization -- the same tenant's owner-approved ``ImprovementProposal``
+    -- and its single changed variable must be that optimization's exact lever, so
+    the change stays traceable to the authorized optimization and its established
+    baseline rather than becoming an untethered experiment.
+
+    The log records the change, not the measured movement; it can never be
+    projected to an OBSERVATION claim. The separate ``ImprovementOutcome`` remains
+    the measured before-and-after, so the two are never conflated (SPEC.md section
+    3, Measurement invariant).
+    """
+
+    test_id: str
+    tenant_id: str
+    optimization: "ImprovementProposal"
+    changes: tuple[SplitTestChange, ...]
+    mode: SplitTestMode
+    window: MeasurementWindow
+    read_on: date
+    rationale: str
+
+    def __post_init__(self) -> None:
+        from redops.contexts.measurement.domain.entities import (
+            ImprovementProposal,
+        )
+
+        for label, value in (
+            ("split test id", self.test_id),
+            ("split test tenant id", self.tenant_id),
+            ("split test rationale", self.rationale),
+        ):
+            if not value or not value.strip():
+                raise InvalidSplitTestError(f"{label} is required")
+        if not isinstance(self.optimization, ImprovementProposal):
+            raise InvalidSplitTestError(
+                "a split test must bind to the staged optimization it logs, not "
+                "a free-standing experiment"
+            )
+        if self.optimization.tenant_id != self.tenant_id:
+            raise SplitTestTenantBoundaryError(
+                f"split test {self.test_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its optimization "
+                f"{self.optimization.proposal_id!r} belongs to tenant "
+                f"{self.optimization.tenant_id!r}"
+            )
+        if not (
+            self.optimization.is_approved or self.optimization.is_measured
+        ):
+            raise SplitTestDependencyError(
+                f"split test {self.test_id!r} cannot log a change for "
+                f"optimization {self.optimization.proposal_id!r} in state "
+                f"{self.optimization.state.value!r}; only an owner-approved "
+                "optimization can authorize a material change"
+            )
+        if not self.optimization.baseline.is_established:
+            raise SplitTestDependencyError(
+                f"split test {self.test_id!r} cannot log a change for "
+                f"optimization {self.optimization.proposal_id!r}: its "
+                "performance baseline is no longer established"
+            )
+        if not isinstance(self.changes, tuple) or len(self.changes) != 1:
+            raise SplitTestVariableError(
+                f"split test {self.test_id!r} must change exactly one variable "
+                "at a time; changing none or more than one makes the result "
+                "unattributable"
+            )
+        change = self.changes[0]
+        if not isinstance(change, SplitTestChange):
+            raise InvalidSplitTestError(
+                "a split test change must be a typed variable change with before "
+                "and after values"
+            )
+        if change.variable != self.optimization.lever:
+            raise SplitTestLeverError(
+                f"split test {self.test_id!r} changes {change.variable!r}, but "
+                f"its approved optimization authorizes the lever "
+                f"{self.optimization.lever!r}"
+            )
+        if not isinstance(self.mode, SplitTestMode):
+            raise InvalidSplitTestError(
+                "a split test requires the canon's pause-and-clone or "
+                "run-concurrent mode"
+            )
+        if not isinstance(self.window, MeasurementWindow):
+            raise InvalidSplitTestError(
+                "a split test requires the window it is read over"
+            )
+        if not isinstance(self.read_on, date):
+            raise InvalidSplitTestError(
+                "a split test requires the date its result is read"
+            )
+        if self.read_on < self.window.end:
+            raise SplitTestWindowOpenError(
+                "a split test cannot read its result before its test window has "
+                f"closed: it was read on {self.read_on} but the window ends "
+                f"{self.window.end}"
+            )
+
+    @property
+    def variable(self) -> str:
+        """The single variable this split test changes."""
+        return self.changes[0].variable
+
+    @property
+    def is_split_test(self) -> bool:
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a split-test change log as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions; the log
+        records what changed, while the measured movement is the separate
+        improvement outcome. A change log is therefore never an observation.
+        """
+        raise SplitTestObservationError(
+            f"split test {claim_id!r} logs the variable that changed, not an "
+            "observed movement or causal conclusion, and cannot be recorded as "
+            "an observation"
+        )

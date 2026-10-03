@@ -370,3 +370,85 @@ class ScalingRecommendationObservationError(MeasurementError):
     never an observed measurement or an authorization.
     """
 
+
+class InvalidSplitTestError(MeasurementError, ValueError):
+    """A SplitTest or SplitTestChange leaves a required field unspecified.
+
+    Canon file 24: a split test logs the one variable that was changed, its
+    before and after values, how it was run and the window it is read over ("I
+    keep a spreadsheet... I'll just say, okay, add version one... The headline of
+    the ad, I'm going to change"). A split test or change missing its identity, a
+    before or after value, a mode or a rationale cannot be a traceable change log.
+    """
+
+
+class SplitTestChangeError(MeasurementError, ValueError):
+    """A split-test change does not actually change anything.
+
+    Canon file 24 logs a version change with a before and after ("add version
+    one... man on a tricycle... I'm going to test it against... my change"), so a
+    change whose before and after values are identical records no version change
+    and cannot stand as the single variable under test.
+    """
+
+
+class SplitTestVariableError(MeasurementError):
+    """A split test does not change exactly one variable.
+
+    Canon file 24 is explicit that a test changes one variable at a time: "I'm
+    not going to change this headline and the image and the button text. Why?
+    Because how do I know what the hell worked?" A test that logs no change or
+    more than one change cannot attribute the result to a single variable.
+    """
+
+
+class SplitTestLeverError(MeasurementError):
+    """A split test changes a variable other than the approved optimization lever.
+
+    SPEC.md section 4: a passing gate pins the exact evidence and intended use,
+    and a performance recommendation changes one lever. The canon's split-test
+    discipline (canon file 24) tests the staged change, so the logged variable
+    must be the exact lever the owner-approved optimization authorizes.
+    """
+
+
+class SplitTestDependencyError(MeasurementError):
+    """A split test is not grounded on an approved optimization and baseline.
+
+    SPEC.md section 4: performance recommendations require owner approval before
+    material changes, and the canon's split-test discipline (canon file 24:
+    "You shouldn't do it in the beginning because you need a baseline of
+    metrics") starts testing only once a baseline exists. A split test of a
+    merely proposed optimization would log a material change that no owner has
+    authorized.
+    """
+
+
+class SplitTestTenantBoundaryError(MeasurementError):
+    """A split test cites another tenant's optimization.
+
+    SPEC.md section 3: every tenant resource carries a tenant id and a query is
+    tenant scoped, so a client's split test cannot log a change to a different
+    client's optimization.
+    """
+
+
+class SplitTestWindowOpenError(MeasurementError):
+    """A split test's result was read before its test window closed.
+
+    Canon file 24 does not read a split test until the period it runs over has
+    elapsed ("I pause the first ad, clone it... And then I wait 10 days to see how
+    it does"), so a read date before the window end would report a result that has
+    not yet been observed over a complete window.
+    """
+
+
+class SplitTestObservationError(MeasurementError):
+    """A split-test change log was projected as an observed result.
+
+    SPEC.md section 3, Measurement invariant keeps observations distinct from
+    conclusions. A split test logs what changed, not the measured movement or a
+    causal conclusion, so it is never an observation and cannot be represented as
+    one.
+    """
+
