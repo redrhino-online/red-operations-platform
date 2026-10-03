@@ -2201,9 +2201,11 @@ class NonConvertedSegment:
 
     Canon file 34's invisible opt-in recovers the prospect who "hit that landing
     page and don't opt in", so the segment names the funnel step and page the
-    prospect stalled on and the conversion goal they did not achieve. It is
-    grounded on a same-tenant tracking code and the unachieved goal on that code,
-    so a segment cannot be invented apart from the pixel and goal that define it.
+    prospect stalled on and the conversion goal they did not achieve. Because the
+    canon creates "a conversion goal for every step in the funnel", the unachieved
+    goal must be the goal recorded at the landing step it names. It is grounded on
+    a same-tenant tracking code and the unachieved goal on that code, so a segment
+    cannot be invented apart from the pixel and goal that define it.
     """
 
     segment_id: str
@@ -2248,6 +2250,15 @@ class NonConvertedSegment:
                 f"non-converted segment {self.segment_id!r} names a goal recorded "
                 f"on tracking code {self.unachieved_goal.tracking_code.code_id!r}, "
                 f"not its own tracking code {self.tracking_code.code_id!r}"
+            )
+        if self.unachieved_goal.funnel_step != self.landing_step:
+            raise InvisibleOptInStepError(
+                f"non-converted segment {self.segment_id!r} stalls on step "
+                f"{self.landing_step!r}, but its unachieved goal "
+                f"{self.unachieved_goal.goal_id!r} marks step "
+                f"{self.unachieved_goal.funnel_step!r}; a segment must name the "
+                "conversion goal recorded at the step it stalled on (canon file "
+                "34: a goal for every step of the funnel)"
             )
 
 

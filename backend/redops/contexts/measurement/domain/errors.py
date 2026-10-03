@@ -633,12 +633,16 @@ class InvisibleOptInContactGateError(MeasurementError):
 
 
 class InvisibleOptInStepError(MeasurementError):
-    """An invisible opt-in offer does not move the prospect down the funnel.
+    """An invisible opt-in offer or segment names the wrong funnel step.
 
-    Canon file 34: the offer pushes a non-converted visitor "all the way down the
-    funnel". An offer whose advanced audience occupies the same funnel step the
-    prospect stalled on presents no next action and is refused, mirroring the
-    focused campaign's named next-step rule.
+    Canon file 34 sets up "a conversion goal for every step in the funnel", so a
+    goal marks the step it completes. A non-converted segment is a prospect who
+    "hit that landing page and don't opt in", so its unachieved goal must be the
+    goal recorded at the step it stalled on. The offer then pushes that visitor
+    "all the way down the funnel", so its advanced audience must occupy a later
+    step than the one the prospect stalled on. A segment whose goal marks another
+    step, or an offer whose advanced audience occupies the stalled step, presents
+    an unattributable state or no next action and is refused.
     """
 
 

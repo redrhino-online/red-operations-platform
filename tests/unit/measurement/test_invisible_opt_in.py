@@ -189,6 +189,18 @@ class NonConvertedSegmentTests(unittest.TestCase):
                 )
             )
 
+    def test_a_segment_binds_its_goal_to_the_step_it_stalled_on(self):
+        segment = non_converted_segment()
+
+        self.assertEqual(segment.landing_step, segment.unachieved_goal.funnel_step)
+
+    def test_a_segment_refuses_a_goal_recorded_at_another_step(self):
+        with self.assertRaises(InvisibleOptInStepError):
+            non_converted_segment(
+                landing_step="authority-amplifier",
+                unachieved_goal=conversion_goal(funnel_step="opt-in"),
+            )
+
     def test_a_segment_cannot_cross_a_tenant_boundary(self):
         with self.assertRaises(InvisibleOptInTenantBoundaryError):
             non_converted_segment(
