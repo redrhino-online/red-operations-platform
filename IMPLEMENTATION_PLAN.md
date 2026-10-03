@@ -46,7 +46,11 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   cycle records an `Arch-Docs: n/a` waiver because the ported domain has no route
   or runtime behavior yet, and the architecture section is deferred until it
   does. The prior dual-commit blocker is resolved: `ralph_cycle.sh` commits fork
-  code and this repository's plan in their own repositories.
+  code and this repository's plan in their own repositories. The owner also
+  confirmed the language/layer split (fork `docs/adr/0007`): RED domain,
+  application, infrastructure and API logic stays Python in the fork's
+  `openexecutive.redops`, and TypeScript is limited to the Next.js UI/command
+  center — no RED business logic in TypeScript.
 - Blockers: the storage, tenant-isolation, scheduler-topology and
   agent-registration ADRs still need the RED principal's explicit acceptance
   before any real client data; the `redops` application/API/UI wiring is
