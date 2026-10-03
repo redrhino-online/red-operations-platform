@@ -4,3 +4,4 @@
 # before `[5/6]` can pass, so this list grows as Q34-Q44 land.
 portfolio-command-center /command-center
 client-workspace-overview /client-workspace
+source-and-claim-explorer /source-explorer

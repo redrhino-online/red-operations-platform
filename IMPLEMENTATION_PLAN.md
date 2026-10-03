@@ -4,12 +4,12 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T201508Z (Ralph cycle, this run): selected item was Q34, the
-  client workspace overview screen (SPEC.md sections 4 and 8; section 13
-  condition 6; queue item Q34). It is the highest priority ready item: its only
-  dependency Q33 is done, and it is now the head of the Q34-Q45 chain for
+- Cycle 2026-10-03T201635Z (Ralph cycle, this run): selected item was Q35, the
+  source and claim explorer screen (SPEC.md sections 3, 7 and 8; section 13
+  condition 6; queue item Q35). It is the highest priority ready item: its only
+  dependency Q34 is done, and it is now the head of the Q35-Q45 chain for
   condition 6, the largest unstarted DoD condition. It outranks alternatives:
-  Q35-Q45 each depend on Q34; Q28 stage 8-10 required kinds are still blocked on
+  Q36-Q45 each depend on Q35; Q28 stage 8-10 required kinds are still blocked on
   the named methodology-owner placement decision; Q16 needs a workflow write
   route and connector seam; Q3/Q4 need the ADR 0006 resolution and a live key;
   Q8 layer coverage and the condition 2 cross-client-retrieval scenario have no
@@ -18,38 +18,40 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   implemented or are candidate pipeline additions awaiting a named-owner
   decision (Serve and Grow; service and partnership lines), so no canon-covered
   method artifact outranks this gate work.
-- Outcome: new `frontend/src/features/client-workspace/` feature.
-  `ClientWorkspaceOverview.tsx` is a presentational view over the backend
-  production-manager view (state, exact pinned asset versions as provenance and
-  version history, missing kinds, dependency and blocking dependency, owner,
-  next action, due date, and verified progress kept apart from activity);
-  `ClientWorkspaceOverviewScreen.tsx` owns the tenant/engagement/date read;
-  route `/client-workspace` (`src/app/client-workspace/page.tsx`) binds the
-  `client-workspace-overview` screen id now declared in `frontend/dod-screens.txt`.
-  The API client gained `AssetVersion`, `StageProductionView`,
-  `PipelineProgress`, `MetricReporting`, `EngagementProductionView` and
-  `getProductionView`, reading
-  `GET /red/clients/{tenant}/engagements/{engagement}/production-view?on=`. No
-  product authority, gate decision or pipeline stage changed; the UI can approve
-  or release nothing.
-- Evidence: `frontend/src/features/client-workspace/ClientWorkspaceOverview.test.tsx`
-  (5 tests) pins `assetPins` exact-version rendering, a stage's state/owner/next
-  action/missing kind, the verified-progress-vs-activity separation, the
-  loading/error states, and a stubbed-fetch screen read asserting the
-  tenant-scoped production-view request path. `npx vitest run` -> 2 files, 10
-  passed (5 new, 5 existing). `npm run build` -> compiled, `/client-workspace`
-  route emitted. `bash scripts/check_frontend_build.sh frontend` -> exit 0.
-  `bash scripts/check_frontend_screens.sh frontend` -> still exit 1, now 10
-  remaining section 8 ids (honest red; condition 6 needs Q35-Q45). `make done`
-  still fails first at `[2/6]` condition 2 (four section 11 scenarios uncovered).
-- New findings: the production-manager view is served at
-  `/red/clients/{tenant_id}/engagements/{engagement}/production-view` with the
-  tenant and engagement as path authority and `on` (date) as a required query
-  parameter; it already carries the section 4/8 fields the workspace overview
-  needs (current stage, exact approved asset versions, missing kinds,
-  dependencies and blockers, owner, next action, due date, verified progress
-  apart from activity), so the screen is a thin read with no new backend route.
-- Blockers (unchanged): `frontend/` Q35-Q45 are the path to DoD condition 6;
+- Outcome: new `frontend/src/features/source-explorer/` feature.
+  `SourceClaimExplorer.tsx` is a presentational view over the tenant-scoped
+  sources and claims: it renders each source's provenance (locator, checksum,
+  capture time, access rule) and the claims it grounds, and each claim's
+  statement, provenance class, direct-source flag, confidence note and exact
+  source citations, with helpers `claimsForSource` and `groundedClaims`;
+  `SourceClaimExplorerScreen.tsx` owns the tenant-scoped read and fetches
+  `GET /red/clients/{tenant}/sources` and `GET /red/claims?tenant_id=` in
+  parallel; route `/source-explorer` (`src/app/source-explorer/page.tsx`) binds
+  the `source-and-claim-explorer` screen id now declared in
+  `frontend/dod-screens.txt`. The API client gained `SourceRecord`,
+  `SourceRecordList`, `ClaimCitation`, `Claim`, `ClaimList`, `listSources` and
+  `listClaims`. No product authority, gate decision or pipeline stage changed;
+  the UI can set no provenance, add no citation and approve nothing.
+- Evidence: `frontend/src/features/source-explorer/SourceClaimExplorer.test.tsx`
+  (6 tests) pins `claimsForSource` grounding, `groundedClaims` direct-source
+  filtering, source provenance plus citation rendering, the
+  directly-sourced-vs-unsourced split, the loading/error states, and a
+  stubbed-fetch screen read asserting both tenant-scoped request paths.
+  `npm test` -> 3 files, 16 passed (6 new). `npm run build` -> compiled,
+  `/source-explorer` route emitted. `bash scripts/check_frontend_build.sh
+  frontend` -> exit 0. `bash scripts/check_frontend_screens.sh frontend` ->
+  still exit 1, now 9 remaining section 8 ids (honest red; condition 6 needs
+  Q36-Q45). `make done` still fails first at `[2/6]` condition 2 (four section
+  11 scenarios uncovered).
+- New findings: the source list read is tenant-path-scoped
+  (`/red/clients/{tenant_id}/sources?limit=&offset=`) while the claim list read
+  is tenant-query-scoped (`/red/claims?tenant_id=&limit=&offset=`); both match
+  the SPEC.md section 7 resource set and the backend's required-scope rule, so
+  the explorer needs no new backend route. A claim carries
+  `is_directly_sourced` and a per-citation checksum/location the backend already
+  verified against the stored immutable source, so the UI can show grounding
+  without re-deriving it.
+- Blockers (unchanged): `frontend/` Q36-Q45 are the path to DoD condition 6;
   Q8's retrieval, worker and artifact-URL isolation coverage and the condition 2
   cross-client-retrieval scenario are blocked until those seams exist; Q28 stage
   8-10 required kinds blocked on the named methodology-owner placement decision;
@@ -57,12 +59,12 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   Q3 agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
   smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
   deploy-only scenarios need the Atlas cluster and a chosen backup target.
-- Highest priority ready next item: Q35, the source and claim explorer screen.
-  Required asset: a source and claim explorer at a declared route showing
-  sources and their grounded claims (SPEC.md section 8) reading the
-  tenant-scoped `/red/clients/{id}/sources` and `/red/claims` endpoints, plus
-  its browser test; checkpoint: none (UI, not a gate); approver: none. Blocked
-  downstream dependency: Q36-Q45. Prerequisite: Q34 (done this cycle).
+- Highest priority ready next item: Q36, the transformation map screen.
+  Required asset: a transformation map at a declared route showing the stage 4
+  Signature Solution's three phases, nine steps and stage transitions (SPEC.md
+  sections 3 and 8) reading the tenant-scoped `/red/methods` endpoint, plus its
+  browser test; checkpoint: none (UI, not a gate); approver: none. Blocked
+  downstream dependency: Q37-Q45. Prerequisite: Q35 (done this cycle).
 
 ### Prior cycle (2026-10-03T201337Z)
 
@@ -3963,7 +3965,7 @@ stalls:
 | Q32 | Next.js shell in `frontend/` plus RED theme plus API client | ui | Q15 | builds; health route. Done 2026-10-03T200524Z: `frontend/` Next.js 16 / React 19 / TypeScript app (`package.json`, `next.config.ts` `output: standalone`, RED `globals.css` palette, `layout.tsx` shell, `page.tsx` surface list, `health/route.ts` liveness, tenant-scoped `shared/api/client.ts` over `/red`); `npm run build` clean, `/health` -> `{"status":"ok"}`, `/` -> 200. No section 8 screen or `dod-screens.txt` yet, so the condition 6 gate stays honestly red |
 | Q33 | Command center screen | ui | Q32 | Done 2026-10-03T201337Z: `frontend/src/features/command-center/` (`CommandCenter.tsx` presentational, `CommandCenterScreen.tsx` tenant-scoped read, route `/command-center`, `frontend/dod-screens.txt` declares the screen id) over `listInterventions`; Vitest+jsdom browser runner (`vitest.config.ts`, `npm test` -> `vitest run`). `npm run build` clean, `npm test` 5 passed, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 11 remaining screens |
 | Q34 | Client workspace overview | ui | Q33 | Done 2026-10-03T201508Z: `frontend/src/features/client-workspace/` (`ClientWorkspaceOverview.tsx` presentational, `ClientWorkspaceOverviewScreen.tsx` tenant/engagement/date read, route `/client-workspace`, `frontend/dod-screens.txt` declares the screen id) over `getProductionView` (`GET /red/clients/{tenant}/engagements/{engagement}/production-view?on=`). `npm run build` clean, `npm test` 5 new passed (10 total), `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 10 remaining screens |
-| Q35 | Source and claim explorer | ui | Q34 | browser test |
+| Q35 | Source and claim explorer | ui | Q34 | Done 2026-10-03T201635Z: `frontend/src/features/source-explorer/` (`SourceClaimExplorer.tsx` presentational with `claimsForSource`/`groundedClaims`, `SourceClaimExplorerScreen.tsx` tenant-scoped parallel read, route `/source-explorer`, `frontend/dod-screens.txt` declares the screen id) over `listSources`/`listClaims` (`GET /red/clients/{tenant}/sources` and `GET /red/claims?tenant_id=`). `npm run build` clean, `npm test` 6 new passed (16 total), `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 9 remaining screens |
 | Q36 | Transformation map | ui | Q35 | browser test |
 | Q37 | Offer and journey editor | ui | Q36 | browser test |
 | Q38 | Build board with dependency view | ui | Q37 | browser test |

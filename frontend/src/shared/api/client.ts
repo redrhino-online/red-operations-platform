@@ -116,6 +116,51 @@ export interface InterventionList {
   interventions: InterventionCard[];
 }
 
+// One immutable source record and its grounded claims (SPEC.md sections 3, 7, 8
+// and 11; Q35). Mirrors `SourceRecordResponse`, `ClaimResponse` and their list
+// envelopes in `backend/redops/api/schemas.py`. The explorer reads them; it
+// recomputes no claim rule and can set no provenance.
+export interface SourceRecord {
+  source_id: string;
+  tenant_id: string;
+  locator: string;
+  checksum: string;
+  captured_on: string;
+  access_rule: string;
+}
+
+export interface SourceRecordList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  sources: SourceRecord[];
+}
+
+export interface ClaimCitation {
+  source_id: string;
+  checksum: string;
+  location: string;
+}
+
+export interface Claim {
+  claim_id: string;
+  tenant_id: string;
+  statement: string;
+  provenance: string;
+  confidence_note: string;
+  is_directly_sourced: boolean;
+  citations: ClaimCitation[];
+}
+
+export interface ClaimList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  claims: Claim[];
+}
+
 // The production-manager view one client engagement (SPEC.md sections 4 and 8;
 // Q34). Mirrors `EngagementProductionViewResponse` in `backend/redops/api/
 // schemas.py`. State, provenance (exact pinned asset versions), dependencies,
@@ -234,6 +279,27 @@ export class RedOperationsApi extends RedApiClient {
       )}/production-view`,
       { on },
     );
+  }
+
+  // The source and claim explorer reads (SPEC.md sections 3, 7 and 8; Q35).
+  // The tenant is the source path authority and the required claim query scope;
+  // both reads refuse an unscoped query, so a client never sees another's
+  // material.
+  listSources(
+    tenantId: string,
+    params: ListParams = {},
+  ): Promise<SourceRecordList> {
+    return this.get<SourceRecordList>(
+      `/red/clients/${encodeURIComponent(tenantId)}/sources`,
+      { ...params },
+    );
+  }
+
+  listClaims(tenantId: string, params: ListParams = {}): Promise<ClaimList> {
+    return this.get<ClaimList>("/red/claims", {
+      tenant_id: tenantId,
+      ...params,
+    });
   }
 
   health(): Promise<{ status: string }> {
