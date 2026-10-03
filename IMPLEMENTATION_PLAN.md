@@ -114,12 +114,15 @@ Owner decisions to pre-make before launch, so the queue never stalls:
   Adding or renaming a pipeline stage stays out of scope. This turns the
   per-asset "required kind?" decisions into one owner decision.
 - 3F pilot: the engagement is 3F, a men's discipline, integrity and agency
-  coaching brand. The prototype runs the happy path: every stage is treated as
-  client approved by a clearly named test approver, so the e2e exercises the
-  pipeline instead of a real authority; the real authority gates stay
-  implemented in code as the later production concern. The deployed health check
-  is `https://redop.atlas.lan/`, which the cluster already serves (confirmed HTTP
-  200; see `.env.example`).
+  coaching brand, under workspace `3fmindset`. The prototype runs the happy path:
+  every stage is treated as client approved by a named role placeholder (an
+  auto-approving authority), so the e2e exercises the pipeline instead of a real
+  person; the real authority gates stay implemented in code as the later
+  production concern. The source set is the client's own archive,
+  `https://github.com/3f-mindset/book` (`Notes/`), a public repository fetched at
+  runtime into the ignored `project_sources/` path and never committed. The
+  deployed health check is `https://redop.atlas.lan/`, which the cluster already
+  serves (confirmed HTTP 200; see `.env.example`).
 - Known blocker: the `atlas` remote SSH key is not authorized (`git fetch atlas`
   fails with `Permission denied (publickey)`), so the final loop cycle cannot
   push to atlas until the key is added, or the run uses
