@@ -7,12 +7,15 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from redops.contexts.commercial.domain.errors import (
+    DiagnosisTenantBoundaryError,
     InvalidAvatarProfileError,
     InvalidBusinessSnapshotError,
     InvalidDeliverySpecificationError,
+    InvalidDiagnosisPackageError,
     InvalidOfferError,
     InvalidOfferFunnelAuditError,
 )
+from redops.contexts.governance.domain.value_objects import StageAssetVersion
 from redops.contexts.method.domain.entities import SignatureSolution
 from redops.contexts.method.domain.value_objects import (
     ImpactAssessment,
@@ -386,3 +389,136 @@ class OfferFunnelAudit:
             ("evidence", self.evidence_claim_ids),
         ):
             _require_entries(entries, label, InvalidOfferFunnelAuditError)
+
+
+CANONICAL_DIAGNOSIS_KINDS: tuple[str, ...] = (
+    "avatar-profile",
+    "pains",
+    "goals",
+    "consequences-of-inaction",
+    "awareness-map",
+    "customer-evidence",
+    "voice-notes",
+    "business-snapshot",
+    "offer-funnel-audit",
+)
+
+_AVATAR_DIAGNOSIS_KINDS: tuple[str, ...] = (
+    "avatar-profile",
+    "pains",
+    "goals",
+    "consequences-of-inaction",
+    "awareness-map",
+    "customer-evidence",
+    "voice-notes",
+)
+
+
+@dataclass(frozen=True)
+class DiagnosisPackage:
+    """The reviewed stage 1 assets, projected to the nine canonical gate kinds.
+
+    SPEC.md section 4, stage 1 "Diagnose": the required asset package enumerates
+    the avatar with demographics, psychographics, pains, goals, consequences of
+    inaction, awareness, customer evidence and voice notes alongside the business
+    snapshot and the offer and funnel audit. The Commercial context reviews those
+    as three rich value objects (``AvatarProfile``, ``BusinessSnapshot``,
+    ``OfferFunnelAudit``); this package is the bridge to the governance gate,
+    which pins one exact ``StageAssetVersion`` per canonical kind. The avatar
+    value carries the content for its seven kinds; the business snapshot and offer
+    and funnel audit each satisfy one kind.
+
+    SPEC.md sections 3 and 4 require a passing gate to pin the exact evidence, so
+    each reviewed asset is projected with a positive integer version and a blank
+    version or a cross-tenant value is refused rather than silently pinned. The
+    canon (SPEC.md section 12.3: stage 1 uses canon files 02, 03 and 04) groups
+    the avatar's pains, goals, consequences and why into one Avatar Goals Grid,
+    but the SPEC stage 1 package enumerates them as separate required items, so
+    they are projected as separate kinds while the avatar carries the content.
+    """
+
+    package_id: str
+    tenant_id: str
+    avatar: AvatarProfile
+    avatar_version: int
+    business_snapshot: BusinessSnapshot
+    business_snapshot_version: int
+    offer_funnel_audit: OfferFunnelAudit
+    offer_funnel_audit_version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("diagnosis package id", self.package_id),
+            ("diagnosis package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidDiagnosisPackageError(f"{label} is required")
+        for label, value in (
+            ("avatar", self.avatar),
+            ("business snapshot", self.business_snapshot),
+            ("offer and funnel audit", self.offer_funnel_audit),
+        ):
+            if value.tenant_id != self.tenant_id:
+                raise DiagnosisTenantBoundaryError(
+                    f"diagnosis {label} belongs to tenant {value.tenant_id!r}, "
+                    f"not package tenant {self.tenant_id!r}"
+                )
+        for label, value in (
+            ("avatar version", self.avatar_version),
+            ("business snapshot version", self.business_snapshot_version),
+            ("offer and funnel audit version", self.offer_funnel_audit_version),
+        ):
+            if not isinstance(value, int) or value < 1:
+                raise InvalidDiagnosisPackageError(
+                    f"{label} must be a positive integer so the stage 1 gate can "
+                    "pin the reviewed asset at an exact version"
+                )
+
+    @property
+    def kinds(self) -> frozenset[str]:
+        """The canonical kinds the three reviewed assets project onto."""
+        return frozenset(CANONICAL_DIAGNOSIS_KINDS)
+
+    def missing_kinds(self) -> tuple[str, ...]:
+        """Canonical stage 1 kinds not covered by the projected assets."""
+        covered = {asset.kind for asset in self.stage_asset_versions()}
+        return tuple(
+            kind for kind in CANONICAL_DIAGNOSIS_KINDS if kind not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_kinds()
+
+    def _avatar_asset(self, kind: str) -> StageAssetVersion:
+        return StageAssetVersion(
+            asset_id=self.avatar.avatar_id,
+            tenant_id=self.tenant_id,
+            kind=kind,
+            version=self.avatar_version,
+        )
+
+    def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
+        """Project the reviewed stage 1 assets onto exact governance evidence.
+
+        The avatar value satisfies its seven canonical kinds at one exact version;
+        the business snapshot and offer and funnel audit satisfy one kind each.
+        Governance still pins each projection for the workspace tenant, so a
+        cross-client value is refused rather than silently authorized (SPEC.md
+        sections 3, 4 and 11).
+        """
+        return (
+            *(self._avatar_asset(kind) for kind in _AVATAR_DIAGNOSIS_KINDS),
+            StageAssetVersion(
+                asset_id=self.business_snapshot.snapshot_id,
+                tenant_id=self.tenant_id,
+                kind="business-snapshot",
+                version=self.business_snapshot_version,
+            ),
+            StageAssetVersion(
+                asset_id=self.offer_funnel_audit.audit_id,
+                tenant_id=self.tenant_id,
+                kind="offer-funnel-audit",
+                version=self.offer_funnel_audit_version,
+            ),
+        )

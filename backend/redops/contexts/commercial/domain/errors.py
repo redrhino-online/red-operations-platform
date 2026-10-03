@@ -123,3 +123,24 @@ class UnsourcedDiagnosisEvidenceError(CommercialError):
     diagnosis asset. A missing claim cannot be represented as evidence.
     """
 
+
+class InvalidDiagnosisPackageError(CommercialError, ValueError):
+    """A stage 1 diagnosis package was built without an identity or exact version.
+
+    SPEC.md sections 3 and 4: a passing stage 1 gate pins the exact evidence and
+    intended downstream use, so the reviewed stage 1 assets are projected onto the
+    canonical asset kinds with a positive integer version each. A package that
+    leaves its identity or an asset version unspecified cannot be represented as
+    exact gate evidence.
+    """
+
+
+class DiagnosisTenantBoundaryError(CommercialError):
+    """A stage 1 diagnosis package mixed in a value from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client, so the
+    avatar, business snapshot and offer and funnel audit projected onto a
+    workspace's stage 1 gate package must all belong to that workspace's tenant.
+    A cross-tenant diagnosis value cannot be pinned as this client's gate evidence.
+    """
+
