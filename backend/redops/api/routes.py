@@ -55,8 +55,11 @@ from redops.api.schemas import (
     OfferListResponse,
     OfferVersionInput,
     OfferVersionResponse,
+    OpportunityListResponse,
+    OpportunityResponse,
     RecordMeasurementRequest,
     RecordJourneyReleaseRequest,
+    RecordOpportunityRequest,
     RecordStageEightGateRequest,
     RecordStageFiveGateRequest,
     RecordStageFourGateRequest,
@@ -304,6 +307,15 @@ from redops.contexts.operations.domain.value_objects import (
 )
 from redops.contexts.operations.infrastructure.repositories import (
     intervention_dismissal_repository_from_env,
+)
+from redops.contexts.portfolio.application.ports import OpportunityRepository
+from redops.contexts.portfolio.domain.errors import PortfolioError
+from redops.contexts.portfolio.domain.value_objects import (
+    Opportunity,
+    OpportunityKind,
+)
+from redops.contexts.portfolio.infrastructure.repositories import (
+    opportunity_repository_from_env,
 )
 from redops.contexts.production.application.ports import (
     AuthorityAmplifierRepository,
@@ -658,6 +670,24 @@ def get_intervention_dismissal_repository() -> Iterator[
     repository = intervention_dismissal_repository_from_env(
         os.environ.get("DATABASE_URL")
     )
+    try:
+        yield repository
+    finally:
+        repository.close()
+
+
+def get_opportunity_repository() -> Iterator[OpportunityRepository]:
+    """Provide the portfolio opportunity seam to the API (SPEC.md section 6).
+
+    SPEC.md section 7 lists ``/opportunities`` and SPEC.md section 9 keeps a
+    tenant's portfolio record from being lost. The dependency owns one adapter for
+    the request and releases any connection it opened when the request ends. The
+    store is chosen once from ``DATABASE_URL``; a request cannot silently
+    downgrade to a process-local opportunity store, because a set-but-unusable
+    configuration raises before the route runs.
+    """
+
+    repository = opportunity_repository_from_env(os.environ.get("DATABASE_URL"))
     try:
         yield repository
     finally:
@@ -4517,3 +4547,124 @@ def dismiss_intervention(
         actor=dismissal.actor,
         dismissed_on=dismissal.dismissed_on,
     )
+
+
+def _opportunity_payload(opportunity: Opportunity) -> OpportunityResponse:
+    """Project one proposed opportunity onto the portfolio read surface.
+
+    SPEC.md sections 3 and 4 pin an opportunity's exact source asset version, so
+    the payload reports the source kind and version verbatim rather than a bare
+    asset name. The route computes no rule; the ``Opportunity`` value object
+    already validated the proposal and refused any approved state.
+    """
+
+    return OpportunityResponse(
+        tenant_id=opportunity.tenant_id,
+        opportunity_id=opportunity.opportunity_id,
+        title=opportunity.title,
+        kind=opportunity.kind.value,
+        source_asset_id=opportunity.source.asset_id,
+        source_kind=opportunity.source.kind,
+        source_version=opportunity.source.version,
+        investment_case=opportunity.investment_case,
+        expected_outcome=opportunity.expected_outcome,
+        owner=opportunity.owner,
+        next_action=opportunity.next_action,
+        captured_on=opportunity.captured_on,
+        state=opportunity.state.value,
+    )
+
+
+@router.get("/opportunities", response_model=OpportunityListResponse)
+def list_opportunities(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose opportunities are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repository: OpportunityRepository = Depends(get_opportunity_repository),
+) -> OpportunityListResponse:
+    """List one client tenant's portfolio opportunity register (SPEC.md sections
+    1, 7 and 9).
+
+    SPEC.md section 7 lists ``/opportunities`` and requires list endpoints to
+    enforce client access and pagination; SPEC.md section 9 requires every tenant
+    resource query to carry ``tenant_id``. The tenant is a required query
+    parameter, not an optional filter, so the endpoint cannot produce a
+    portfolio-wide read across clients, and the store read is tenant scoped. Every
+    stored opportunity is a proposal, so listing one authorizes no investment.
+    """
+
+    try:
+        opportunities = repository.list(tenant_id)
+    except PortfolioError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+    page = opportunities[offset : offset + limit]
+    return OpportunityListResponse(
+        tenant_id=tenant_id,
+        total=len(opportunities),
+        limit=limit,
+        offset=offset,
+        opportunities=[_opportunity_payload(item) for item in page],
+    )
+
+
+@router.post(
+    "/opportunities", status_code=201, response_model=OpportunityResponse
+)
+def record_opportunity(
+    body: RecordOpportunityRequest,
+    repository: OpportunityRepository = Depends(get_opportunity_repository),
+) -> OpportunityResponse:
+    """Record one proposed portfolio opportunity (SPEC.md sections 1, 7 and 5).
+
+    SPEC.md section 1 puts portfolio expansion in the product contract and SPEC.md
+    section 7 lists ``/opportunities``. The route maps the typed request to the
+    domain ``Opportunity``, grounding it on the exact same-tenant
+    ``StageAssetVersion`` the caller names (a cross-tenant source is refused by
+    the value object), and persists it through the port. Recording an opportunity
+    is a proposal only: the value object keeps it ``proposed`` and refuses any
+    approved state, so no investment, spend or launch is authorized here (SPEC.md
+    sections 1 and 5). A same-id re-statement with different content is a named
+    409 rather than a rewritten register entry.
+    """
+
+    try:
+        opportunity = Opportunity(
+            opportunity_id=body.opportunity_id,
+            tenant_id=body.tenant_id,
+            title=body.title,
+            kind=OpportunityKind(body.kind),
+            source=StageAssetVersion(
+                asset_id=body.source.asset_id,
+                tenant_id=body.tenant_id,
+                kind=body.source.kind,
+                version=body.source.version,
+            ),
+            investment_case=body.investment_case,
+            expected_outcome=body.expected_outcome,
+            owner=body.owner,
+            next_action=body.next_action,
+            captured_on=body.captured_on,
+        )
+        repository.save(opportunity)
+    except PortfolioError as exc:
+        status = (
+            409
+            if type(exc).__name__ == "OpportunityConflictError"
+            else 422
+        )
+        raise HTTPException(
+            status_code=status,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return _opportunity_payload(opportunity)

@@ -99,3 +99,49 @@ class UmbrellaPlanObservationError(PortfolioError):
     plan is the engagement's intended strategy and targets, while any measured
     movement stays a separate observation, so a plan is never an observation.
     """
+
+
+class InvalidOpportunityError(PortfolioError, ValueError):
+    """A portfolio opportunity was built without required content.
+
+    SPEC.md section 7 lists ``/opportunities`` and SPEC.md section 1 puts
+    portfolio expansion in the product contract; the canon's Grow motion splits
+    the foundation offer into smaller offers that are new entry points and raise
+    customer lifetime value (canon files 11 and 12, mapped in SPEC.md section
+    12.3). An opportunity names its tenant, a title, a typed kind, the exact
+    approved asset version it derives from, its investment case, its expected
+    outcome, a named owner and a next action (SPEC.md sections 3 and 4). A blank
+    identity, an untyped kind, a versionless source or a missing owner, action or
+    case cannot be represented as an opportunity.
+    """
+
+
+class OpportunityTenantBoundaryError(PortfolioError):
+    """An opportunity mixed in a source asset from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. An
+    opportunity belongs to the tenant of the client portfolio it expands, so it
+    cannot be grounded on another tenant's asset.
+    """
+
+
+class OpportunityAuthorityError(PortfolioError):
+    """An opportunity was represented as already invested in or launched.
+
+    SPEC.md section 1 forbids representing a draft or model inference as client
+    approved fact, and SPEC.md section 5 makes agent output a proposal that is
+    never an implicit grant of authority. The canon's Grow offers are a future
+    portfolio expansion (canon files 11 and 12). The register records only a
+    proposal: an opportunity stays proposed until a human investment authority
+    acts, so it cannot be stored or read back as approved, invested or launched.
+    """
+
+
+class OpportunityConflictError(PortfolioError):
+    """A stored opportunity was re-stated with different content under its id.
+
+    An opportunity register is append-only (SPEC.md section 3, Decision
+    invariant: decision history is append only). A same-id re-statement with
+    different content is refused rather than silently rewritten; a materially
+    different opportunity is a new identity.
+    """

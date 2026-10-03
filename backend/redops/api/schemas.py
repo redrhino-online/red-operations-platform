@@ -1871,3 +1871,71 @@ class InterventionDismissalResponse(BaseModel):
     rationale: str
     actor: str
     dismissed_on: date
+
+
+class OpportunitySourceInput(BaseModel):
+    """The exact stage asset version an opportunity derives from (SPEC.md section 3).
+
+    SPEC.md sections 3 and 4 pin an exact approved asset version to its intended
+    downstream use, so an opportunity names the exact ``(asset_id, kind,
+    version)`` it expands rather than a bare asset name. The tenant is the
+    opportunity's tenant, not a caller field, so a source cannot be claimed for
+    another client.
+    """
+
+    asset_id: str
+    kind: str
+    version: int
+
+
+class RecordOpportunityRequest(BaseModel):
+    """Record one proposed portfolio opportunity (SPEC.md section 7).
+
+    SPEC.md section 7 lists ``/opportunities`` and SPEC.md section 1 puts
+    portfolio expansion in the product contract; the canon's Grow motion splits
+    the foundation offer into smaller offers that are new entry points and raise
+    customer lifetime value (canon files 11 and 12; SPEC.md section 12.3). The
+    request carries the tenant, title, typed kind, exact same-tenant source asset
+    version, investment case, expected outcome, named owner, next action and
+    capture date. Recording an opportunity is a proposal only: it authorizes no
+    investment, spend or launch (SPEC.md sections 1 and 5).
+    """
+
+    tenant_id: str
+    opportunity_id: str
+    title: str
+    kind: str
+    source: OpportunitySourceInput
+    investment_case: str
+    expected_outcome: str
+    owner: str
+    next_action: str
+    captured_on: date
+
+
+class OpportunityResponse(BaseModel):
+    """One proposed portfolio opportunity, re-validated through the value object."""
+
+    tenant_id: str
+    opportunity_id: str
+    title: str
+    kind: str
+    source_asset_id: str
+    source_kind: str
+    source_version: int
+    investment_case: str
+    expected_outcome: str
+    owner: str
+    next_action: str
+    captured_on: date
+    state: str
+
+
+class OpportunityListResponse(BaseModel):
+    """One tenant's paginated opportunity register (SPEC.md sections 7 and 9)."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    opportunities: list[OpportunityResponse]

@@ -119,10 +119,10 @@ class MigrationRunnerTests(unittest.TestCase):
                     "SELECT to_regclass('public.intervention_dismissals')"
                 )
                 self.assertIsNotNone(cursor.fetchone()[0])
+                cursor.execute("SELECT to_regclass('public.opportunities')")
+                self.assertIsNotNone(cursor.fetchone()[0])
                 cursor.execute("SELECT version_num FROM alembic_version")
-                self.assertEqual(
-                    cursor.fetchone()[0], "0016_intervention_dismissals"
-                )
+                self.assertEqual(cursor.fetchone()[0], "0017_opportunities")
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -24,9 +24,15 @@ from datetime import date, timedelta
 from enum import Enum
 
 from redops.contexts.engagement.domain.entities import ClientWorkspace
-from redops.contexts.governance.domain.value_objects import StageTemplate
+from redops.contexts.governance.domain.value_objects import (
+    StageAssetVersion,
+    StageTemplate,
+)
 from redops.contexts.portfolio.domain.errors import (
+    InvalidOpportunityError,
     InvalidUmbrellaPlanError,
+    OpportunityAuthorityError,
+    OpportunityTenantBoundaryError,
     UmbrellaPlanDependencyError,
     UmbrellaPlanFormatError,
     UmbrellaPlanObservationError,
@@ -362,3 +368,124 @@ class UmbrellaPlan:
             f"umbrella plan {claim_id!r} is an intended strategy, not an observed "
             "result, and cannot be recorded as an observation"
         )
+
+
+
+class OpportunityKind(Enum):
+    """The canon's Grow effects for a portfolio opportunity (canon files 11, 12).
+
+    SPEC.md section 12.3 records the canon's Grow motion: it "splits the
+    foundation offer into smaller offers that act as new entry points and raise
+    customer lifetime value". An opportunity is one of those two effects, so the
+    register distinguishes a new entry point from a lifetime value offer and
+    cannot record an untyped expansion.
+    """
+
+    ENTRY_POINT = "entry_point"
+    LIFETIME_VALUE = "lifetime_value"
+
+
+class OpportunityState(Enum):
+    """The lifecycle of a portfolio opportunity (SPEC.md sections 1 and 5).
+
+    The register holds proposals only: an opportunity stays ``PROPOSED`` until a
+    human investment authority acts. ``APPROVED``, ``REJECTED`` and ``PARKED``
+    are named so an attempt to store an opportunity as already decided is
+    refused with a named error rather than silently accepted as approved fact.
+    """
+
+    PROPOSED = "proposed"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PARKED = "parked"
+
+
+@dataclass(frozen=True)
+class Opportunity:
+    """One proposed portfolio expansion, grounded on an exact approved asset.
+
+    SPEC.md section 7 lists ``/opportunities`` and SPEC.md section 1 puts
+    portfolio expansion in the product contract. The canon's Grow motion splits
+    the foundation offer into smaller offers that are new entry points and raise
+    customer lifetime value (canon files 11 and 12, mapped in SPEC.md section
+    12.3), and the IP Portfolio Development agent owns the derivative
+    opportunity and must escalate investment and launch (SPEC.md section 5). This
+    value object records the register entry: an opaque id, the owning tenant, a
+    title, a typed kind, the exact same-tenant ``StageAssetVersion`` it derives
+    from, its investment case, its expected outcome, a named owner, a next action
+    and the capture date.
+
+    It is reject-only and frozen. A blank identity, an untyped kind, a
+    versionless or cross-tenant source, a missing case, outcome, owner or action,
+    or an attempt to record the proposal as approved is refused, so the platform
+    never presents a proposed expansion as an authorized investment (SPEC.md
+    sections 1, 4 and 5). Recording an opportunity authorizes no investment, no
+    spend and no launch.
+    """
+
+    opportunity_id: str
+    tenant_id: str
+    title: str
+    kind: OpportunityKind
+    source: StageAssetVersion
+    investment_case: str
+    expected_outcome: str
+    owner: str
+    next_action: str
+    captured_on: date
+    state: OpportunityState = OpportunityState.PROPOSED
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("opportunity id", self.opportunity_id),
+            ("opportunity tenant id", self.tenant_id),
+            ("opportunity title", self.title),
+            ("opportunity investment case", self.investment_case),
+            ("opportunity expected outcome", self.expected_outcome),
+            ("opportunity owner", self.owner),
+            ("opportunity next action", self.next_action),
+        ):
+            if not value or not value.strip():
+                raise InvalidOpportunityError(f"{label} is required")
+        if not isinstance(self.kind, OpportunityKind):
+            raise InvalidOpportunityError(
+                "an opportunity requires a typed kind (an entry point or a "
+                "lifetime value offer)"
+            )
+        if not isinstance(self.source, StageAssetVersion):
+            raise InvalidOpportunityError(
+                "an opportunity requires the exact stage asset version it "
+                "derives from; a versionless source is not traceable"
+            )
+        if self.source.tenant_id != self.tenant_id:
+            raise OpportunityTenantBoundaryError(
+                f"opportunity {self.opportunity_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its source asset belongs to tenant "
+                f"{self.source.tenant_id!r}; an opportunity cannot cross a "
+                "client boundary"
+            )
+        if not isinstance(self.captured_on, date):
+            raise InvalidOpportunityError(
+                "an opportunity requires a capture date"
+            )
+        if not isinstance(self.state, OpportunityState):
+            raise InvalidOpportunityError(
+                "an opportunity requires a typed lifecycle state"
+            )
+        if self.state is not OpportunityState.PROPOSED:
+            raise OpportunityAuthorityError(
+                f"opportunity {self.opportunity_id!r} is a proposal and stays "
+                f"proposed until a human investment authority acts; the platform "
+                f"cannot record it as {self.state.value!r} (SPEC.md sections 1 "
+                "and 5)"
+            )
+
+    @property
+    def source_key(self) -> tuple[str, int]:
+        """The exact source asset kind and version this opportunity derives from."""
+        return (self.source.kind, self.source.version)
+
+    @property
+    def is_proposal(self) -> bool:
+        """An opportunity is a proposal, never a client approved fact."""
+        return True

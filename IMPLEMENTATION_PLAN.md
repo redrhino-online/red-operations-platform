@@ -4,6 +4,65 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T195052Z (Ralph cycle, this run): selected item was the
+  `/opportunities` half of Q14, the tenant-scoped Portfolio opportunity register
+  (prerequisite Q13 met; `/interventions` landed last cycle). It outranks the
+  `frontend/` Q32: SPEC.md section 7 lists `/opportunities`, SPEC.md sections 1
+  and 3 put portfolio expansion and the Portfolio context (opportunity and
+  roadmap) in the product contract, and Phase 5's TDD example pins "opportunity
+  remains proposed until investment authority acts", but no Portfolio
+  opportunity store or route existed. The `frontend/` Q32 shell would falsely
+  pass DoD [5/6] while condition 6 (Q45) is far off.
+- Outcome: new pure-domain `Opportunity` value object (tenant, id, title, typed
+  `OpportunityKind`, exact same-tenant `StageAssetVersion` source, investment
+  case, expected outcome, owner, next action, capture date, and an
+  `OpportunityState` fixed to `PROPOSED`) with named `InvalidOpportunityError`,
+  `OpportunityTenantBoundaryError`, `OpportunityAuthorityError` and
+  `OpportunityConflictError`; new Portfolio application port
+  `OpportunityRepository` (`get`/`list`/`save`/`close`); in-memory and PostgreSQL
+  adapters, `opportunity_repository_from_env`, `OpportunityConfigurationError`
+  and payload mappers; migration `0017_opportunities` (NOT NULL
+  `tenant_id`/`opportunity_id` and an append-only unique key); and tenant-scoped
+  routes `GET /red/opportunities` (paginated register) and `POST
+  /red/opportunities` (record one proposal). The value object refuses any
+  approved state, so the register holds proposals only and recording one
+  authorizes no investment, spend or launch. SPEC.md section 7's REST resource
+  set is now complete.
+- Evidence: `make check` -> 2222 passed, 2 skipped, 704 subtests; pyflakes clean.
+  New tests `tests/unit/portfolio/test_opportunity.py` (10),
+  `test_opportunity_repository.py` (7) and `test_opportunities_route.py` (8),
+  plus `test_opportunity_postgres.py` (4, run against the live compose
+  database); `tests/unit/shared/test_migrate.py` pins head `0017_opportunities`
+  and the new table. `make done` still fails only [5/6] (`frontend/` missing,
+  Q32); [1/6]-[4/6] and [6/6] pass.
+- New findings: canon files 11 and 12 (Perfect Product) govern the opportunity's
+  shape only at the level of the Grow effect (a new entry point or a lifetime
+  value offer), so the register grounds each proposal on an exact stage asset
+  version, a named owner and a next action rather than inventing a canon sales
+  model; the canon's Grow as a pipeline addition stays the named-owner decision
+  recorded in the gap register. A same-id re-statement is a named 409 and an
+  exact replay is idempotent, matching the append-only register used by the other
+  Q13/Q14 stores.
+- Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
+  land shell-only; Q28 stage 8-10 required kinds blocked on the named
+  methodology-owner placement decision; Q16 idempotency keys blocked on a
+  workflow write route; Q3 agent registration blocked on the ADR 0006 /
+  vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's section 11 acceptance suite is blocked
+  in part on the deploy-only scenarios (GitOps revert, backup restore) that
+  need the cluster.
+- Highest priority ready next item: Q32, the Next.js shell in `frontend/` plus
+  the RED theme, the API client and the first real screen (command center Q33)
+  with a browser test. It is gated on not landing shell-only: DoD [5/6] passes on
+  `frontend/` merely existing with no `OpenExecutive` string, while condition 6
+  (Q45, all section 8 screens) is far off, so a screens-less shell would falsely
+  turn `make done` green and stop the loop. Required asset: the Next.js app shell
+  that consumes the now-complete SPEC.md section 7 REST surface; checkpoint: none
+  (UI, not a gate); approver: none. Blocked downstream dependency: Q33-Q45. The
+  stage 0-10 e2e Q30 is already green.
+
+### Prior cycle (2026-10-03T194645Z)
+
 - Cycle 2026-10-03T194645Z (Ralph cycle, this run): selected item was the
   `/interventions` half of Q14, the tenant-scoped command center intervention
   read and durable dismissal surface over the existing Operations
@@ -3399,7 +3458,7 @@ stalls:
 | Q11 | REST `/offers`, `/builds` (done 2026-10-03T193035Z; `GET /red/offers` and `GET`/`POST /red/builds`, tenant required on every read and carried on the create body; `BuildObject` now requires a `tenant_id` (SPEC.md sections 3 and 9); new Production `BuildObjectRepository` port with in-memory and PostgreSQL adapters and migration `0013_build_objects` (upsert per `(tenant_id, build_id)`); `/offers` is a tenant-scoped paginated read over the existing offer store, left read-only because production readiness is gate-owned; `/builds` list is tenant-scoped and paginated and create records an Identified proposal. Tests `tests/unit/commercial/test_offers_route.py`, `tests/unit/production/test_build_object_store.py`, `tests/unit/production/test_builds_route.py`, `tests/unit/production/test_build_object_postgres.py`) | api | Q10 | route tests |
 | Q12 | REST `/approvals`, `/decisions` with exact version approval (done 2026-10-03T193430Z; `GET /red/decisions` and `GET /red/approvals`, tenant required, paginated, projected from the durable tenant-scoped `GateLedgerRepository`; `/decisions` lists the append-only gate decisions in canonical stage order with disposition, reviewer, scope, rationale, exact pinned asset versions and next action, and `/approvals` flattens the per-asset `ApprovalRequest`s with exact asset version and scope, requester, designated approver, outcome and expiry; both read-only because a decision is recorded through its stage gate and listing an approval never grants authority. Tests `tests/unit/governance/test_governance_read_routes.py` (6)) | api | Q11 | version specific approval |
 | Q13 | REST `/journeys`, `/measurements` (`/measurements` done 2026-10-03T193641Z; `GET /red/measurements` and `POST /red/measurements` over the new durable Measurement `MeasurementRegistry` (metric definitions + observations), in-memory and PostgreSQL adapters and migration `0014_measurements`; tenant required, append-only, an observation pins its exact metric version and a same-key re-statement is a 409. `/journeys` advanced 2026-10-03T194013Z: the SPEC.md section 3 `JourneyRelease` core aggregate now exists (pure domain, invariant "launch needs signed readiness and authorized release", grounded on a same-tenant ready-for-traffic `LaunchQA` whose `TrafficAuthorization` names the designated authority); `/journeys` done 2026-10-03T194326Z: new Execution `JourneyReleaseRepository` port (get/list/save/close) with in-memory and PostgreSQL adapters, migration `0015_journey_releases`, and tenant-scoped `GET`/`POST /red/journeys` grounded on the durable stage 9 launch QA by exact id; append-only, a same-id re-statement is a 409. Tests `tests/unit/execution/test_journey_release_repository.py` (7), `test_journeys_route.py` (7), `test_journey_release_postgres.py` (4)) | api | Q12 | route tests |
-| Q14 | REST `/opportunities`, `/interventions` (`/interventions` done 2026-10-03T194645Z: tenant-scoped `GET /red/interventions` ranks the command center cards for a client engagement from the Governance production view and `POST /red/interventions/dismiss` records a durable operator dismissal; new Operation `InterventionDismissal` value object and `InterventionDismissalRepository` port with in-memory and PostgreSQL adapters and migration `0016_intervention_dismissals`; the cards are derived on read, only the dismissal is stored, a same-key re-statement is a 409. Tests `tests/unit/operations/test_intervention_dismissal.py`, `test_intervention_dismissal_repository.py`, `test_intervention_dismissal_postgres.py`, `test_interventions_route.py`. `/opportunities` remains) | api | Q13 | route tests |
+| Q14 | REST `/opportunities`, `/interventions` (`/interventions` done 2026-10-03T194645Z: tenant-scoped `GET /red/interventions` ranks the command center cards for a client engagement from the Governance production view and `POST /red/interventions/dismiss` records a durable operator dismissal; new Operation `InterventionDismissal` value object and `InterventionDismissalRepository` port with in-memory and PostgreSQL adapters and migration `0016_intervention_dismissals`; the cards are derived on read, only the dismissal is stored, a same-key re-statement is a 409. Tests `tests/unit/operations/test_intervention_dismissal.py`, `test_intervention_dismissal_repository.py`, `test_intervention_dismissal_postgres.py`, `test_interventions_route.py`. `/opportunities` done 2026-10-03T195052Z: tenant-scoped `GET /red/opportunities` and `POST /red/opportunities` over the new Portfolio `Opportunity` value object and `OpportunityRepository` port with in-memory and PostgreSQL adapters and migration `0017_opportunities`; an opportunity is a proposal grounded on an exact same-tenant `StageAssetVersion`, stays `proposed` and refuses an approved state, append-only, a same-id re-statement is a 409. Tests `tests/unit/portfolio/test_opportunity.py`, `test_opportunity_repository.py`, `test_opportunities_route.py`, `test_opportunity_postgres.py`. Q14 complete) | api | Q13 | route tests |
 | Q15 | REST `/workflows/{id}` with SSE or stable id polling (done 2026-10-03T185701Z; `GET /red/clients/{tenant_id}/workflows/{run_id}`; tenant-scoped polling read returning a stable append-only `event_id` and the transition log; 404 for a missing/foreign run. Tenant is the path authority, matching the stage routes, not the bare `/workflows/{id}`) | api | Q5 | route tests `tests/unit/workflows/test_workflow_run_route.py` (4) |
 | Q16 | Idempotency keys and optimistic version conflicts on mutations | api | Q15 | duplicate delivery one effect; stale update 409 |
 | Q17 | Stage 0 intake route hardened plus workspace and authority (API surface) (done 2026-10-03T190410Z; `RecordStageZeroGateRequest` no longer carries `authorities`; `record_stage_zero_gate` resolves the persisted `ClientWorkspace` and its authority registry through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_zero_gate_route.py` (7) and helper `tests/unit/workspace_fixture.py`) | pipeline | Q9 | stage 0 gate e2e |
@@ -3460,7 +3519,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 - Missing canon files 19 and 20; promised sales/enrollment and email/follow-up modules absent — status: unresolved, request from license owner.
 - Service and partnership lines (kickoff checklist, module production standard, session guide, client scorecard, case study template; renewal and win-back, next-offer path, referral and partner plan, community rules, reputation track) — canon internal/service-ops and internal/stations docs — after stage 10 (service delivery and portfolio expansion) — status: identified gap 2026-10-03 (Ralph cycle 130; canon stations and method map updated 2026-10-03). The canon map now has nine stations (Plan, Market, Message, Offer, Funnel, Traffic, Content, Retargeting, Enroll) whose build line is a 12-week program, and the third phase's motions are Extract, Content, Expand; Serve is the client's own delivery and Grow splits the foundation offer into smaller offers that raise customer lifetime value. The back half of the client life is still thin, so RED defines the service line (deliver one module a week, teach one day and coach another, track attendance and results, collect a case study when results land) and the partnership line (retain, grow, refer, renew, reputation). SPEC.md section 1 puts "portfolio expansion" in the product contract and section 3 names the Portfolio context (opportunity and roadmap), but no stage 0-10 asset or required gate kind represents delivery progress, the case study as sourced proof, or the renewal, referral and reputation clocks. These are candidate pipeline additions that need a named-owner decision (adding or renaming a stage is not an agent decision); the case study is also constrained by SPEC.md section 1 (no unreviewed testimonials or performance claims) and section 4 (client-approved, version-scoped claims). Any publish, send, spend or client commitment remains a human decision.
 - Extract (pull key ideas from the signature solution: FAQs, problems, process, reviews and praise; group themes around the one currency; build an email and social content plan) — n/a, our layer (feeds 25-28) — service layer ahead of stage 10 content operations, a stage 6/10 asset — status: implemented 2026-10-03 (Ralph cycle 2026-10-03T174319Z) as the pure Commercial Design `ContentPlan` (`ContentIdeaSource`, `ContentPlanChannel`, `ContentTheme`, `ContentIdea`, `ContentPlan`, `CONTENT_PLAN_CANON_REFERENCE = "25, 27, 28"`), which grounds on a same-tenant stage 4 `SignatureSolution` and stage 2 `PrimaryCurrency`, extracts ideas with a typed source (faq, problem, process, review_and_praise), maps every idea to a step the solution names and to a declared theme, requires each theme to advance either the current or the desired measure of the one locked currency, refuses a duplicate or cross-tenant theme or idea, requires the plan to build both an email and a social delivery, binds a named owner, reports the solution steps it covers and misses, is a plan and is never an observation. It is an asset inside stage 6, not a new stage; any publish or spend stays a human decision. It is distinct from the `ContentRoadmap` (canon 26, 27); reconciling the two into one flow is a bounded follow-up. Owner decision 2026-10-03 applied (Ralph cycle 2026-10-03T183643Z): the typed `ContentPlan` is now a required stage 6 gate kind (`content-plan`), declared by the stage 6 `StageTemplate` and pinned at its exact version through the `CampaignMessagePackage` bridge against the approved method's own Signature Solution and the locked Primary Currency the request carries, so a "Campaign Message Approved" gate cannot pass without the Extract content plan the message's content is pulled from; stage 6 is now fifteen required kinds.
-- Serve and Grow (Serve is the client's own delivery of the offer; Grow splits the foundation offer into smaller offers that are new entry points and raise customer lifetime value, expanding the RED Portfolio) — canon 11, 12 — after stage 10, Portfolio context — status: identified gap 2026-10-03 (canon stations and method map updated). SPEC.md section 1 puts portfolio expansion in the product contract and section 3 names the Portfolio context, but no stage 0-10 asset represents the smaller offers as entry points or the lifetime value they raise. A candidate pipeline addition needing a named-owner decision; any client commitment stays a human decision.
+- Serve and Grow (Serve is the client's own delivery of the offer; Grow splits the foundation offer into smaller offers that are new entry points and raise customer lifetime value, expanding the RED Portfolio) — canon 11, 12 — after stage 10, Portfolio context — status: identified gap 2026-10-03 (canon stations and method map updated). SPEC.md section 1 puts portfolio expansion in the product contract and section 3 names the Portfolio context, but no stage 0-10 asset represents the smaller offers as entry points or the lifetime value they raise. The SPEC.md section 7 `/opportunities` REST resource and the Portfolio `Opportunity` register now exist (Ralph cycle 2026-10-03T195052Z): it records a proposed entry point or lifetime value offer grounded on an exact same-tenant `StageAssetVersion`, staying `proposed` until a human investment authority acts, but it is not yet a stage 0-10 required gate kind. A candidate pipeline addition needing a named-owner decision; any client commitment stays a human decision.
 
 ## Product priority: the gated production engagement
 
