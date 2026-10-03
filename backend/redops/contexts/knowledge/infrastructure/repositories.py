@@ -12,11 +12,13 @@ a ``DATABASE_URL`` are available (see
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from typing import Any
 
 from redops.contexts.knowledge.application.ports import (
     ClaimStore,
+    KnowledgeRetriever,
     SourceRecordStore,
 )
 from redops.contexts.knowledge.domain.entities import Claim, SourceRecord
@@ -24,6 +26,7 @@ from redops.contexts.knowledge.domain.errors import (
     ClaimConflictError,
     SourceRecordImmutableError,
     UnscopedClaimError,
+    UnscopedRetrievalError,
     UnscopedSourceRecordError,
 )
 from redops.contexts.knowledge.infrastructure.mappers import (
@@ -420,3 +423,63 @@ def claim_store_from_env(database_url: str | None) -> ClaimStore:
             "use the process-local claim store"
         )
     return PostgresClaimStore(psycopg.connect(database_url))
+
+
+def _require_retrieval_tenant(value: str) -> None:
+    """Refuse an unscoped retrieval of a client's knowledge.
+
+    SPEC.md sections 3 and 9 make retrieval a client resource read that must
+    carry ``tenant_id`` on every query. A retrieval without a client could return
+    another client's knowledge, so it is refused rather than answered unscoped.
+    """
+
+    if not value or not value.strip():
+        raise UnscopedRetrievalError(
+            "tenant-scoped retrieval requires a non-blank tenant id; retrieval "
+            "is a client resource read and cannot be answered unscoped"
+        )
+
+
+def _retrieval_terms(text: str) -> frozenset[str]:
+    """Tokenise a query or a claim statement for the reference matcher.
+
+    Lowercased alphanumeric terms only, so punctuation and casing do not change a
+    match. An empty token set means there is nothing to match.
+    """
+
+    return frozenset(
+        token for token in re.split(r"[^0-9a-z]+", text.lower()) if token
+    )
+
+
+class InMemoryKnowledgeRetriever(KnowledgeRetriever):
+    """Tenant-scoped, process-local reference retrieval over a claim store.
+
+    SPEC.md section 5 gives the Knowledge Management agent a client's source
+    index, and SPEC.md section 3 starts with full text and vector retrieval over
+    that client's own records. This reference adapter composes the append-only,
+    tenant-scoped ``ClaimStore`` and matches a query's terms against a claim's
+    statement, returning the tenant's claims with the citations that attribute
+    them to their immutable sources. It is always scoped to one client, so a
+    different client's matching claim is never returned (SPEC.md sections 3, 9
+    and 11). A durable PostgreSQL full-text adapter implements the same port.
+    """
+
+    def __init__(self, claims: ClaimStore) -> None:
+        self._claims = claims
+
+    def retrieve(self, tenant_id: str, query: str) -> tuple[Claim, ...]:
+        _require_retrieval_tenant(tenant_id)
+        terms = _retrieval_terms(query)
+        if not terms:
+            return ()
+        return tuple(
+            claim
+            for claim in self._claims.list(tenant_id)
+            if terms & _retrieval_terms(claim.statement)
+        )
+
+    def close(self) -> None:
+        """The retriever borrows the claim store's lifecycle; it releases nothing."""
+
+        return None

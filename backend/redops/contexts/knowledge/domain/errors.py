@@ -59,6 +59,16 @@ class UnscopedClaimError(KnowledgeError):
     """
 
 
+class UnscopedRetrievalError(KnowledgeError):
+    """Retrieval was attempted without a tenant.
+
+    SPEC.md sections 3 and 9 require every tenant resource and query to carry
+    ``tenant_id``. A retrieval that is not scoped to one client could return
+    another client's knowledge, so it is refused rather than answered unscoped
+    (SPEC.md sections 3, 9 and 11).
+    """
+
+
 class ClaimConflictError(InvalidClaimError):
     """A stored claim was re-stated in a way that is not an append-only revision.
 

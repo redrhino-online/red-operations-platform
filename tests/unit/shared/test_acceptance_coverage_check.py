@@ -165,14 +165,15 @@ class AcceptanceCoverageCheckTests(unittest.TestCase):
             )
 
     def test_repository_suite_is_honest(self) -> None:
-        # Five section 11 scenarios have no test yet, so the gate must fail and
-        # name them rather than passing condition 2.
+        # Three section 11 scenarios have no test yet, so the gate must fail and
+        # name them rather than passing condition 2. The retrieval scenario is now
+        # covered, so it must not be listed as unmet.
         result = run_check(REPO_ROOT / "tests" / "acceptance")
         self.assertEqual(result.returncode, 1)
         self.assertIn("duplicate-delivery-one-effect", result.stderr)
-        self.assertIn("cross-client-retrieval-empty", result.stderr)
         self.assertIn("gitops-revert-restores", result.stderr)
         self.assertIn("backup-restores-approval-trail", result.stderr)
+        self.assertNotIn("cross-client-retrieval-empty", result.stderr)
 
 
 if __name__ == "__main__":

@@ -107,13 +107,14 @@ class SecurityCoverageCheckTests(unittest.TestCase):
             self.assertIn("declared artifact-url test file has no test", result.stderr)
 
     def test_repository_suite_is_honest(self) -> None:
-        # The real suite covers only the API layer today, so the gate must fail
-        # and name the three absent layers rather than passing.
+        # The real suite covers the API and retrieval layers today, so the gate
+        # must fail and name the two absent layers rather than passing, and must
+        # not list the covered retrieval layer as missing.
         result = run_check(REPO_ROOT / "tests" / "security")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("retrieval", result.stderr)
         self.assertIn("worker", result.stderr)
         self.assertIn("artifact-url", result.stderr)
+        self.assertNotIn("retrieval", result.stderr)
 
 
 if __name__ == "__main__":

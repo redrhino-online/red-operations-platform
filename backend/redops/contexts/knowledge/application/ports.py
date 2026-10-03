@@ -67,3 +67,24 @@ class ClaimStore(abc.ABC):
 
     def close(self) -> None:
         """A default no-op so a process-local adapter need not implement it."""
+
+
+class KnowledgeRetriever(abc.ABC):
+    """Seam for tenant-scoped retrieval of one client's knowledge.
+
+    SPEC.md section 5 gives the Knowledge Management agent a client's source
+    index, and SPEC.md section 3 starts with full text and vector retrieval over
+    that client's own records. Retrieval therefore always runs against exactly
+    one client: a query that would match another client's material returns
+    nothing (SPEC.md sections 3 and 9). SPEC.md section 13 condition 3 names the
+    retrieval layer explicitly, so the seam exists instead of an implicit store
+    read. ``retrieve`` returns claims, which carry their own source citations, so
+    a caller can attribute every result.
+    """
+
+    @abc.abstractmethod
+    def retrieve(self, tenant_id: str, query: str) -> tuple[Claim, ...]:
+        """Return the tenant's claims matching the query, with their citations."""
+
+    def close(self) -> None:
+        """A default no-op so a process-local adapter need not implement it."""
