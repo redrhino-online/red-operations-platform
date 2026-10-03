@@ -451,3 +451,59 @@ class ClientProcessObservationError(ClientProcessError):
     movement stays a separate observed or authorized record, so the process is
     never an observation.
     """
+
+
+class JourneyReleaseError(ExecutionError):
+    """Base class for the SPEC.md section 3 journey release rule violations."""
+
+
+class InvalidJourneyReleaseError(JourneyReleaseError, ValueError):
+    """A JourneyRelease value violates an invariant.
+
+    SPEC.md section 3 names ``JourneyRelease`` (assets, routing, configuration
+    digest, rollback ref) as a core aggregate, and SPEC.md section 4 makes
+    launch require "integration checks, customer path dry run, consent where
+    applicable, named operator, rollback". A blank identity, routing,
+    configuration digest or rollback reference, an empty released asset set, or
+    an asset package that does not pin exactly one exact version per kind cannot
+    be represented as a journey release.
+    """
+
+
+class JourneyReleaseDependencyError(JourneyReleaseError):
+    """A journey release was not grounded on a typed stage 9 launch QA.
+
+    SPEC.md sections 3 and 4 ground a launch on the reviewed stage 9 launch QA
+    ("Launch Approved: all critical path checks pass, exceptions have owners, and
+    the designated human authorizes traffic"), so a release must be grounded on
+    a typed ``LaunchQA`` rather than an untyped readiness claim.
+    """
+
+
+class JourneyReleaseReadinessError(JourneyReleaseError):
+    """A journey release was offered a QA that is not signed ready and authorized.
+
+    SPEC.md section 3 states the ``JourneyRelease`` invariant: "launch needs
+    signed readiness and authorized release". A stage 9 launch QA that has not
+    reached ``READY_FOR_TRAFFIC``, or that carries no ``TrafficAuthorization``,
+    cannot authorize a launch, so no journey release can be built from it.
+    """
+
+
+class JourneyReleaseAuthorityError(JourneyReleaseError):
+    """A journey release pinned an authorization by a non-designated actor.
+
+    SPEC.md section 4: approval is version specific and "an agent cannot confer
+    human approval upon itself", and stage 9 requires "the designated human
+    authorizes traffic". A release cannot pin a traffic authorization whose actor
+    is not the QA's designated authority, even if the QA's state claims readiness.
+    """
+
+
+class JourneyReleaseTenantBoundaryError(JourneyReleaseError):
+    """A journey release mixed in a QA or asset from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. A
+    release belongs to the tenant of the launch QA and of every released asset it
+    pins, so it cannot cross a tenant boundary.
+    """

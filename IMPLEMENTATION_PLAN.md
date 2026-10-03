@@ -4,7 +4,65 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T193641Z (Ralph cycle, this run): selected item was the
+- Cycle 2026-10-03T194013Z (Ralph cycle, this run): selected item was the
+  Execution `JourneyRelease` core aggregate (SPEC.md section 3), the spec-named
+  aggregate the remaining `/journeys` half of Q13 needs. It outranks the
+  alternatives: every stage 0-10 gate-integrity item is closed or blocked on a
+  named-owner decision (Q28 stage 8-10 required-kind placement, Q3 vendor agent
+  registration, Q16 workflow write route), and the `frontend/` Q32 is a
+  downstream dashboard whose shell-only form would falsely pass DoD [5/6] while
+  condition 6 (Q45) is far off. `JourneyRelease` was absent from the codebase
+  (grep confirmed), it is launch-integrity (invariant "launch needs signed
+  readiness and authorized release"), it is a SPEC.md section 3 core aggregate,
+  and it is the prerequisite for `/journeys` (Q13) and then `/opportunities`,
+  `/interventions` (Q14). It does not require the JourneyRelease-vs-stage-8
+  `FunnelIntegration` owner decision the prior status named: the SPEC names
+  `JourneyRelease` and the canon is silent on it, so the SPEC governs the shape
+  (SPEC.md section 12.1); projecting the existing `FunnelIntegration` instead
+  remains available to the owner as an intentional deviation and is not
+  foreclosed.
+- Outcome: new pure-domain `JourneyRelease` (`release_id`, `tenant_id`, `qa`,
+  `assets`, `routing`, `configuration_digest`, `rollback_ref`) in
+  `backend/redops/contexts/execution/domain/journey_release.py`, with named
+  `JourneyReleaseError` / `InvalidJourneyReleaseError` /
+  `JourneyReleaseDependencyError` / `JourneyReleaseReadinessError` /
+  `JourneyReleaseAuthorityError` / `JourneyReleaseTenantBoundaryError`. It
+  refuses to exist without a same-tenant ready-for-traffic `LaunchQA` carrying a
+  `TrafficAuthorization` by that QA's designated authority (both halves of the
+  section 3 invariant), and it refuses a blank routing, configuration digest or
+  rollback reference and a released package that is not exactly one exact
+  `StageAssetVersion` per kind. It exposes `released_kinds`, `is_signed_ready`
+  and `is_authorized`; it is frozen so a later release is a new identity and a
+  previous deployed release stays historically identifiable. It authorizes no
+  traffic (a stage 10 observation) and confers no human approval.
+- Evidence: `make check` -> 2151 passed, 2 skipped, 690 subtests; pyflakes
+  clean. New `tests/unit/execution/test_journey_release.py` (12 tests, 4
+  subtests). `make done` still fails only [5/6] (`frontend/` missing, Q32);
+  [1/6]-[4/6] and [6/6] pass.
+- New findings: the stage 9 `LaunchQA` already carries the signed human
+  `TrafficAuthorization` when it reaches `READY_FOR_TRAFFIC`, so "signed
+  readiness and authorized release" maps onto the existing stage 9 evidence
+  rather than a second authority path; the release re-verifies the authorizer
+  against the QA's designated authority rather than trusting the
+  `LaunchApprovedPolicy` that ran when the QA was authorized, so a directly
+  constructed ready QA cannot smuggle a rogue authorizer into a release.
+- Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
+  land shell-only; Q28 stage 8-10 required kinds blocked on the named
+  methodology-owner placement decision; Q16 idempotency keys blocked on a
+  workflow write route; Q3 agent registration blocked on the ADR 0006 /
+  vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: the Q13 `/journeys` route and durable store
+  over this `JourneyRelease` (prerequisite met this cycle). Required asset: a
+  tenant-scoped `JourneyReleaseRepository` (in-memory and PostgreSQL adapters,
+  migration) plus `GET`/`POST /red/journeys`. Checkpoint: none (API surface, not
+  a gate); approver: none (no gate decides). Blocked downstream dependency: Q14
+  `/opportunities`, `/interventions`; then the `frontend/` screens Q32-Q45. The
+  stage 0-10 e2e Q30 is already green.
+
+### Prior cycle (2026-10-03T193641Z)
+
+- Cycle 2026-10-03T193641Z (Ralph cycle): selected item was the
   `/measurements` half of Q13, the tenant-scoped stage 10 metric registry
   (prerequisite Q12 met). It outranks the `/journeys` half because it closes a
   real persistence gap: SPEC.md section 3 names the Measurement aggregate
@@ -3213,7 +3271,7 @@ stalls:
 | Q10 | REST `/claims`, `/methods` (done 2026-10-03T192641Z; `GET`/`POST /red/claims` and `GET /red/methods`, tenant required on GET and path/body-scoped to the tenant; new durable Knowledge `ClaimStore` port with in-memory and PostgreSQL adapters and migration `0012_claims`; the claim create route verifies every citation against the same tenant's stored immutable `SourceRecord` by id and checksum, and the claim store refuses a same-id non-append-only re-statement; `MethodVersionRepository.list` added so `/methods` is a tenant-scoped paginated read of approved methods, left read-only because approval is gate-owned. Tests `tests/unit/knowledge/test_claim_store.py`, `tests/unit/knowledge/test_claims_route.py`, `tests/unit/method/test_methods_route.py`) | api | Q9 | route tests |
 | Q11 | REST `/offers`, `/builds` (done 2026-10-03T193035Z; `GET /red/offers` and `GET`/`POST /red/builds`, tenant required on every read and carried on the create body; `BuildObject` now requires a `tenant_id` (SPEC.md sections 3 and 9); new Production `BuildObjectRepository` port with in-memory and PostgreSQL adapters and migration `0013_build_objects` (upsert per `(tenant_id, build_id)`); `/offers` is a tenant-scoped paginated read over the existing offer store, left read-only because production readiness is gate-owned; `/builds` list is tenant-scoped and paginated and create records an Identified proposal. Tests `tests/unit/commercial/test_offers_route.py`, `tests/unit/production/test_build_object_store.py`, `tests/unit/production/test_builds_route.py`, `tests/unit/production/test_build_object_postgres.py`) | api | Q10 | route tests |
 | Q12 | REST `/approvals`, `/decisions` with exact version approval (done 2026-10-03T193430Z; `GET /red/decisions` and `GET /red/approvals`, tenant required, paginated, projected from the durable tenant-scoped `GateLedgerRepository`; `/decisions` lists the append-only gate decisions in canonical stage order with disposition, reviewer, scope, rationale, exact pinned asset versions and next action, and `/approvals` flattens the per-asset `ApprovalRequest`s with exact asset version and scope, requester, designated approver, outcome and expiry; both read-only because a decision is recorded through its stage gate and listing an approval never grants authority. Tests `tests/unit/governance/test_governance_read_routes.py` (6)) | api | Q11 | version specific approval |
-| Q13 | REST `/journeys`, `/measurements` (`/measurements` done 2026-10-03T193641Z; `GET /red/measurements` and `POST /red/measurements` over the new durable Measurement `MeasurementRegistry` (metric definitions + observations), in-memory and PostgreSQL adapters and migration `0014_measurements`; tenant required, append-only, an observation pins its exact metric version and a same-key re-statement is a 409. `/journeys` remains and is gated on the `JourneyRelease` vs stage 8 `FunnelIntegration` named-owner decision) | api | Q12 | route tests |
+| Q13 | REST `/journeys`, `/measurements` (`/measurements` done 2026-10-03T193641Z; `GET /red/measurements` and `POST /red/measurements` over the new durable Measurement `MeasurementRegistry` (metric definitions + observations), in-memory and PostgreSQL adapters and migration `0014_measurements`; tenant required, append-only, an observation pins its exact metric version and a same-key re-statement is a 409. `/journeys` advanced 2026-10-03T194013Z: the SPEC.md section 3 `JourneyRelease` core aggregate now exists (pure domain, invariant "launch needs signed readiness and authorized release", grounded on a same-tenant ready-for-traffic `LaunchQA` whose `TrafficAuthorization` names the designated authority); the tenant-scoped `/journeys` store and route remain) | api | Q12 | route tests |
 | Q14 | REST `/opportunities`, `/interventions` | api | Q13 | route tests |
 | Q15 | REST `/workflows/{id}` with SSE or stable id polling (done 2026-10-03T185701Z; `GET /red/clients/{tenant_id}/workflows/{run_id}`; tenant-scoped polling read returning a stable append-only `event_id` and the transition log; 404 for a missing/foreign run. Tenant is the path authority, matching the stage routes, not the bare `/workflows/{id}`) | api | Q5 | route tests `tests/unit/workflows/test_workflow_run_route.py` (4) |
 | Q16 | Idempotency keys and optimistic version conflicts on mutations | api | Q15 | duplicate delivery one effect; stale update 409 |
