@@ -4,7 +4,67 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T201148Z (Ralph cycle, this run): selected item was hardening
+- Cycle 2026-10-03T201337Z (Ralph cycle, this run): selected item was Q33, the
+  portfolio command center screen plus the frontend browser runner (SPEC.md
+  sections 7 and 8; section 13 condition 6; queue item Q33). It is the highest
+  priority ready item: its only dependency Q32 (the Next.js shell) is done, and
+  it is the head of the Q33-Q45 dependency chain for condition 6, the largest
+  unstarted DoD condition. The prior cycle hardened `[5/6]`
+  (`scripts/check_frontend_build.sh`) to require a runnable `npm test`, so Q33
+  also had to choose the browser runner and wire it, or the gate would stay
+  honestly red. It outranks alternatives: Q34-Q45 each depend on Q33; Q28
+  stage 8-10 required kinds are blocked on the named methodology-owner
+  placement decision; Q16 needs a workflow write route and connector seam;
+  Q3/Q4 need the ADR 0006 resolution and a live key; Q8 layer coverage and the
+  condition 2 cross-client-retrieval scenario have no retrieval/worker/artifact
+  seam yet; Q47-Q50 need the Atlas cluster.
+- Outcome: new `frontend/src/features/command-center/` feature. Presentational
+  `CommandCenter.tsx` renders the ranked `GET /red/interventions` cards (SPEC.md
+  section 7 fields: severity, reason, subject, explanation, owner, next action,
+  due date, affected builds) and filters dismissed cards; container
+  `CommandCenterScreen.tsx` owns the tenant-scoped read with a tenant/engagement/
+  date form; route `/command-center` (`src/app/command-center/page.tsx`) binds
+  the `portfolio-command-center` screen id declared in the new
+  `frontend/dod-screens.txt`. Chose Vitest + jsdom + Testing Library as the
+  browser runner (`vitest.config.ts`, `npm test` -> `vitest run`); the API client
+  gained `InterventionCard`/`InterventionList` types and `listInterventions`.
+  No product authority, gate decision or pipeline stage changed; the UI can
+  approve or release nothing.
+- Evidence: `frontend/src/features/command-center/CommandCenter.test.tsx` (5
+  tests) renders two active cards and asserts reasons, owners, next actions and
+  affected builds appear, drops a dismissed card (count 0), and covers the
+  loading/error states plus a stubbed-fetch screen read asserting the
+  `/red/interventions?tenant_id=3fmindset` request. `npm test` -> 5 passed;
+  `npm run build` -> compiled, TypeScript finished, `/command-center` route
+  emitted. `bash scripts/check_frontend_build.sh frontend` -> exit 0
+  ("build compiled and the browser suite ran"), the prior cycle's red gate now
+  green. `bash scripts/check_frontend_screens.sh frontend` -> still exit 1 with
+  the 11 remaining section 8 screen ids missing (honest red; condition 6 needs
+  Q34-Q45). `make done` still fails first at `[2/6]` condition 2.
+- New findings: `next build` (Turbopack) type-checks and ignores the co-located
+  `*.test.tsx` (build is clean with the vitest imports present). Vitest needs a
+  `resolve.alias` for the `@/*` tsconfig path or the container import fails to
+  resolve; the config now maps `@` to `./src`. npm blocked the esbuild
+  postinstall, but esbuild 0.28 ships its platform binary as an optional
+  dependency, so Vitest ran without approving install scripts.
+- Blockers (unchanged): `frontend/` Q34-Q45 are the path to DoD condition 6;
+  Q8's retrieval, worker and artifact-URL isolation coverage and the condition 2
+  cross-client-retrieval scenario are blocked until those seams exist; Q28 stage
+  8-10 required kinds blocked on the named methodology-owner placement decision;
+  Q16 idempotency keys blocked on a workflow write route and a connector seam;
+  Q3 agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
+  deploy-only scenarios need the Atlas cluster and a chosen backup target.
+- Highest priority ready next item: Q34, the client workspace overview screen.
+  Required asset: the workspace overview at a declared route showing the client
+  workspace state, provenance, dependencies and next action (SPEC.md section 8),
+  reading a tenant-scoped backend endpoint, plus its browser test; checkpoint:
+  none (UI, not a gate); approver: none. Blocked downstream dependency: Q35-Q45.
+  Prerequisite: Q33 (done this cycle).
+
+### Prior cycle (2026-10-03T201148Z)
+
+- Cycle 2026-10-03T201148Z (Ralph cycle, prior): selected item was hardening
   the prototype definition-of-done gate so DoD condition 6 (all section 8
   screens render, SPEC.md section 13) can no longer pass without the frontend
   actually building and its browser suite running. `[5/6]` ran only
@@ -3839,7 +3899,7 @@ stalls:
 | Q30 | Stage 0-10 API e2e with deterministic agents | e2e | Q27 | DoD 1: one client intake to baseline |
 | Q31 | Section 11 acceptance suite (SPEC.md section 11) | e2e | Q30 | DoD 2. Condition 2 gate added 2026-10-03T200006Z: `scripts/check_acceptance_coverage.sh` requires all ten canonical scenarios declared in `tests/acceptance/covered-scenarios.txt`, each covered scenario pointing at a test file that exists with at least one test, so condition 2 cannot pass without the suite. Covered today: source-attribution, known-requires-source, unauthorized-approval-rejected, method-change-identifies-dependents, worker-restart-preserves-waiting, launch-blocked-on-failed-path. Uncovered and keeping the gate red: duplicate-delivery-one-effect (needs a connector idempotency seam, Q16), cross-client-retrieval-empty (needs the retrieval port, Q8), gitops-revert-restores and backup-restores-approval-trail (deploy-only, Q49 and a chosen backup target) |
 | Q32 | Next.js shell in `frontend/` plus RED theme plus API client | ui | Q15 | builds; health route. Done 2026-10-03T200524Z: `frontend/` Next.js 16 / React 19 / TypeScript app (`package.json`, `next.config.ts` `output: standalone`, RED `globals.css` palette, `layout.tsx` shell, `page.tsx` surface list, `health/route.ts` liveness, tenant-scoped `shared/api/client.ts` over `/red`); `npm run build` clean, `/health` -> `{"status":"ok"}`, `/` -> 200. No section 8 screen or `dod-screens.txt` yet, so the condition 6 gate stays honestly red |
-| Q33 | Command center screen | ui | Q32 | browser test (chooses the frontend browser runner and wires `npm test`); shows blockers and owners |
+| Q33 | Command center screen | ui | Q32 | Done 2026-10-03T201337Z: `frontend/src/features/command-center/` (`CommandCenter.tsx` presentational, `CommandCenterScreen.tsx` tenant-scoped read, route `/command-center`, `frontend/dod-screens.txt` declares the screen id) over `listInterventions`; Vitest+jsdom browser runner (`vitest.config.ts`, `npm test` -> `vitest run`). `npm run build` clean, `npm test` 5 passed, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 11 remaining screens |
 | Q34 | Client workspace overview | ui | Q33 | browser test |
 | Q35 | Source and claim explorer | ui | Q34 | browser test |
 | Q36 | Transformation map | ui | Q35 | browser test |

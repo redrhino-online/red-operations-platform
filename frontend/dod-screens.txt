@@ -1,0 +1,5 @@
+# Section 8 screens implemented so far (SPEC.md section 8; DoD condition 6).
+# One line per implemented screen: `<screen-id> <route>`. The condition 6 gate
+# `scripts/check_frontend_screens.sh` requires all twelve canonical screen ids
+# before `[5/6]` can pass, so this list grows as Q34-Q44 land.
+portfolio-command-center /command-center

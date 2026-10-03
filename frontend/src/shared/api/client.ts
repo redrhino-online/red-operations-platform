@@ -90,6 +90,32 @@ export interface WorkflowRunView {
   state: string;
 }
 
+// One command center card from `GET /red/interventions` (SPEC.md section 7).
+// The fields mirror `InterventionResponse` in `backend/redops/api/schemas.py`;
+// the UI only reads them and never recomputes the ranking.
+export interface InterventionCard {
+  client: string;
+  reason: string;
+  severity: string;
+  subject: string;
+  explanation: string;
+  evidence: string[];
+  owner: string;
+  next_action: string;
+  due_on: string | null;
+  state: string;
+  affected_builds: string[];
+  resolution_note: string;
+}
+
+export interface InterventionList {
+  tenant_id: string;
+  engagement: string;
+  on: string;
+  total: number;
+  interventions: InterventionCard[];
+}
+
 // Tenant-scoped reads used by the first screens. Paths match `backend/redops/
 // api/routes.py` (router prefix `/red`).
 export class RedOperationsApi extends RedApiClient {
@@ -101,6 +127,21 @@ export class RedOperationsApi extends RedApiClient {
     return this.get<WorkflowRunView>(
       `/red/clients/${encodeURIComponent(tenantId)}/workflows/${encodeURIComponent(runId)}`,
     );
+  }
+
+  // The command center read (SPEC.md sections 7 and 8). Tenant, engagement and
+  // the evaluation date are all required by the backend, which refuses an
+  // unscoped query.
+  listInterventions(
+    tenantId: string,
+    engagement: string,
+    on: string,
+  ): Promise<InterventionList> {
+    return this.get<InterventionList>("/red/interventions", {
+      tenant_id: tenantId,
+      engagement,
+      on,
+    });
   }
 
   health(): Promise<{ status: string }> {
