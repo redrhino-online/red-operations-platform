@@ -173,6 +173,20 @@ class InvalidMeasurementRecordError(MeasurementError, ValueError):
     """
 
 
+class MeasurementWindowOpenError(MeasurementError):
+    """A MeasurementRecord is written before the window it covers has closed.
+
+    SPEC.md section 3 keys a MeasurementRecord by its window and keeps
+    observations distinct from causal conclusions, so a record describes a
+    period that has been observed. The canon's optimization discipline (canon
+    files 23 and 24: "I wait 10 days to see how it does"; "don't touch anything
+    for 10 days") does not read a result until the period it is measured over has
+    elapsed, so a record whose ``recorded_on`` date falls before its window end
+    is refused: the window is still open, so its figure cannot yet be a real
+    observation and cannot ground a baseline or a movement.
+    """
+
+
 class MeasurementTenantBoundaryError(MeasurementError):
     """A measurement record cites another tenant's metric definition.
 

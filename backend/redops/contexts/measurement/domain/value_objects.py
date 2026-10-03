@@ -29,6 +29,7 @@ from redops.contexts.measurement.domain.errors import (
     InvalidMetricDefinitionError,
     InvalidMetricWindowError,
     MeasurementTenantBoundaryError,
+    MeasurementWindowOpenError,
 )
 
 
@@ -356,6 +357,13 @@ class MeasurementRecord:
     names the basis (placeholder or observed) and the source, and can be projected
     to a ``PerformanceClaim`` of kind OBSERVATION so the improvement loop reads a
     typed observed movement rather than a causal conclusion.
+
+    The canon's optimization discipline (canon files 23 and 24: "I wait 10 days
+    to see how it does"; "don't touch anything for 10 days") reads a result only
+    after the period it is measured over has elapsed, so a record is written only
+    once its window has closed: ``recorded_on`` cannot fall before ``window.end``.
+    A still-open window has no complete observation to report and cannot enter the
+    registry or ground a baseline.
     """
 
     record_id: str
@@ -410,6 +418,12 @@ class MeasurementRecord:
         if not isinstance(self.recorded_on, date):
             raise InvalidMeasurementRecordError(
                 "a measurement record requires the date it was recorded"
+            )
+        if self.recorded_on < self.window.end:
+            raise MeasurementWindowOpenError(
+                "a measurement record cannot be written before the window it "
+                f"covers has closed: it was recorded on {self.recorded_on} but "
+                f"the window ends {self.window.end}"
             )
 
     @property

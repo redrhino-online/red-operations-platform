@@ -13,6 +13,10 @@ the canon's Metrics Matrix and dashboard discipline (canon files 23 and 24):
   metric.
 - A placeholder figure is not an observation, and a placeholder-only series
   cannot serve as a baseline; a sample below the caller's minimum is too small.
+- A record is written only once the window it covers has closed, so a
+  still-open result window cannot enter the registry or ground any baseline
+  (canon file 24: "I wait 10 days to see how it does"; "don't touch anything for
+  10 days").
 - A measurement can be projected to an OBSERVATION claim, never a causal
   conclusion.
 """
@@ -26,11 +30,13 @@ from redops.contexts.measurement.domain.errors import (
     InvalidMetricDefinitionError,
     InvalidMetricWindowError,
     MeasurementTenantBoundaryError,
+    MeasurementWindowOpenError,
     MetricBaselineNotObservedError,
     MetricSampleTooSmallError,
 )
 from redops.contexts.measurement.domain.policies import MetricBaselinePolicy
 from redops.contexts.measurement.domain.value_objects import (
+    MeasurementWindow,
     MetricDirection,
     MetricFunnelStep,
     MetricUnit,
@@ -135,6 +141,31 @@ class MeasurementRecordTests(unittest.TestCase):
     def test_a_record_requires_a_measurement_window(self):
         with self.assertRaises(InvalidMeasurementRecordError):
             measurement_record(window="last week")
+
+    def test_a_record_cannot_be_recorded_before_its_window_closes(self):
+        with self.assertRaises(MeasurementWindowOpenError):
+            measurement_record(
+                window=MeasurementWindow(
+                    start=date(2026, 10, 2), end=date(2026, 10, 9)
+                ),
+                recorded_on=date(2026, 10, 2),
+            )
+
+    def test_a_record_may_be_recorded_on_the_day_its_window_closes(self):
+        record = measurement_record(
+            window=MeasurementWindow(
+                start=date(2026, 10, 2), end=date(2026, 10, 5)
+            ),
+            recorded_on=date(2026, 10, 5),
+        )
+
+        self.assertEqual(date(2026, 10, 5), record.window.end)
+        self.assertEqual(date(2026, 10, 5), record.recorded_on)
+
+    def test_the_default_record_is_written_after_its_window_closes(self):
+        record = measurement_record()
+
+        self.assertGreaterEqual(record.recorded_on, record.window.end)
 
     def test_a_record_is_immutable(self):
         record = measurement_record()

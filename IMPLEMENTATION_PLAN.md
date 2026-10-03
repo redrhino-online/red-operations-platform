@@ -4,44 +4,44 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:17:53Z (Ralph cycle 99).
-- Selected item: require that a recorded stage 10 improvement outcome's *after*
-  observation window has closed by the outcome's `measured_on` date
-  (`measured_on >= after.window.end`) via a value-object invariant on
-  `ImprovementOutcome` and the new named `ImprovementResultWindowOpenError`, so a
-  measured optimization cannot report a movement over a result window that has
-  not yet elapsed. This is the general temporal completion of cycles 96 through
-  98's typed, ordered, approved-then-observed grounding and applies the canon's
-  "I wait 10 days to see how it does" and "don't touch anything for 10 days"
-  discipline (canon files 23 and 24) to the closure of the result window itself
-  (SPEC.md section 3 Measurement aggregate and `MeasurementWindow`; section 4
-  stage 10; Phase 5 "one improvement is approved and measured"). It was this
-  plan's named highest priority ready next item after cycle 98. It outranks the
-  advertising and forecast dashboard (a downstream feature), the Operations
-  delivery adapter (blocked on the storage ADR), the stage 9 compliance
-  projection (needs a named-owner decision on a canonical kind) and the
-  stage-parameterized gate refactor (quality only), because it closes the last
-  open temporal edge of the stage 10 movement chain without a new artifact, stage
+- Cycle timestamp: 2026-10-03T05:19:18Z (Ralph cycle 100).
+- Selected item: enforce that a `MeasurementRecord` cannot be recorded before
+  the window it covers has ended (`recorded_on >= window.end`) via a value-object
+  invariant on `MeasurementRecord` and the new named `MeasurementWindowOpenError`,
+  so an observation with a still-open window cannot enter the metric registry or
+  ground any baseline or movement. This is the general form of cycles 96 through
+  99's stage 10 movement chain and applies the canon's "I wait 10 days to see how
+  it does" and "don't touch anything for 10 days" discipline (canon files 23 and
+  24) to the record itself, not only to an improvement outcome (SPEC.md section 3
+  Measurement aggregate and `MeasurementWindow`; Phase 5 "metric registry, event
+  instrumentation, observations and experiment records"). It was this plan's named
+  highest priority ready next item after cycle 99. It outranks the stage 10
+  baseline establishment-date precedence (the next gate-integrity analogue, named
+  below), the advertising and forecast dashboard (a downstream feature), the
+  Operations delivery adapter (blocked on the storage ADR), the stage 9 compliance
+  projection (needs a named-owner decision) and the stage-parameterized gate
+  refactor (quality only), because it closes the registry-level temporal edge that
+  every baseline, movement and dashboard depends on without a new artifact, stage
   or decision.
 - Outcome: completed and verified (single item; no second item started).
 - Evidence: behavioral coverage in
-  `tests/unit/measurement/test_improvement_loop.py`
-  (`ImprovementOutcomeSettlementTests`): an outcome whose after window ends after
-  its `measured_on` date is refused with the named
-  `ImprovementResultWindowOpenError`, an outcome may be measured exactly on the
-  day its after window closes, and the default grounded outcome asserts
-  `outcome.measured_on >= outcome.after.window.end`. Running
+  `tests/unit/measurement/test_metric_registry.py` (`MeasurementRecordTests`): a
+  record whose window ends after its `recorded_on` date is refused with the named
+  `MeasurementWindowOpenError`, a record may be written exactly on the day its
+  window closes, and the default record asserts
+  `record.recorded_on >= record.window.end`. Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1083 passed, up from 1080. `python3 -m pyflakes backend/redops tests`
+  reports 1086 passed, up from 1083. `python3 -m pyflakes backend/redops tests`
   is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the stage 10 movement chain now requires a registered metric on
-  an established same-tenant baseline, an owner approval (not the proposer), a
-  distinct observed before-and-after over ordered windows, an after window that
-  opens no earlier than the approval, and an after window that has closed by the
-  date the outcome is read. The new check is ordered after the existing before/
-  before-after window-overlap check so the earlier temporal errors keep firing
-  for their own rule rather than being masked by the closure rule. No persistence
-  adapter exists yet, so the invariant is enforced purely at construction.
+- New findings: the registry-level closure rule forced the fixture audit the prior
+  plan predicted: three `tests/unit/measurement/test_improvement_loop.py` tests
+  that deliberately build a future-window record to exercise the outcome-level
+  overlap and result-window rules now set `recorded_on` to the window end, so the
+  record is itself valid and the outcome-level named errors still fire in their
+  established order. No persistence adapter exists yet, so the invariant is
+  enforced purely at construction. The stage 10 baseline gate has the analogous
+  open edge: `PerformanceBaseline.establish` accepts any `on` date, including one
+  before the stage 9 authorization and the observed first-qualified-traffic date.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -49,27 +49,41 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: enforce that a `MeasurementRecord` itself
-  cannot be recorded before the window it covers has ended
-  (`recorded_on >= window.end`) via a value-object invariant and a named error,
-  so an observation with a still-open window cannot enter the metric registry or
-  serve as a baseline anywhere (SPEC.md section 3 Measurement aggregate; canon
-  files 23 and 24: real metrics accumulate over an elapsed period, "don't touch
-  anything for 10 days" before reading a result). It outranks the advertising and
-  forecast dashboard (a downstream feature), the Operations delivery adapter
-  (blocked on the storage ADR), the stage 9 compliance projection (needs a
-  named-owner decision) and the stage-parameterized gate refactor (quality only),
-  because it is the general form of this cycle's rule and prevents a future-window
-  observation from grounding any baseline or movement. Prerequisite: satisfied
-  (this cycle's outcome-level closure rule and the existing `MeasurementWindow` /
-  `MeasurementRecord` values); it needs a fixture audit for any record whose
-  window end currently falls after its `recorded_on`.
+- Highest priority ready next item: enforce that `PerformanceBaseline.establish`
+  cannot establish a stage 10 baseline before its own evidence exists -- the
+  establishment date must not precede the stage 9 traffic authorization date
+  (`qa.authorization.authorized_on`) nor the observed first-qualified-traffic
+  milestone date -- via `PerformanceBaselinePolicy` and a named error, so a
+  baseline cannot report establishment before the traffic it reports was
+  authorized and observed (SPEC.md section 4 stage 10 "Performance Baseline
+  Established"; canon files 23 and 24: a baseline of metrics accumulates only
+  after the campaign has run). It outranks the advertising and forecast dashboard
+  (a downstream feature), the Operations delivery adapter (blocked on the storage
+  ADR), the stage 9 compliance projection (needs a named-owner decision) and the
+  stage-parameterized gate refactor (quality only), because it is the same
+  gate-integrity temporal edge at the stage 10 gate that this cycle closed at the
+  registry. Prerequisite: satisfied (the existing `PerformanceBaselinePolicy`,
+  `TrafficAuthorization.authorized_on` and `MilestoneObservation.observed_on`); it
+  needs a fixture audit for any baseline established before its own milestones.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; the advertising and forecast dashboard; a
   stage-parameterized gate recorder/handler refactor; projecting the compliance
   package onto a canonical stage 9 gate kind (methodology-owner decision); and
   all persistence.
+  [DONE 2026-10-03 (Ralph cycle 100): required a `MeasurementRecord` to be
+  written only once the window it covers has closed --
+  `MeasurementRecord.__post_init__` now refuses a record whose `recorded_on` date
+  falls before its `window.end` with the new named `MeasurementWindowOpenError`,
+  so a still-open observation cannot enter the metric registry or ground any
+  baseline or movement (SPEC.md section 3 Measurement aggregate and
+  `MeasurementWindow`; Phase 5 "metric registry, event instrumentation,
+  observations and experiment records"; canon files 23 and 24: wait before
+  reading how the change did); verified by the new `MeasurementRecordTests`
+  closure tests in `tests/unit/measurement/test_metric_registry.py` and the
+  fixture-audit updates in `tests/unit/measurement/test_improvement_loop.py`
+  (full suite 1086 passed), so the registry itself now carries the temporal
+  discipline the improvement loop previously enforced only at the outcome.]
   [DONE 2026-10-03 (Ralph cycle 99): required a stage 10 improvement outcome's
   after observation window to have closed by its `measured_on` date --
   `ImprovementOutcome.__post_init__` now refuses an outcome measured before its

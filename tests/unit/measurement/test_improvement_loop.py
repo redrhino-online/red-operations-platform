@@ -341,6 +341,7 @@ class ImprovementOutcomeTests(unittest.TestCase):
                     window=MeasurementWindow(
                         start=date(2026, 9, 25), end=date(2026, 10, 8)
                     ),
+                    recorded_on=date(2026, 10, 8),
                 ),
             )
 
@@ -474,6 +475,7 @@ class ImprovementOutcomeSettlementTests(unittest.TestCase):
                     window=MeasurementWindow(
                         start=date(2026, 10, 2), end=date(2026, 10, 5)
                     ),
+                    recorded_on=date(2026, 10, 5),
                 ),
             )
 
@@ -486,6 +488,7 @@ class ImprovementOutcomeSettlementTests(unittest.TestCase):
                 window=MeasurementWindow(
                     start=date(2026, 10, 2), end=date(2026, 10, 5)
                 ),
+                recorded_on=date(2026, 10, 5),
             ),
         )
 
