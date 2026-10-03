@@ -125,10 +125,14 @@ stalls:
   runtime into the ignored `project_sources/` path and never committed. The
   deployed health check is `https://redop.atlas.lan/`, which the cluster already
   serves (confirmed HTTP 200; see `.env.example`).
-- Known blocker: the `atlas` remote SSH key is not authorized (`git fetch atlas`
-  fails with `Permission denied (publickey)`), so the final loop cycle cannot
-  push to atlas until the key is added, or the run uses
-  `FINAL_PUSH_REMOTES=origin`.
+- Publish auth (resolved 2026-10-03): Gitea on `10.0.0.110:2222` authenticates
+  with `~/.ssh/id_rsa`, but the ssh config maps the literal `10.0.0.110` to the
+  control-plane key `id_rsa_control`. The `atlas` remote (app repo) and the
+  submodule `gitea` remote now use the `gitea-atlas` ssh alias (HostName
+  `10.0.0.110`, port 2222, `IdentityFile ~/.ssh/id_rsa`), and `git fetch atlas`
+  succeeds. The final loop cycle can push to atlas; `origin` (GitHub) is
+  unaffected. This also resolves the earlier "atlas push blocked" finding, which
+  was a key/host mapping issue, not a missing key.
 
 | # | Item | Area | Depends | Evidence / gate |
 | --- | --- | --- | --- | --- |

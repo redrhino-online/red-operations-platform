@@ -103,9 +103,10 @@ remote that is not configured is skipped. The `upstream` fork remote
   final cycle of a `make loop` also pushes to `atlas`, so a long run does not
   push an unfinished branch to Atlas until the last round. Override with
   `PUSH_REMOTES` and `FINAL_PUSH_REMOTES`.
-- This repository's `atlas` remote is the Atlas Gitea repository
-  (`ssh://git@10.0.0.110:2222/atlas-admin/red-operations-platform.git`), not the
-  platform/GitOps repo (`github.com/211lab/atlas`).
+- This repository's `atlas` remote is the Atlas Gitea repository, reached as
+  `ssh://gitea-atlas/atlas-admin/red-operations-platform.git` (the `gitea-atlas`
+  ssh alias uses `~/.ssh/id_rsa` on port 2222), not the platform/GitOps repo
+  (`github.com/211lab/atlas`).
 
 Publishing is source-only for now: the container build workflow, Helm chart and
 Argo CD Application are deferred until the platform has a real HTTP service and
