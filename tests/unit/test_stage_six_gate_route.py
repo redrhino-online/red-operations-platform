@@ -329,7 +329,6 @@ class StageSixGateRouteTests(unittest.TestCase):
     def stage_two_payload(self):
         return {
             "workspace_id": "ws-3f",
-            "authorities": self._authorities(),
             "currency_package_id": "currency-3f",
             "inventory": {
                 "inventory_id": "inventory-3f",

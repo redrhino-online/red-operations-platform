@@ -293,17 +293,17 @@ class MillionDollarMessageInput(BaseModel):
 class RecordStageTwoGateRequest(BaseModel):
     """The stage 2 "Currency Locked" gate request (SPEC.md section 4).
 
-    The caller supplies the reviewed positioning values, the workspace authority
-    registry and the decision metadata. The route builds the canonical gate from
-    these through the use case; it deliberately accepts no pre-built gate, so
-    approver authority and exact-version evidence cannot be bypassed. Stage 2
-    depends on a passing stage 1 decision already in the ledger. The currency
-    inventory carries no claims: the "Currency Locked" checkpoint turns on the
-    primary currency's internal specificity, not external customer evidence.
+    The caller supplies the reviewed positioning values and the decision
+    metadata; the authority registry is resolved from the durable workspace
+    store, never the body. The route builds the canonical gate from these through
+    the use case; it deliberately accepts no pre-built gate, so approver authority
+    and exact-version evidence cannot be bypassed. Stage 2 depends on a passing
+    stage 1 decision already in the ledger. The currency inventory carries no
+    claims: the "Currency Locked" checkpoint turns on the primary currency's
+    internal specificity, not external customer evidence.
     """
 
     workspace_id: str
-    authorities: list[ClientAuthorityInput]
     currency_package_id: str
     inventory: CurrencyInventoryInput
     positioning: PositioningDecisionInput
