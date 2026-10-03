@@ -3,7 +3,8 @@
   "permission": {
     "external_directory": {
       "*": "ask",
-      "/home/wsl/red-op/OpenExecutive/**": "allow"
+      "/home/wsl/red-op/OpenExecutive/**": "allow",
+      "/home/wsl/red-op/canon/**": "allow"
     }
   }
 }

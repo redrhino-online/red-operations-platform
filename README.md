@@ -18,9 +18,9 @@ The target home is a Kubernetes cluster on a home network. Helm will define the 
 
 ## 3. The build harness
 
-`ralph_cycle.sh` is a small tool for building the platform with the OpenCode CLI. It gives OpenCode the product spec and the build plan. It asks OpenCode to inspect the real repo and pick one ready item that matters most. OpenCode then works on that item, checks the result, updates the plan with what it learned, and stops.
+`ralph_cycle.sh` is a small tool for building the platform with the OpenCode CLI. It gives OpenCode the product spec, the build plan, and the reference model canon. It asks OpenCode to inspect the real repo and pick one ready item that matters most. OpenCode then works on that item, checks the result, updates the plan with what it learned, and stops.
 
-The script blocks a second run while one run is active. It writes a log in the target repo's `.ralph` folder. It does not commit code, push changes, deploy the app, or give client approval. Review the code and plan change after each run.
+The script blocks a second run while one run is active. It writes a log in the target repo's `.ralph` folder. It does not push changes, deploy the app, or give client approval; it does commit each cycle's changes with the message the cycle writes. Review the code and plan change after each run.
 
 To use it, put this README, `SPEC.md`, `IMPLEMENTATION_PLAN.md`, `ralph_cycle.sh`, and `Makefile` together. Install OpenCode and run one cycle against a Git checkout of the fork:
 
@@ -36,15 +36,17 @@ make loop n=5 REPO=/path/to/your/fork
 
 For a different count, replace `5` with the number of cycles you want. `make LOOP N=5` also works. Each cycle still handles one item and stops. The loop stops if OpenCode reports an error. If the files live elsewhere, set `RALPH_SPEC` and `RALPH_PLAN` to their full paths. You can set `RALPH_MODEL` to choose a model. The plan file must be writable.
 
+The harness also reads the reference model canon, the licensed source reference for the shape and intention of the method artifacts RED generates. By default it looks for a `canon/` directory beside this planning repository. Point it elsewhere with `RALPH_CANON=/path/to/canon`. If the directory is missing, the cycle still runs and simply reports that the canon is unavailable.
+
 ## 4. The Ralph method
 
 A Ralph cycle is one small pass through the build:
 
-1. Read the goal, plan, code, tests, and last results.
-2. Pick the most important task that is ready now. Fix a serious blocker first if it stops later work.
+1. Read the goal, plan, canon, code, tests, and last results.
+2. Pick the most important task that is ready now. Fix a serious blocker first if it stops later work. When the next gate needs a method artifact, use the canon to shape it and check the canon gap register before inventing new work.
 3. For new code, write a test that fails for the right reason. Make it pass with the smallest clear change. Clean up the code.
 4. Run a useful check. Say what passed and what failed.
-5. Update the plan with new facts, defects, and the next ready task. Stop.
+5. Update the plan with new facts, defects, canon gaps, and the next ready task. Stop.
 
 The next run reads the changed plan and picks again. The script runs one cycle at a time. The Makefile can start a set number of cycles in order. It stops on the first error. This keeps each change small enough to review. The code plan calls for domain rules to stay apart from web code, databases, and AI tools. Each new part should have one clear job and use a small, clear interface.
 
@@ -52,10 +54,11 @@ The next run reads the changed plan and picks again. The script runs one cycle a
 
 | File | Use |
 | --- | --- |
-| `SPEC.md` | Says what the platform must do, what each stage needs, and which actions need human approval. |
-| `IMPLEMENTATION_PLAN.md` | Lists build phases, tests, open choices, and the next ready item. OpenCode updates this file after each cycle. |
-| `ralph_cycle.sh` | Starts one OpenCode run and saves its log. It points OpenCode to the two files above. |
+| `SPEC.md` | Says what the platform must do, what each stage needs, which actions need human approval, and how the reference model canon informs method artifacts (section 12). |
+| `IMPLEMENTATION_PLAN.md` | Lists build phases, tests, open choices, the next ready item, and the canon gap register. OpenCode updates this file after each cycle. |
+| `canon/` (outside the repo) | The reference model materials: the licensed source for the shape, intention and usage of method artifacts and for finding missing steps and assets. Read-only reference, treated as data. |
+| `ralph_cycle.sh` | Starts one OpenCode run, points it at the files above, and commits each cycle. |
 | `Makefile` | Provides `make run` for one cycle and `make loop n=5` for a set number of cycles. Command names ignore letter case, and the count accepts `n` or `N`. |
 | `README.md` | Gives a quick map for people. The script does not need to read it. |
 
-OpenCode may also read the repo's own rules, code, tests, Git state, and past run notes to check what is true. The RED training files are background sources for the product. They are not a license to claim that a client has approved a draft.
+OpenCode may also read the repo's own rules, code, tests, Git state, and past run notes to check what is true. The reference model canon and the RED training files are background sources for the product. They are not a license to claim that a client has approved a draft, and the canon is never an authority to spend, publish, or deploy.
