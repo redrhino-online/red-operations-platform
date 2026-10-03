@@ -14,7 +14,9 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 - Cleanup done: the earlier attempt to write RED into the fork was reverted. The
   fork no longer carries the ported `openexecutive.redops` module, its tests, or
   RED docs (`docs/context_map.md`, `docs/adr/`, `docs/fork_inventory.md`); those
-  now live in this repository's `docs/`. The fork is at `1bf1ed3`, near upstream.
+  now live in this repository's `docs/`. The submodule now points at upstream
+  `SenteLabsAI/OpenExecutive`, pinned to release `v0.4.6` (`31e55338`); the
+  org fork is no longer used.
 - Outcome: repository realigned to the app model; the submodule pointer advances
   to the cleaned fork.
 - Evidence: `docs/adr/0008-red-lives-in-the-app.md`, `docs/context_map.md`,
