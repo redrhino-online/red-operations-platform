@@ -320,6 +320,32 @@ export interface JourneyReleaseList {
   releases: JourneyRelease[];
 }
 
+// One version-specific approval from `GET /red/approvals` (SPEC.md sections 3,
+// 4, 7 and 8; Q39). Mirrors `ApprovalRecordResponse` in
+// `backend/redops/api/schemas.py`. An approval pins exactly one asset version
+// and one intended scope; `asset_id` is the pinned asset kind, so the same
+// kind re-approved at a later stage yields its version history. The inbox reads
+// these; the UI recomputes no approval rule and grants no authority.
+export interface ApprovalRecord {
+  asset_id: string;
+  version: number;
+  scope: string;
+  requested_by: string;
+  approver: string;
+  outcome: string;
+  expires_on: string | null;
+  stage_number: number;
+  decided_on: string;
+}
+
+export interface ApprovalList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  approvals: ApprovalRecord[];
+}
+
 // The production-manager view one client engagement (SPEC.md sections 4 and 8;
 // Q34). Mirrors `EngagementProductionViewResponse` in `backend/redops/api/
 // schemas.py`. State, provenance (exact pinned asset versions), dependencies,
@@ -505,6 +531,20 @@ export class RedOperationsApi extends RedApiClient {
     params: ListParams = {},
   ): Promise<JourneyReleaseList> {
     return this.get<JourneyReleaseList>("/red/journeys", {
+      tenant_id: tenantId,
+      ...params,
+    });
+  }
+
+  // The approval inbox read (SPEC.md sections 3, 4, 7 and 8; Q39). The tenant is
+  // a required query scope and the route is read-only; an approval is pinned to
+  // an exact asset version by the passing gate decision, so listing an approval
+  // cannot itself authorize production or traffic.
+  listApprovals(
+    tenantId: string,
+    params: ListParams = {},
+  ): Promise<ApprovalList> {
+    return this.get<ApprovalList>("/red/approvals", {
       tenant_id: tenantId,
       ...params,
     });

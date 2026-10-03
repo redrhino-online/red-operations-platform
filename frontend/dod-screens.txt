@@ -8,3 +8,4 @@ source-and-claim-explorer /source-explorer
 transformation-map /transformation-map
 offer-and-journey-editor /offer-and-journey
 build-board /build-board
+approval-inbox /approval-inbox

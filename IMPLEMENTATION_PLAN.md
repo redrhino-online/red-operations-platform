@@ -4,6 +4,73 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T202445Z (Ralph cycle, this run): selected item was Q39, the
+  approval inbox with exact version diff (SPEC.md sections 3, 4, 8 and 13
+  condition 6; queue item Q39). It is the highest priority ready item: its only
+  dependency Q38 is done, and it is now the head of the Q39-Q45 chain for
+  condition 6, the largest unstarted DoD condition. It outranks alternatives:
+  Q40-Q45 each depend on Q39; Q28 stage 8-10 required kinds are still blocked on
+  the named methodology-owner placement decision; Q16 needs a workflow write
+  route and a connector seam; Q3/Q4 need the ADR 0006 resolution and a live key;
+  Q8 layer coverage and the condition 2 cross-client-retrieval scenario have no
+  retrieval/worker/artifact seam yet; Q47-Q50 need the Atlas cluster. Q31 also
+  blocks condition 2 on a connector idempotency seam and the deploy-only
+  scenarios. The canon gap register has no ready pipeline item: its remaining
+  entries are implemented or are candidate pipeline additions awaiting a
+  named-owner decision, so no canon-covered method artifact outranks this gate
+  work.
+- Outcome: new `frontend/src/features/approval-inbox/` feature.
+  `ApprovalInbox.tsx` is a presentational inbox over the tenant-scoped
+  version-specific approvals from `GET /red/approvals`: it groups each approval
+  by its pinned asset kind with the `approvalHistories` helper, surfaces the
+  `latest` exact version with `exactVersion`, orders each history ascending with
+  a stable `orderKey`, finds the `priorApproval` and renders the exact
+  `approvalDiff` field-by-field (version, scope, outcome, approver,
+  requested_by, expires_on, stage_number, decided_on) against the previous
+  version of the same asset, showing a baseline approval when none exists;
+  `ApprovalInboxScreen.tsx` owns the tenant-scoped read; route `/approval-inbox`
+  (`src/app/approval-inbox/page.tsx`) binds the `approval-inbox` screen id now
+  declared in `frontend/dod-screens.txt`. The API client gained `ApprovalRecord`,
+  `ApprovalList` and `listApprovals`. No product authority, gate decision or
+  pipeline stage changed; the inbox can approve nothing.
+- Evidence: `frontend/src/features/approval-inbox/ApprovalInbox.test.tsx` (12
+  tests) pins `exactVersion`, `approvalHistories` grouping/ordering/latest,
+  `priorApproval` for a successor and a baseline, `approvalDiff` exact
+  prior-to-current entries, baseline and no-change handling, the rendered latest
+  version and diff, the loading/error states, the empty state, and a
+  stubbed-fetch screen read asserting the tenant-scoped request path. `npm test`
+  -> 7 files, 55 passed (12 new). `npm run build` -> compiled, `/approval-inbox`
+  route emitted. `make check` -> 2265 passed, 2 skipped, 704 subtests passed.
+  `bash scripts/check_frontend_build.sh frontend` -> exit 0.
+  `bash scripts/check_frontend_screens.sh frontend` -> still exit 1, now 5
+  remaining section 8 ids (workflow-run-detail, launch-readiness,
+  performance-review, portfolio-opportunities, authority-settings; condition 6
+  needs Q40-Q45). `make done` still fails first at `[2/6]` condition 2.
+- New findings: `GET /red/approvals` already projects the exact asset version,
+  scope, requester, designated approver, outcome and expiry per approval, and
+  `asset_id` in that projection is the pinned asset *kind* (an `AssetVersionRef`
+  keyed by kind), so grouping the append-only approvals by `asset_id` yields a
+  real per-asset version history. The diff is derived only from those records;
+  it resolves no asset content and asserts no approval rule. No backend route
+  was needed.
+- Blockers (unchanged): `frontend/` Q40-Q45 are the path to DoD condition 6;
+  Q8's retrieval, worker and artifact-URL isolation coverage and the condition 2
+  cross-client-retrieval scenario are blocked until those seams exist; Q28 stage
+  8-10 required kinds blocked on the named methodology-owner placement decision;
+  Q16 idempotency keys blocked on a workflow write route and a connector seam;
+  Q3 agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
+  deploy-only scenarios need the Atlas cluster and a chosen backup target.
+- Highest priority ready next item: Q40, the workflow run detail screen.
+  Required asset: a workflow run detail at a declared route showing the
+  tenant-scoped run state and stable append-only event log with the polled
+  `event_id` (SPEC.md sections 7 and 8) over the tenant-scoped `GET
+  /red/clients/{tenant_id}/workflows/{run_id}` read, plus its browser test;
+  checkpoint: none (UI, not a gate); approver: none. Blocked downstream
+  dependency: Q41-Q45. Prerequisite: Q39 (done this cycle).
+
+### Prior cycle (2026-10-03T202254Z)
+
 - Cycle 2026-10-03T202254Z (Ralph cycle, this run): selected item was Q38, the
   build board with dependency view (SPEC.md sections 3, 4, 8 and 13 condition 6;
   queue item Q38). It is the highest priority ready item: its only dependency
@@ -4179,7 +4246,7 @@ stalls:
 | Q36 | Transformation map | ui | Q35 | Done 2026-10-03T201934Z: `frontend/src/features/transformation-map/` (`TransformationMap.tsx` presentational with the `transformationSteps` phase-flattening helper, `TransformationMapScreen.tsx` tenant-scoped read, route `/transformation-map`, `frontend/dod-screens.txt` declares the screen id) over `listMethods` (`GET /red/methods?tenant_id=`). The method read now projects the pinned stage 4 `signature_solution` (transformation map, start/final states, narrative, three phases, nine named steps with inputs/actions/outputs) via the shared `signature_solution_to_payload` mapper plus `SignatureSolutionResponse`/`TransformationPhaseResponse`/`SignatureStepResponse`. `npm run build` clean (`/transformation-map` emitted), `npm test` 7 new passed (23 total), `tests/unit/method/test_methods_route.py` 6 passed, `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 8 remaining screens |
 | Q37 | Offer and journey editor | ui | Q36 | Done 2026-10-03T202056Z: `frontend/src/features/offer-journey/` (`OfferJourneyEditor.tsx` presentational with the `pinnedMethodRefs`/`releasedAssetKinds` helpers, `OfferJourneyEditorScreen.tsx` parallel tenant-scoped read, route `/offer-and-journey`, `frontend/dod-screens.txt` declares the screen id) over `listOffers`/`listJourneys` (`GET /red/offers?tenant_id=` and `GET /red/journeys?tenant_id=`). Stage 5 shape cites canon 11-12 and routing cites canon 13-14, 21-22. `npm run build` clean (`/offer-and-journey` emitted), `npm test` 9 new passed (32 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 7 remaining screens |
 | Q38 | Build board with dependency view | ui | Q37 | Done 2026-10-03T202254Z: `frontend/src/features/build-board/` (`BuildBoard.tsx` presentational with the `boardStates` lifecycle-order, `buildsInState`, `dependencyRefs` and `blockedBuilds` helpers, `BuildBoardScreen.tsx` tenant-scoped read, route `/build-board`, `frontend/dod-screens.txt` declares the screen id) over `listBuilds` (`GET /red/builds?tenant_id=`). `npm run build` clean (`/build-board` emitted), `npm test` 11 new passed (43 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 6 remaining screens |
-| Q39 | Approval inbox with exact version diff | ui | Q38 | browser test; version diff shown |
+| Q39 | Approval inbox with exact version diff | ui | Q38 | Done 2026-10-03T202445Z: `frontend/src/features/approval-inbox/` (`ApprovalInbox.tsx` presentational with the `approvalHistories`/`priorApproval`/`approvalDiff`/`exactVersion` helpers, `ApprovalInboxScreen.tsx` tenant-scoped read, route `/approval-inbox`, `frontend/dod-screens.txt` declares the screen id) over `listApprovals` (`GET /red/approvals?tenant_id=`). The diff groups the append-only approvals by pinned asset kind and reports each changed field's exact prior and current value against the previous version, with a baseline notice when none exists. `npm run build` clean (`/approval-inbox` emitted), `npm test` 12 new passed (55 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 5 remaining screens |
 | Q40 | Workflow run detail | ui | Q39 | browser test |
 | Q41 | Launch readiness | ui | Q40 | browser test |
 | Q42 | Performance review | ui | Q41 | browser test |
