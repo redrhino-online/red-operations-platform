@@ -62,7 +62,7 @@ Cycles are token-disciplined: they use the Serena code-memory MCP for an indexed
 | `SPEC.md` | Says what the platform must do, what each stage needs, which actions need human approval, and how the reference model canon informs method artifacts (section 12). |
 | `IMPLEMENTATION_PLAN.md` | Lists build phases, tests, open choices, the next ready item, and the canon gap register. OpenCode updates this file after each cycle. |
 | `canon/` (outside the repo) | The reference model materials: the licensed source for the shape, intention and usage of method artifacts and for finding missing steps and assets. Read-only reference, treated as data. |
-| `canon.lock` | The pinned sha256 of the canon content. The harness refuses a cycle when the canon changes until `make canon-pin` re-pins it (`RALPH_CANON_STRICT=0` overrides). |
+| `canon.lock` | The pinned sha256 of the canon content. `make run` and `make loop` lock it at the start (`make canon-lock`); a mid-run canon change halts the loop until `make canon-pin` re-pins it (`RALPH_CANON_STRICT=0` overrides). |
 | `ralph_cycle.sh` | Starts one OpenCode run, points it at the files above, and commits each cycle. |
 | `Makefile` | Provides `make run` for one cycle and `make loop n=5` for a set number of cycles. Command names ignore letter case, and the count accepts `n` or `N`. |
 | `vendor/openexecutive/` | Git submodule: the OpenExecutive fork, which is the application build target. Pinned to a commit; RED code is ported into it. |

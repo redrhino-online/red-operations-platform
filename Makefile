@@ -41,7 +41,7 @@ HELP_ALIASES := $(shell bash -c 's=help; for ((m=0;m<16;m++)); do out=; for ((i=
 
 COMMAND_ALIASES := $(RUN_ALIASES) $(LOOP_ALIASES) $(HELP_ALIASES)
 
-.PHONY: run loop help check done canon-pin reset-hosted $(COMMAND_ALIASES)
+.PHONY: run loop help check done canon-lock canon-pin reset-hosted $(COMMAND_ALIASES)
 .DEFAULT_GOAL := help
 
 $(filter-out run,$(RUN_ALIASES)): run
@@ -57,10 +57,11 @@ help:
 	  'make run REPO=../fork    Run against a Git checkout in another folder' \
 	  'make check               Run the full test suite (with Postgres) and pyflakes' \
 	  'make done                Run the prototype definition-of-done gate (SPEC section 13)' \
-	  'make canon-pin           Pin the current reference canon content hash in canon.lock' \
+	  'make canon-lock          Lock the current canon content at the start of a run (idempotent)' \
+	  'make canon-pin           Force re-pin the canon content hash in canon.lock' \
 	  'make reset-hosted        Wipe the hosted instance data (onboarding/people)'
 
-run:
+run: canon-lock
 	@RALPH_PUSH_REMOTES="$(PUSH_REMOTES)" RALPH_PLAN_PUSH_REMOTES="$(PUSH_REMOTES)" "$(RALPH)" "$(REPO)"
 
 check:
@@ -71,13 +72,23 @@ check:
 done:
 	@./scripts/check_definition_of_done.sh
 
+# Lock the canon at the start of a run so a cycle never trips the strict pin,
+# and so a mid-run canon change still halts the loop. Writes canon.lock only
+# when the content hash differs, so an unchanged canon leaves the tree clean.
+canon-lock:
+	@h="$$(./scripts/canon_hash.sh)"; p="$$(awk 'NR==1{print $$1}' canon.lock 2>/dev/null || true)"; \
+	if [[ "$$h" != "$$p" ]]; then \
+	  printf '%s %s\n' "$$h" "$$(date -u +%FT%TZ)" > canon.lock; \
+	  printf 'canon locked: %s (was %s)\n' "$$h" "$${p:-none}"; \
+	else printf 'canon locked: %s\n' "$$h"; fi
+
 canon-pin:
 	@h="$$(./scripts/canon_hash.sh)"; printf '%s %s\n' "$$h" "$$(date -u +%FT%TZ)" > canon.lock; printf 'pinned canon: %s\n' "$$h"
 
 reset-hosted:
 	@./scripts/reset_redop_data.sh
 
-loop:
+loop: canon-lock
 	@if [[ "$(COUNT)" != "-1" ]] && [[ ! "$(COUNT)" =~ ^[1-9][0-9]*$$ ]]; then \
 	  printf 'Use: make loop n=5 for five cycles, or make loop n=-1 to run continuously\n' >&2; exit 2; fi
 	@failures=0; cycle=1; \
