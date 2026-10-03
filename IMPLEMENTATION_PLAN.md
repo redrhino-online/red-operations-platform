@@ -4,48 +4,51 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03 (Ralph cycle 2026-10-03T142538Z):
-- Selected item: tenant-scope the gate ledger seam — the first, independently
-  verifiable slice of the previous cycle's next item (a): add `tenant_id` to
-  `GateLedger`/`GateDecision` and enforce it (ADR 0004). Chosen over the
-  PostgreSQL adapter and the RED route because those must filter by tenant
-  anyway, and over the rest of item (a) as one bounded unit because the cross
-  tenant leak is a concrete defect against SPEC sections 3 and 9.
-- Outcome: `GateDecision` now carries a validated `tenant_id`; `GateLedger`
-  takes an optional `tenant_id` and refuses to record another client's decision
-  with the new named `CrossTenantGateError`; `GateDecision.from_gate` resolves
-  the tenant from the ledger (or an explicit override) so every recorder's
-  decision inherits its client without touching the eleven stage assemblers;
-  `GateLedgerRepository.load(template, tenant_id)` is now tenant-keyed and
-  `append` refuses a decision with no tenant; `InMemoryGateLedgerRepository`
-  filters stored decisions by tenant so two engagements on the same template
-  version can no longer share a ledger.
-- Evidence: `tests/unit/governance/test_gate_ledger_repository.py` (9 tests;
-  added tenant isolation, unscoped-load refusal, unscoped-append refusal and
-  scoped-ledger cross-tenant refusal); domain suite 1612 passed, 1 skipped;
-  app smoke 3 passed; `python3 -m pyflakes backend/redops tests` clean.
-- New findings: the leak was latent because the only adapter is the in-memory
-  reference; the port is now the enforcement seam. Pure-domain callers may still
-  construct an unscoped `GateLedger(template)` (tenant defaults to ""), which
-  keeps the ~90 domain test fixtures valid; the production seam (the repository)
-  always scopes and refuses blank tenants. A decision created outside a
-  tenant-scoped ledger and appended is rejected, so production cannot persist an
-  unscoped gate. The PostgreSQL adapter must add a `tenant_id` column, a
-  (tenant, template_version, stage) index and, later, row-level policy.
+- Cycle 2026-10-03 (Ralph cycle 2026-10-03T142816Z):
+- Selected item: the ready half of the plan's next gate-path item — a RED HTTP
+  route that records the stage 0 "Production Ready" gate through the
+  tenant-scoped `GateLedgerRepository` port and returns the pinned decision
+  (plan item (c)). Chosen over the durable PostgreSQL adapter (item (b)) because
+  (b) is still blocked: no PostgreSQL driver exists in any verified interpreter
+  and no migration scaffolding exists, so untested SQL would ship; (c) is
+  independently verifiable now with the in-memory reference adapter the port
+  already has, and it delivers the first API write path over the isolated seam
+  (SPEC.md sections 6, 7 and 11).
+- Outcome: `POST /red/clients/{tenant_id}/stages/0/gate` maps a typed
+  `RecordStageZeroGateRequest` to `RecordStageZeroGateCommand`, loads the
+  tenant's ledger through the port, runs `RecordStageZeroGateHandler`, appends
+  the durable decision and returns the pinned decision (exact per-kind asset
+  versions, disposition, reviewer, tenant). The path tenant, not the body, scopes
+  the ledger. `backend/redops/api/schemas.py` holds the entry-point schemas; the
+  route holds no domain rule and catches the domain's named errors as 422 so a
+  rejected request never writes. The repository is injected through the
+  overridable `get_gate_ledger_repository` dependency, so the durable adapter
+  (b) can replace it without touching the route.
+- Evidence: `tests/unit/test_stage_zero_gate_route.py` (4 tests: passing gate
+  records and pins exact versions; unauthorized approver is a named 422 with no
+  write; self-approved gate is a named 422; a recorded gate is not visible to
+  another client). 7 passed with the app smoke suite; domain suite 1612 passed,
+  2 skipped; `python3 -m pyflakes backend/redops tests` clean.
+- New findings: the governance `GateDecision.required_assets` is a
+  `frozenset[AssetVersionRef]` carrying only `(asset_id, version)`, where
+  `asset_id` is the canonical kind string, so the HTTP response exposes exact
+  `(kind, version)` evidence but not the instance-level asset id. The route
+  synthesizes the stage 0 `StageRun` (Working) from the request because no run
+  store exists yet; wiring the route to a real run store is a follow-up. The
+  in-memory ledger is process-local, so the route is only as durable as the
+  reference adapter until (b) lands.
 - Blockers: Tier 2 facts still hold (see Standing decisions). The durable
   PostgreSQL adapter is still unwritten and its migration is uncommitted; no
   PostgreSQL driver exists in the verified interpreters (the vendored core venv
   has fastapi + pydantic only), though `psycopg[binary]`, `alembic` and
-  `uvicorn` are declared app dependencies and the local compose PostgreSQL
+  `uvicorn` are declared and the local compose PostgreSQL
   (`redop-dev-postgres-1`) is up and healthy.
-- Highest priority ready next item: finish the gate path — (b) add the
-  PostgreSQL `GateLedgerRepository` adapter with a committed migration that
-  includes `tenant_id`, validated against the local compose database, then (c)
-  add a RED route that runs `RecordStageZeroGateHandler` through the
-  tenant-scoped port and returns the pinned decision, with an HTTP-boundary
-  behavioral test. Prerequisites: the scoped port (done); a PostgreSQL driver in
-  the test interpreter (must be installed via `uv sync` or a scoped venv);
-  local compose PostgreSQL (up).
+- Highest priority ready next item: (b) the PostgreSQL `GateLedgerRepository`
+  adapter with a committed migration that includes `tenant_id`, validated
+  against the local compose database, so the route written this cycle becomes
+  durable. Prerequisites: a PostgreSQL driver in a verified interpreter (must be
+  installed via `uv sync` or a scoped venv) and migration scaffolding; the scoped
+  port and the route are done.
 
 ### Standing decisions (unchanged this cycle)
 
