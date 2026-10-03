@@ -26,6 +26,7 @@ from redops.contexts.execution.domain.errors import (
     InvalidPerformanceBaselineError,
     InvalidPerformanceClaimError,
     MilestoneObservationPrecedenceError,
+    MilestoneOrderError,
     PerformanceBaselineDependencyError,
     PerformanceBaselineIncompleteError,
     PerformanceBaselinePrecedenceError,
@@ -304,6 +305,79 @@ class MilestoneAuthorizationPrecedenceTests(unittest.TestCase):
                 traffic_on=authorized_on, lead_on=authorized_on
             ),
         ).establish(on=authorized_on)
+
+        self.assertTrue(established.is_established)
+
+
+class MilestoneFunnelOrderTests(unittest.TestCase):
+    """Observed milestones must fall in the funnel's own order.
+
+    SPEC.md section 4, stage 10: "first qualified traffic and subsequent lead,
+    appointment and sale are distinct observed milestones", and canon files 22 and
+    23 track the funnel as a ordered value chain (leads, booked sessions, shown
+    sessions, customers). A later milestone cannot be observed before the earlier
+    one it depends on: an appointment requires a lead, and a sale requires an
+    appointment. Without this, a baseline could claim a sale before any lead and
+    still pass "Performance Baseline Established".
+    """
+
+    def _qa_authorized_on(self, day):
+        return launch_qa().authorize_traffic(
+            authorization=authorization(authorized_on=day)
+        )
+
+    def _observed(self, dates):
+        return tuple(
+            milestone(
+                kind,
+                status=(
+                    ObservationStatus.OBSERVED
+                    if kind in dates
+                    else ObservationStatus.PENDING
+                ),
+                observed_on=dates.get(kind),
+            )
+            for kind in MILESTONE_ORDER
+        )
+
+    def test_a_later_milestone_observed_before_an_earlier_one_is_refused(self):
+        dates = {
+            MilestoneKind.FIRST_QUALIFIED_TRAFFIC: date(2026, 10, 5),
+            MilestoneKind.LEAD: date(2026, 10, 2),
+        }
+
+        with self.assertRaises(MilestoneOrderError):
+            performance_baseline(
+                launch_qa=self._qa_authorized_on(date(2026, 10, 1)),
+                milestones=self._observed(dates),
+            ).establish(on=date(2026, 10, 6))
+
+    def test_a_sale_observed_before_the_appointment_is_refused(self):
+        dates = {
+            MilestoneKind.FIRST_QUALIFIED_TRAFFIC: date(2026, 10, 1),
+            MilestoneKind.LEAD: date(2026, 10, 1),
+            MilestoneKind.APPOINTMENT: date(2026, 10, 5),
+            MilestoneKind.SALE: date(2026, 10, 2),
+        }
+
+        with self.assertRaises(MilestoneOrderError):
+            performance_baseline(
+                launch_qa=self._qa_authorized_on(date(2026, 10, 1)),
+                milestones=self._observed(dates),
+            ).establish(on=date(2026, 10, 6))
+
+    def test_observed_milestones_in_funnel_order_are_allowed(self):
+        dates = {
+            MilestoneKind.FIRST_QUALIFIED_TRAFFIC: date(2026, 10, 1),
+            MilestoneKind.LEAD: date(2026, 10, 2),
+            MilestoneKind.APPOINTMENT: date(2026, 10, 3),
+            MilestoneKind.SALE: date(2026, 10, 4),
+        }
+
+        established = performance_baseline(
+            launch_qa=self._qa_authorized_on(date(2026, 10, 1)),
+            milestones=self._observed(dates),
+        ).establish(on=date(2026, 10, 4))
 
         self.assertTrue(established.is_established)
 

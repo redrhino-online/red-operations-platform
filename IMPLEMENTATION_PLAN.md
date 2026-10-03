@@ -4,52 +4,50 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T06:16:11Z (Ralph cycle 128).
-- Selected item: close a tenant-boundary and gate-integrity defect in the canon
-  stage 1 Market reach gate -- `MarketReachPolicy.require_multiplatform` (canon
-  files 02 and 03) now refuses a multi-network confirmation whose estimates span
-  more than one client or include a non-estimate, with the new named
-  `MarketReachBoundaryError`. It is a defect fix inside the audience sizing
-  asset shipped in cycle 127, not new work: SPEC.md sections 3 and 9 make
-  `tenant_id` on every tenant resource and query a hard invariant and SPEC.md
-  sections 4 and 12.3 map audience sizing to the stage 1 Market gate ("the
-  market is big enough, reachable", canon README, canon files 02 and 03), yet
-  the confirmation previously only counted distinct platforms, so a cross-client
-  pair of estimates -- or any non-estimate element -- could pass as one
-  "reachable market". It outranks the remaining bounded wiring follow-ups and
-  the blocked persistence work because it needs no methodology-owner or storage
-  ADR decision, it hardens an already-shipped gate rather than adding a
-  downstream feature, and it closes a cross-client leak the SPEC treats as a
-  hard invariant. It is not a new pipeline stage and authorizes no outreach or
-  spend.
+- Cycle timestamp: 2026-10-03T06:18:20Z (Ralph cycle 129).
+- Selected item: close a gate-integrity defect in the stage 10 "Performance
+  Baseline Established" checkpoint -- `PerformanceBaselinePolicy.require` now
+  refuses a baseline whose observed milestones do not fall in the funnel's own
+  order, with the new named `MilestoneOrderError`. It is a defect fix inside the
+  stage 10 baseline shipped in cycles 31/87/88, not new work: SPEC.md section 4
+  says "first qualified traffic and subsequent lead, appointment and sale are
+  distinct observed milestones", and canon files 22 and 23 track leads, booked
+  sessions, shown sessions and customers as an ordered value chain, yet the
+  policy only checked each observation against the stage 9 traffic authorization
+  and the establishment date, so a baseline could report a sale observed before
+  any lead and still pass. It outranks the remaining bounded wiring follow-ups
+  and the blocked persistence work because it needs no methodology-owner or
+  storage ADR decision (unlike wiring the audience reach estimate, the product
+  program or the other planning assets into a required gate kind), it hardens an
+  already-shipped gate rather than adding a downstream feature, and it closes a
+  verified-progress hole the SPEC treats as a named acceptance condition. It is
+  not a new pipeline stage, asset or required gate kind and authorizes no
+  outreach or spend.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: `MarketReachPolicy.require_multiplatform` (canon files 02 and 03)
-  now validates every element of the confirmation as a typed
-  `AudienceReachEstimate` and requires all of them to share one `tenant_id`
-  before it counts distinct research platforms, raising the new named
-  `MarketReachBoundaryError` (in `commercial/domain/errors.py`) for a non-estimate
-  element or a set spanning more than one client, while the existing single-limit
-  and single-platform refusals stay `MarketReachError`. New behavioral coverage:
-  2 tests in `tests/unit/commercial/test_audience_reach.py`
-  (`test_a_multi_network_confirmation_must_size_one_client`,
-  `test_a_multi_network_confirmation_requires_typed_estimates`), so the file now
-  has 26 tests. Running
+- Evidence: `PerformanceBaselinePolicy.require`
+  (`backend/redops/contexts/execution/domain/policies.py`) now walks
+  `MILESTONE_ORDER`, tracks the previous observed milestone, and raises the new
+  named `MilestoneOrderError` (in `execution/domain/errors.py`) when a later
+  milestone's `observed_on` precedes an earlier one's, while pending milestones
+  are skipped so a partially-observed funnel in order still establishes. New
+  behavioral coverage: 3 tests in
+  `tests/unit/execution/test_performance_baseline.py`
+  (`test_a_later_milestone_observed_before_an_earlier_one_is_refused`,
+  `test_a_sale_observed_before_the_appointment_is_refused`,
+  `test_observed_milestones_in_funnel_order_are_allowed`), so the file now has
+  36 tests. Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1592 passed, up from 1590. `python3 -m pyflakes backend/redops tests`
+  reports 1595 passed, up from 1592. `python3 -m pyflakes backend/redops tests`
   is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the cycle 127 market reach confirmation proved "reachable" by
-  counting distinct networks only, so a caller could satisfy the canon's "make
-  sure you're climbing the right mountain" check with estimates from two
-  different clients, or with an untyped value, and the stage 1 Market gate had no
-  tenant boundary on this evidence path. The canon confirms one market (canon
-  file 03) and SPEC.md sections 3 and 9 make `tenant_id` on every tenant resource
-  and query a hard invariant, so this cycle closes that cross-client leak inside
-  the shipped asset. No new asset, stage or required gate kind is added; wiring
-  the estimate into the `TargetMarketCandidate`, the stage 1 `DiagnosisPackage`
-  or a required stage 1 gate kind remains a bounded follow-up and a
-  methodology-owner decision, and Google keyword research (named at the end of
-  canon file 02 but absent from the supplied sessions) stays a recorded gap
-  alongside missing files 19 and 20.
+- New findings: the stage 10 `MILESTONE_ORDER` was only used to report the
+  missing milestone kinds, never to order the observations, so the "Performance
+  Baseline Established" checkpoint accepted a baseline in which the sale
+  preceded the lead. The existing precedence rules (cycles 101 through 105)
+  bound each observation to the traffic authorization and the establishment
+  date but left the inter-milestone progression unenforced. This cycle closes
+  that last temporal edge. The check lives in the gate policy rather than the
+  value object so a baseline still under construction may hold observations in
+  any insertion order; establishment is where the ordered evidence is pinned.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant model
   given slot-based single-active-client isolation, the lifecycle transition graph
@@ -58,14 +56,14 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   adapter still depend on the storage ADR; the placement of the planning assets
   built since cycle 110 (including the content roadmap, the syndication plan, the
   audience campaign, the invisible opt-in, the banner library, the crusher, the
-  content measurement loop, the product program and now the audience reach
-  estimate) in a required gate kind still needs a methodology-owner decision.
-  Any spend, send or publish authorization remains a human decision (SPEC.md
-  sections 4 and 9).
-- Highest priority ready next item: with this cycle the tenant-boundary hole in
-  the market reach confirmation is closed and the remaining named domain work is
-  either implemented or blocked on a named-owner decision (target stage/kind,
-  storage ADR, missing canon modules). The single most useful unblocker remains a
+  content measurement loop, the product program and the audience reach estimate)
+  in a required gate kind still needs a methodology-owner decision. Any spend,
+  send or publish authorization remains a human decision (SPEC.md sections 4 and
+  9).
+- Highest priority ready next item: with this cycle the last temporal edge in
+  the stage 10 baseline is closed and the remaining named domain work is either
+  implemented or blocked on a named-owner decision (target stage/kind, storage
+  ADR, missing canon modules). The single most useful unblocker remains a
   named-owner decision on the storage ADR (it releases persistence for every pure
   artifact and the Operations delivery adapter) followed by the methodology-owner
   decision on required stage 1/5/6/8/10 asset kinds (it releases wiring the
@@ -89,6 +87,17 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   125 as the Measurement `AudienceBuildObservation`, with wiring an observed
   audience into the stage 10 baseline a methodology-owner decision); and all
   persistence.
+  [DONE 2026-10-03 (Ralph cycle 129): closed a gate-integrity defect in the stage
+  10 "Performance Baseline Established" checkpoint -- `PerformanceBaselinePolicy.require`
+  now refuses a baseline whose observed milestones are out of the funnel's own
+  order, raising the new named `MilestoneOrderError`, so a baseline can no longer
+  report an appointment or sale observed before the earlier milestone it depends
+  on (SPEC.md section 4 stage 10; canon files 22 and 23 track leads, booked
+  sessions, shown sessions and customers as an ordered value chain). 3 new tests
+  in `tests/unit/execution/test_performance_baseline.py`, full suite 1595 passed.
+  It is a defect fix inside the cycle 88 stage 10 gate, adds no new stage, asset
+  or required gate kind, and is enforced at the establishment policy so a draft
+  baseline may still hold observations in any insertion order.]
   [DONE 2026-10-03 (Ralph cycle 128): closed a tenant-boundary and gate-integrity
   defect in the canon stage 1 Market reach gate -- `MarketReachPolicy.require_multiplatform`
   now validates each element as a typed `AudienceReachEstimate` and requires all

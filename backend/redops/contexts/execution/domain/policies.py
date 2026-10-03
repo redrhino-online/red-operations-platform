@@ -27,6 +27,7 @@ from redops.contexts.execution.domain.errors import (
     LaunchQADependencyError,
     LaunchQAIncompleteError,
     MilestoneObservationPrecedenceError,
+    MilestoneOrderError,
     MissingComplianceAssetError,
     PerformanceBaselineDependencyError,
     PerformanceBaselineIncompleteError,
@@ -219,7 +220,11 @@ class PerformanceBaselinePolicy:
     later lead, appointment and sale milestones recorded as distinct milestones
     (pending is allowed). A baseline that omits a milestone, or that claims
     establishment from campaign activation alone, is refused (Phase 5 TDD example:
-    "launch alone cannot complete the engagement").
+    "launch alone cannot complete the engagement"). The observed milestones must
+    also fall in the funnel's own order -- a later milestone may not be observed
+    before the earlier one it depends on (SPEC.md section 4; canon files 22 and
+    23 track leads, booked sessions, shown sessions and customers as an ordered
+    value chain).
     """
 
     def require(self, baseline: PerformanceBaseline, on: date) -> None:
@@ -269,6 +274,28 @@ class PerformanceBaselinePolicy:
                 f"before the stage 9 traffic authorization on "
                 f"{authorized_on.isoformat()}"
             )
+        observed_by_kind = {
+            observation.kind: observation.observed_on
+            for observation in baseline.milestones
+            if observation.is_observed
+        }
+        previous_kind: MilestoneKind | None = None
+        previous_on: date | None = None
+        for kind in MILESTONE_ORDER:
+            if kind not in observed_by_kind:
+                continue
+            observed_on = observed_by_kind[kind]
+            if previous_on is not None and observed_on < previous_on:
+                raise MilestoneOrderError(
+                    f"performance baseline {baseline.baseline_id!r} cannot be "
+                    f"established: {kind.value} was observed on "
+                    f"{observed_on.isoformat()}, before the earlier "
+                    f"{previous_kind.value} observed on "
+                    f"{previous_on.isoformat()}; the funnel's milestones must be "
+                    "observed in order"
+                )
+            previous_kind = kind
+            previous_on = observed_on
         observed_dates = [
             observation.observed_on
             for observation in baseline.milestones

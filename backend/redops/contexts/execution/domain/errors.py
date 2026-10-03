@@ -173,6 +173,18 @@ class MilestoneObservationPrecedenceError(PerformanceBaselineError):
     """
 
 
+class MilestoneOrderError(PerformanceBaselineError):
+    """A later stage 10 milestone was observed before an earlier one.
+
+    SPEC.md section 4, stage 10: "first qualified traffic and subsequent lead,
+    appointment and sale are distinct observed milestones", and canon files 22 and
+    23 track the funnel as an ordered value chain (leads, booked sessions, shown
+    sessions, customers). A lead cannot be observed after the appointment it
+    produces, and an appointment cannot follow the sale. Otherwise a baseline
+    could report a sale before any lead and still pass the checkpoint.
+    """
+
+
 class PerformanceClaimError(PerformanceBaselineError):
     """Base class for observation-versus-causal claim rule violations."""
 
