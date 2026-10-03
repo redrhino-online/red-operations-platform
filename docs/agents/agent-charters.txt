@@ -1,0 +1,15 @@
+# RED agent charters required by SPEC.md section 5.
+# Format: <slot> <charter-file>
+# Slots 1-9 are the nine core agents in the section 5 table; slots 10 and 11 are
+# the chartered capability agents (proposal-only).
+1 charter-01-discovery-diagnosis.md
+2 charter-02-ip-structuring.md
+3 charter-03-offer-journey-design.md
+4 charter-04-knowledge-management.md
+5 charter-05-governance-approval.md
+6 charter-06-asset-production.md
+7 charter-07-campaign-execution.md
+8 charter-08-insight-performance.md
+9 charter-09-ip-portfolio.md
+10 charter-10-client-success.md
+11 charter-11-assurance-compliance.md

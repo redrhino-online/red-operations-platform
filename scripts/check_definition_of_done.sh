@@ -34,13 +34,10 @@ printf '\n[5/6] RED UI: all section 8 screens render, browser tests, no OpenExec
   || fail "the section 8 screens are not rendered; condition 6 is unmet"
 ./scripts/check_frontend_build.sh frontend \
   || fail "the frontend does not build or its browser suite does not run; condition 6 is unmet"
-if command -v rg >/dev/null 2>&1; then
-  if rg -q 'OpenExecutive' frontend --glob '!**/node_modules/**' --glob '!**/.next/**' 2>/dev/null; then
-    fail "OpenExecutive branding found in frontend/; product surfaces must be RED branded"
-  fi
-else
-  printf 'rg unavailable; skipping the UI branding scan (recorded as a gap)\n'
-fi
+./scripts/check_agent_charters.sh docs/agents \
+  || fail "the agent charters SPEC.md section 5 requires are incomplete; condition 8 is unmet"
+./scripts/check_branding_and_notice.sh frontend vendor/openexecutive \
+  || fail "RED branding or retained LICENSE/NOTICE is incomplete; condition 8 is unmet"
 
 printf '\n[6/6] deployed on Atlas k3s (Argo CD healthy; migration ran before the API served)\n'
 REDOP_HEALTH_URL="${REDOP_HEALTH_URL:-https://redop.atlas.lan/}"

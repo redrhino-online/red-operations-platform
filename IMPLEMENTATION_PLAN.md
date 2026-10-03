@@ -4,6 +4,68 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T210459Z (Ralph cycle, this run): selected item was Q46, the
+  condition 8 RED branding and notice sweep (SPEC.md sections 5 and 13 condition
+  8). It is the highest priority ready item: after condition 3 closed, the
+  remaining ready work is agent-charter and branding evidence, while the
+  pipeline-critical alternatives stay blocked. It outranks alternatives: Q29
+  (method change impact) is domain-complete and tested
+  (`MethodChangeImpactPolicy` / `ImpactAssessment`), so it is not an open defect;
+  Q28 stage 8-10 required kinds stay blocked on the named methodology-owner
+  placement decision; Q3/Q4 and condition 5's deterministic e2e need the ADR
+  0006 / zero-vendor-edit resolution and a live key; Q47-Q50 and condition 2's
+  two remaining scenarios need the Atlas cluster and a chosen backup target
+  (Q49). The canon gap register has no ready pipeline item.
+- Outcome: added the nine core agent charters SPEC.md section 5 requires, in the
+  existing charter format (`docs/agents/charter-01-discovery-diagnosis.md`
+  through `charter-09-ip-portfolio.md`), each carrying the section 5 contract:
+  mission, responsibilities, allowed tools, inputs, outputs, evidence policy,
+  context budget, quality rubric, escalation rules, budget limit, delivery
+  pipeline mapping and canon reference. Added `docs/agents/agent-charters.txt`
+  (slots 1-11), the data-driven `scripts/check_agent_charters.sh` and
+  `scripts/check_branding_and_notice.sh` (RED Director name, no OpenExecutive
+  branding under `frontend/`, vendored `LICENSE`/`NOTICE` retained), and wired
+  both into DoD `[5/6]`, replacing the old inline frontend branding scan. No
+  route, gate rule, approval authority, pipeline stage, vendored file, migration
+  or method artifact changed.
+- Evidence: new `tests/unit/shared/test_branding_gate.py` (9 tests) proves the
+  charter gate passes on a complete manifest and refuses a missing directory, a
+  missing charter file, a missing required section and a duplicate slot, and that
+  the branding gate refuses a missing NOTICE and a non-RED Director name, with
+  the repository charters and branding honest (11 chartered agents).
+  `scripts/check_agent_charters.sh docs/agents` -> "agent charters ok: 11
+  chartered agents"; `scripts/check_branding_and_notice.sh frontend
+  vendor/openexecutive` -> ok. `make check` -> 2320 passed, 2 skipped, 706
+  subtests (was 2311; +9); `uv run pyflakes backend tests` clean. `make done`
+  still stops at `[2/6]` condition 2 (deploy-gated), unchanged; DoD `[5/6]` now
+  also proves the condition 8 charters and notices.
+- New findings: all eleven agent charters now exist and pass the section 5
+  contract under the gate, so condition 8's "agent charters are RED" evidence is
+  complete. The charters are `Proposed` and remain proposal-only; they grant no
+  execution permission. `check_branding_and_notice.sh` checks the vendored
+  `LICENSE`/`NOTICE` because the app repo has no root copies and the dependency
+  is vendored (ADR 0008).
+- Blockers (unchanged head): condition 2 is the `make done` head blocker and its
+  two remaining scenarios need the Atlas cluster and a chosen backup target
+  (Q49). Condition 5 needs the deterministic agent e2e (Q3/ADR 0006 tension) and
+  a live key. Q3 agent registration blocked on the ADR 0006 / vendor-edit
+  tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q47-Q50 need the Atlas cluster. Every other
+  condition (1, 3, 4, 6, 7, 8) is met by its gate.
+- Highest priority ready next item: the Q8 injection-guard coverage (SPEC.md
+  sections 5, 9 and 11; the prompt-injection guard, distinct from the four
+  condition 3 layers). Required asset: a tenant-scoped injection-guard policy or
+  port with an in-memory reference adapter and a `tests/security/` test proving
+  ingested material is treated as data and cannot change a gate or direct a tool
+  call. Prerequisite: none (no cluster or owner decision). Checkpoint: none;
+  approver: none. Blocked downstream dependency: it hardens condition 3's suite
+  and SPEC.md section 9's ingestion boundary; it does not gate a stage. The
+  pipeline-critical alternatives (Q3/ADR 0006, object-store provisioner, backup
+  target, Atlas cluster) remain named-owner or operator decisions a cycle must
+  not make unattended.
+
+### Prior cycle (2026-10-03T210152Z)
+
 - Cycle 2026-10-03T210152Z (Ralph cycle, this run): selected item was the
   condition 3 artifact-URL isolation layer (Q8; SPEC.md sections 3, 6, 9 and 13
   condition 3). It is the highest priority ready item: it is the last of the four
@@ -4963,7 +5025,7 @@ stalls:
 | Q43 | Portfolio opportunities | ui | Q42 | Done 2026-10-03T203428Z: `frontend/src/features/portfolio-opportunities/` (`PortfolioOpportunities.tsx` presentational with the `groundingVersion`/`byKind`/`isProposal` helpers, `PortfolioOpportunitiesScreen.tsx` tenant-scoped read, route `/portfolio-opportunities`, `frontend/dod-screens.txt` declares the screen id) over `listOpportunities` (`GET /red/opportunities?tenant_id=`). The view groups proposals by the canon Grow effect (entry point vs lifetime value, canon files 11-12) and shows each proposal's state, exact pinned grounding source (`source_asset_id@vN`, source kind), expected outcome, investment case, owner, next action and capture date; it approves no investment. The client gained `PortfolioOpportunity`/`OpportunityList` and `listOpportunities`. `npm run build` clean (`/portfolio-opportunities` emitted), `npm test` 7 new passed (91 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 1 remaining screen |
 | Q44 | Authority settings | ui | Q43 | Done 2026-10-03T203620Z: `frontend/src/features/authority-settings/` (`AuthoritySettings.tsx` presentational with the `authorityHolders`/`approvalScopes`/`approverLabel` helpers, `AuthoritySettingsScreen.tsx` parallel tenant-scoped read, route `/authority-settings`, `frontend/dod-screens.txt` declares the screen id, the twelfth and last section 8 screen) over `listClients` (`GET /red/clients?tenant_id=`) and `getProductionView`. The view flattens the workspace authority registry and shows each stage's accountable role, required approver role and recorded approver; it grants no authority and approves no gate. The client's stale `ClientSummary`/`listClients` was corrected to `ClientWorkspaceList` (`ClientAuthority`, `ClientWorkspace`). `npm run build` clean (`/authority-settings` emitted), `npm test` 7 new passed (98 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_screens.sh frontend` exit 0 (all 12 screens), `scripts/check_frontend_build.sh frontend` exit 0 |
 | Q45 | All screen browser suite | ui | Q44 | Satisfied 2026-10-03T203620Z by Q44: all twelve section 8 screens now declare a page and a browser test, so condition 6's screen, build and branding gates pass. DoD 6. Condition 6 build/suite gate added 2026-10-03T201148Z: `scripts/check_frontend_build.sh` (run by `[5/6]` after `check_frontend_screens.sh`) requires `frontend/package.json` to declare `build` and `test` and runs both |
-| Q46 | RED branding sweep: Director, charters, UI copy, LICENSE and NOTICE | branding | Q32 | DoD 8; no OpenExecutive branding in the UI. Frontend slice verified passing (all 12 screens RED-branded, `check_frontend_screens.sh`/`check_frontend_build.sh` green, no OpenExecutive branding under `frontend/`); vendor root retains `LICENSE`/`NOTICE`; Director name is RED in `layout.tsx`/`page.tsx`. Ready next item (2026-10-03T210152Z): `docs/agents/` holds only slots 10 and 11, so the nine core agent charters SPEC.md section 5 requires are missing. Add them in the existing charter format and a branding/notice verification gate |
+| Q46 | RED branding sweep: Director, charters, UI copy, LICENSE and NOTICE | branding | Q32 | DoD 8; no OpenExecutive branding in the UI. Frontend slice verified passing (all 12 screens RED-branded, `check_frontend_screens.sh`/`check_frontend_build.sh` green, no OpenExecutive branding under `frontend/`); vendor root retains `LICENSE`/`NOTICE`; Director name is RED in `layout.tsx`/`page.tsx`. Done 2026-10-03T210459Z: the nine core agent charters SPEC.md section 5 requires now exist (`docs/agents/charter-01-discovery-diagnosis.md` .. `charter-09-ip-portfolio.md`), each carrying the section 5 contract, declared in `docs/agents/agent-charters.txt` and enforced by `scripts/check_agent_charters.sh`; `scripts/check_branding_and_notice.sh` proves the RED Director name, no OpenExecutive branding under `frontend/`, and the retained vendored `LICENSE`/`NOTICE`, and both run in DoD `[5/6]`. Verified by `tests/unit/shared/test_branding_gate.py` (9 tests); `make check` 2320 passed / 2 skipped / 706 subtests |
 | Q47 | Dockerfile plus health endpoint | deploy | Q30 | image builds; health passes |
 | Q48 | Helm chart: web, api, worker, migration Job, ingress, PDB, probes | deploy | Q47 | chart lint and render |
 | Q49 | Argo CD Application plus migration before serve ordering | deploy | Q48 | Argo healthy; migration ran first |
