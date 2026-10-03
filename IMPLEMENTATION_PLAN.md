@@ -4,6 +4,75 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T210152Z (Ralph cycle, this run): selected item was the
+  condition 3 artifact-URL isolation layer (Q8; SPEC.md sections 3, 6, 9 and 13
+  condition 3). It is the highest priority ready item: it is the last of the four
+  condition 3 layers, has no prerequisite (a reference adapter needs no cluster or
+  object-store decision), and it closes SPEC.md section 9's "cross client access
+  at ... artifact URL" at a port seam before any serving route exists. It
+  outranks alternatives: the artifact-URL layer is the only remaining condition 3
+  layer; condition 2's two remaining scenarios are deploy-gated (Atlas cluster,
+  chosen backup target Q49); Q28 stage 8-10 required kinds stay blocked on the
+  named methodology-owner placement decision; Q3/Q4 and condition 5's
+  deterministic e2e need the ADR 0006 / zero-vendor-edit resolution and a live
+  key; Q47-Q50 need the Atlas cluster. The canon gap register has no ready
+  pipeline item.
+- Outcome: new shared artifact-access layer under `backend/redops/shared/
+  artifacts/`: pure-domain `ArtifactRef` value object and the named
+  `InvalidArtifactRefError` / `ArtifactTenantBoundaryError`; the
+  `ArtifactUrlResolver` application port (`mint` / `resolve`); and the
+  process-local `InMemoryArtifactUrlResolver` reference adapter. A URL minted for
+  one client resolves only for that client; an unknown or forged URL returns
+  `None` (no existence disclosure); a blank tenant is refused on resolve and an
+  unscoped artifact is refused at construction. No route, gate rule, approval
+  authority, pipeline stage, vendored file or migration changed. The durable
+  private-object-store adapter is deferred until the object-store provisioner
+  decision (SPEC.md section 11); a serving route is the later composition
+  consumer, exactly as the worker and connector seams preceded theirs.
+- Evidence: new `tests/security/test_artifact_url_isolation.py` (7 tests) proves
+  own-URL resolution to the exact reference, cross-tenant non-resolution, scoping
+  to the requested client, forged/unknown URLs resolving to nothing, blank-tenant
+  refusal on resolve and unscoped-artifact refusal. `tests/security/
+  covered-layers.txt` now declares the `artifact-url` layer, and
+  `tests/unit/shared/test_security_coverage_check.py::test_repository_suite_is_
+  honest` now expects the gate to pass. `scripts/check_security_coverage.sh
+  tests/security` -> "security coverage ok: 4 condition 3 layers declared with
+  tests" (was exit 1 naming `artifact-url`). `make check` -> 2311 passed, 2
+  skipped, 706 subtests passed (was 2304; +7). `uv run pyflakes backend tests`
+  clean. `make done` still stops at `[2/6]` condition 2 (deploy-gated),
+  unchanged; condition 3 is now fully covered by the suite gate.
+- New findings: the artifact URL layer is enforceable at a port without a route
+  because `ArtifactRef` already carries the tenant and checksum, so resolution is
+  a pure tenant comparison; the serving route and durable object-store adapter
+  remain pending consumers. This closes condition 3: all four named layers (api,
+  retrieval, worker, artifact-url) now have a declared isolation test and the
+  `[3/6]` coverage gate passes.
+- Blockers (unchanged head): condition 2 is the `make done` head blocker and its
+  two remaining scenarios need the Atlas cluster and a chosen backup target
+  (Q49). Condition 5 needs the deterministic agent e2e (Q3/ADR 0006 tension) and
+  a live key. Q3 agent registration blocked on the ADR 0006 / vendor-edit
+  tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q47-Q50 need the Atlas cluster. Every other
+  condition (1, 3, 4, 6, 7, 8) is met by its gate.
+- Highest priority ready next item: Q46, the condition 8 RED branding and notice
+  sweep (prerequisite Q32 met; no decision blocked). The frontend slice already
+  passes (all 12 screens declared, `check_frontend_screens.sh` and
+  `check_frontend_build.sh` green, no OpenExecutive branding under `frontend/`),
+  and the vendor root retains `LICENSE` and `NOTICE`. The concrete gap to close
+  is the missing RED charters for the nine core agents: SPEC.md section 5 requires
+  every agent to have a versioned charter, and `docs/agents/` holds only
+  `charter-10-client-success.md` and `charter-11-assurance-compliance.md`.
+  Smallest independently verifiable first step: add the nine core agent charters
+  in the existing charter format and a branding/notice verification gate so
+  condition 8's evidence is complete. Checkpoint: none; approver: none (branding
+  and charter copy, no client authority). Blocked downstream dependency: none
+  directly; it hardens an already-passing `[5/6]`. Note the alternative
+  pipeline-critical unblockers (object-store provisioner, backup target, ADR
+  0006) are all named-owner or operator decisions that a cycle must not make
+  unattended.
+
+### Prior cycle (2026-10-03T205830Z)
+
 - Cycle 2026-10-03T205830Z (Ralph cycle, this run): selected item was the
   background-worker isolation layer (Q8 worker layer; SPEC.md sections 7, 9 and
   13 condition 3). It is the highest priority ready item: after the retrieval
@@ -4856,7 +4925,7 @@ stalls:
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). REST `/workflows/{id}` polling read landed 2026-10-03T185701Z (Q15). The fork `workflows/resumer.py` adapter was reassessed and rejected as mis-specified: the resumer is an 809-line fork polling loop, not a per-step executor, so RED's `WorkflowStepExecutor` seam is served by connector adapters (Q16), not a resumer shim |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z). The stage 0 `ClientWorkspace` and the knowledge `SourceRecord` stores completed with Q9 2026-10-03T190017Z (`0010_client_workspaces`, `0011_source_records`); the Production `BuildObject` store completed with Q11 2026-10-03T193035Z (`0013_build_objects`, which also added the required `tenant_id` the aggregate lacked) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
-| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests). Retrieval layer done 2026-10-03T203755Z: `KnowledgeRetriever` port (`backend/redops/contexts/knowledge/application/ports.py`) with the `InMemoryKnowledgeRetriever` tenant-scoped reference adapter over the `ClaimStore`, and `tests/security/test_retrieval_isolation.py` (6 tests); `tests/security/covered-layers.txt` declares `retrieval`. Worker layer done 2026-10-03T205830Z: `WorkflowRunStore.list_resumable(*, tenant_id)` on the port with in-memory and PostgreSQL implementations, the `ResumeDueRunsHandler` per-client worker pass in `backend/redops/workflows/application/handlers.py`, and `tests/security/test_worker_isolation.py` (6 tests); `tests/security/covered-layers.txt` declares `worker`. Artifact-URL and injection-guard coverage remain; artifact-URL is the ready next item (see Current cycle status). The condition 3 gate now enforces coverage: `tests/security/covered-layers.txt` declares each covered layer and `scripts/check_security_coverage.sh` (called by DoD `[3/6]`) refuses a suite that does not declare `api`, `retrieval`, `worker` and `artifact-url` with a test each (2026-10-03T195801Z), so condition 3 cannot pass until all four layers exist; it now names only `artifact-url` missing. Condition 2's cross-client-retrieval scenario is now covered by `tests/security/test_retrieval_isolation.py` |
+| Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests). Retrieval layer done 2026-10-03T203755Z: `KnowledgeRetriever` port (`backend/redops/contexts/knowledge/application/ports.py`) with the `InMemoryKnowledgeRetriever` tenant-scoped reference adapter over the `ClaimStore`, and `tests/security/test_retrieval_isolation.py` (6 tests); `tests/security/covered-layers.txt` declares `retrieval`. Worker layer done 2026-10-03T205830Z: `WorkflowRunStore.list_resumable(*, tenant_id)` on the port with in-memory and PostgreSQL implementations, the `ResumeDueRunsHandler` per-client worker pass in `backend/redops/workflows/application/handlers.py`, and `tests/security/test_worker_isolation.py` (6 tests); `tests/security/covered-layers.txt` declares `worker`. Artifact-URL layer done 2026-10-03T210152Z: shared `ArtifactRef` value object, `ArtifactUrlResolver` port and `InMemoryArtifactUrlResolver` adapter under `backend/redops/shared/artifacts/`, and `tests/security/test_artifact_url_isolation.py` (7 tests); `tests/security/covered-layers.txt` declares `artifact-url`. Injection-guard coverage remains (a distinct concern from the four artifact/API layers). The condition 3 gate now enforces coverage: `tests/security/covered-layers.txt` declares each covered layer and `scripts/check_security_coverage.sh` (called by DoD `[3/6]`) refuses a suite that does not declare `api`, `retrieval`, `worker` and `artifact-url` with a test each (2026-10-03T195801Z); all four are now declared, so the gate passes (2026-10-03T210152Z). Condition 2's cross-client-retrieval scenario is now covered by `tests/security/test_retrieval_isolation.py` |
 | Q9 | REST `/clients` and `/clients/{id}/sources` (done 2026-10-03T190017Z; `GET /red/clients?tenant_id=&limit=&offset=` and `POST /red/clients`, `GET`/`POST /red/clients/{tenant_id}/sources`; durable `ClientWorkspaceStore` and `SourceRecordStore` ports with in-memory and PostgreSQL adapters and migrations `0010_client_workspaces`/`0011_source_records`; tenant is a required query parameter, an unscoped read/write or a rewritten source is refused) | api | Q7 | route tests `tests/unit/engagement/test_clients_route.py` (8), adapter tests `tests/unit/engagement/test_client_workspace_store.py` and `tests/unit/knowledge/test_source_record_store.py` |
 | Q10 | REST `/claims`, `/methods` (done 2026-10-03T192641Z; `GET`/`POST /red/claims` and `GET /red/methods`, tenant required on GET and path/body-scoped to the tenant; new durable Knowledge `ClaimStore` port with in-memory and PostgreSQL adapters and migration `0012_claims`; the claim create route verifies every citation against the same tenant's stored immutable `SourceRecord` by id and checksum, and the claim store refuses a same-id non-append-only re-statement; `MethodVersionRepository.list` added so `/methods` is a tenant-scoped paginated read of approved methods, left read-only because approval is gate-owned. Tests `tests/unit/knowledge/test_claim_store.py`, `tests/unit/knowledge/test_claims_route.py`, `tests/unit/method/test_methods_route.py`) | api | Q9 | route tests |
 | Q11 | REST `/offers`, `/builds` (done 2026-10-03T193035Z; `GET /red/offers` and `GET`/`POST /red/builds`, tenant required on every read and carried on the create body; `BuildObject` now requires a `tenant_id` (SPEC.md sections 3 and 9); new Production `BuildObjectRepository` port with in-memory and PostgreSQL adapters and migration `0013_build_objects` (upsert per `(tenant_id, build_id)`); `/offers` is a tenant-scoped paginated read over the existing offer store, left read-only because production readiness is gate-owned; `/builds` list is tenant-scoped and paginated and create records an Identified proposal. Tests `tests/unit/commercial/test_offers_route.py`, `tests/unit/production/test_build_object_store.py`, `tests/unit/production/test_builds_route.py`, `tests/unit/production/test_build_object_postgres.py`) | api | Q10 | route tests |
@@ -4894,7 +4963,7 @@ stalls:
 | Q43 | Portfolio opportunities | ui | Q42 | Done 2026-10-03T203428Z: `frontend/src/features/portfolio-opportunities/` (`PortfolioOpportunities.tsx` presentational with the `groundingVersion`/`byKind`/`isProposal` helpers, `PortfolioOpportunitiesScreen.tsx` tenant-scoped read, route `/portfolio-opportunities`, `frontend/dod-screens.txt` declares the screen id) over `listOpportunities` (`GET /red/opportunities?tenant_id=`). The view groups proposals by the canon Grow effect (entry point vs lifetime value, canon files 11-12) and shows each proposal's state, exact pinned grounding source (`source_asset_id@vN`, source kind), expected outcome, investment case, owner, next action and capture date; it approves no investment. The client gained `PortfolioOpportunity`/`OpportunityList` and `listOpportunities`. `npm run build` clean (`/portfolio-opportunities` emitted), `npm test` 7 new passed (91 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 1 remaining screen |
 | Q44 | Authority settings | ui | Q43 | Done 2026-10-03T203620Z: `frontend/src/features/authority-settings/` (`AuthoritySettings.tsx` presentational with the `authorityHolders`/`approvalScopes`/`approverLabel` helpers, `AuthoritySettingsScreen.tsx` parallel tenant-scoped read, route `/authority-settings`, `frontend/dod-screens.txt` declares the screen id, the twelfth and last section 8 screen) over `listClients` (`GET /red/clients?tenant_id=`) and `getProductionView`. The view flattens the workspace authority registry and shows each stage's accountable role, required approver role and recorded approver; it grants no authority and approves no gate. The client's stale `ClientSummary`/`listClients` was corrected to `ClientWorkspaceList` (`ClientAuthority`, `ClientWorkspace`). `npm run build` clean (`/authority-settings` emitted), `npm test` 7 new passed (98 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_screens.sh frontend` exit 0 (all 12 screens), `scripts/check_frontend_build.sh frontend` exit 0 |
 | Q45 | All screen browser suite | ui | Q44 | Satisfied 2026-10-03T203620Z by Q44: all twelve section 8 screens now declare a page and a browser test, so condition 6's screen, build and branding gates pass. DoD 6. Condition 6 build/suite gate added 2026-10-03T201148Z: `scripts/check_frontend_build.sh` (run by `[5/6]` after `check_frontend_screens.sh`) requires `frontend/package.json` to declare `build` and `test` and runs both |
-| Q46 | RED branding sweep: Director, charters, UI copy, LICENSE and NOTICE | branding | Q32 | DoD 8; no OpenExecutive branding in the UI |
+| Q46 | RED branding sweep: Director, charters, UI copy, LICENSE and NOTICE | branding | Q32 | DoD 8; no OpenExecutive branding in the UI. Frontend slice verified passing (all 12 screens RED-branded, `check_frontend_screens.sh`/`check_frontend_build.sh` green, no OpenExecutive branding under `frontend/`); vendor root retains `LICENSE`/`NOTICE`; Director name is RED in `layout.tsx`/`page.tsx`. Ready next item (2026-10-03T210152Z): `docs/agents/` holds only slots 10 and 11, so the nine core agent charters SPEC.md section 5 requires are missing. Add them in the existing charter format and a branding/notice verification gate |
 | Q47 | Dockerfile plus health endpoint | deploy | Q30 | image builds; health passes |
 | Q48 | Helm chart: web, api, worker, migration Job, ingress, PDB, probes | deploy | Q47 | chart lint and render |
 | Q49 | Argo CD Application plus migration before serve ordering | deploy | Q48 | Argo healthy; migration ran first |

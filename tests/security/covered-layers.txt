@@ -4,9 +4,11 @@
 # Format: <layer-id> <test-file> (path relative to this directory).
 # Canonical layer ids: api, retrieval, worker, artifact-url.
 #
-# Only the API, retrieval and worker layers are covered today; there is no
-# artifact-serving route yet, so that layer is unrepresented and the gate must
-# keep failing condition 3 until that seam exists and is tested.
+# All four layers named by SPEC.md section 13 condition 3 are covered: the
+# artifact-url layer resolves a URL only inside the client it was minted for,
+# through the shared ArtifactUrlResolver seam. A durable private-object-store
+# adapter implements the same port once the object-store provisioner is chosen.
 api test_cross_tenant_isolation.py
 retrieval test_retrieval_isolation.py
 worker test_worker_isolation.py
+artifact-url test_artifact_url_isolation.py
