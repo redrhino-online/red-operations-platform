@@ -22,11 +22,13 @@ from redops.api.schemas import (
     CampaignMessageInput,
     ClaimInput,
     EngagementProductionViewResponse,
+    FunnelIntegrationInput,
     MethodVersionInput,
     OfferVersionInput,
     RecordStageEightGateRequest,
     RecordStageFiveGateRequest,
     RecordStageFourGateRequest,
+    RecordStageNineGateRequest,
     RecordStageOneGateRequest,
     RecordStageSevenGateRequest,
     RecordStageSixGateRequest,
@@ -60,6 +62,7 @@ from redops.contexts.engagement.application.commands import (
     RecordStageEightGateCommand,
     RecordStageFiveGateCommand,
     RecordStageFourGateCommand,
+    RecordStageNineGateCommand,
     RecordStageOneGateCommand,
     RecordStageSevenGateCommand,
     RecordStageSixGateCommand,
@@ -71,6 +74,7 @@ from redops.contexts.engagement.application.handlers import (
     RecordStageEightGateHandler,
     RecordStageFiveGateHandler,
     RecordStageFourGateHandler,
+    RecordStageNineGateHandler,
     RecordStageOneGateHandler,
     RecordStageSevenGateHandler,
     RecordStageSixGateHandler,
@@ -86,15 +90,27 @@ from redops.contexts.engagement.domain.value_objects import (
     IntakeAssetKind,
     IntakePackage,
 )
-from redops.contexts.execution.domain.entities import FunnelIntegration
+from redops.contexts.execution.domain.entities import (
+    FunnelIntegration,
+    LaunchQA,
+)
 from redops.contexts.execution.domain.errors import ExecutionError
 from redops.contexts.execution.domain.value_objects import (
+    ComplianceAsset,
+    ComplianceAssetKind,
+    CompliancePackage,
+    ComplianceWaiver,
     FunnelAssetPackage,
     FunnelIntegrationPackage,
     HandoffKind,
     HandoffOutcome,
     HandoffRecord,
+    LaunchQAPackage,
     ProspectPathDryRun,
+    QACheck,
+    QACheckKind,
+    QACheckOutcome,
+    TrafficAuthorization,
 )
 from redops.contexts.governance.application.ports import (
     GateLedgerRepository,
@@ -439,6 +455,62 @@ def _approve_authority_amplifier(
             on=amplifier_body.creative_approval.approved_on,
         )
     )
+
+
+def _complete_stage_eight_funnel(
+    tenant_id: str,
+    funnel_body: FunnelIntegrationInput,
+    amplifier: AuthorityAmplifier,
+) -> FunnelIntegration:
+    """Rebuild the stage 8 funnel and drive its "Funnel Complete" checkpoint.
+
+    SPEC.md section 3: production requires approved dependencies, and the stage 9
+    launch QA grounds on the completed stage 8 funnel (SPEC.md section 4). No
+    funnel store is exposed over the API yet, so the caller supplies the reviewed
+    funnel assets and its prospect path dry run, and the domain re-proves the
+    funnel completion -- every canonical handoff present exactly once and routed
+    with a record and an owner -- rather than the transport layer asserting it.
+    Sharing this builder keeps the stage 8 and stage 9 routes from drifting in how
+    they re-state that upstream dependency.
+    """
+
+    assets = FunnelAssetPackage(
+        campaign_architecture=funnel_body.assets.campaign_architecture,
+        pages=funnel_body.assets.pages,
+        forms=funnel_body.assets.forms,
+        qualification=funnel_body.assets.qualification,
+        booking=funnel_body.assets.booking,
+        sequences=funnel_body.assets.sequences,
+        crm=funnel_body.assets.crm,
+        tags=funnel_body.assets.tags,
+        automation=funnel_body.assets.automation,
+        analytics=funnel_body.assets.analytics,
+        tracking=funnel_body.assets.tracking,
+        sales_handoff=funnel_body.assets.sales_handoff,
+        sops=funnel_body.assets.sops,
+    )
+    dry_run = ProspectPathDryRun(
+        dry_run_id=funnel_body.dry_run.dry_run_id,
+        tenant_id=tenant_id,
+        handoffs=tuple(
+            HandoffRecord(
+                kind=HandoffKind(entry.kind),
+                outcome=HandoffOutcome(entry.outcome),
+                tenant_id=tenant_id,
+                record_id=entry.record_id,
+                owner=entry.owner,
+                detail=entry.detail,
+            )
+            for entry in funnel_body.dry_run.handoffs
+        ),
+    )
+    return FunnelIntegration(
+        integration_id=funnel_body.integration_id,
+        tenant_id=tenant_id,
+        amplifier=amplifier,
+        owner=funnel_body.owner,
+        assets=assets,
+    ).mark_funnel_complete(dry_run)
 
 
 @router.get("/health")
@@ -1779,43 +1851,9 @@ def record_stage_eight_gate(
             amplifier_body=body.amplifier,
             claims_body=body.claims,
         )
-        assets = FunnelAssetPackage(
-            campaign_architecture=body.funnel.assets.campaign_architecture,
-            pages=body.funnel.assets.pages,
-            forms=body.funnel.assets.forms,
-            qualification=body.funnel.assets.qualification,
-            booking=body.funnel.assets.booking,
-            sequences=body.funnel.assets.sequences,
-            crm=body.funnel.assets.crm,
-            tags=body.funnel.assets.tags,
-            automation=body.funnel.assets.automation,
-            analytics=body.funnel.assets.analytics,
-            tracking=body.funnel.assets.tracking,
-            sales_handoff=body.funnel.assets.sales_handoff,
-            sops=body.funnel.assets.sops,
+        funnel = _complete_stage_eight_funnel(
+            tenant_id, body.funnel, amplifier
         )
-        dry_run = ProspectPathDryRun(
-            dry_run_id=body.funnel.dry_run.dry_run_id,
-            tenant_id=tenant_id,
-            handoffs=tuple(
-                HandoffRecord(
-                    kind=HandoffKind(entry.kind),
-                    outcome=HandoffOutcome(entry.outcome),
-                    tenant_id=tenant_id,
-                    record_id=entry.record_id,
-                    owner=entry.owner,
-                    detail=entry.detail,
-                )
-                for entry in body.funnel.dry_run.handoffs
-            ),
-        )
-        funnel = FunnelIntegration(
-            integration_id=body.funnel.integration_id,
-            tenant_id=tenant_id,
-            amplifier=amplifier,
-            owner=body.funnel.owner,
-            assets=assets,
-        ).mark_funnel_complete(dry_run)
         package = FunnelIntegrationPackage(
             package_id=body.funnel_package_id,
             tenant_id=tenant_id,
@@ -1857,6 +1895,192 @@ def record_stage_eight_gate(
         )
         ledger = repository.load(template, tenant_id)
         decision = RecordStageEightGateHandler().handle(command, ledger=ledger)
+        repository.append(decision)
+        run_repository.save(stage_run)
+    except (
+        CommercialError,
+        EngagementError,
+        ExecutionError,
+        GovernanceError,
+        MethodError,
+        ProductionError,
+        ValueError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return {
+        "stage_number": decision.stage_number,
+        "template_version": decision.template_version,
+        "checkpoint": decision.checkpoint,
+        "disposition": decision.disposition.value,
+        "reviewer": decision.reviewer,
+        "scope": decision.scope,
+        "tenant_id": decision.tenant_id,
+        "decided_on": decision.decided_on.isoformat(),
+        "next_action": decision.next_action,
+        "required_assets": [
+            {
+                "asset_id": asset.asset_id,
+                "version": asset.version,
+            }
+            for asset in decision.required_assets
+        ],
+    }
+
+
+@router.post("/clients/{tenant_id}/stages/9/gate", status_code=201)
+def record_stage_nine_gate(
+    tenant_id: str,
+    body: RecordStageNineGateRequest,
+    repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
+    run_repository: StageRunRepository = Depends(get_stage_run_repository),
+) -> dict[str, Any]:
+    """Record the stage 9 "Launch Approved" gate through the use case.
+
+    SPEC.md section 6: the API calls the use case and never mutates persistence
+    directly. This route maps the typed request to the Engagement
+    ``RecordStageNineGateCommand``, loads the tenant's ledger through the
+    ``GateLedgerRepository`` port, runs ``RecordStageNineGateHandler`` and appends
+    the resulting ``GateDecision``. Stage 9 depends on stage 8, so governance
+    refuses the decision unless the ledger already holds a passing stage 8
+    decision (SPEC.md section 4). The stage 9 ``StageRun`` is loaded-or-created and
+    upserted through the ``StageRunRepository`` port in the same operation.
+
+    SPEC.md section 4, stage 9 "QA" and its "Launch Approved" checkpoint: all
+    critical path checks pass, exceptions have owners, and the designated human
+    authorizes traffic, grounded on the completed stage 8 funnel (canon files 01,
+    08, 21, 22 and 24 per SPEC.md section 12.3). The route rebuilds the reviewed QA
+    on the rebuilt complete stage 8 funnel and drives ``authorize_traffic``, so the
+    ``LaunchApprovedPolicy`` and ``ComplianceRequiredPolicy`` -- not the transport
+    layer -- decide whether the sixteen canonical kinds may be pinned as passing
+    evidence. The route re-states the approved method, production ready offer,
+    approved stage 6 message, approved stage 7 amplifier and stage 8 funnel because
+    no store is exposed over the API yet; every integrity rule -- the complete
+    same-tenant check set, the critical path outcomes, the compliance package, the
+    grounded stage 8 dependency, the canonical kinds, exact versions,
+    owner/approver authority and the tenant boundary -- stays enforced by the
+    domain, and a rejection is a named 422 and never a partial write. The path
+    tenant, not the body, is the authoritative client scope.
+    """
+
+    template = stage_zero_to_ten_template()
+    try:
+        workspace = ClientWorkspace(
+            workspace_id=body.workspace_id,
+            tenant_id=tenant_id,
+            authorities=tuple(
+                ClientAuthority(actor=entry.actor, authority=entry.authority)
+                for entry in body.authorities
+            ),
+        )
+        method, _method_reference, _offer, message = _approve_method_offer_message(
+            tenant_id,
+            method_body=body.method,
+            offer_body=body.offer,
+            message_body=body.message,
+        )
+        amplifier = _approve_authority_amplifier(
+            tenant_id,
+            method=method,
+            message=message,
+            amplifier_body=body.amplifier,
+            claims_body=body.claims,
+        )
+        funnel = _complete_stage_eight_funnel(
+            tenant_id, body.funnel, amplifier
+        )
+        compliance = CompliancePackage(
+            package_id=body.qa.compliance.package_id,
+            tenant_id=tenant_id,
+            target_markets=tuple(body.qa.compliance.target_markets),
+            assets=tuple(
+                ComplianceAsset(
+                    kind=ComplianceAssetKind(entry.kind),
+                    tenant_id=tenant_id,
+                    reference=entry.reference,
+                    version=entry.version,
+                )
+                for entry in body.qa.compliance.assets
+            ),
+            waivers=tuple(
+                ComplianceWaiver(
+                    kind=ComplianceAssetKind(entry.kind),
+                    reason=entry.reason,
+                    risk_owner=entry.risk_owner,
+                    review_trigger=entry.review_trigger,
+                    expires_on=entry.expires_on,
+                )
+                for entry in body.qa.compliance.waivers
+            ),
+        )
+        qa = LaunchQA(
+            qa_id=body.qa.qa_id,
+            tenant_id=tenant_id,
+            funnel=funnel,
+            owner=body.qa.owner,
+            designated_authority=body.qa.designated_authority,
+            checks=tuple(
+                QACheck(
+                    kind=QACheckKind(entry.kind),
+                    outcome=QACheckOutcome(entry.outcome),
+                    evidence=entry.evidence,
+                    owner=entry.owner,
+                    detail=entry.detail,
+                )
+                for entry in body.qa.checks
+            ),
+            compliance=compliance,
+        ).authorize_traffic(
+            authorization=TrafficAuthorization(
+                authorized_by=body.qa.authorization.authorized_by,
+                intended_use=body.qa.authorization.intended_use,
+                authorized_on=body.qa.authorization.authorized_on,
+            )
+        )
+        package = LaunchQAPackage(
+            package_id=body.qa_package_id,
+            tenant_id=tenant_id,
+            qa=qa,
+            qa_version=body.qa_version,
+        )
+        stage_run = run_repository.load(
+            template.version, workspace.workspace_id, 9, tenant_id
+        )
+        if stage_run is None:
+            stage_run = StageRun(
+                engagement=workspace.workspace_id,
+                stage_number=9,
+                template_version=template.version,
+                assigned_owner=body.stage_owner,
+                tenant_id=tenant_id,
+            )
+        stage_run.record_activity(
+            actor=body.stage_owner,
+            reason="stage 9 launch QA work began",
+            on=body.on,
+            correlation_id=body.correlation_id,
+        )
+        command = RecordStageNineGateCommand(
+            template=template,
+            workspace=workspace,
+            package=package,
+            stage_run=stage_run,
+            approver=body.approver,
+            scope=body.scope,
+            checkpoint_evidence=body.checkpoint_evidence,
+            rationale=body.rationale,
+            assigned_owner=body.assigned_owner,
+            due_on=body.due_on,
+            on=body.on,
+            correlation_id=body.correlation_id,
+            proposed_by=body.proposed_by,
+            next_action=body.next_action,
+        )
+        ledger = repository.load(template, tenant_id)
+        decision = RecordStageNineGateHandler().handle(command, ledger=ledger)
         repository.append(decision)
         run_repository.save(stage_run)
     except (

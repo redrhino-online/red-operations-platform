@@ -773,6 +773,118 @@ class RecordStageEightGateRequest(BaseModel):
     next_action: str = ""
 
 
+class QACheckInput(BaseModel):
+    """One recorded stage 9 launch QA check (SPEC.md section 4, stage 9).
+
+    Every check carries the evidence that supports its outcome. An excepted check
+    must name a human owner; the domain, not the transport layer, refuses an
+    unowned exception, a missing check or a failed critical path check.
+    """
+
+    kind: str
+    outcome: str
+    evidence: str
+    owner: str = ""
+    detail: str = ""
+
+
+class ComplianceAssetInput(BaseModel):
+    """One reviewed stage 9 compliance asset at an exact version."""
+
+    kind: str
+    reference: str
+    version: int
+
+
+class ComplianceWaiverInput(BaseModel):
+    """A scoped human waiver of an absent stage 9 compliance asset."""
+
+    kind: str
+    reason: str
+    risk_owner: str
+    review_trigger: str
+    expires_on: date | None = None
+
+
+class CompliancePackageInput(BaseModel):
+    """The reviewed stage 9 compliance and consent package (SPEC.md 4/9).
+
+    The target markets decide whether consent is applicable; the domain refuses a
+    missing launch-blocking asset unless a live scoped waiver covers it, and a
+    waiver never makes an absent asset appear present.
+    """
+
+    package_id: str
+    target_markets: list[str]
+    assets: list[ComplianceAssetInput]
+    waivers: list[ComplianceWaiverInput] = Field(default_factory=list)
+
+
+class TrafficAuthorizationInput(BaseModel):
+    """A designated human's authorization to begin stage 9 traffic."""
+
+    authorized_by: str
+    intended_use: str
+    authorized_on: date
+
+
+class LaunchQAInput(BaseModel):
+    """The reviewed stage 9 launch QA before its "Launch Approved" checkpoint.
+
+    Carries the QA identity, owner, designated authority, the complete launch
+    check set, the reviewed compliance package and the traffic authorization. The
+    route grounds the QA on the rebuilt stage 8 funnel and drives
+    ``authorize_traffic``, so the domain decides whether traffic may begin.
+    """
+
+    qa_id: str
+    owner: str
+    designated_authority: str
+    checks: list[QACheckInput]
+    compliance: CompliancePackageInput
+    authorization: TrafficAuthorizationInput
+
+
+class RecordStageNineGateRequest(BaseModel):
+    """The stage 9 "Launch Approved" gate request (SPEC.md section 4).
+
+    The caller supplies the reviewed launch QA and its traffic authorization, the
+    approved stage 8 funnel the QA grounds on (rebuilt from the approved method,
+    production ready offer, approved stage 6 message and approved stage 7
+    amplifier), the known claims that support the amplifier proof, the workspace
+    authority registry and the decision metadata. The route builds the canonical
+    gate from these through the use case; it deliberately accepts no pre-built
+    gate, so the tenant boundary, approver authority, owner authority and
+    exact-version evidence cannot be bypassed. Stage 9 depends on a passing stage
+    8 decision already in the ledger. The checkpoint requires every critical path
+    check to pass, exceptions to have owners, a complete reviewed compliance
+    package and the designated human to authorize traffic.
+    """
+
+    workspace_id: str
+    authorities: list[ClientAuthorityInput]
+    qa_package_id: str
+    qa_version: int
+    message: CampaignMessageInput
+    offer: OfferVersionInput
+    method: MethodVersionInput
+    amplifier: AuthorityAmplifierInput
+    claims: list[ClaimInput] = Field(default_factory=list)
+    funnel: FunnelIntegrationInput
+    qa: LaunchQAInput
+    stage_owner: str
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
 class AssetVersionResponse(BaseModel):
     """One exact asset version pinned or approved for a stage."""
 
