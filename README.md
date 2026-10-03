@@ -22,6 +22,8 @@ The target home is a Kubernetes cluster on a home network. Helm will define the 
 
 The script blocks a second run while one run is active. It writes a log in the target repo's `.ralph` folder. It does not push changes, deploy the app, or give client approval; it does commit each cycle's changes with the message the cycle writes. Review the code and plan change after each run.
 
+The loop stops on the first error, on `.ralph/STOP`, or when the prototype meets its definition of done (SPEC section 13, checked by `make done`). See `.env.example` for the local database the harness and `make check` use.
+
 To use it, put this README, `SPEC.md`, `IMPLEMENTATION_PLAN.md`, `ralph_cycle.sh`, and `Makefile` together. Install OpenCode and run one cycle against a Git checkout of the fork:
 
 ```bash

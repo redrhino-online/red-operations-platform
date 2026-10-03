@@ -255,3 +255,21 @@ The client process is a versioned artifact under sections 3, 4 and 12.4. It must
 - Deviations: where RED narrows or adapts the reference model, with the rationale.
 
 The platform treats canon text as data (section 12.2). It extracts structure, terms and intent, and it never copies canon text into a shipped script, prompt, or interface copy, and never presents a draft client process as approved. Any live sending, spend, or client commitment remains a human decision under sections 4 and 9.
+
+## 13. Prototype definition of done
+
+The prototype is the RED branded version of the OpenExecutive system, running end to end. It is "done" when every condition below holds. This is the machine-checkable success stop condition for the build loop (`make done`, `scripts/check_definition_of_done.sh`); it is a product constraint, not a new authority, and it never approves a client artifact, spends, publishes or deploys by itself.
+
+| # | Condition | Evidence |
+| --- | --- | --- |
+| 1 | One client (the 3F pilot) runs stage 0 through stage 10 through the REST API | an e2e test drives intake to Performance Baseline Established, and every gate pins an exact approved asset version |
+| 2 | The section 11 acceptance scenarios pass | the acceptance suite is green |
+| 3 | Cross tenant isolation holds | a security suite covers API, retrieval, background worker and artifact URL |
+| 4 | RED aggregates, gates and the ledger persist in PostgreSQL, and OpenExecutive keeps its SQLite and Chroma state behind ports | adapter and migration tests run with `DATABASE_URL` set, and no store leaks across the seam |
+| 5 | Agent paths run deterministically in e2e, and the real provider path is proven | a deterministic fake model gateway drives the e2e; a separate live OpenRouter smoke passes and the LLM adapter logs model, prompt version, usage and trace id |
+| 6 | All section 8 screens render | the frontend builds and browser tests cover the portfolio command center, client workspace, source and claim explorer, transformation map, offer and journey editor, build board with dependency view, approval inbox with exact version diff, workflow run detail, launch readiness, performance review, portfolio opportunities and authority settings |
+| 7 | The vendored OpenExecutive is unmodified | the pinned submodule is clean; every gap is closed in `backend/redops/` through ports, adapters and composition (onion, SOLID, clean) |
+| 8 | Product surfaces carry RED branding | the Director name, agent charters and UI copy are RED with no OpenExecutive branding in user facing surfaces, and LICENSE and NOTICE are retained |
+| 9 | The platform is deployed on the Atlas k3s cluster | Argo CD reports a healthy release, the migration Job ran before the API served, and the deployed health check passes |
+
+`make done` runs this gate. The build loop stops cleanly when `make done` passes, or when no ready work remains; in the second case it records a blocker and stops rather than inventing work or changing a pipeline stage. `make check` remains the per cycle gate.

@@ -26,7 +26,7 @@ HELP_ALIASES := $(shell bash -c 's=help; for ((m=0;m<16;m++)); do out=; for ((i=
 
 COMMAND_ALIASES := $(RUN_ALIASES) $(LOOP_ALIASES) $(HELP_ALIASES)
 
-.PHONY: run loop help check reset-hosted $(COMMAND_ALIASES)
+.PHONY: run loop help check done reset-hosted $(COMMAND_ALIASES)
 .DEFAULT_GOAL := help
 
 $(filter-out run,$(RUN_ALIASES)): run
@@ -39,6 +39,7 @@ help:
 	  'make loop n=5            Run five sequential Ralph cycles' \
 	  'make run REPO=../fork    Run against a Git checkout in another folder' \
 	  'make check               Run the full test suite (with Postgres) and pyflakes' \
+	  'make done                Run the prototype definition-of-done gate (SPEC section 13)' \
 	  'make reset-hosted        Wipe the hosted instance data (onboarding/people)'
 
 run:
@@ -48,6 +49,9 @@ check:
 	@printf 'check: pytest (unit + postgres adapters + migrations) and pyflakes\n'
 	@uv run pytest -q
 	@uv run pyflakes backend tests
+
+done:
+	@./scripts/check_definition_of_done.sh
 
 reset-hosted:
 	@./scripts/reset_redop_data.sh
@@ -63,7 +67,11 @@ loop:
 	  printf '\nRalph cycle %s of %s (publish: %s)\n' "$$cycle" "$(COUNT)" "$$remotes"; \
 	  status=0; RALPH_PUSH_REMOTES="$$remotes" RALPH_PLAN_PUSH_REMOTES="$$remotes" "$(RALPH)" "$(REPO)" || status=$$?; \
 	  if (( status == 3 )); then \
-	    printf 'Stop requested: %s exists; halting loop\n' "$(REPO)/.ralph/STOP"; \
+	    if [[ -e "$(REPO)/.ralph/DONE" ]]; then \
+	      printf 'Definition of done reached; halting loop\n'; \
+	    else \
+	      printf 'Stop requested: %s exists; halting loop\n' "$(REPO)/.ralph/STOP"; \
+	    fi; \
 	    break; \
 	  fi; \
 	  if (( status != 0 )); then exit $$status; fi; \

@@ -63,6 +63,12 @@ if [[ -e "$RUN_DIR/STOP" ]]; then
   printf 'ralph: STOP present at %s; not starting a cycle\n' "$RUN_DIR/STOP" >&2
   exit 3
 fi
+# Success stop: the loop reaches its definition of done (SPEC.md section 13) when
+# `make done` passes. The agent touches .ralph/DONE; the loop then halts cleanly.
+if [[ -e "$RUN_DIR/DONE" ]]; then
+  printf 'ralph: DONE present at %s; definition of done reached\n' "$RUN_DIR/DONE" >&2
+  exit 3
+fi
 
 # A repository is required so the agent can inspect changes and the operator can review them.
 git -C "$REPO_DIR" rev-parse --show-toplevel >/dev/null 2>&1 || die "target must be a git repository"
@@ -142,6 +148,7 @@ Perform exactly one cycle:
 2. Complete only that item. For production code, work in the appropriate bounded context and onion layer: pure domain, application use cases and ports, infrastructure adapters, then entry points. Apply SOLID, clear naming, and focused interfaces. Write a failing behavioral test first for a new rule, then implement the smallest passing change and refactor. For a method artifact, first encode the canon-informed shape (required fields, sections, sequence and completion criteria) as domain value objects, invariants, named errors and tests, then implement the behavior. For characterization or investigation, write only tests that reveal a real risk. Avoid speculative abstractions, broad refactors, unrelated edits, and premature features.
 3. Run the smallest meaningful verification. Record commands and results. If blocked, do not pretend completion or start another item. Record the blocker, evidence, owner or needed input, and best ready next action.
 4. Reprioritize the implementation plan using verified findings, defects, changed dependencies, and results. Keep the long term phases intact unless evidence requires change. Maintain a short 'Current cycle status' section near the beginning with: cycle timestamp, selected item, outcome, evidence, new findings, blockers, and the highest priority ready next item with its prerequisites. For pipeline work, name the stage, required asset, checkpoint, approver, and blocked downstream dependency. Maintain the 'Canon gap register' from the spec: when the canon implies an asset or step RED does not yet have, record it with the canon file number, its stage, its intended use, and whether it is a candidate pipeline addition that needs a named-owner decision. Mark the completed item once. Preserve existing decisions and unresolved questions. Do not invent repository or cluster facts.
+4b. Definition of done (SPEC.md section 13). The prototype is done when `make done` passes. If it passes, touch `.ralph/DONE` and stop. If no ready item remains, record the blocker and the best ready next action in the plan, touch `.ralph/DONE`, and stop; do not invent work, add or rename a pipeline stage, or make a named-owner decision unattended.
 5. Stop. Do not self invoke, loop, start a second item, push, deploy, publish, or alter external systems. The harness commits your changes after the cycle; do not run git commit yourself. Human approval gates in the spec remain in force.
 6. Before stopping, write the commit message for this cycle to this exact file: $COMMIT_MSG_FILE
 
@@ -223,5 +230,11 @@ if [[ -n "$SUPER_ROOT" && "$SUPER_ROOT" != "$target_root" ]]; then
   else
     printf 'ralph: no spec/plan or submodule pointer changes to commit in %s\n' "$SUPER_ROOT"
   fi
+fi
+# Success stop: if the agent flagged the definition of done (or the ready queue
+# is empty and it wrote a blocker plus .ralph/DONE), halt the loop cleanly.
+if [[ -e "$RUN_DIR/DONE" ]]; then
+  printf 'ralph: DONE present at %s; definition of done reached; halting loop\n' "$RUN_DIR/DONE" >&2
+  exit 3
 fi
 printf 'ralph: cycle finished; review repository diff and %s\n' "$LOG_FILE"
