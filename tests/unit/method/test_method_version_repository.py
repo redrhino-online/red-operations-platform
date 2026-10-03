@@ -110,6 +110,27 @@ class MethodVersionRepositoryTests(unittest.TestCase):
 
         self.assertIsNone(foreign)
 
+    def test_list_is_tenant_scoped_and_ordered_by_identity(self):
+        self.repository.save(approved_method())
+        self.repository.save(
+            approved_method(
+                method_version(
+                    method_id="a-method", semantic_version=SemanticVersion(1, 0, 0)
+                )
+            )
+        )
+
+        listed = self.repository.list("client-3f")
+
+        self.assertEqual(
+            ["a-method", "method-3f"], [method.method_id for method in listed]
+        )
+        self.assertEqual((), self.repository.list("client-other"))
+
+    def test_list_refuses_a_blank_tenant(self):
+        with self.assertRaises(MethodVersionTenantBoundaryError):
+            self.repository.list("")
+
 
 class MethodVersionMapperTests(unittest.TestCase):
     """The durable payload round-trips the full approved aggregate.

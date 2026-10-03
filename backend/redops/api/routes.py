@@ -21,14 +21,18 @@ from redops.api.schemas import (
     AuthorityAmplifierInput,
     CampaignMessageInput,
     ClaimInput,
+    ClaimListResponse,
+    ClaimResponse,
     ClientWorkspaceListResponse,
     ClientWorkspaceResponse,
+    CreateClaimRequest,
     CreateClientWorkspaceRequest,
     CreateSourceRecordRequest,
     EngagementProductionViewResponse,
     FunnelIntegrationInput,
     LaunchQAInput,
     MethodVersionInput,
+    MethodVersionListResponse,
     OfferVersionInput,
     RecordStageEightGateRequest,
     RecordStageFiveGateRequest,
@@ -204,10 +208,17 @@ from redops.contexts.governance.infrastructure.repositories import (
     gate_ledger_repository_from_env,
     stage_run_repository_from_env,
 )
-from redops.contexts.knowledge.application.ports import SourceRecordStore
+from redops.contexts.knowledge.application.ports import (
+    ClaimStore,
+    SourceRecordStore,
+)
 from redops.contexts.knowledge.domain.entities import Claim, SourceRecord
-from redops.contexts.knowledge.domain.errors import KnowledgeError
+from redops.contexts.knowledge.domain.errors import (
+    ClaimCitationError,
+    KnowledgeError,
+)
 from redops.contexts.knowledge.infrastructure.repositories import (
+    claim_store_from_env,
     source_record_store_from_env,
 )
 from redops.contexts.knowledge.domain.value_objects import (
@@ -335,6 +346,25 @@ def get_source_record_store() -> Iterator[SourceRecordStore]:
     """
 
     store = source_record_store_from_env(os.environ.get("DATABASE_URL"))
+    try:
+        yield store
+    finally:
+        store.close()
+
+
+def get_claim_store() -> Iterator[ClaimStore]:
+    """Provide the configured claim seam to the API (SPEC.md §6).
+
+    SPEC.md section 7 lists ``/claims`` and section 3 keeps a claim a client
+    resource, so the surface must read and write the same durable store the
+    rest of the platform shares. The dependency owns one adapter for the request
+    and releases any connection it opened when the request ends; the store is
+    chosen once from ``DATABASE_URL``, and a set-but-unusable configuration raises
+    before the route runs, so a deployment cannot mistake a process-local claim
+    store for a durable one.
+    """
+
+    store = claim_store_from_env(os.environ.get("DATABASE_URL"))
     try:
         yield store
     finally:
@@ -3439,4 +3469,181 @@ def create_source_record(
         checksum=source.checksum,
         captured_on=source.captured_on,
         access_rule=source.access_rule,
+    )
+
+
+def _claim_payload(claim: Claim) -> dict[str, Any]:
+    """Project a stored claim onto the response shape, computing no rule."""
+
+    return {
+        "claim_id": claim.claim_id,
+        "tenant_id": claim.tenant_id,
+        "statement": claim.statement,
+        "provenance": claim.provenance.value,
+        "confidence_note": claim.confidence_note,
+        "is_directly_sourced": claim.is_directly_sourced,
+        "citations": [
+            {
+                "source_id": citation.source_id,
+                "checksum": citation.checksum,
+                "location": citation.location,
+            }
+            for citation in sorted(
+                claim.citations,
+                key=lambda item: (item.source_id, item.location, item.checksum),
+            )
+        ],
+    }
+
+
+@router.get("/claims", response_model=ClaimListResponse)
+def list_claims(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose claims are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    store: ClaimStore = Depends(get_claim_store),
+) -> ClaimListResponse:
+    """List one client tenant's claims (SPEC.md sections 3, 7 and 9).
+
+    SPEC.md section 7 lists ``/claims`` and requires list endpoints to enforce
+    client access and pagination; SPEC.md section 9 requires every tenant
+    resource query to carry ``tenant_id``. The tenant is a required query
+    parameter, not an optional filter, so the endpoint cannot produce a
+    portfolio-wide read across clients; the store read is tenant scoped and a
+    blank tenant is refused by the domain seam. Pagination is applied after the
+    tenant-scoped read so a page is stable.
+    """
+
+    claims = store.list(tenant_id)
+    page = claims[offset : offset + limit]
+    return ClaimListResponse(
+        tenant_id=tenant_id,
+        total=len(claims),
+        limit=limit,
+        offset=offset,
+        claims=[_claim_payload(claim) for claim in page],
+    )
+
+
+@router.post("/claims", status_code=201, response_model=ClaimResponse)
+def create_claim(
+    body: CreateClaimRequest,
+    store: ClaimStore = Depends(get_claim_store),
+    source_store: SourceRecordStore = Depends(get_source_record_store),
+) -> ClaimResponse:
+    """Record one claim with a verified source attribution (SPEC.md section 3).
+
+    SPEC.md section 3 makes a Known claim cite at least one direct source and
+    section 11 requires source attribution to survive ingestion. The route
+    resolves every citation against the same tenant's immutable
+    ``SourceRecordStore`` and refuses a citation whose source id is unknown or
+    whose checksum does not match the stored original, so a caller cannot assert
+    a Known claim against a fabricated citation. The claim's own invariants
+    (unsupported Known, missing field) are enforced by the aggregate; a refusal
+    is a named 422 or 409 and never a partial write.
+    """
+
+    try:
+        for citation in body.citations:
+            source = source_store.get(body.tenant_id, citation.source_id)
+            if source is None or source.checksum != citation.checksum:
+                raise ClaimCitationError(
+                    f"claim {body.claim_id!r} cites source "
+                    f"{citation.source_id!r}, which is not a stored original of "
+                    f"tenant {body.tenant_id!r} with checksum "
+                    f"{citation.checksum!r}; a claim cannot cite an unverifiable "
+                    "source"
+                )
+        claim = Claim(
+            claim_id=body.claim_id,
+            tenant_id=body.tenant_id,
+            statement=body.statement,
+            provenance=ProvenanceClass(body.provenance),
+            citations=frozenset(
+                SourceCitation(
+                    source_id=citation.source_id,
+                    checksum=citation.checksum,
+                    location=citation.location,
+                )
+                for citation in body.citations
+            ),
+            confidence_note=body.confidence_note,
+        )
+        store.save(claim)
+    except KnowledgeError as exc:
+        status = 409 if type(exc).__name__ == "ClaimConflictError" else 422
+        raise HTTPException(
+            status_code=status,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return _claim_payload(claim)
+
+
+def _method_payload(method: MethodVersion) -> dict[str, Any]:
+    """Project a stored approved method version, computing no rule."""
+
+    approval = method.approval
+    return {
+        "method_id": method.method_id,
+        "tenant_id": method.tenant_id,
+        "parent_method": method.parent_method,
+        "semantic_version": str(method.semantic_version),
+        "stages": list(method.stages),
+        "currency": method.currency,
+        "claims": sorted(method.claims),
+        "is_approved": method.is_approved,
+        "approved_by": None if approval is None else approval.approved_by,
+        "intended_use": None if approval is None else approval.intended_use,
+        "approved_on": None if approval is None else approval.approved_on,
+        "primary_currency": (
+            None if method.primary_currency is None
+            else method.primary_currency.currency
+        ),
+        "diagnostic_model_id": (
+            None if method.diagnostic_model is None
+            else method.diagnostic_model.model_id
+        ),
+        "signature_solution_id": (
+            None if method.signature_solution is None
+            else method.signature_solution.solution_id
+        ),
+    }
+
+
+@router.get("/methods", response_model=MethodVersionListResponse)
+def list_method_versions(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose approved methods are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repository: MethodVersionRepository = Depends(get_method_version_repository),
+) -> MethodVersionListResponse:
+    """List one client tenant's approved method versions (SPEC.md sections 3, 7, 9).
+
+    SPEC.md section 7 lists ``/methods`` and requires pagination; SPEC.md section
+    9 requires every query to carry the client scope. The tenant is a required
+    query parameter and the repository read is tenant scoped, so another client's
+    approved methods are unreadable here. The route is read-only: a method is born
+    approved through its stage gate and a direct write here would let a caller
+    confer the approval that governance owns (SPEC.md section 4), so no method
+    write path is exposed.
+    """
+
+    methods = repository.list(tenant_id)
+    page = methods[offset : offset + limit]
+    return MethodVersionListResponse(
+        tenant_id=tenant_id,
+        total=len(methods),
+        limit=limit,
+        offset=offset,
+        methods=[_method_payload(method) for method in page],
     )

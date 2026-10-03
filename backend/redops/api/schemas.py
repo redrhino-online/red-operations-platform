@@ -1417,3 +1417,87 @@ class SourceRecordListResponse(BaseModel):
     limit: int
     offset: int
     sources: list[SourceRecordResponse]
+
+
+class CreateClaimRequest(BaseModel):
+    """Record one claim with an explicit provenance class and citations.
+
+    The caller supplies the statement, provenance, confidence note and citations;
+    the tenant is supplied here because the claim is being created. The domain
+    refuses an unsupported Known claim, and the route refuses a citation that does
+    not resolve to a stored original of the same tenant (SPEC.md sections 3, 9
+    and 11), so a fabricated source attribution cannot be persisted.
+    """
+
+    claim_id: str
+    tenant_id: str
+    statement: str
+    provenance: str
+    confidence_note: str
+    citations: list[SourceCitationInput] = Field(default_factory=list)
+
+
+class SourceCitationResponse(BaseModel):
+    """One checksum and location based reference to an exact source location."""
+
+    source_id: str
+    checksum: str
+    location: str
+
+
+class ClaimResponse(BaseModel):
+    """One claim, re-validated through the domain aggregate."""
+
+    claim_id: str
+    tenant_id: str
+    statement: str
+    provenance: str
+    confidence_note: str
+    is_directly_sourced: bool
+    citations: list[SourceCitationResponse]
+
+
+class ClaimListResponse(BaseModel):
+    """A paginated page of one client tenant's claims."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    claims: list[ClaimResponse]
+
+
+class MethodVersionResponse(BaseModel):
+    """One approved method version, read back from the durable method store.
+
+    SPEC.md section 3 pins an exact version and intended use at approval and
+    section 4 keeps the approved version identifiable. The read surface projects
+    the method's identity, its approval and the ids of the stage 2 to 4
+    dependencies it pins; the exact asset content is retrieved through the gate
+    seam, not re-declared here.
+    """
+
+    method_id: str
+    tenant_id: str
+    parent_method: str
+    semantic_version: str
+    stages: list[str]
+    currency: str
+    claims: list[str]
+    is_approved: bool
+    approved_by: str | None
+    intended_use: str | None
+    approved_on: date | None
+    primary_currency: str | None
+    diagnostic_model_id: str | None
+    signature_solution_id: str | None
+
+
+class MethodVersionListResponse(BaseModel):
+    """A paginated page of one client tenant's approved method versions."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    methods: list[MethodVersionResponse]

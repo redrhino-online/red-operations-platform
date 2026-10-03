@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import abc
 
-from redops.contexts.knowledge.domain.entities import SourceRecord
+from redops.contexts.knowledge.domain.entities import Claim, SourceRecord
 
 
 class SourceRecordStore(abc.ABC):
@@ -37,6 +37,33 @@ class SourceRecordStore(abc.ABC):
     @abc.abstractmethod
     def save(self, source: SourceRecord) -> None:
         """Store an immutable source record, refusing a different same-key body."""
+
+    def close(self) -> None:
+        """A default no-op so a process-local adapter need not implement it."""
+
+
+class ClaimStore(abc.ABC):
+    """Seam for claims, keyed by ``(tenant_id, claim_id)`` (SPEC.md section 7).
+
+    SPEC.md section 7 lists ``/claims`` and section 9 requires every tenant
+    resource query to carry ``tenant_id``, so ``list`` and ``get`` return only the
+    requested tenant's claims. A claim's provenance may change only through an
+    append-only ``Claim.reclassify``, so ``save`` grows a stored claim's revision
+    history but refuses a same-id re-statement that rewrites it; ``close``
+    releases any connection the adapter opened.
+    """
+
+    @abc.abstractmethod
+    def list(self, tenant_id: str) -> tuple[Claim, ...]:
+        """Return the tenant's claims, ordered by id."""
+
+    @abc.abstractmethod
+    def get(self, tenant_id: str, claim_id: str) -> Claim | None:
+        """Return one tenant-scoped claim, or ``None`` if unknown."""
+
+    @abc.abstractmethod
+    def save(self, claim: Claim) -> None:
+        """Store a claim, refusing a same-id non-append-only re-statement."""
 
     def close(self) -> None:
         """A default no-op so a process-local adapter need not implement it."""

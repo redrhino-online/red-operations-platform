@@ -4,6 +4,63 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T192641Z (Ralph cycle, this run): selected item was Q10, the
+  tenant-scoped REST surface for `/claims` and `/methods` (prerequisite Q9 met).
+  Q17-Q27 closed the caller-supplied-authority defect across every stage 0-10
+  gate, so no gate-integrity item is ready (Q28 is blocked on the named
+  methodology-owner placement decision). Q10 outranks the remaining alternatives
+  because it is the next product-backbone step of SPEC.md section 7 and feeds the
+  stage 0-10 e2e (Q30) and the section 8 screens (Q32-Q45); it is more than a
+  surface, because before this cycle the Section 3 invariant "a Known claim must
+  cite a direct source" had no durable store and no route that verified a
+  citation against the immutable original a claim points at. The `frontend/`
+  shell Q32 was again rejected: the DoD [5/6] script passes on `frontend/`
+  merely existing with no `OpenExecutive` string, so a screens-less shell would
+  falsely turn `make done` green while condition 6 (Q45) is far off. Q29 is
+  domain-complete, Q16 is blocked on a workflow write route and Q3/Q4 are
+  blocked on the ADR 0006 tension and a live key, so Q10 is the ready item.
+- Outcome: new Knowledge `ClaimStore` port, `claim_to_payload`/`claim_from_payload`
+  mapper, in-memory and PostgreSQL adapters, `claim_store_from_env` and migration
+  `0012_claims`. The claim store is append-only per `(tenant_id, claim_id)`: a
+  claim's statement is immutable, a provenance change must append a recorded
+  `ClaimRevision`, and a same-id content change that recorded no revision is
+  refused. New routes `GET`/`POST /red/claims` and `GET /red/methods`. The
+  `/claims` create route resolves every citation against the same tenant's
+  `SourceRecordStore` and refuses an unknown source id or a checksum that does
+  not match the stored original, so a Known claim cannot be asserted against a
+  fabricated citation (SPEC.md sections 3 and 11). `/methods` is a tenant-scoped,
+  paginated read over the approved-method store (`MethodVersionRepository.list`
+  added to the port and both adapters); it is deliberately read-only, because a
+  method is born approved through its stage gate and a direct write would let a
+  caller confer the approval governance owns (SPEC.md section 4).
+- Evidence: `make check` -> 2082 passed, 2 skipped, 686 subtests; pyflakes
+  clean. New tests `tests/unit/knowledge/test_claim_store.py` (in-memory, mapper
+  and PostgreSQL cases), `tests/unit/knowledge/test_claims_route.py` and
+  `tests/unit/method/test_methods_route.py`; `tests/unit/shared/test_migrate.py`
+  now pins head `0012_claims` and the `claims` table. `make done` still fails
+  only [5/6] (`frontend/` missing, Q32); [1/6]-[4/6] pass.
+- New findings: `Claim` excludes its `_revisions` tuple from dataclass equality,
+  so a store guard based on `==` cannot detect a dropped revision history; the
+  claim store therefore compares content with revisions stripped plus a
+  revision-prefix check. `/claims` now verifies citations against the durable
+  source store, closing the fabricated-citation path that the domain alone cannot
+  check (a `SourceCitation` carries no tenant). `/methods` exposes no write path
+  by design.
+- Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
+  land shell-only; Q28 stage 8-10 required kinds blocked on the named
+  methodology-owner placement decision; Q16 idempotency keys blocked on a
+  workflow write route; Q3 agent registration blocked on the ADR 0006 /
+  vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: Q11, REST `/offers` and `/builds` (prereq
+  Q10 done). Required asset: the offer and build records exposed through
+  tenant-scoped routes reusing the existing durable offer store and the
+  Production `BuildObject`; checkpoint: none (API surface, not a gate);
+  approver: none (no gate decides). Blocked downstream dependency: Q12-Q14 chain
+  from it; then the stage 0-10 e2e Q30 and the `frontend/` screens Q32-Q45.
+
+### Prior cycle (2026-10-03T192509Z)
+
 - Cycle 2026-10-03T192509Z (Ralph cycle, this run): selected item was Q27
   hardening, the stage 10 "Performance Baseline Established" gate route hardened
   against the caller-supplied-authority defect (prerequisite Q26 met). Q17-Q26
@@ -2988,7 +3045,7 @@ stalls:
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
 | Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams |
 | Q9 | REST `/clients` and `/clients/{id}/sources` (done 2026-10-03T190017Z; `GET /red/clients?tenant_id=&limit=&offset=` and `POST /red/clients`, `GET`/`POST /red/clients/{tenant_id}/sources`; durable `ClientWorkspaceStore` and `SourceRecordStore` ports with in-memory and PostgreSQL adapters and migrations `0010_client_workspaces`/`0011_source_records`; tenant is a required query parameter, an unscoped read/write or a rewritten source is refused) | api | Q7 | route tests `tests/unit/engagement/test_clients_route.py` (8), adapter tests `tests/unit/engagement/test_client_workspace_store.py` and `tests/unit/knowledge/test_source_record_store.py` |
-| Q10 | REST `/claims`, `/methods` | api | Q9 | route tests |
+| Q10 | REST `/claims`, `/methods` (done 2026-10-03T192641Z; `GET`/`POST /red/claims` and `GET /red/methods`, tenant required on GET and path/body-scoped to the tenant; new durable Knowledge `ClaimStore` port with in-memory and PostgreSQL adapters and migration `0012_claims`; the claim create route verifies every citation against the same tenant's stored immutable `SourceRecord` by id and checksum, and the claim store refuses a same-id non-append-only re-statement; `MethodVersionRepository.list` added so `/methods` is a tenant-scoped paginated read of approved methods, left read-only because approval is gate-owned. Tests `tests/unit/knowledge/test_claim_store.py`, `tests/unit/knowledge/test_claims_route.py`, `tests/unit/method/test_methods_route.py`) | api | Q9 | route tests |
 | Q11 | REST `/offers`, `/builds` | api | Q10 | route tests |
 | Q12 | REST `/approvals`, `/decisions` with exact version approval | api | Q11 | version specific approval |
 | Q13 | REST `/journeys`, `/measurements` | api | Q12 | route tests |

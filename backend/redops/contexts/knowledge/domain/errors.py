@@ -47,3 +47,35 @@ class SourceRecordImmutableError(InvalidSourceRecordError):
     same id; a corrected capture is a new record, so the stored original a claim
     points at is never silently replaced.
     """
+
+
+class UnscopedClaimError(KnowledgeError):
+    """A claim store was read or written without a tenant.
+
+    SPEC.md sections 3 and 9 make a Claim a client resource and require every
+    tenant resource and query to carry ``tenant_id``. Storing or resolving one
+    without a client would either leak across clients or create an orphaned
+    record, so the store refuses an unscoped read or write.
+    """
+
+
+class ClaimConflictError(InvalidClaimError):
+    """A stored claim was re-stated in a way that is not an append-only revision.
+
+    SPEC.md sections 3 and 4: a Known claim cannot silently become Known and an
+    approval trail is append only. A claim's provenance may change only through
+    ``Claim.reclassify``, which records a ``ClaimRevision``. A stored claim can
+    therefore grow its revision history, but a same-id re-statement that rewrites
+    the statement or drops and replaces recorded revisions is refused so a claim
+    cannot be silently altered or its history erased.
+    """
+
+
+class ClaimCitationError(InvalidClaimError):
+    """A claim cited a source that is not a stored original of the same tenant.
+
+    SPEC.md sections 3 and 11: a Known claim must cite a direct source and source
+    attribution must survive ingestion. A citation whose source id is unknown for
+    the tenant, or whose checksum does not match the stored immutable original, is
+    refused rather than persisted as a fabricated citation.
+    """

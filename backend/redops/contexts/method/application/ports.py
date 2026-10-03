@@ -35,6 +35,10 @@ class MethodVersionRepository(abc.ABC):
         """Return the exact approved method version, or ``None`` if unknown."""
 
     @abc.abstractmethod
+    def list(self, tenant_id: str) -> tuple[MethodVersion, ...]:
+        """Return the tenant's approved method versions, ordered by identity."""
+
+    @abc.abstractmethod
     def save(self, method: MethodVersion) -> None:
         """Store an approved method version, refusing a different same-key body."""
 

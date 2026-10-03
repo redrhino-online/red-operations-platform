@@ -79,6 +79,16 @@ class InMemoryMethodVersionRepository(MethodVersionRepository):
         _require_method_tenant(tenant_id, "read")
         return self._methods.get((tenant_id, method_id, version))
 
+    def list(self, tenant_id: str) -> tuple[MethodVersion, ...]:
+        _require_method_tenant(tenant_id, "read")
+        return tuple(
+            self._methods[key]
+            for key in sorted(
+                (key for key in self._methods if key[0] == tenant_id),
+                key=lambda key: (key[1], key[2].major, key[2].minor, key[2].patch),
+            )
+        )
+
     def save(self, method: MethodVersion) -> None:
         _require_method_tenant(method.tenant_id, "write")
         if method.approval is None:
@@ -149,6 +159,21 @@ class PostgresMethodVersionRepository(MethodVersionRepository):
         if row is None:
             return None
         return method_from_payload(row[0])
+
+    def list(self, tenant_id: str) -> tuple[MethodVersion, ...]:
+        _require_method_tenant(tenant_id, "read")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT method
+                FROM method_versions
+                WHERE tenant_id = %s
+                ORDER BY method_id, semantic_version
+                """,
+                (tenant_id,),
+            )
+            rows = cursor.fetchall()
+        return tuple(method_from_payload(row[0]) for row in rows)
 
     def save(self, method: MethodVersion) -> None:
         _require_method_tenant(method.tenant_id, "write")
