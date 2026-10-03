@@ -1601,6 +1601,14 @@ class RetargetingCampaign:
                 f"{self.to_step!r}, which is the step its audience is already on; "
                 "a focused campaign must move a prospect to a new step"
             )
+        if self.from_step != self.audience.funnel_step:
+            raise RetargetingStepError(
+                f"retargeting campaign {self.campaign_id!r} starts from step "
+                f"{self.from_step!r}, but its audience "
+                f"{self.audience.audience_id!r} is segmented on step "
+                f"{self.audience.funnel_step!r}; a focused campaign must move the "
+                "list from the step it occupies"
+            )
 
 
 class RetargetingStep(Enum):

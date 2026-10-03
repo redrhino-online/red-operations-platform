@@ -242,6 +242,10 @@ class RetargetingCampaignTests(unittest.TestCase):
         with self.assertRaises(RetargetingStepError):
             retargeting_campaign(to_step="lead")
 
+    def test_a_campaign_must_start_from_its_lists_own_funnel_step(self):
+        with self.assertRaises(RetargetingStepError):
+            retargeting_campaign(from_step="webinar")
+
     def test_a_campaign_target_goal_must_share_the_list_tracking_code(self):
         with self.assertRaises(RetargetingDependencyError):
             retargeting_campaign(

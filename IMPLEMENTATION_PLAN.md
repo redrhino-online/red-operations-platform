@@ -4,49 +4,45 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T06:21:50Z (Ralph cycle 130).
+- Cycle timestamp: 2026-10-03T06:23:35Z (Ralph cycle 131).
 - Selected item: close a dependency-enforcement defect in the canon stage 8/10
-  Retargeting `RetargetingPlan` (canon file 34) -- `RetargetingPlan.__post_init__`
-  now refuses a declared conversion goal that is not recorded on the plan's own
-  tracking code, raising the existing named `RetargetingDependencyError`. It is a
-  defect fix inside the cycle 110 retargeting asset, not new work: canon file 34's
-  roadmap runs "Step one Tracking code" then "set up conversion goals" on the
-  funnel's pages, so the plan's goals must share the plan's pixel. The plan already
-  bound its lists and campaigns to its tracking code (`RetargetingAudience` and
-  `RetargetingCampaign` each require the same code) but left the goals loop
-  checking only the tenant, so a roadmap could declare a goal belonging to a
-  different pixel and still report `is_complete`. It outranks the newly identified
-  service/partnership canon assets (they sit outside the 0-10 pipeline and need a
-  named-owner stage decision), the bounded wiring follow-ups and the blocked
-  persistence work because it needs no decision, it hardens an already-shipped
-  asset's dependency graph rather than adding a downstream feature, and it closes
-  the last unbound edge in the retargeting roadmap's tracking-code prerequisite. It
-  adds no stage, asset or required gate kind and authorizes no spend or send.
+  retargeting focused campaign (canon files 33, 34) --
+  `RetargetingCampaign.__post_init__` now refuses a campaign whose declared
+  `from_step` differs from the `funnel_step` its own `RetargetingAudience` is
+  segmented on, raising the existing named `RetargetingStepError`. It is a defect
+  fix inside the cycle 110 retargeting asset, not new work: canon file 34 builds
+  retargeting lists as "user groups with a defined state within a defined stage of
+  your funnel" and then a focused campaign moves that list "from point A to point
+  B", so a campaign's starting step must be the step its list actually occupies.
+  The campaign already bound its target goal to the list's tracking code and
+  refused `from_step == to_step`, but it never tied `from_step` to
+  `audience.funnel_step`, so a roadmap could claim to move a list from a step the
+  list was not on and still report `is_complete`. It outranks the newly identified
+  service/partnership canon assets (they need a named-owner stage decision), the
+  bounded wiring follow-ups and the blocked persistence work because it needs no
+  decision, it hardens an already-shipped asset's dependency graph rather than
+  adding a downstream feature, and it closes the last unbound edge in the
+  retargeting roadmap's list-to-campaign linkage. It adds no stage, asset or
+  required gate kind and authorizes no spend or send.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: `RetargetingPlan.__post_init__`
+- Evidence: `RetargetingCampaign.__post_init__`
   (`backend/redops/contexts/measurement/domain/value_objects.py`) now compares
-  each declared `goal.tracking_code` to the plan's `tracking_code` and raises
-  `RetargetingDependencyError` when it differs, mirroring the existing list and
-  campaign checks. New behavioral coverage:
-  `test_a_plan_goal_must_share_the_plan_tracking_code` in
-  `tests/unit/measurement/test_retargeting.py`, so the file now has 36 tests.
+  `self.from_step` to `self.audience.funnel_step` and raises
+  `RetargetingStepError` when they differ, alongside the existing `from_step ==
+  to_step` guard. New behavioral coverage:
+  `test_a_campaign_must_start_from_its_lists_own_funnel_step` in
+  `tests/unit/measurement/test_retargeting.py`, so the file now has 37 tests.
   Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1596 passed, up from 1595. `python3 -m pyflakes backend/redops tests`
+  reports 1597 passed, up from 1596. `python3 -m pyflakes backend/redops tests`
   is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the `RetargetingPlan` goals loop, unlike its audiences and
-  campaigns, never compared the goal's tracking code to the plan's, so a roadmap
-  could list a conversion goal recorded on another pixel while claiming to be
-  complete. The audience and campaign guards masked this in the common fixture (a
-  single imported goal fails membership first), which is why the defect survived
-  cycles 110 and 128. The canon's own order, tracking code before conversion
-  goals, makes the same-pixel link the hidden prerequisite the other checks assume.
-  Also verified this cycle: the supplied canon README map (canon README sections 6
-  and 7) exposes service-line and partnership-line assets RED must define (kickoff
-  checklist, module production standard, session guide, client scorecard, case
-  study template; renewal and win-back, next-offer path, referral and partner plan,
-  community rules, reputation track) that the stage 0-10 template and the gap
-  register do not yet represent; recorded in the Canon gap register below as
-  candidates needing a named-owner stage decision.
+- New findings: the `RetargetingCampaign` carried both a `from_step` and an
+  `audience.funnel_step` but never compared them, so a focused campaign could
+  declare a different starting point than the list it targets. The common fixture
+  masked this because it sets both to `"lead"`; the `from_step == to_step` guard
+  and the list/tracking-code membership checks made the omission invisible in the
+  existing tests. The canon's own sequence, a list segmented at a stage and a
+  campaign that advances it to the next one, makes the list's `funnel_step` the
+  hidden precondition the other campaign checks assume.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant model
   given slot-based single-active-client isolation, the lifecycle transition graph
@@ -59,21 +55,24 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   the retargeting roadmap) in a required gate kind still needs a methodology-owner
   decision, as does any service/partnership asset placement. Any spend, send or
   publish authorization remains a human decision (SPEC.md sections 4 and 9).
-- Highest priority ready next item: with the retargeting roadmap's tracking-code
-  prerequisite now complete, the remaining named domain work is either implemented
-  or blocked on a named-owner decision (target stage/kind, storage ADR, missing
-  canon modules). The single most useful unblocker remains a named-owner decision
-  on the storage ADR (it releases persistence for every pure artifact and the
-  Operations delivery adapter) followed by the methodology-owner decision on
-  required stage 1/5/6/8/10 asset kinds (it releases wiring the audience reach
-  estimate, the product program, the awareness map, the matchmaker, the funnel
-  finder, the transformations, the umbrella, the swimlanes, the enrollment, the
-  content roadmap, the content syndication, the content crusher, the content
-  measurement loop, the invisible opt-in, the banner library and the retargeting
-  roadmap into gates or views). Until then the next implementable slice, if a
-  decision is granted, is wiring the audience reach estimate into the
-  `TargetMarketCandidate` or a stage 1 required kind, or the product program into
-  a stage 5 required kind.
+- Highest priority ready next item: with the retargeting campaign's list-to-step
+  edge now complete, the remaining named domain work is either implemented or
+  blocked on a named-owner decision (target stage/kind, storage ADR, missing canon
+  modules). The single most useful unblocker remains a named-owner decision on the
+  storage ADR (it releases persistence for every pure artifact and the Operations
+  delivery adapter) followed by the methodology-owner decision on required stage
+  1/5/6/8/10 asset kinds (it releases wiring the audience reach estimate, the
+  product program, the awareness map, the matchmaker, the funnel finder, the
+  transformations, the umbrella, the swimlanes, the enrollment, the content
+  roadmap, the content syndication, the content crusher, the content measurement
+  loop, the invisible opt-in, the banner library and the retargeting roadmap into
+  gates or views). Until then the next implementable slice, if a decision is
+  granted, is wiring the audience reach estimate into the `TargetMarketCandidate`
+  or a stage 1 required kind, or the product program into a stage 5 required kind.
+  A remaining candidate defect family, if no decision is granted, is the mirror
+  check in `RetargetingCampaign`: whether a campaign's `to_step` can be tied to
+  its target goal's URL, which the canon does not make explicit and so is left as
+  an open question rather than assumed.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; a stage-parameterized gate recorder/handler refactor;
@@ -90,6 +89,18 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   stage decision; the content measurement loop (completed in cycle 125 as the
   Measurement `AudienceBuildObservation`, with wiring an observed audience into the
   stage 10 baseline a methodology-owner decision); and all persistence.
+  [DONE 2026-10-03 (Ralph cycle 131): closed a dependency-enforcement defect in the
+  canon stage 8/10 retargeting focused campaign -- `RetargetingCampaign.__post_init__`
+  now refuses a declared `from_step` that differs from the `funnel_step` of the
+  `RetargetingAudience` it targets, raising the existing named `RetargetingStepError`,
+  so a focused campaign can no longer claim to move a list from a step that list does
+  not occupy (SPEC.md sections 3, 4 and 12.3; canon file 34 builds lists as "user
+  groups with a defined state within a defined stage of your funnel" and moves them
+  "from point A to point B"). 1 new test in
+  `tests/unit/measurement/test_retargeting.py`, full suite 1597 passed. It is a
+  defect fix inside the cycle 110 asset, mirrors the existing list and tracking-code
+  membership checks, adds no new stage, asset or required gate kind, and authorizes
+  no spend or send.]
   [DONE 2026-10-03 (Ralph cycle 130): closed a dependency-enforcement defect in the
   canon stage 8/10 Retargeting `RetargetingPlan` -- `RetargetingPlan.__post_init__`
   now refuses a declared `ConversionGoal` that is not recorded on the plan's own
@@ -802,7 +813,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 - Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93 built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate. Cycle 106 completed that slice: the METRICS dimension now reports each registered metric's newest observed figure and a measured movement via `metric_reporting_views`. Cycle 107 built the canon's forecast equation (`FunnelMetricRole`, `FunnelFigure`, `FunnelEconomics`, `FunnelForecast`, `funnel_figure`) so the metrics matrix unit economics exist before real data and a forecast stays distinct from an observed result.   Cycle 108 built the canon's scaling rule (`LearningPhase`, `ScalingAction`, `ScalingRecommendation`, `AdScalingPolicy`), so the dashboard can now turn an observed cost per lead into an owner-approved scale, hold, bid-up-the-funnel or pause-and-review recommendation. Cycle 109 built the canon's split-test logging (`SplitTestMode`, `SplitTestChange`, `SplitTest`), so a stage 10 optimization logs the one variable it changes (bound to the approved improvement's lever) before reading the result. This candidate is now fully implemented; no remaining scope.
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: implemented 2026-10-03 (Ralph cycle 115) as the Commercial Design `ContentRoadmap` (`ContentBeat`, `ContentChannel`, `ContentTopic`, `ContentDistributionPolicy`), which maps each step of a same-tenant stage 4 `SignatureSolution` to content topics that follow the Authority Amplifier beat order and reach the canon's minimum blog, YouTube and Facebook channels, binds a named owner and reports the steps it covers and misses. Implemented 2026-10-03 (Ralph cycle 120) for the syndication and recycling schedule as the Commercial Design `ContentSyndicationPlan` (`SyndicationChannel`, `SyndicationCadence`, `RecycledFormat`, `ChannelSyndication`, `DailyPromotionBudget`, `TopicSyndication`), which distributes a same-tenant `ContentRoadmap` by syndicating each planned topic to at least one typed channel on a per-channel cadence, promoting it on a positive dollar-a-day Decimal budget and recycling it into typed derivative formats, binds a named owner and reports the topics it does not yet syndicate, with `ContentSyndicationPolicy.require_multichannel` and `require_owned_reach` refusing a single-channel or borrowed-only distribution (canon file 31). Implemented 2026-10-03 (Ralph cycle 121) for the ten-second-view audience building campaign as the Measurement `VideoViewAudienceCampaign` (`AudienceBuildingObjective`, `VideoViewWindow`, `InterestTargeting`, `VideoViewAudiencePolicy`), which binds a named owner to a video-views objective, a same-tenant `AvatarProfile` interest stack, the canon's ten-second view and thirty-day retention window, a positive low `DailyPromotionBudget`, a caller-supplied target cost per ten-second view, a same-tenant `TrackingCode` and the existing `RetargetingAudience` lists it warms, reporting the funnel steps it builds for and refusing a non-video-views objective, an untyped or cross-tenant dependency, a weaker or over-thirty-day window and a non-positive target cost (canon file 30). Remaining candidate: the content measurement loop (a stage 10 observation of audience size and cost per view). Implemented 2026-10-03 (Ralph cycle 125) as the Measurement `AudienceBuildObservation`, which binds a named owner to a same-tenant `VideoViewAudienceCampaign`, an explicit closed `MeasurementWindow`, an observed basis, a positive built audience size and a positive Decimal cost per ten-second view, exposes `meets_target_cost` and `indicates_topic_problem` against the campaign's own target cost, projects to an OBSERVATION `PerformanceClaim`, and refuses a blank identity, a non-positive or non-integer audience size, a non-positive or non-Decimal cost, an untyped or cross-tenant campaign, an untyped window or basis, a placeholder basis and a result read before its window closed (canon files 23 and 30). No candidate remains in this gap; wiring the observation into a required stage 10 gate kind or the baseline milestone set remains a methodology-owner decision, and any spend remains a human decision.
 - Content Crusher (the world class content outline: topic, title, measurable promise, transformation, model, metaphor, context, steps, story, choice, action) — canon 12, 16, 32 — stage 6 — status: implemented 2026-10-03 (Ralph cycle 124) as the Commercial Design `ContentPromise` and `ContentCrusher`, which grounds a named owner on a same-tenant `ContentRoadmap` topic and teaches the roadmap's `SignatureSolution` steps, so the content flywheel's "produce" scope (canon file 28: never create content that does not live in the signature solution) is now a typed, tenant-scoped asset rather than prose. SPEC.md section 12.5 does not name the crusher in its seed table, so it is recorded here as part of the audience-building and content flywheel candidate; it is an asset inside stage 6, not a new stage. Its placement in a required stage 6 gate kind remains a methodology-owner decision, and any publish or spend stays a human decision.
-- Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 110) as the Measurement `RetargetingPlan` (`TrackingCode`, `ConversionGoal`, `RetargetingAudience`, `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep`), which orders the canon's tracking code, conversion goals, retargeting lists and focused campaigns and binds them to one tenant and a named owner; the canon's effective-ads step is covered by the stage 10 `SplitTest` and its metrics step by the `MetricDefinition` registry. Implemented 2026-10-03 (Ralph cycle 122) for the canon's invisible opt-in offer as the Measurement `InvisibleOptInOffer` (`LeadMagnetAsset`, `NonConvertedSegment`), which recovers a non-converted visitor segment (the step and page they stalled on plus the goal they did not achieve) and delivers a contact-free lead magnet on a typed channel while advancing an existing same-tenant retargeting list down the funnel, binds a named owner and refuses a contact-gated delivery, a cross-tenant segment and an audience still on the stalled step. Implemented 2026-10-03 (Ralph cycle 123) for the canon's banner-ad specs and swipe file as the Measurement `BannerAdReferenceLibrary` (`BannerDimension`, `BannerAdReference`, `BannerAdReferencePolicy`), which binds a named owner and tenant to at least one unique-channel reference naming a typed channel, its required `WIDTHxHEIGHT` sizes and a swipe-copy note, enforces the canon's Google Display sizes (300x250, 728x90) and Facebook image (600x315), leaves canon-silent Twitter as a recorded gap, reports the canon channels it does not cover and is never an observation. No candidate remains in this gap. The invisible opt-in, the banner library and the rest of the planning assets still need a named-owner decision on where they belong in a required stage 8/10 gate kind; any send or spend remains a human decision. Hardened 2026-10-03 (Ralph cycle 130): `RetargetingPlan` now requires every declared conversion goal to share the plan's own tracking code, closing the last unbound prerequisite in the roadmap's tracking-code order.
+- Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 110) as the Measurement `RetargetingPlan` (`TrackingCode`, `ConversionGoal`, `RetargetingAudience`, `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep`), which orders the canon's tracking code, conversion goals, retargeting lists and focused campaigns and binds them to one tenant and a named owner; the canon's effective-ads step is covered by the stage 10 `SplitTest` and its metrics step by the `MetricDefinition` registry. Implemented 2026-10-03 (Ralph cycle 122) for the canon's invisible opt-in offer as the Measurement `InvisibleOptInOffer` (`LeadMagnetAsset`, `NonConvertedSegment`), which recovers a non-converted visitor segment (the step and page they stalled on plus the goal they did not achieve) and delivers a contact-free lead magnet on a typed channel while advancing an existing same-tenant retargeting list down the funnel, binds a named owner and refuses a contact-gated delivery, a cross-tenant segment and an audience still on the stalled step. Implemented 2026-10-03 (Ralph cycle 123) for the canon's banner-ad specs and swipe file as the Measurement `BannerAdReferenceLibrary` (`BannerDimension`, `BannerAdReference`, `BannerAdReferencePolicy`), which binds a named owner and tenant to at least one unique-channel reference naming a typed channel, its required `WIDTHxHEIGHT` sizes and a swipe-copy note, enforces the canon's Google Display sizes (300x250, 728x90) and Facebook image (600x315), leaves canon-silent Twitter as a recorded gap, reports the canon channels it does not cover and is never an observation. No candidate remains in this gap. The invisible opt-in, the banner library and the rest of the planning assets still need a named-owner decision on where they belong in a required stage 8/10 gate kind; any send or spend remains a human decision. Hardened 2026-10-03 (Ralph cycle 130): `RetargetingPlan` now requires every declared conversion goal to share the plan's own tracking code, closing the last unbound prerequisite in the roadmap's tracking-code order. Hardened 2026-10-03 (Ralph cycle 131): `RetargetingCampaign` now requires its declared `from_step` to equal the `funnel_step` of the `RetargetingAudience` it targets, closing the last unbound edge in the list-to-campaign linkage.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: implemented 2026-10-03 (Ralph cycle 94) as the Execution `CompliancePackage` (`ComplianceAssetKind`, `ComplianceAsset`, `ComplianceWaiver`) with the `ComplianceRequiredPolicy` gating `LaunchQA` traffic authorization, so "Launch Approved" needs every required asset or a live owned waiver; projecting the compliance assets onto their own canonical stage 9 gate kind remains a candidate that needs a named-owner decision.
 - Positioning and decision tools (Target Market Matchmaker, awareness levels, Funnel Finder) — canon 00, 04, 13, 14 — stages 1 and 2 — status: implemented 2026-10-03 (Ralph cycle 112) for the market awareness levels as the Commercial Design `MarketAwarenessMap` (`MarketAwarenessLevel`), which types the stage 1 `awareness-map` kind with the canon's five levels, requires research evidence and message requirements, rejects a retarget level that is not strictly further down the funnel, and projects to exact `StageAssetVersion` evidence; implemented 2026-10-03 (Ralph cycle 113) for the Target Market Matchmaker as the Commercial Design `TargetMarketCandidate` and `TargetMarketMatchmaker`, which narrows at least two canon-judged candidates to the one to serve now, grounds the chosen market on a same-tenant `MarketAwarenessMap`, and has `TargetMarketMatchPolicy.require_servable` refuse a market whose awareness position is not initially targetable; and implemented 2026-10-03 (Ralph cycle 114) for the Funnel Finder as the Commercial Design `FunnelProfile`, `FunnelType`, `OfferPriceBand` and `FunnelFinder`, which chooses one of the canon's funnel types from the four canon factors, narrows at least two considered types to the selected one with a rationale, and has `FunnelSelectionPolicy.require_price_fit` refuse a high-ticket offer with a self-serve funnel and a low-ticket offer with the sales-call CAC funnel (canon 13, 14). No candidate remains in this gap. Wiring the awareness map, the match or the finder into the `AvatarProfile`, the stage 1 `DiagnosisPackage`, the stage 6 `CampaignMessage` or the stage 8 `FunnelIntegration` is a bounded follow-up; none is a required gate kind yet (a methodology-owner decision).
 - Thirteen transformations (the overall shift, three phase shifts and nine step-level from/to pairs, titled from the million dollar message) — canon 09, 10 — stage 4 — status: implemented 2026-10-03 (Ralph cycle 118) as the pure Method `Transformation`, `TransformationScope` and `ThirteenTransformations`, which ground on a same-tenant stage 4 `SignatureSolution`, require exactly one overall shift titled with the Million Dollar Message, three phase shifts and nine step shifts (thirteen total), match each shift's from/to states to the solution's own states, and refuse a missing/extra/duplicate shift, a shift naming a phase or step the solution does not have, a no-op shift and a cross-tenant solution or shift, and never represent the structure as an observation. It is a method structure asset, not a new required stage 4 gate kind; wiring it into the `SignaturePackage` bridge or a required kind remains a bounded follow-up and a methodology-owner decision.
