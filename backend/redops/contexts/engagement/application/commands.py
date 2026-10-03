@@ -15,6 +15,7 @@ from redops.contexts.commercial.domain.value_objects import (
     CurrencyPackage,
     DiagnosisPackage,
     DiagnosticPackage,
+    OfferPackage,
     SignaturePackage,
 )
 from redops.contexts.engagement.domain.entities import ClientWorkspace
@@ -158,6 +159,45 @@ class RecordStageThreeGateCommand:
     template: StageTemplate
     workspace: ClientWorkspace
     package: DiagnosticPackage
+    stage_run: StageRun
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
+@dataclass(frozen=True)
+class RecordStageFiveGateCommand:
+    """Request to assemble and record the stage 5 "Offer Locked" gate.
+
+    The command carries the reviewed ``OfferPackage`` (the bridge that projects
+    the single stage 5 ``DeliverySpecification`` onto the twelve canonical kinds),
+    the workspace authority registry and the exact decision metadata; it
+    deliberately carries no ``StageGate``. The use case builds the canonical gate
+    itself from the package, so a caller cannot substitute a hand-built gate and
+    skip the tenant-boundary, approver-authority and owner-authority checks
+    (SPEC.md sections 3, 4 and 6). Unlike the stage 1 command it carries no
+    claims, because the "Offer Locked" checkpoint turns on every delivered method
+    step carrying an action, actor, deliverable, timing and measure, which
+    ``DeliverySpecification`` already enforces at construction, rather than on
+    external customer evidence.
+
+    It also carries the stage 5 ``StageRun`` to close. Recording a passing gate
+    and completing the stage are one application operation, so the durable
+    ``GateDecision`` and the stage status cannot drift apart. Stage 5 depends on
+    stage 4, so the passing stage 4 decision must already be present in the
+    ``GateLedger`` the use case is given (SPEC.md section 4).
+    """
+
+    template: StageTemplate
+    workspace: ClientWorkspace
+    package: OfferPackage
     stage_run: StageRun
     approver: str
     scope: str
