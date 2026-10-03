@@ -4,50 +4,49 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:40:16Z (Ralph cycle 110).
-- Selected item: build the canon's retargeting roadmap as a pure Measurement
-  plan artifact -- the named `TrackingCode`, `ConversionGoal`, `RetargetingAudience`,
-  `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep` and the
-  `RetargetingPlan` that binds them to a named owner and one tenant, so a stage 8
-  funnel can plan and a stage 10 operator can re-engage prospects at each funnel
-  step (canon files 33 and 34: "Step one Tracking code"; "set up conversion goals";
-  "create retargeting lists... segments for user groups with a defined state within
-  a defined stage of your funnel"; "create super focused campaigns that should
-  accomplish one goal at a time"; SPEC.md section 4 stage 8 "Funnel Complete" and
-  section 12.3 retargeting at stages 8 and 10). It was the named highest priority
-  ready next item after cycle 109 and outranks the Operations delivery adapter
-  (blocked on the storage ADR) and the stage 9 compliance projection (needs a
-  named-owner decision), because it closes the retargeting-system canon gap with a
-  bounded, pure-domain change that continues the stage 10 measurement/optimization
-  substrate and reuses the canon's PAG (pixel/audience/goal) tracking already
-  named at stage 8.
+- Cycle timestamp: 2026-10-03T05:41:39Z (Ralph cycle 111).
+- Selected item: build the canon's follow-up and nurture lifecycle as a pure
+  Commercial Design plan artifact -- the named `NurtureAudienceState`,
+  `NurtureModality`, `NurtureMessage`, `NurtureSequence` and the `NurturePlan` that
+  grounds content on a same-tenant stage 4 `SignatureSolution` and binds it to a
+  named owner, so a post-stage-10 engagement can keep non-converting prospects
+  warm (canon files 15, 24, 33, 34: the Signature Solution Series takes each
+  solution step into follow-up content; the 5P modalities problem, promise, proof,
+  ping, promotion; the one-question survey; re-engaging non-openers with different
+  headlines; sequencing no-shows and post-call non-buyers; SPEC.md section 12.3
+  follow-up lifecycle after stage 10, section 12.5 canon gap register and section 3
+  observation invariant). It was the named highest priority ready next item after
+  cycle 110 and outranks the Operations delivery adapter (blocked on the storage
+  ADR) and the stage 9 compliance projection (needs a named-owner decision),
+  because it closes a canon gap with a bounded, pure-domain change that continues
+  the post-launch lifecycle after the retargeting roadmap.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: the retargeting roadmap now lives in the Measurement domain with the
-  named `InvalidRetargetingError`, `RetargetingDependencyError`,
-  `RetargetingStepError`, `RetargetingTenantBoundaryError` and
-  `RetargetingObservationError`. A tracking code names its provider and installed
-  pages; a conversion goal is grounded on a same-tenant tracking code and carries
-  a placeholder-or-observed value; a retargeting list segments a named funnel step
-  on a same-tenant achieved goal and a positive lookback window; a focused campaign
-  moves a list to a named next funnel step on a named channel, sharing the list's
-  tracking code; and the plan requires a named owner, binds every list and campaign
-  to the plan's own tracking code and declared goals, reports its required sections
-  and refuses to be projected to an observation. New behavioral coverage: 35 tests
-  in `tests/unit/measurement/test_retargeting.py`. Running `PYTHONPATH=backend
-  python3 -m unittest discover -s tests -p 'test_*.py'` reports 1207 passed, up
-  from 1172. `python3 -m pyflakes backend/redops tests` is clean. `ruff` and
+- Evidence: the follow-up and nurture lifecycle now lives in the Commercial Design
+  domain with the named `InvalidNurtureError`, `NurtureDependencyError`,
+  `NurtureSequenceError`, `NurtureTenantBoundaryError` and
+  `NurtureObservationError`. A nurture message names its prospect state, its 5P
+  modality, the Signature Solution step it derives from, a subject and a purpose;
+  the ping modality is the one-question survey and must ask exactly one question
+  while a non-ping may not carry one; a sequence orders one state's messages and
+  re-engages a non-opener with at least two distinct subjects; and the plan
+  requires a named owner, grounds every message on a step of its same-tenant
+  `SignatureSolution`, refuses a cross-tenant method or sequence, and reports the
+  canon prospect states it does not yet cover. New behavioral coverage: 32 tests
+  in `tests/unit/commercial/test_nurture_lifecycle.py`. Running `PYTHONPATH=backend
+  python3 -m unittest discover -s tests -p 'test_*.py'` reports 1239 passed, up
+  from 1207. `python3 -m pyflakes backend/redops tests` is clean. `ruff` and
   `mypy` remain uninstalled.
-- New findings: the canon contradicts itself on PAG ordering -- file 33 says
-  "Pixels Audiences Goals" (pixel, then list, then goal) while file 34's six-step
-  roadmap sets up conversion goals (step 2) before retargeting lists (step 3). This
-  cycle follows the plan's stated order (tracking code and goal exist before a list
-  or campaign) and the six-step roadmap, and records file 33's PAG acronym order as
-  an intentional deviation rather than canon text. The plan models the canon's
-  first four roadmap steps as typed value objects; the fifth step (effective ads)
-  is already covered one-variable-at-a-time by the stage 10 `SplitTest` and the
-  sixth (metrics) by the `MetricDefinition` registry, so the plan does not
-  duplicate them. The retargeting-system canon gap is now implemented for its
-  stages 8 and 10 planning scope.
+- New findings: SPEC.md section 12.6 warns the supplied canon is missing the
+  dedicated email/follow-up module, so this cycle extracts only the structure and
+  intent that the covered files state and records the artifact as a documented gap
+  rather than canon-complete. The 5P ordering is consistent across files 33 and 24
+  (problem, promise, proof, ping, promotion), so no contradiction is carried. The
+  lifecycle is placed in Commercial Design (the customer path and message context)
+  rather than as a new pipeline stage, and it is not wired into a stage 6, 8 or 10
+  required-kind set, because adding a required kind or a stage is a named-owner
+  decision (SPEC.md section 12.5). This is an intentional shaping choice, not a
+  change to the gate contract. The follow-up and nurture canon gap is now
+  implemented for its post-stage-10 planning scope.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -55,25 +54,39 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: build the canon's follow-up and nurture
-  lifecycle (Signature Solution Series, 5P email system, one-question survey,
-  re-engagement) as a pure-domain artifact so a stage 10 engagement can keep
-  non-converting prospects warm after launch (canon files 15, 24, 33 and 34; SPEC.md
-  section 12.3 lists it as a canon gap after stage 10 and section 12.6 records the
-  supplied canon as incomplete here). It outranks the Operations delivery adapter
-  (blocked on the storage ADR) and the stage 9 compliance projection (needs a
-  named-owner decision), and it continues the stage 10 lifecycle after the
-  retargeting plan. Prerequisite: read canon files 15, 24, 33 and 34's follow-up
-  and nurture material before implementing, and record that SPEC.md section 12.6
-  warns the dedicated email/follow-up module is absent from the supplied canon, so
-  the artifact is a documented gap rather than canon-complete. The enrollment and
-  sales call (canon 00, 13, 14, 21, 24) remains a larger named-owner pipeline
-  decision and is not selected.
+- Highest priority ready next item: build the canon's positioning and decision
+  tools (Target Market Matchmaker, market awareness levels, Funnel Finder) as
+  pure-domain Commercial/Method decision assets at stages 1 and 2 (canon files 00,
+  04, 13 and 14; SPEC.md section 12.5 records them as a canon gap and section 12.3
+  maps them to stages 1 and 2 and pre-stage-8 selection). They outrank the
+  audience-building and content flywheel (canon 25-31, stages 6 and 10) and the
+  downstream candidates because they strengthen the earliest pipeline gates:
+  stage 1 "Avatar Locked" needs a defensible awareness position and stage 2
+  "Currency Locked" needs a defensible market and funnel choice, and the canon's
+  awareness levels and matchmaker decisions inform the existing `awareness-map`,
+  `category` and `primary-currency` kinds. Prerequisite: read canon files 00, 04,
+  13 and 14 before shaping, and treat adding a required gate kind (rather than a
+  planning asset) as a methodology-owner decision. The enrollment and sales call
+  (canon 00, 13, 14, 21, 24) remains a larger named-owner pipeline decision and is
+  not selected.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; a stage-parameterized gate recorder/handler refactor;
   projecting the compliance package onto a canonical stage 9 gate kind
   (methodology-owner decision); and all persistence.
+  [DONE 2026-10-03 (Ralph cycle 111): built the canon's follow-up and nurture
+  lifecycle as the pure Commercial Design `NurtureAudienceState`, `NurtureModality`,
+  `NurtureMessage`, `NurtureSequence` and `NurturePlan` -- the plan grounds every
+  message on a named step of a same-tenant stage 4 `SignatureSolution`, names the
+  prospect state it recovers, uses the 5P modality (where ping is the one-question
+  survey), re-engages non-openers with distinct headlines, binds the sequences to a
+  named owner, reports the canon states it does not yet cover and is never an
+  observation -- so the follow-up and nurture canon gap is implemented for its
+  post-stage-10 planning scope (SPEC.md section 12.3 and section 12.5; canon files
+  15, 24, 33, 34); verified by `tests/unit/commercial/test_nurture_lifecycle.py`
+  (32 tests, full suite 1239 passed). The dedicated email/follow-up module is
+  absent from the supplied canon (SPEC.md section 12.6), so this is a documented
+  gap, not canon-complete.]
   [DONE 2026-10-03 (Ralph cycle 110): built the canon's retargeting roadmap as the
   pure Measurement `TrackingCode`, `ConversionGoal`, `RetargetingAudience`,
   `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep` and
@@ -491,7 +504,7 @@ The reference model canon is the licensed source reference for the shape, intent
 This register tracks canon-described assets and steps the stage 0 to 10 template does not yet represent. Each entry: candidate, canon files, target stage, intended use, status, and whether it is a candidate pipeline change that needs a named-owner decision. Seed entries are in SPEC.md section 12.5. Adding or renaming a pipeline stage is a named-owner decision; implementing a candidate as an asset inside an existing stage is not.
 
 - Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 13, 14, 21, 24 — between stages 8 and 10 — status: candidate, needs named-owner decision on a Sell/Enroll stage.
-- Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: candidate.
+- Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: implemented 2026-10-03 (Ralph cycle 111) as the Commercial Design `NurturePlan` (`NurtureAudienceState`, `NurtureModality`, `NurtureMessage`, `NurtureSequence`), which grounds each message on a step of a same-tenant stage 4 `SignatureSolution`, uses the 5P modality (ping is the one-question survey), re-engages non-openers with distinct headlines and binds the sequences to a named owner. SPEC.md section 12.6 warns the dedicated email/follow-up module is absent from the supplied canon, so the shape is extracted from the covered files and recorded as a documented gap; wiring it into a required stage kind remains a named-owner decision.
 - Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93 built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate. Cycle 106 completed that slice: the METRICS dimension now reports each registered metric's newest observed figure and a measured movement via `metric_reporting_views`. Cycle 107 built the canon's forecast equation (`FunnelMetricRole`, `FunnelFigure`, `FunnelEconomics`, `FunnelForecast`, `funnel_figure`) so the metrics matrix unit economics exist before real data and a forecast stays distinct from an observed result.   Cycle 108 built the canon's scaling rule (`LearningPhase`, `ScalingAction`, `ScalingRecommendation`, `AdScalingPolicy`), so the dashboard can now turn an observed cost per lead into an owner-approved scale, hold, bid-up-the-funnel or pause-and-review recommendation. Cycle 109 built the canon's split-test logging (`SplitTestMode`, `SplitTestChange`, `SplitTest`), so a stage 10 optimization logs the one variable it changes (bound to the approved improvement's lever) before reading the result. This candidate is now fully implemented; no remaining scope.
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: candidate.
 - Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 110) as the Measurement `RetargetingPlan` (`TrackingCode`, `ConversionGoal`, `RetargetingAudience`, `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep`), which orders the canon's tracking code, conversion goals, retargeting lists and focused campaigns and binds them to one tenant and a named owner; the canon's effective-ads step is covered by the stage 10 `SplitTest` and its metrics step by the `MetricDefinition` registry. Remaining candidate: the canon's invisible opt-in offer and banner-ad spec/swipe-file assets are delivery assets outside this planning artifact and still need a named-owner decision on where they belong.

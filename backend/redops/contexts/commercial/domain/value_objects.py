@@ -20,11 +20,16 @@ from redops.contexts.commercial.domain.errors import (
     InvalidDiagnosisPackageError,
     InvalidDiagnosticPackageError,
     InvalidMillionDollarMessageError,
+    InvalidNurtureError,
     InvalidOfferError,
     InvalidOfferFunnelAuditError,
     InvalidOfferPackageError,
     InvalidPositioningDecisionError,
     InvalidSignaturePackageError,
+    NurtureDependencyError,
+    NurtureObservationError,
+    NurtureSequenceError,
+    NurtureTenantBoundaryError,
     OfferTenantBoundaryError,
     SignatureTenantBoundaryError,
 )
@@ -1234,4 +1239,282 @@ class CampaignMessagePackage:
                 version=self.message_version,
             )
             for kind in CANONICAL_MESSAGE_KINDS
+        )
+
+
+class NurtureAudienceState(Enum):
+    """The prospect states the canon's follow-up lifecycle re-engages (canon 24).
+
+    The canon follows up with the people who did not convert at each step: leads
+    who opted in but did not book (canon files 15 and 33), people who booked a
+    call but did not show, people who took the call but did not enrol (canon file
+    24: "whether they've showed up or not, if they haven't signed up, then I need
+    to get a sequence going for them after that"), and the people who never
+    opened an email (canon file 24: "there's another 70% of the people that never
+    opened your email"). Naming the state keeps a sequence aimed at one recoverable
+    prospect rather than an untyped mailing list.
+    """
+
+    OPTED_IN_NOT_BOOKED = "opted_in_not_booked"
+    BOOKED_NO_SHOW = "booked_no_show"
+    ATTENDED_NOT_ENROLLED = "attended_not_enrolled"
+    NON_OPENER = "non_opener"
+
+
+REQUIRED_NURTURE_STATES: tuple[NurtureAudienceState, ...] = (
+    NurtureAudienceState.OPTED_IN_NOT_BOOKED,
+    NurtureAudienceState.BOOKED_NO_SHOW,
+    NurtureAudienceState.ATTENDED_NOT_ENROLLED,
+    NurtureAudienceState.NON_OPENER,
+)
+
+
+class NurtureModality(Enum):
+    """The canon's 5P messaging modalities for follow-up (canon file 33).
+
+    The canon's 5P framework selects one copy modality per follow-up message: the
+    problem or pain the prospect has, the promise of the outcome, the proof from
+    other clients, a ping that asks a question, or a direct promotion (canon file
+    33: "a problem people have... the promise of what life or the outcome will
+    be... demonstrate proof... ping them, ask them a question... or a promotion").
+    """
+
+    PROBLEM = "problem"
+    PROMISE = "promise"
+    PROOF = "proof"
+    PING = "ping"
+    PROMOTION = "promotion"
+
+
+@dataclass(frozen=True)
+class NurtureMessage:
+    """One follow-up message in the canon's nurture lifecycle (canon 15, 24, 33).
+
+    A message derives from one named step of the Signature Solution Series (canon
+    file 15: the series takes each Signature Solution step and turns it into
+    follow-up content), carries its prospect state and one of the 5P modalities,
+    and names the subject and the purpose it serves. The canon's one-question
+    survey is the "ping" modality, which asks exactly one question, so a ping
+    without a question and a non-ping that carries one are both refused (canon
+    file 24: "if I send a one question email to your list").
+    """
+
+    message_id: str
+    tenant_id: str
+    name: str
+    audience_state: NurtureAudienceState
+    modality: NurtureModality
+    signature_step: str
+    subject: str
+    purpose: str
+    question: str | None = None
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("nurture message id", self.message_id),
+            ("nurture message tenant id", self.tenant_id),
+            ("nurture message name", self.name),
+            ("nurture message signature step", self.signature_step),
+            ("nurture message subject", self.subject),
+            ("nurture message purpose", self.purpose),
+        ):
+            if not value or not value.strip():
+                raise InvalidNurtureError(f"{label} is required")
+        if not isinstance(self.audience_state, NurtureAudienceState):
+            raise InvalidNurtureError(
+                "a nurture message requires a named prospect state"
+            )
+        if not isinstance(self.modality, NurtureModality):
+            raise InvalidNurtureError(
+                "a nurture message requires one of the 5P messaging modalities"
+            )
+        if self.modality is NurtureModality.PING:
+            if not self.question or not self.question.strip():
+                raise NurtureSequenceError(
+                    f"nurture message {self.message_id!r} uses the ping modality "
+                    "and must ask exactly one question"
+                )
+        elif self.question is not None:
+            raise NurtureSequenceError(
+                f"nurture message {self.message_id!r} carries a question but does "
+                "not use the ping modality; the one-question survey is a ping"
+            )
+
+
+@dataclass(frozen=True)
+class NurtureSequence:
+    """An ordered follow-up sequence for one prospect state (canon 15, 24).
+
+    The canon sends follow-up content over time by prospect state; the one
+    exception is the non-opener, who is re-engaged by resending the message with
+    different headlines rather than one identical copy (canon file 24: "sending
+    that message to them two or three times over the next week... with maybe
+    different headlines"), so a non-opener sequence requires at least two distinct
+    subjects. A sequence is frozen, all its messages belong to one tenant and one
+    state, and message identities are unique.
+    """
+
+    sequence_id: str
+    tenant_id: str
+    audience_state: NurtureAudienceState
+    messages: tuple[NurtureMessage, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("nurture sequence id", self.sequence_id),
+            ("nurture sequence tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidNurtureError(f"{label} is required")
+        if not isinstance(self.audience_state, NurtureAudienceState):
+            raise InvalidNurtureError(
+                "a nurture sequence requires a named prospect state"
+            )
+        if not self.messages:
+            raise NurtureSequenceError(
+                f"nurture sequence {self.sequence_id!r} requires at least one "
+                "message"
+            )
+        seen: set[str] = set()
+        for message in self.messages:
+            if not isinstance(message, NurtureMessage):
+                raise NurtureSequenceError(
+                    "a nurture sequence message must be a typed nurture message"
+                )
+            if message.tenant_id != self.tenant_id:
+                raise NurtureTenantBoundaryError(
+                    f"nurture sequence {self.sequence_id!r} belongs to tenant "
+                    f"{self.tenant_id!r}, but message {message.message_id!r} "
+                    f"belongs to tenant {message.tenant_id!r}"
+                )
+            if message.audience_state is not self.audience_state:
+                raise NurtureSequenceError(
+                    f"nurture sequence {self.sequence_id!r} targets "
+                    f"{self.audience_state.value!r}, but message "
+                    f"{message.message_id!r} targets "
+                    f"{message.audience_state.value!r}"
+                )
+            if message.message_id in seen:
+                raise NurtureSequenceError(
+                    f"nurture sequence {self.sequence_id!r} contains duplicate "
+                    f"message id {message.message_id!r}"
+                )
+            seen.add(message.message_id)
+        if (
+            self.audience_state is NurtureAudienceState.NON_OPENER
+            and len({message.subject for message in self.messages}) < 2
+        ):
+            raise NurtureSequenceError(
+                f"nurture sequence {self.sequence_id!r} re-engages non-openers, "
+                "who are resent the message with different headlines; it needs at "
+                "least two distinct subjects"
+            )
+
+
+@dataclass(frozen=True)
+class NurturePlan:
+    """The canon's follow-up and nurture lifecycle for a client (SPEC.md 12).
+
+    SPEC.md section 12.3 places the follow-up and nurture lifecycle (the
+    Signature Solution Series, the 5P email system, the one-question survey and
+    re-engagement) after stage 10, and section 12.5 records it as a canon gap
+    informed by canon files 15, 24, 33 and 34. The plan grounds its content on a
+    same-tenant stage 4 ``SignatureSolution`` so every message derives from one of
+    the solution's named steps, binds the sequences to a named owner and one
+    tenant, and reports the prospect states it does not yet cover.
+
+    The plan is never an observed result: it is the follow-up content that will
+    run, while any measured movement stays a separate observation (SPEC.md section
+    3, Measurement invariant). It does not authorize sending or publishing; that
+    remains a named human approval (SPEC.md sections 4 and 9).
+    """
+
+    plan_id: str
+    tenant_id: str
+    owner: str
+    method: SignatureSolution
+    sequences: tuple[NurtureSequence, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("nurture plan id", self.plan_id),
+            ("nurture plan tenant id", self.tenant_id),
+            ("nurture plan owner", self.owner),
+        ):
+            if not value or not value.strip():
+                raise InvalidNurtureError(f"{label} is required")
+        if not isinstance(self.method, SignatureSolution):
+            raise NurtureDependencyError(
+                "a nurture plan must derive its content from a typed stage 4 "
+                "Signature Solution"
+            )
+        if self.method.tenant_id != self.tenant_id:
+            raise NurtureTenantBoundaryError(
+                f"nurture plan {self.plan_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Signature Solution "
+                f"{self.method.solution_id!r} belongs to tenant "
+                f"{self.method.tenant_id!r}"
+            )
+        step_names = {step.name for step in self.method.steps}
+        seen: set[str] = set()
+        for sequence in self.sequences:
+            if not isinstance(sequence, NurtureSequence):
+                raise NurtureSequenceError(
+                    "a nurture plan sequence must be a typed nurture sequence"
+                )
+            if sequence.tenant_id != self.tenant_id:
+                raise NurtureTenantBoundaryError(
+                    f"nurture plan {self.plan_id!r} cites sequence "
+                    f"{sequence.sequence_id!r} from another tenant"
+                )
+            if sequence.sequence_id in seen:
+                raise NurtureSequenceError(
+                    f"nurture plan {self.plan_id!r} contains duplicate sequence id "
+                    f"{sequence.sequence_id!r}"
+                )
+            seen.add(sequence.sequence_id)
+            for message in sequence.messages:
+                if message.signature_step not in step_names:
+                    raise NurtureDependencyError(
+                        f"nurture message {message.message_id!r} derives from "
+                        f"Signature Solution step {message.signature_step!r}, "
+                        "which the plan's Signature Solution does not name"
+                    )
+
+    @property
+    def covered_states(self) -> tuple[NurtureAudienceState, ...]:
+        """The prospect states the plan's sequences cover."""
+        return tuple(
+            state
+            for state in REQUIRED_NURTURE_STATES
+            if any(
+                sequence.audience_state is state for sequence in self.sequences
+            )
+        )
+
+    def missing_states(self) -> tuple[NurtureAudienceState, ...]:
+        """Canon prospect states the plan does not yet cover."""
+        covered = set(self.covered_states)
+        return tuple(
+            state for state in REQUIRED_NURTURE_STATES if state not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_states()
+
+    @property
+    def is_plan(self) -> bool:
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a nurture plan as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The plan
+        describes the follow-up content that will run, while any measured movement
+        is a separate observation, so a plan is never an observation.
+        """
+        raise NurtureObservationError(
+            f"nurture plan {claim_id!r} is follow-up content to run, not an "
+            "observed result, and cannot be recorded as an observation"
         )

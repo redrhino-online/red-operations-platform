@@ -286,3 +286,57 @@ class CampaignMessageTenantBoundaryError(CommercialError):
     pinned as this client's gate evidence.
     """
 
+
+class InvalidNurtureError(CommercialError, ValueError):
+    """A follow-up and nurture message was built without its required content.
+
+    SPEC.md section 12.3 places the follow-up and nurture lifecycle after stage 10
+    and section 12.5 records it as a canon gap, shaped by the canon's Signature
+    Solution Series, 5P messaging and re-engagement material (canon files 15, 24,
+    33 and 34). A nurture message names its prospect state, its 5P modality, the
+    Signature Solution step it derives from, a subject and a purpose, so a blank
+    or untyped message cannot be represented as follow-up content.
+    """
+
+
+class NurtureTenantBoundaryError(CommercialError):
+    """A nurture message or plan mixed in an asset from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. A
+    nurture message, its sequence, or the Signature Solution the plan derives
+    content from cannot cross a tenant boundary.
+    """
+
+
+class NurtureDependencyError(CommercialError):
+    """A nurture message was not grounded on the approved Signature Solution.
+
+    The canon's Signature Solution Series takes each step of the Signature
+    Solution and turns it into follow-up content (canon file 15), so a plan must
+    be grounded on a same-tenant Signature Solution and every message must address
+    one of that solution's named steps. A message about a step the method does not
+    have, or a sequence the plan does not declare, cannot be represented as
+    follow-up content.
+    """
+
+
+class NurtureSequenceError(CommercialError):
+    """A nurture sequence was built out of the canon's messaging discipline.
+
+    The canon's 5P framework asks one question with the "ping" modality and asks
+    it one at a time (canon files 24 and 33), and re-engages non-openers by
+    resending with different headlines rather than repeating one identical message
+    (canon file 24). A sequence that mixes prospect states, duplicates a message,
+    asks no question with a ping, or re-engages non-openers with a single or
+    repeated subject violates that discipline.
+    """
+
+
+class NurtureObservationError(CommercialError):
+    """A nurture plan was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. A nurture
+    plan is the follow-up content that will run, while any measured movement stays
+    a separate observation, so a plan is never an observation.
+    """
+
