@@ -82,6 +82,20 @@ class LaunchQARepositoryTests(unittest.TestCase):
 
         self.assertIsNone(self.repository.get("client-other", "qa-3f"))
 
+    def test_list_returns_the_tenants_qas_in_id_order(self):
+        self.repository.save(ready_for_traffic(qa_id="qa-b"))
+        self.repository.save(ready_for_traffic(qa_id="qa-a"))
+
+        listed = self.repository.list(TENANT)
+
+        self.assertEqual(["qa-a", "qa-b"], [qa.qa_id for qa in listed])
+
+    def test_a_blank_tenant_is_refused_on_list(self):
+        for tenant in ("", "   "):
+            with self.subTest(tenant=tenant):
+                with self.assertRaises(LaunchQAVersionTenantBoundaryError):
+                    self.repository.list(tenant)
+
 
 class LaunchQAMapperTests(unittest.TestCase):
     """The durable payload round-trips the full authorized QA aggregate.

@@ -262,6 +262,16 @@ class InMemoryLaunchQARepository(LaunchQARepository):
         _require_launch_qa_tenant(tenant_id, "read")
         return self._qas.get((tenant_id, qa_id))
 
+    def list(self, tenant_id: str) -> tuple[LaunchQA, ...]:
+        _require_launch_qa_tenant(tenant_id, "read")
+        return tuple(
+            qa
+            for (stored_tenant, _qa_id), qa in sorted(
+                self._qas.items(), key=lambda item: item[0][1]
+            )
+            if stored_tenant == tenant_id
+        )
+
     def save(self, qa: LaunchQA) -> None:
         _require_launch_qa_tenant(qa.tenant_id, "write")
         if not qa.is_ready_for_traffic:
@@ -326,6 +336,21 @@ class PostgresLaunchQARepository(LaunchQARepository):
         if row is None:
             return None
         return launch_qa_from_payload(row[0])
+
+    def list(self, tenant_id: str) -> tuple[LaunchQA, ...]:
+        _require_launch_qa_tenant(tenant_id, "read")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT qa
+                FROM launch_qas
+                WHERE tenant_id = %s
+                ORDER BY qa_id
+                """,
+                (tenant_id,),
+            )
+            rows = cursor.fetchall()
+        return tuple(launch_qa_from_payload(row[0]) for row in rows)
 
     def save(self, qa: LaunchQA) -> None:
         _require_launch_qa_tenant(qa.tenant_id, "write")

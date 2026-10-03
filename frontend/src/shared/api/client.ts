@@ -374,6 +374,47 @@ export interface ApprovalList {
   approvals: ApprovalRecord[];
 }
 
+// One authorized stage 9 launch QA and its launch checks (SPEC.md sections 4
+// and 8; Q41). Mirrors `LaunchQAResponse` in `backend/redops/api/schemas.py`. The
+// launch readiness screen reads the QA state, each required check's outcome,
+// evidence and owner, whether the check is on the critical path, and the
+// designated human's pinned traffic authorization. The UI recomputes no gate
+// rule and can authorize no traffic.
+export interface LaunchQACheck {
+  kind: string;
+  outcome: string;
+  evidence: string;
+  owner: string;
+  detail: string;
+  is_critical_path: boolean;
+}
+
+export interface TrafficAuthorization {
+  authorized_by: string;
+  intended_use: string;
+  authorized_on: string;
+}
+
+export interface LaunchQA {
+  qa_id: string;
+  tenant_id: string;
+  owner: string;
+  designated_authority: string;
+  state: string;
+  checks: LaunchQACheck[];
+  authorization: TrafficAuthorization | null;
+  review_reason: string | null;
+  is_ready_for_traffic: boolean;
+}
+
+export interface LaunchQAList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  launch_qas: LaunchQA[];
+}
+
 // The production-manager view one client engagement (SPEC.md sections 4 and 8;
 // Q34). Mirrors `EngagementProductionViewResponse` in `backend/redops/api/
 // schemas.py`. State, provenance (exact pinned asset versions), dependencies,
@@ -573,6 +614,19 @@ export class RedOperationsApi extends RedApiClient {
     params: ListParams = {},
   ): Promise<ApprovalList> {
     return this.get<ApprovalList>("/red/approvals", {
+      tenant_id: tenantId,
+      ...params,
+    });
+  }
+
+  // The launch readiness read (SPEC.md sections 4, 7 and 8; Q41). The tenant is
+  // a required query scope and the route is read-only; a QA is authorized
+  // through its stage 9 gate, so listing one never authorizes traffic.
+  listLaunchQAs(
+    tenantId: string,
+    params: ListParams = {},
+  ): Promise<LaunchQAList> {
+    return this.get<LaunchQAList>("/red/launch-qas", {
       tenant_id: tenantId,
       ...params,
     });

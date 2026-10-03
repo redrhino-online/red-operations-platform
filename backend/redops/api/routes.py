@@ -45,7 +45,10 @@ from redops.api.schemas import (
     InterventionDismissalResponse,
     InterventionListResponse,
     InterventionResponse,
+    LaunchQACheckResponse,
     LaunchQAInput,
+    LaunchQAListResponse,
+    LaunchQAResponse,
     MethodReferenceResponse,
     MethodVersionInput,
     MethodVersionListResponse,
@@ -73,6 +76,7 @@ from redops.api.schemas import (
     RecordStageZeroGateRequest,
     SourceRecordListResponse,
     SourceRecordResponse,
+    TrafficAuthorizationResponse,
 )
 from redops.contexts.commercial.application.ports import (
     CampaignMessageRepository,
@@ -211,6 +215,7 @@ from redops.contexts.execution.domain.value_objects import (
     QACheck,
     QACheckKind,
     QACheckOutcome,
+    QA_CHECK_ORDER,
     TrafficAuthorization,
 )
 from redops.contexts.execution.infrastructure.repositories import (
@@ -4316,6 +4321,86 @@ def list_journeys(
         limit=limit,
         offset=offset,
         releases=[_journey_release_payload(release) for release in page],
+    )
+
+
+@router.get("/launch-qas", response_model=LaunchQAListResponse)
+def list_launch_qas(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose launch QAs are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repository: LaunchQARepository = Depends(get_launch_qa_repository),
+) -> LaunchQAListResponse:
+    """List one client tenant's authorized stage 9 launch QAs (SPEC 4, 7, 8, 9).
+
+    The launch readiness screen needs the stage 9 QA state, its required checks
+    and exceptions, and the pinned traffic authorization (SPEC.md sections 4 and
+    8). SPEC.md section 9 requires every tenant resource query to carry
+    ``tenant_id`` and section 7 requires list endpoints to enforce client access
+    and pagination, so the tenant is a required query parameter and the
+    repository read is tenant scoped; another client's QAs are unreadable here.
+    Pagination is applied after the tenant-scoped read so a page is stable. The
+    route is read-only: a QA is authorized through its stage 9 gate and listing
+    one never authorizes traffic.
+    """
+
+    qas = repository.list(tenant_id)
+    page = qas[offset : offset + limit]
+    return LaunchQAListResponse(
+        tenant_id=tenant_id,
+        total=len(qas),
+        limit=limit,
+        offset=offset,
+        launch_qas=[_launch_qa_payload(qa) for qa in page],
+    )
+
+
+def _launch_qa_payload(qa: LaunchQA) -> LaunchQAResponse:
+    """Project one authorized stage 9 launch QA onto the launch readiness read.
+
+    SPEC.md sections 4 and 8: the launch readiness view shows the stage 9 QA
+    state, its required checks with each outcome and owner, and the designated
+    human's traffic authorization. Checks are returned in the canonical stage 9
+    order so the view is stable, and a check that may be excepted off the
+    critical path is marked with ``is_critical_path`` so the view shows what
+    blocks "Launch Approved" without recomputing the rule. The route computes no
+    gate rule; the aggregate already re-validated on load.
+    """
+
+    order = {kind: index for index, kind in enumerate(QA_CHECK_ORDER)}
+    checks = sorted(
+        qa.checks, key=lambda check: order.get(check.kind, len(order))
+    )
+    return LaunchQAResponse(
+        qa_id=qa.qa_id,
+        tenant_id=qa.tenant_id,
+        owner=qa.owner,
+        designated_authority=qa.designated_authority,
+        state=qa.state.value,
+        checks=[
+            LaunchQACheckResponse(
+                kind=check.kind.value,
+                outcome=check.outcome.value,
+                evidence=check.evidence,
+                owner=check.owner,
+                detail=check.detail,
+                is_critical_path=check.kind.is_critical_path,
+            )
+            for check in checks
+        ],
+        authorization=(
+            None
+            if qa.authorization is None
+            else TrafficAuthorizationResponse(
+                authorized_by=qa.authorization.authorized_by,
+                intended_use=qa.authorization.intended_use,
+                authorized_on=qa.authorization.authorized_on,
+            )
+        ),
+        review_reason=qa.review_reason,
+        is_ready_for_traffic=qa.is_ready_for_traffic,
     )
 
 

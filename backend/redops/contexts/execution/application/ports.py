@@ -57,6 +57,10 @@ class LaunchQARepository(abc.ABC):
         """Return the exact authorized launch QA, or ``None`` if unknown."""
 
     @abc.abstractmethod
+    def list(self, tenant_id: str) -> tuple[LaunchQA, ...]:
+        """Return every stored authorized launch QA for one client tenant."""
+
+    @abc.abstractmethod
     def save(self, qa: LaunchQA) -> None:
         """Store an authorized launch QA, refusing a different same-id body."""
 

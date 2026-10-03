@@ -1860,6 +1860,54 @@ class JourneyReleaseListResponse(BaseModel):
     releases: list[JourneyReleaseResponse]
 
 
+class LaunchQACheckResponse(BaseModel):
+    """One recorded stage 9 launch QA check (SPEC.md section 4, stage 9).
+
+    Every check carries the evidence for its outcome and its named owner, and
+    ``is_critical_path`` tells the readiness view which failures or exceptions
+    block the "Launch Approved" checkpoint.
+    """
+
+    kind: str
+    outcome: str
+    evidence: str
+    owner: str
+    detail: str
+    is_critical_path: bool
+
+
+class TrafficAuthorizationResponse(BaseModel):
+    """The designated human's pinned authorization to begin stage 9 traffic."""
+
+    authorized_by: str
+    intended_use: str
+    authorized_on: date
+
+
+class LaunchQAResponse(BaseModel):
+    """One authorized stage 9 launch QA, re-validated through the domain aggregate."""
+
+    qa_id: str
+    tenant_id: str
+    owner: str
+    designated_authority: str
+    state: str
+    checks: list[LaunchQACheckResponse]
+    authorization: TrafficAuthorizationResponse | None = None
+    review_reason: str | None = None
+    is_ready_for_traffic: bool
+
+
+class LaunchQAListResponse(BaseModel):
+    """A paginated page of one client tenant's authorized launch QAs."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    launch_qas: list[LaunchQAResponse]
+
+
 class InterventionResponse(BaseModel):
     """One command center intervention card (SPEC.md section 7).
 

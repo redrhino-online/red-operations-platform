@@ -4,6 +4,76 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T202836Z (Ralph cycle, this run): selected item was Q41, the
+  launch readiness screen (SPEC.md sections 4, 7, 8 and 13 condition 6; queue
+  item Q41). It is the highest priority ready item: its only dependency Q40 is
+  done, and it is now the head of the Q41-Q45 chain for condition 6, the largest
+  unstarted DoD condition. It outranks alternatives: Q42-Q45 each depend on Q41;
+  Q28 stage 8-10 required kinds are still blocked on the named methodology-owner
+  placement decision; Q16 needs a workflow write route and a connector seam;
+  Q3/Q4 need the ADR 0006 resolution and a live key; Q8 layer coverage and the
+  condition 2 cross-client-retrieval scenario have no retrieval/worker/artifact
+  seam yet; Q47-Q50 need the Atlas cluster. Q31 also blocks condition 2 on a
+  connector idempotency seam and the deploy-only scenarios. The canon gap
+  register has no ready pipeline item: its remaining entries are implemented or
+  are candidate pipeline additions awaiting a named-owner decision, so no
+  canon-covered method artifact outranks this gate work.
+- Outcome: the launch readiness screen required a read the platform did not
+  have. Stage 9 launch QAs are durable and tenant-scoped, but the read seam only
+  exposed `get`, so no route could list a client's authorized QAs. This cycle
+  added the narrow `LaunchQARepository.list` port method with in-memory and
+  PostgreSQL implementations, a read-only paginated `GET /red/launch-qas` route
+  projecting each QA's state, its checks (kind, outcome, evidence, owner and
+  `is_critical_path`) and the designated human's pinned traffic authorization,
+  and a new `frontend/src/features/launch-readiness/` feature.
+  `LaunchReadiness.tsx` is a presentational view with the `checksWithOutcome`,
+  `criticalFailures`, `exceptions` and `isAuthorized` helpers: it surfaces the
+  stage 9 QA state, the critical-path failures and excepted checks that block or
+  qualify "Launch Approved", and the exact `authorized_by`, `intended_use` and
+  `authorized_on` (SPEC.md section 4, stage 9). `LaunchReadinessScreen.tsx` owns
+  the tenant-scoped read; route `/launch-readiness`
+  (`src/app/launch-readiness/page.tsx`) binds the `launch-readiness` screen id
+  now declared in `frontend/dod-screens.txt`. No product authority, gate
+  decision or pipeline stage changed; a read authorizes no traffic.
+- Evidence: `tests/unit/execution/test_launch_qas_route.py` (5 tests) drives the
+  real app against an in-memory QA store: it pins the tenant-scoped listing, the
+  exact check projection (18 checks in canonical order with outcomes and
+  `is_critical_path`), the off-critical exception with its named owner, the
+  other-tenant empty read, the required tenant parameter and pagination.
+  `tests/unit/execution/test_launch_qa_repository.py` gained 2 tests for `list`
+  ordering and the blank-tenant refusal (19 total). `npm test` -> 9 files, 74
+  passed (9 new). `npm run build` -> compiled, `/launch-readiness` route
+  emitted. `make check` -> 2272 passed, 2 skipped, 706 subtests passed.
+  `bash scripts/check_frontend_build.sh frontend` -> exit 0.
+  `bash scripts/check_frontend_screens.sh frontend` -> still exit 1, now 3
+  remaining section 8 ids (performance-review, portfolio-opportunities,
+  authority-settings; condition 6 needs Q42-Q44). `make done` still fails first
+  at `[2/6]` condition 2.
+- New findings: the `LaunchQA` aggregate and its durable store already existed
+  (migration `0008_launch_qas`) and already carried the complete stage 9
+  evidence, but the read seam exposed only `get`, so the launch readiness screen
+  was the first UI item that needed a new backend route. The store only holds
+  QAs that passed "Launch Approved" (a non-ready QA is refused on save), so
+  every listed QA is ready-for-traffic and pins an authorization;
+  `is_critical_path` is derived from the check kind, not stored, so the route
+  projects it from the domain enum.
+- Blockers (unchanged): `frontend/` Q42-Q44 are the path to DoD condition 6;
+  Q8's retrieval, worker and artifact-URL isolation coverage and the condition 2
+  cross-client-retrieval scenario are blocked until those seams exist; Q28 stage
+  8-10 required kinds blocked on the named methodology-owner placement decision;
+  Q16 idempotency keys blocked on a workflow write route and a connector seam;
+  Q3 agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
+  deploy-only scenarios need the Atlas cluster and a chosen backup target.
+- Highest priority ready next item: Q42, the performance review screen.
+  Required asset: a performance review at a declared route showing the
+  tenant-scoped stage 10 baseline state and its post-launch milestones over the
+  tenant-scoped stage 10 / production-view reads (SPEC.md sections 4 and 8),
+  plus its browser test; checkpoint: none (UI, not a gate); approver: none.
+  Blocked downstream dependency: Q43-Q45. Prerequisite: Q41 (done this cycle).
+
+### Prior cycle (2026-10-03T202643Z)
+
 - Cycle 2026-10-03T202643Z (Ralph cycle, this run): selected item was Q40, the
   workflow run detail (SPEC.md sections 4, 7, 8 and 13 condition 6; queue item
   Q40). It is the highest priority ready item: its only dependency Q39 is done,
@@ -4316,7 +4386,7 @@ stalls:
 | Q38 | Build board with dependency view | ui | Q37 | Done 2026-10-03T202254Z: `frontend/src/features/build-board/` (`BuildBoard.tsx` presentational with the `boardStates` lifecycle-order, `buildsInState`, `dependencyRefs` and `blockedBuilds` helpers, `BuildBoardScreen.tsx` tenant-scoped read, route `/build-board`, `frontend/dod-screens.txt` declares the screen id) over `listBuilds` (`GET /red/builds?tenant_id=`). `npm run build` clean (`/build-board` emitted), `npm test` 11 new passed (43 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 6 remaining screens |
 | Q39 | Approval inbox with exact version diff | ui | Q38 | Done 2026-10-03T202445Z: `frontend/src/features/approval-inbox/` (`ApprovalInbox.tsx` presentational with the `approvalHistories`/`priorApproval`/`approvalDiff`/`exactVersion` helpers, `ApprovalInboxScreen.tsx` tenant-scoped read, route `/approval-inbox`, `frontend/dod-screens.txt` declares the screen id) over `listApprovals` (`GET /red/approvals?tenant_id=`). The diff groups the append-only approvals by pinned asset kind and reports each changed field's exact prior and current value against the previous version, with a baseline notice when none exists. `npm run build` clean (`/approval-inbox` emitted), `npm test` 12 new passed (55 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 5 remaining screens |
 | Q40 | Workflow run detail | ui | Q39 | Done 2026-10-03T202643Z: `frontend/src/features/workflow-run/` (`WorkflowRunDetail.tsx` presentational with the `eventOrdinal`/`orderedTransitions` event-log helpers, `WorkflowRunDetailScreen.tsx` tenant-plus-run read, route `/workflow-run-detail`, `frontend/dod-screens.txt` declares the screen id) over `getWorkflowRun` (`GET /red/clients/{tenant_id}/workflows/{run_id}`). The client `WorkflowRunView` was corrected to the real route projection and gained `WorkflowRunTransition`. `npm run build` clean (`/workflow-run-detail` emitted), `npm test` 10 new passed (65 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 4 remaining screens |
-| Q41 | Launch readiness | ui | Q40 | browser test |
+| Q41 | Launch readiness | ui | Q40 | Done 2026-10-03T202836Z: `frontend/src/features/launch-readiness/` (`LaunchReadiness.tsx` presentational with the `checksWithOutcome`/`criticalFailures`/`exceptions`/`isAuthorized` helpers, `LaunchReadinessScreen.tsx` tenant-scoped read, route `/launch-readiness`, `frontend/dod-screens.txt` declares the screen id) over `listLaunchQAs` (`GET /red/launch-qas`). That read is new: `LaunchQARepository` gained `list` (in-memory + PostgreSQL) and the route projects each QA's state, its checks (kind, outcome, evidence, owner, `is_critical_path`) and the pinned traffic authorization. The view surfaces the stage 9 state, critical-path failures, exceptions and the exact authorization; it authorizes no traffic. `npm run build` clean (`/launch-readiness` emitted), `npm test` 9 new passed (74 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 3 remaining screens |
 | Q42 | Performance review | ui | Q41 | browser test |
 | Q43 | Portfolio opportunities | ui | Q42 | browser test |
 | Q44 | Authority settings | ui | Q43 | browser test |
