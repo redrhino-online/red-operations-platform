@@ -106,13 +106,15 @@ done. This complements the "Initial backlog by vertical slice" at the end of
 this plan. Dependencies are the minimum, not a strict order: independent items
 in different areas may be done in any order.
 
-Owner decisions to pre-make before launch, so the queue never stalls:
+Owner decisions (confirmed 2026-10-03, owner RED principal), so the queue never
+stalls:
 
 - Required-kind policy: every canon-informed asset already implemented in a
-  bounded context becomes a required asset kind of its target stage gate, wired
-  through the existing `StageTemplate`/`StageGate` factory, in stage order.
-  Adding or renaming a pipeline stage stays out of scope. This turns the
-  per-asset "required kind?" decisions into one owner decision.
+  bounded context becomes a required asset kind of its target stage gate in the
+  running platform, wired through the existing `StageTemplate`/`StageGate`
+  factory, in stage order. It is an asset inside an existing stage, never a new
+  stage, and it is reversible. This turns the per-asset "required kind?"
+  decisions into one owner decision.
 - 3F pilot: the engagement is 3F, a men's discipline, integrity and agency
   coaching brand, under workspace `3fmindset`. The prototype runs the happy path:
   every stage is treated as client approved by a named role placeholder (an

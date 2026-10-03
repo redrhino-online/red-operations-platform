@@ -222,7 +222,7 @@ The artifact's required shape should be enforced in the domain as value objects,
 
 ### 12.5 Canon gap register
 
-The canon describes assets and steps important to the method that the current stage 0 to 10 template does not represent. These are candidates; adding a stage or renaming one is a named-owner decision (section 11). The implementation plan maintains a working Canon gap register seeded from the entries below, each with its canon files, target stage, intended use, and status.
+The canon describes assets and steps important to the method that the current stage 0 to 10 template does not represent. These are candidates; adding a stage or renaming one is a named-owner decision (section 11). The implementation plan maintains a working Canon gap register seeded from the entries below, each with its canon files, target stage, intended use, and status. Owner decision 2026-10-03: a canon-informed asset already implemented in a bounded context becomes a required asset kind of its target stage gate in the running platform, wired through the `StageTemplate` and `StageGate` factory in stage order. It is an asset inside an existing stage, never a new stage, and the choice is reversible.
 
 | Candidate asset or step | Canon files | Intended use | Fits where |
 | --- | --- | --- | --- |
