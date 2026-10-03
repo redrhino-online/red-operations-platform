@@ -30,11 +30,13 @@ from redops.contexts.commercial.domain.value_objects import (
     CurrencyPackage,
     DiagnosisPackage,
     DiagnosticPackage,
+    SignaturePackage,
 )
 from redops.contexts.engagement.domain.entities import ClientWorkspace
 from redops.contexts.engagement.domain.errors import (
     GateApproverNotAuthorizedError,
     GateAuthorRequiredError,
+    NotStageFourGateError,
     NotStageOneGateError,
     NotStageThreeGateError,
     NotStageTwoGateError,
@@ -64,6 +66,7 @@ STAGE_ZERO = 0
 STAGE_ONE = 1
 STAGE_TWO = 2
 STAGE_THREE = 3
+STAGE_FOUR = 4
 
 
 class StageZeroGateAssembler:
@@ -582,6 +585,143 @@ class StageThreeGateRecorder:
                 actor=approver,
                 on=on,
                 rationale=f"stage 3 asset {asset} approved for {scope}",
+            )
+            gate.record_asset_approval(request)
+        gate.state = GateState.APPROVED
+        decision = GateDecision.from_gate(
+            gate,
+            ledger=ledger,
+            reviewer=approver,
+            scope=scope,
+            checkpoint_evidence=checkpoint_evidence,
+            disposition=GateDisposition.APPROVED,
+            rationale=rationale,
+            on=on,
+            assigned_owner=assigned_owner,
+            due_on=due_on,
+            next_action=next_action,
+        )
+        ledger.record(decision)
+        return decision
+
+
+class StageFourGateAssembler:
+    """Builds and validates the canonical stage 4 "IP Architecture Locked" gate.
+
+    SPEC.md section 4, stage 4 "Package IP" and its "IP Architecture Locked"
+    checkpoint: "the transformation is coherent and explainable without listing
+    every tactic", and the stage is complete only when its required assets exist,
+    pass the checkpoint, and receive approval for downstream use. The Commercial
+    ``SignaturePackage`` (cycle 75) projects the single reviewed
+    ``SignatureSolution`` -- the transformation map, process inventory, three
+    phases, nine steps, named stages, starting and final states, stage
+    inputs/actions/outputs, narrative and visual -- onto the twelve canonical
+    stage 4 asset kinds as exact ``StageAssetVersion`` evidence, and the canon maps
+    stage 4 to files 09 and 10 (SPEC.md section 12.3).
+
+    Unlike stage 1, the "IP Architecture Locked" checkpoint turns on the coherence
+    and continuity of the reviewed transformation, which ``SignatureSolution``
+    already enforces at construction, so this assembler adds no separate source
+    policy. It composes the pieces so a caller cannot hand an unvalidated stage 4
+    gate to ``GateDecision.from_gate``: the reviewed package is checked against
+    the workspace tenant, the gate is pinned from the template's exact stage 4
+    asset package, and the designated approver is bound to the workspace authority
+    registry (``GateApproverAuthorityPolicy``). It is a pure domain service: it
+    returns a gate and mutates nothing, invokes no persistence, and never invents
+    a concrete approver identity or authority role (SPEC.md section 11).
+    """
+
+    def assemble(
+        self,
+        *,
+        template: StageTemplate,
+        workspace: ClientWorkspace,
+        package: SignaturePackage,
+        approver: str,
+        proposed_by: str | None = None,
+    ) -> StageGate:
+        if package.tenant_id != workspace.tenant_id:
+            raise TenantBoundaryError(
+                f"signature package {package.package_id!r} belongs to tenant "
+                f"{package.tenant_id!r}, not workspace tenant "
+                f"{workspace.tenant_id!r}"
+            )
+        gate = StageGate.from_assets(
+            template,
+            STAGE_FOUR,
+            tenant_id=workspace.tenant_id,
+            assets=package.stage_asset_versions(),
+        )
+        gate.approver = approver
+        gate.proposed_by = proposed_by
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        return gate
+
+
+class StageFourGateRecorder:
+    """Records the passing stage 4 "IP Architecture Locked" gate decision.
+
+    SPEC.md section 4: a passing gate pins "the exact evidence and intended
+    downstream use", approval is version specific, and the author cannot
+    impersonate the approver. Given the gate ``StageFourGateAssembler`` already
+    validated, this pure-domain path issues one version-specific
+    ``ApprovalRequest`` per required asset on behalf of the gate's author, has the
+    workspace's designated approver approve each one, records them on the gate,
+    and stores the immutable ``GateDecision`` in the durable ``GateLedger``. It
+    refuses a gate for another stage, an absent author or approver, an approver
+    who holds no authority on the workspace, and an assigned work owner who holds
+    no authority on the workspace, so the stage 4 rubric can never approve an
+    unrelated asset package, a self-issued approval or an unaccountable owner
+    (SPEC.md sections 3, 4, 5 and 11). Because stage 4 depends on stage 3,
+    ``GateDecision.from_gate`` and ``GateLedger.record`` refuse a passing decision
+    until the ledger holds a passing stage 3 decision, so a failed prerequisite
+    blocks dependent authorization (SPEC.md section 4). It mutates only the gate
+    it is given and the ledger; it never invents a concrete human identity.
+    """
+
+    def record(
+        self,
+        *,
+        gate: StageGate,
+        workspace: ClientWorkspace,
+        ledger: GateLedger,
+        scope: str,
+        checkpoint_evidence: str,
+        rationale: str,
+        assigned_owner: str,
+        due_on: date,
+        on: date,
+        next_action: str = "",
+    ) -> GateDecision:
+        if gate.stage_number != STAGE_FOUR:
+            raise NotStageFourGateError(
+                f"stage 4 recording path cannot record a decision for stage "
+                f"{gate.stage_number}"
+            )
+        author = gate.proposed_by
+        if not author or not author.strip():
+            raise GateAuthorRequiredError(
+                "stage 4 recording requires the gate's author so an approval "
+                "request has a requester distinct from the designated approver"
+            )
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        GateOwnerAuthorityPolicy().require(assigned_owner, workspace)
+        approver = gate.approver
+        if not approver or not approver.strip():
+            raise GateApproverNotAuthorizedError(
+                "stage 4 recording requires the gate's designated approver"
+            )
+        for asset in sorted(gate.required_assets, key=str):
+            request = ApprovalRequest(
+                asset=asset,
+                scope=scope,
+                requested_by=author,
+                approver=approver,
+            )
+            request.approve(
+                actor=approver,
+                on=on,
+                rationale=f"stage 4 asset {asset} approved for {scope}",
             )
             gate.record_asset_approval(request)
         gate.state = GateState.APPROVED
