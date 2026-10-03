@@ -18,6 +18,10 @@ a time so the movement can be attributed (canon files 23 and 24):
   recorded movement is temporally sound and an after-state is never read from
   before or during its own before-state (canon file 24: wait before reading how
   the change did).
+- The before observation window must close on or before the owner approval date,
+  so the pre-change measurement is a genuinely pre-change baseline rather than a
+  period observed after the material change was authorized (canon files 23 and
+  24).
 - The after observation window must have closed by the outcome's ``measured_on``
   date, so a result is not read before the window it is measured over has
   elapsed (canon file 24: "I wait 10 days to see how it does"; "don't touch
@@ -32,6 +36,7 @@ from redops.contexts.measurement.domain.entities import ImprovementProposal
 from redops.contexts.measurement.domain.errors import (
     ImprovementApprovalPrecedenceError,
     ImprovementAuthorityError,
+    ImprovementBeforeWindowError,
     ImprovementDependencyError,
     ImprovementNotApprovedError,
     ImprovementObservationError,
@@ -497,6 +502,88 @@ class ImprovementBaselineApprovalPrecedenceTests(unittest.TestCase):
         self.assertGreaterEqual(
             approved.approval.approved_on,
             approved.baseline.established_on,
+        )
+
+
+class ImprovementBeforeWindowPrecedenceTests(unittest.TestCase):
+    """The before state must be observed before the change was authorized.
+
+    SPEC.md section 4: "performance recommendations require evidence and owner
+    approval before material changes", so the ``before`` measurement is a
+    pre-change state and cannot be read from a period that extends past the
+    authorization of the change. The canon's optimization discipline (canon files
+    23 and 24: "you need a baseline of metrics" before optimizing; "I wait 10 days
+    to see how it does" after authorizing a change) treats the before window as
+    the established baseline period, so it must close on or before the named
+    owner's approval date. The policy otherwise only compares the before window
+    with the after window, which leaves this approval-versus-before edge open: a
+    period observed after the change was authorized could still be recorded as the
+    pre-change measurement.
+    """
+
+    def test_a_before_window_closing_after_owner_approval_is_refused(self):
+        approved = improvement_proposal().approve(
+            approval=improvement_approval(approved_on=date(2026, 10, 2))
+        )
+
+        with self.assertRaises(ImprovementBeforeWindowError):
+            approved.record_outcome(
+                outcome=improvement_outcome(
+                    before=measurement_record(
+                        record_id="measure-before-3f",
+                        value=12.0,
+                        window=MeasurementWindow(
+                            start=date(2026, 10, 3), end=date(2026, 10, 5)
+                        ),
+                        recorded_on=date(2026, 10, 5),
+                    ),
+                    after=measurement_record(
+                        record_id="measure-after-3f",
+                        value=8.0,
+                        window=MeasurementWindow(
+                            start=date(2026, 10, 6), end=date(2026, 10, 6)
+                        ),
+                        recorded_on=date(2026, 10, 6),
+                    ),
+                    measured_on=date(2026, 10, 6),
+                )
+            )
+
+    def test_the_before_window_may_close_on_the_approval_date(self):
+        approved = improvement_proposal().approve(
+            approval=improvement_approval(approved_on=date(2026, 10, 5))
+        )
+
+        measured = approved.record_outcome(
+            outcome=improvement_outcome(
+                before=measurement_record(
+                    record_id="measure-before-3f",
+                    value=12.0,
+                    window=MeasurementWindow(
+                        start=date(2026, 10, 3), end=date(2026, 10, 5)
+                    ),
+                    recorded_on=date(2026, 10, 5),
+                ),
+                after=measurement_record(
+                    record_id="measure-after-3f",
+                    value=8.0,
+                    window=MeasurementWindow(
+                        start=date(2026, 10, 6), end=date(2026, 10, 6)
+                    ),
+                    recorded_on=date(2026, 10, 6),
+                ),
+                measured_on=date(2026, 10, 6),
+            )
+        )
+
+        self.assertTrue(measured.is_measured)
+
+    def test_a_grounded_outcome_observes_before_on_or_before_approval(self):
+        measured = measured_improvement()
+
+        self.assertLessEqual(
+            measured.outcome.before.window.end,
+            measured.approval.approved_on,
         )
 
 

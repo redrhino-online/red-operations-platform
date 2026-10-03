@@ -13,6 +13,7 @@ from redops.contexts.measurement.domain.entities import ImprovementProposal
 from redops.contexts.measurement.domain.errors import (
     ImprovementApprovalPrecedenceError,
     ImprovementAuthorityError,
+    ImprovementBeforeWindowError,
     ImprovementDependencyError,
     ImprovementMetricMismatchError,
     ImprovementNotApprovedError,
@@ -96,7 +97,9 @@ class ImprovementMeasurementPolicy:
     traceable and distinct from a causal conclusion. The canon also reads the
     result only after the change was authorized ("I wait 10 days to see how it
     does"; "don't touch anything for 10 days"), so the after observation window
-    cannot begin before the owner's approval date.
+    cannot begin before the owner's approval date, and the before window -- the
+    established baseline period -- cannot close after that approval date, so the
+    pre-change state is genuinely observed before the material change.
     """
 
     def require(
@@ -127,6 +130,16 @@ class ImprovementMeasurementPolicy:
                 "performance baseline is no longer established"
             )
         approval = proposal.approval
+        if (
+            approval is not None
+            and outcome.before.window.end > approval.approved_on
+        ):
+            raise ImprovementBeforeWindowError(
+                f"improvement {proposal.proposal_id!r} was approved on "
+                f"{approval.approved_on}, but its before observation window ends "
+                f"{outcome.before.window.end}; the pre-change measurement cannot "
+                "extend past the owner's authorization of the change"
+            )
         if approval is not None and outcome.after.window.start < approval.approved_on:
             raise ImprovementObservationWindowError(
                 f"improvement {proposal.proposal_id!r} was approved on "

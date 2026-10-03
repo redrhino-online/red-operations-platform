@@ -4,45 +4,44 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:27:56Z (Ralph cycle 104).
-- Selected item: floor the stage 10 improvement approval date at the
-  establishment date of the baseline it optimizes -- a named owner cannot approve
-  an improvement before `baseline.established_on` (`approval.approved_on >=
-  baseline.established_on`) -- via `ImprovementApprovalPolicy` and the named
-  `ImprovementApprovalPrecedenceError`. It was this plan's named highest priority
-  ready next item after cycle 103: the same-chain temporal edge one hop
-  downstream, so an optimization cannot be authorized before the baseline of
-  metrics it changes existed (SPEC.md section 4 stage 10 "Performance Baseline
+- Cycle timestamp: 2026-10-03T05:29:34Z (Ralph cycle 105).
+- Selected item: floor the stage 10 improvement's "before" observation window at
+  the owner approval date -- the pre-change measurement cannot close after the
+  authorization of the change (`outcome.before.window.end <=
+  approval.approved_on`) -- via `ImprovementMeasurementPolicy` and the named
+  `ImprovementBeforeWindowError`. It was this plan's named highest priority ready
+  next item after cycle 104: the last temporal edge in the stage 10 improvement
+  chain, so a period already affected by the authorized change cannot be recorded
+  as the pre-change baseline (SPEC.md section 4 stage 10 "Performance Baseline
   Established" and "performance recommendations require evidence and owner
   approval before material changes"; Phase 5 "one improvement is approved and
   measured"; canon files 23 and 24: "you need a baseline of metrics" before
-  optimizing, and wait after authorizing a change). It outranks the advertising
-  and forecast dashboard (a downstream feature), the Operations delivery adapter
-  (blocked on the storage ADR), the stage 9 compliance projection (needs a
-  named-owner decision) and the stage-parameterized gate refactor (quality only),
-  because gate integrity outranks dashboards and downstream features.
+  optimizing). It outranks the advertising and forecast dashboard (a downstream
+  feature), the Operations delivery adapter (blocked on the storage ADR), the
+  stage 9 compliance projection (needs a named-owner decision) and the
+  stage-parameterized gate refactor (quality only), because gate integrity
+  outranks dashboards.
 - Outcome: completed and verified (single item; no second item started).
 - Evidence: new behavioral coverage in
   `tests/unit/measurement/test_improvement_loop.py`
-  (`ImprovementBaselineApprovalPrecedenceTests`): an improvement approved
-  2026-10-01 against a baseline established 2026-10-02 is refused with the named
-  `ImprovementApprovalPrecedenceError`, and an improvement approved on the
-  establishment date itself is still accepted. The previously dated case in
-  `test_the_after_window_may_begin_on_the_approval_date` was re-based on the
-  establishment date (2026-10-02) because cycles 101 to 103 forbid establishing a
-  baseline before its authorized and observed traffic. Running
-  `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1097 passed, up from 1094. `python3 -m pyflakes backend/redops tests`
-  is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: after cycle 104 the improvement approval is grounded no earlier
-  than the baseline it optimizes, and by transitivity the after window and the
-  outcome read follow. The remaining same-chain temporal edge is the *before*
-  observation: `ImprovementMeasurementPolicy` enforces `after.window.start >=
-  approval.approved_on` and (through `ImprovementOutcome`) `before.window.end <
-  after.window.start`, but it never compares `before.window.end` with
-  `approval.approved_on`, so a "before" state observed after the change was
-  already authorized can still be recorded as the pre-change measurement. That
-  approval-versus-before-window edge is the next gate-integrity analogue.
+  (`ImprovementBeforeWindowPrecedenceTests`): an outcome whose before window
+  closes 2026-10-05 after an approval on 2026-10-02 is refused with the named
+  `ImprovementBeforeWindowError`, a before window closing on the approval date is
+  still accepted, and the grounded fixture observes before no later than its
+  approval. Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
+  'test_*.py'` reports 1100 passed, up from 1097. `python3 -m pyflakes
+  backend/redops tests` is clean. `ruff` and `mypy` remain uninstalled.
+- New findings: with the before window now floored at the owner approval, the
+  stage 10 improvement movement is temporally closed on both sides:
+  `before.window.end <= approval.approved_on <= after.window.start`,
+  `before.window.end < after.window.start`, `after.window.end <= measured_on`, and
+  `recorded_on >= window.end`. No further same-chain temporal edge remains in the
+  improvement loop. The next gap the spec names is the production-manager view's
+  `METRICS` reporting dimension, which is deliberately empty because nothing
+  sources metrics yet; that is the named home of the advertising and forecast
+  dashboard canon gap (canon files 22, 23 and 24) and advances verified progress
+  (SPEC.md section 4, eight reporting dimensions) rather than a consumer
+  dashboard.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -50,27 +49,41 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: require the stage 10 improvement's "before"
-  observation window to close no later than the owner approval date -- the
-  pre-change measurement must end on or before the authorization of the change
-  (`outcome.before.window.end <= approval.approved_on`) -- via
-  `ImprovementMeasurementPolicy` and a named error, so the "before" state is
-  genuinely observed before the material change rather than merely before the
-  after window. It outranks the advertising and forecast dashboard (a downstream
-  feature), the Operations delivery adapter (blocked on the storage ADR), the
-  stage 9 compliance projection (needs a named-owner decision) and the
-  stage-parameterized gate refactor (quality only), because it closes the last
-  temporal edge in the stage 10 improvement chain and gate integrity outranks
-  dashboards. Prerequisite: satisfied (the existing `ImprovementMeasurementPolicy`,
-  `ImprovementApproval.approved_on` and `ImprovementOutcome.before.window`); it
-  needs a fixture audit for any before window ending after its approval, and it
-  must preserve the legitimate case where the baseline period precedes approval.
+- Highest priority ready next item: populate the Governance production-manager
+  view's `METRICS` reporting dimension from the Measurement metric registry and
+  the improvement loop (canon files 22, 23 and 24), so each client's verified
+  progress shows the typed stage 10 metrics and their observed movement alongside
+  the seven other dimensions the view already separates (SPEC.md section 4). It
+  outranks the advertising and forecast dashboard proper (the forecast equation,
+  metrics matrix, bid-up/bid-down rule and split-test logging are a larger
+  downstream feature), the Operations delivery adapter (blocked on the storage
+  ADR), the stage 9 compliance projection (needs a named-owner decision) and the
+  stage-parameterized gate refactor (quality only), because it closes a spec-named
+  verified-progress gap with a bounded, pure-domain change. Prerequisite:
+  satisfied (the cycle 89 `StageProductionView` / `EngagementProductionView` and
+  the cycle 93 `MetricDefinition` / `MeasurementRecord` registry); it must not
+  duplicate activity counts and must keep the METRICS dimension sourced only from
+  typed observed measurements.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; the advertising and forecast dashboard; a
   stage-parameterized gate recorder/handler refactor; projecting the compliance
   package onto a canonical stage 9 gate kind (methodology-owner decision); and
   all persistence.
+  [DONE 2026-10-03 (Ralph cycle 105): floored the stage 10 improvement's "before"
+  observation window at the owner approval date --
+  `ImprovementMeasurementPolicy.require` now refuses an outcome whose before
+  window ends after `ImprovementApproval.approved_on` with the named
+  `ImprovementBeforeWindowError`, so the pre-change measurement is genuinely
+  observed before the material change rather than merely before the after window,
+  closing the last temporal edge in the stage 10 improvement chain (SPEC.md
+  section 4 stage 10 and "performance recommendations require evidence and owner
+  approval before material changes"; canon files 23 and 24: "you need a baseline
+  of metrics" before optimizing); verified by the new
+  `ImprovementBeforeWindowPrecedenceTests` in
+  `tests/unit/measurement/test_improvement_loop.py` (full suite 1100 passed), so
+  the improvement movement is now before-then-approved-then-after in time on
+  both sides.]
   [DONE 2026-10-03 (Ralph cycle 104): floored the stage 10 improvement approval
   date at the establishment date of the baseline it optimizes --
   `ImprovementApprovalPolicy.require` now refuses an `ImprovementApproval` dated
@@ -413,7 +426,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 
 - Enrollment and sales call (10x Enrollment Call, pre-call homework, acceptance criteria, live checkout) — canon 00, 13, 14, 21, 24 — between stages 8 and 10 — status: candidate, needs named-owner decision on a Sell/Enroll stage.
 - Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: candidate.
-- Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93 built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from, but the forecast equation, the metrics matrix, the bid-up/bid-down rule and split-test logging remain candidates.
+- Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93   built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from, but the forecast equation, the metrics matrix, the bid-up/bid-down rule and split-test logging remain candidates. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate.
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: candidate.
 - Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: candidate.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: implemented 2026-10-03 (Ralph cycle 94) as the Execution `CompliancePackage` (`ComplianceAssetKind`, `ComplianceAsset`, `ComplianceWaiver`) with the `ComplianceRequiredPolicy` gating `LaunchQA` traffic authorization, so "Launch Approved" needs every required asset or a live owned waiver; projecting the compliance assets onto their own canonical stage 9 gate kind remains a candidate that needs a named-owner decision.

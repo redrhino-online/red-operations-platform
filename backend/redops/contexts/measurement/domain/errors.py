@@ -70,6 +70,21 @@ class ImprovementObservationWindowError(MeasurementError):
     """
 
 
+class ImprovementBeforeWindowError(MeasurementError):
+    """An outcome reads its before window past the owner's approval of the change.
+
+    SPEC.md section 4: "performance recommendations require evidence and owner
+    approval before material changes", so the before measurement is a pre-change
+    state and must not be observed over a period that extends beyond the
+    authorization of the change. The canon's optimization discipline (canon files
+    23 and 24: "you need a baseline of metrics" before optimizing; "I wait 10 days
+    to see how it does" after authorizing a change) treats the before window as
+    the established baseline period, so it must close on or before the improvement
+    approval date. A before window that closes after the approval would record a
+    period already affected by the authorized change as the pre-change measurement.
+    """
+
+
 class ImprovementResultWindowOpenError(MeasurementError):
     """An outcome is measured before its own result window has closed.
 
