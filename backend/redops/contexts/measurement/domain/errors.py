@@ -70,3 +70,61 @@ class ImprovementOutcomeSupportError(MeasurementError):
     intended use, so the before-and-after outcome must belong to the same tenant
     and cite the same performance baseline the improvement was approved against.
     """
+
+
+class InvalidMetricDefinitionError(MeasurementError, ValueError):
+    """A MetricDefinition violates an invariant.
+
+    SPEC.md section 3: a MeasurementRecord is keyed by a "metric definition,
+    window, baseline, observation, source". A registry metric that leaves its
+    identity, tenant or name unspecified, or carries no unit, direction or
+    positive version, cannot be the typed reference an observation attaches to.
+    """
+
+
+class InvalidMetricWindowError(MeasurementError, ValueError):
+    """A MeasurementWindow violates an invariant.
+
+    SPEC.md section 3: every observation is scoped to a window. A window whose
+    end precedes its start, or that is not a pair of dates, cannot bound a
+    measurement.
+    """
+
+
+class InvalidMeasurementRecordError(MeasurementError, ValueError):
+    """A MeasurementRecord violates an invariant.
+
+    SPEC.md section 3, Measurement invariant: observations are distinct from
+    causal conclusions. A record names the metric, the value, the window, the
+    basis and the source, so a record missing any of these, or attaching a value
+    or sample that is not a real number, cannot be a grounded observation.
+    """
+
+
+class MeasurementTenantBoundaryError(MeasurementError):
+    """A measurement record cites another tenant's metric definition.
+
+    SPEC.md section 3: every tenant resource carries a tenant id and a query is
+    tenant scoped. An observation cannot attach to a metric owned by a different
+    client.
+    """
+
+
+class MetricBaselineNotObservedError(MeasurementError):
+    """A metric has no observed measurement to serve as a baseline.
+
+    SPEC.md section 4, stage 10 and the canon's optimization discipline (canon
+    files 23 and 24): optimization starts only once a baseline of metrics exists,
+    and placeholder figures are not real metrics until measured over enough
+    instances. A placeholder-only series cannot establish a baseline.
+    """
+
+
+class MetricSampleTooSmallError(MeasurementError):
+    """An observed metric has too small a sample to serve as a baseline.
+
+    The canon (canon files 23 and 24) warns that a percentage from too few leads
+    is irrelevant and that placeholder inputs should not change until real
+    metrics accumulate over many instances, so a baseline requires an observed
+    sample at or above the caller-supplied minimum.
+    """

@@ -13,6 +13,13 @@ from redops.contexts.measurement.domain.entities import ImprovementProposal
 from redops.contexts.measurement.domain.value_objects import (
     ImprovementApproval,
     ImprovementOutcome,
+    MeasurementBasis,
+    MeasurementRecord,
+    MeasurementWindow,
+    MetricDefinition,
+    MetricDirection,
+    MetricFunnelStep,
+    MetricUnit,
 )
 from redops.contexts.execution.domain.value_objects import ClaimKind
 
@@ -84,3 +91,45 @@ def measured_improvement(**overrides) -> ImprovementProposal:
     return approved_improvement(**overrides).record_outcome(
         outcome=improvement_outcome()
     )
+
+
+def metric_definition(**overrides) -> MetricDefinition:
+    values = {
+        "metric_id": "metric-cost-per-lead",
+        "tenant_id": TENANT,
+        "name": "cost per lead",
+        "funnel_step": MetricFunnelStep.LEAD,
+        "unit": MetricUnit.CURRENCY,
+        "direction": MetricDirection.LOWER_IS_BETTER,
+        "version": 1,
+    }
+    values.update(overrides)
+    return MetricDefinition(**values)
+
+
+def measurement_window(**overrides) -> MeasurementWindow:
+    values = {"start": TODAY, "end": TODAY}
+    values.update(overrides)
+    return MeasurementWindow(**values)
+
+
+def measurement_record(metric=None, **overrides) -> MeasurementRecord:
+    values = {
+        "record_id": "measure-3f",
+        "tenant_id": TENANT,
+        "metric": metric_definition() if metric is None else metric,
+        "value": 12.0,
+        "window": measurement_window(),
+        "basis": MeasurementBasis.OBSERVED,
+        "source": "analytics://campaign-report",
+        "sample_size": 250,
+        "recorded_on": TODAY,
+    }
+    values.update(overrides)
+    return MeasurementRecord(**values)
+
+
+def placeholder_record(**overrides) -> MeasurementRecord:
+    values = {"basis": MeasurementBasis.PLACEHOLDER, "sample_size": 0}
+    values.update(overrides)
+    return measurement_record(**values)

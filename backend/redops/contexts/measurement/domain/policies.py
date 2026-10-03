@@ -16,11 +16,16 @@ from redops.contexts.measurement.domain.errors import (
     ImprovementNotApprovedError,
     ImprovementOutcomeSupportError,
     ImprovementStateError,
+    MetricBaselineNotObservedError,
+    MetricSampleTooSmallError,
 )
 from redops.contexts.measurement.domain.value_objects import (
     ImprovementApproval,
     ImprovementOutcome,
     ImprovementState,
+    MeasurementBasis,
+    MeasurementRecord,
+    MetricDefinition,
 )
 
 
@@ -99,3 +104,50 @@ class ImprovementMeasurementPolicy:
                     f"the improvement outcome {label} observation must cite the "
                     f"approved baseline {baseline_id!r}"
                 )
+
+
+class MetricBaselinePolicy:
+    """Requires a real observed measurement before a metric can be optimized.
+
+    SPEC.md section 4, stage 10 and the canon's optimization discipline (canon
+    files 23 and 24): optimization starts only after a baseline of metrics
+    exists, placeholder figures are not real metrics until measured over enough
+    instances, and a rate read from too few leads is irrelevant. The policy
+    selects the newest observed, same-tenant record for a metric at or above the
+    caller-supplied minimum sample; a placeholder-only series or an undersized
+    sample is refused with a named error rather than accepted as a baseline.
+    """
+
+    def require(
+        self,
+        metric: MetricDefinition,
+        records: "tuple[MeasurementRecord, ...] | list[MeasurementRecord]",
+        *,
+        minimum_sample: int = 0,
+    ) -> MeasurementRecord:
+        observed = [
+            record
+            for record in records
+            if record.metric.metric_id == metric.metric_id
+            and record.metric.tenant_id == metric.tenant_id
+            and record.tenant_id == metric.tenant_id
+            and record.basis is MeasurementBasis.OBSERVED
+        ]
+        if not observed:
+            raise MetricBaselineNotObservedError(
+                f"metric {metric.metric_id!r} has no observed measurement for "
+                f"tenant {metric.tenant_id!r}; placeholder figures cannot serve "
+                "as a baseline"
+            )
+        adequate = [
+            record
+            for record in observed
+            if record.sample_size >= minimum_sample
+        ]
+        if not adequate:
+            raise MetricSampleTooSmallError(
+                f"metric {metric.metric_id!r} has no observed sample of at least "
+                f"{minimum_sample}; the largest observed sample is "
+                f"{max(record.sample_size for record in observed)}"
+            )
+        return max(adequate, key=lambda record: record.recorded_on)
