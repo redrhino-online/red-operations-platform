@@ -182,6 +182,56 @@ class BaselinePrecedenceTests(unittest.TestCase):
 
         self.assertEqual(TODAY, established.established_on)
 
+    def _traffic_and_lead_observed_on(self, *, traffic_on, lead_on):
+        observed = (MilestoneKind.FIRST_QUALIFIED_TRAFFIC, MilestoneKind.LEAD)
+        return tuple(
+            milestone(
+                kind,
+                status=(
+                    ObservationStatus.OBSERVED
+                    if kind in observed
+                    else ObservationStatus.PENDING
+                ),
+                observed_on=(
+                    traffic_on
+                    if kind is MilestoneKind.FIRST_QUALIFIED_TRAFFIC
+                    else lead_on
+                ),
+            )
+            for kind in MILESTONE_ORDER
+        )
+
+    def test_a_baseline_cannot_establish_before_a_later_observed_milestone(self):
+        authorized_on = date(2026, 10, 1)
+        lead_on = date(2026, 10, 5)
+        qa = launch_qa().authorize_traffic(
+            authorization=authorization(authorized_on=authorized_on)
+        )
+
+        with self.assertRaises(PerformanceBaselinePrecedenceError):
+            performance_baseline(
+                launch_qa=qa,
+                milestones=self._traffic_and_lead_observed_on(
+                    traffic_on=authorized_on, lead_on=lead_on
+                ),
+            ).establish(on=date(2026, 10, 3))
+
+    def test_a_baseline_can_establish_on_a_later_observed_milestone_date(self):
+        authorized_on = date(2026, 10, 1)
+        lead_on = date(2026, 10, 5)
+        qa = launch_qa().authorize_traffic(
+            authorization=authorization(authorized_on=authorized_on)
+        )
+
+        established = performance_baseline(
+            launch_qa=qa,
+            milestones=self._traffic_and_lead_observed_on(
+                traffic_on=authorized_on, lead_on=lead_on
+            ),
+        ).establish(on=lead_on)
+
+        self.assertTrue(established.is_established)
+
 
 class MilestoneAuthorizationPrecedenceTests(unittest.TestCase):
     """No observed milestone may predate the authority that permitted traffic.

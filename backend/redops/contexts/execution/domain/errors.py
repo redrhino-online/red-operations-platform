@@ -152,9 +152,10 @@ class PerformanceBaselinePrecedenceError(PerformanceBaselineError):
     after the stage 9 authority authorized traffic. A baseline of metrics
     accumulates only after the campaign has run (canon files 23 and 24: "you need
     a baseline of metrics", "don't touch anything for 10 days"), so the
-    establishment date must not precede the stage 9 traffic authorization date or
-    the observed first-qualified-traffic date. Otherwise a baseline could claim
-    establishment before the traffic it reports was authorized and observed.
+    establishment date must not precede the stage 9 traffic authorization date
+    or any milestone the baseline records as observed. Otherwise a baseline could
+    claim establishment before the traffic it reports was authorized and
+    observed.
     """
 
 

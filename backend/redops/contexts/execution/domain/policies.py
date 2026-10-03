@@ -265,13 +265,14 @@ class PerformanceBaselinePolicy:
                 f"before the stage 9 traffic authorization on "
                 f"{authorized_on.isoformat()}"
             )
-        traffic = next(
-            observation
+        observed_dates = [
+            observation.observed_on
             for observation in baseline.milestones
-            if observation.kind is MilestoneKind.FIRST_QUALIFIED_TRAFFIC
-        )
+            if observation.is_observed
+        ]
+        latest_observed = max(observed_dates)
         evidence_on = max(
-            qa.authorization.authorized_on, traffic.observed_on
+            qa.authorization.authorized_on, latest_observed
         )
         if on < evidence_on:
             raise PerformanceBaselinePrecedenceError(

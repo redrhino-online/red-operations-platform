@@ -4,44 +4,41 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:24:54Z (Ralph cycle 102).
-- Selected item: enforce that a stage 10 observed milestone cannot be observed
-  before the stage 9 traffic authorization date -- an observed
-  `MilestoneObservation.observed_on` must not precede
-  `qa.authorization.authorized_on` -- via `PerformanceBaselinePolicy` and the new
-  named `MilestoneObservationPrecedenceError`. It was this plan's named highest
-  priority ready next item after cycle 101: the milestone-level counterpart of
-  cycle 101's establishment-date precedence rule, applying the canon's "you need
-  a baseline of metrics" and "don't touch anything for 10 days" discipline (canon
-  files 23 and 24) to every observed stage 10 milestone (SPEC.md section 4 stage
-  10 "Performance Baseline Established"; Phase 5 "stage 10 live traffic
-  milestones and baseline"). It outranks the establishment-vs-observed-milestone
-  edge (the next gate-integrity analogue, named below), the advertising and
-  forecast dashboard (a downstream feature), the Operations delivery adapter
-  (blocked on the storage ADR), the stage 9 compliance projection (needs a
-  named-owner decision) and the stage-parameterized gate refactor (quality only),
-  because it closes the last milestone-level edge that let a baseline report
-  traffic observed before the authority that permitted it existed.
+- Cycle timestamp: 2026-10-03T05:26:43Z (Ralph cycle 103).
+- Selected item: floor the stage 10 baseline establishment date at the latest
+  observed milestone, not only the first-qualified-traffic one -- a
+  `PerformanceBaseline` cannot be established on a date before any milestone it
+  records as observed (`on >= max observed_on`) -- via `PerformanceBaselinePolicy`.
+  It was this plan's named highest priority ready next item after cycle 102: the
+  same-gate temporal counterpart of cycles 101 and 102, applying the canon's "you
+  need a baseline of metrics" and "don't touch anything for 10 days" discipline
+  (canon files 23 and 24) to the establishment date itself (SPEC.md section 4
+  stage 10 "Performance Baseline Established"; Phase 5 "stage 10 live traffic
+  milestones and baseline"). It outranks the advertising and forecast dashboard
+  (a downstream feature), the Operations delivery adapter (blocked on the storage
+  ADR), the stage 9 compliance projection (needs a named-owner decision) and the
+  stage-parameterized gate refactor (quality only), because it closes the last
+  same-gate temporal edge that let a baseline report an observation postdating its
+  own establishment.
 - Outcome: completed and verified (single item; no second item started).
 - Evidence: behavioral coverage in
   `tests/unit/execution/test_performance_baseline.py`
-  (`MilestoneAuthorizationPrecedenceTests`): an observed later milestone (lead)
-  dated before the stage 9 authorization is refused with the named
-  `MilestoneObservationPrecedenceError`, first qualified traffic dated before the
-  authorization is refused, and an observed milestone dated exactly on the
-  authorization date is still accepted. One older `BaselinePrecedenceTests`
-  fixture was tightened to observe traffic on the authorization date so it still
-  isolates the establishment-date rule. Running
+  (`BaselinePrecedenceTests`): a baseline established after traffic but before a
+  later observed milestone (lead observed 2026-10-05) is refused with the named
+  `PerformanceBaselinePrecedenceError`, and a baseline established exactly on that
+  later milestone date is still accepted. Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1092 passed, up from 1089. `python3 -m pyflakes backend/redops tests`
+  reports 1094 passed, up from 1092. `python3 -m pyflakes backend/redops tests`
   is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: after this rule and cycle 101, every observed stage 10 milestone
-  is at or after the stage 9 authorization, but the establishment date is still
-  floored only at the authorization and the first-qualified-traffic date. A
-  baseline may therefore be established on a date before a later observed
-  milestone (for example a sale observed after the establishment date), so the
-  `PerformanceBaseline` can report an observation that postdates its own
-  establishment. That establishment-versus-observed-milestones edge is the next
+- New findings: after cycles 101 to 103, every observed stage 10 milestone is
+  authorized-then-observed and the baseline is established no earlier than any
+  observation it records. The remaining temporal edge is one hop downstream, in
+  the linked optimization chain: `ImprovementProposal` is grounded on an
+  established `PerformanceBaseline` and `ImprovementApprovalPolicy` requires that
+  baseline to be established, but it never compares
+  `ImprovementApproval.approved_on` with `PerformanceBaseline.established_on`, so
+  an improvement can be approved on a date before the baseline it optimizes was
+  established. That approval-versus-baseline-establishment edge is the next
   gate-integrity analogue.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
@@ -50,26 +47,38 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: floor the stage 10 baseline establishment date
-  at the latest observed milestone, not only the first-qualified-traffic one -- a
-  `PerformanceBaseline` cannot be established on a date before any milestone it
-  records as observed (`on >= max observed_on`) -- via `PerformanceBaselinePolicy`
-  and a named error, so the baseline cannot report an observation that postdates
-  its own establishment (SPEC.md section 4 stage 10 "Performance Baseline
-  Established"; canon files 23 and 24: the baseline accumulates only after the
-  campaign runs). It outranks the advertising and forecast dashboard (a
-  downstream feature), the Operations delivery adapter (blocked on the storage
-  ADR), the stage 9 compliance projection (needs a named-owner decision) and the
-  stage-parameterized gate refactor (quality only), because it is the remaining
-  same-gate temporal edge at stage 10. Prerequisite: satisfied (the existing
-  `PerformanceBaselinePolicy` and `MilestoneObservation.observed_on`); it needs a
-  fixture audit for any observed milestone dated after its establishment date.
+- Highest priority ready next item: floor the stage 10 improvement approval date
+  at the establishment date of the baseline it optimizes -- an improvement cannot
+  be approved on a date before `proposal.baseline.established_on`
+  (`approval.approved_on >= baseline.established_on`) -- via
+  `ImprovementApprovalPolicy` and a named error, so a stage 10 optimization cannot
+  be authorized before the baseline it changes was established (SPEC.md section 4
+  stage 10 and Phase 5 "one improvement is approved and measured"; canon files 23
+  and 24: you need a baseline of metrics before optimizing). It outranks the
+  advertising and forecast dashboard (a downstream feature), the Operations
+  delivery adapter (blocked on the storage ADR), the stage 9 compliance projection
+  (needs a named-owner decision) and the stage-parameterized gate refactor
+  (quality only), because it is the remaining same-chain temporal edge at stage
+  10. Prerequisite: satisfied (the existing `ImprovementApprovalPolicy`,
+  `ImprovementApproval.approved_on` and `PerformanceBaseline.established_on`); it
+  needs a fixture audit for any approval dated before its baseline establishment.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; the advertising and forecast dashboard; a
   stage-parameterized gate recorder/handler refactor; projecting the compliance
   package onto a canonical stage 9 gate kind (methodology-owner decision); and
   all persistence.
+  [DONE 2026-10-03 (Ralph cycle 103): floored the stage 10 baseline establishment
+  date at the latest observed milestone -- `PerformanceBaselinePolicy.require` now
+  refuses a `PerformanceBaseline` established before any milestone it records as
+  observed with the named `PerformanceBaselinePrecedenceError`, so a baseline
+  cannot report a lead, appointment or sale observed after its own establishment
+  date, closing the last same-gate temporal edge at stage 10 (SPEC.md section 4
+  stage 10 "Performance Baseline Established"; canon files 23 and 24: a baseline
+  of metrics accumulates only after the campaign runs); verified by the new
+  `BaselinePrecedenceTests` later-milestone cases in
+  `tests/unit/execution/test_performance_baseline.py`, so every observed stage 10
+  milestone is now both authorized-then-observed and establishment-ordered.]
   [DONE 2026-10-03 (Ralph cycle 102): required every observed stage 10 milestone
   to be observed no earlier than the stage 9 traffic authorization --
   `PerformanceBaselinePolicy.require` now refuses a `PerformanceBaseline` whose
