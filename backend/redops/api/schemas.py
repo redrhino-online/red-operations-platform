@@ -885,6 +885,102 @@ class RecordStageNineGateRequest(BaseModel):
     next_action: str = ""
 
 
+class MilestoneObservationInput(BaseModel):
+    """One recorded or pending stage 10 post-launch milestone (SPEC.md 4).
+
+    First qualified traffic and the later lead, appointment and sale are distinct
+    milestones; a pending milestone carries no observation. The domain refuses an
+    observed milestone without a date and source, and a pending milestone that
+    carries an observation.
+    """
+
+    kind: str
+    status: str
+    observed_on: date | None = None
+    source: str = ""
+    detail: str = ""
+
+
+class LaunchAssetPackageInput(BaseModel):
+    """The stage 10 required asset package (SPEC.md section 4, stage 10).
+
+    Twelve non-blank artifact references: the live campaign, spend and lead
+    records, conversion and engagement measures, applications, bookings, shows,
+    closes, acquisition cost, attribution and issue log. The domain refuses a
+    missing one rather than letting an incomplete launch look complete.
+    """
+
+    live_campaign: str
+    spend_records: str
+    lead_records: str
+    conversion_measures: str
+    engagement_measures: str
+    applications: str
+    bookings: str
+    shows: str
+    closes: str
+    acquisition_cost: str
+    attribution: str
+    issue_log: str
+
+
+class PerformanceBaselineInput(BaseModel):
+    """The reviewed stage 10 baseline before its checkpoint (SPEC.md section 4).
+
+    Carries the baseline identity, owner, the twelve-asset package and the
+    observed-or-pending milestone set. The route grounds the baseline on the
+    rebuilt ready-for-traffic stage 9 launch QA and drives ``establish``, so the
+    ``PerformanceBaselinePolicy`` decides whether the first qualified traffic was
+    observed and the milestones are ordered.
+    """
+
+    baseline_id: str
+    owner: str
+    assets: LaunchAssetPackageInput
+    milestones: list[MilestoneObservationInput]
+
+
+class RecordStageTenGateRequest(BaseModel):
+    """The stage 10 "Performance Baseline Established" gate request.
+
+    SPEC.md section 4, stage 10. The caller supplies the reviewed baseline and its
+    milestone observations, the stage 9 launch QA the baseline grounds on (rebuilt
+    from the approved stage 8 funnel and the traffic authorization), the approved
+    stages 6-8 assets that the funnel re-grounds on, the known claims that support
+    the amplifier proof, the workspace authority registry and the decision
+    metadata. The route builds the canonical gate from these through the use case;
+    it deliberately accepts no pre-built gate, so the tenant boundary, approver
+    authority, owner authority and exact-version evidence cannot be bypassed.
+    Stage 10 depends on a passing stage 9 decision already in the ledger. The
+    checkpoint requires the stage 9 traffic authorization and first qualified
+    traffic observed, with later milestones shown as pending.
+    """
+
+    workspace_id: str
+    authorities: list[ClientAuthorityInput]
+    baseline_package_id: str
+    baseline_version: int
+    message: CampaignMessageInput
+    offer: OfferVersionInput
+    method: MethodVersionInput
+    amplifier: AuthorityAmplifierInput
+    claims: list[ClaimInput] = Field(default_factory=list)
+    funnel: FunnelIntegrationInput
+    qa: LaunchQAInput
+    baseline: PerformanceBaselineInput
+    stage_owner: str
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
 class AssetVersionResponse(BaseModel):
     """One exact asset version pinned or approved for a stage."""
 

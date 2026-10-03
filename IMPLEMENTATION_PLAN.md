@@ -4,7 +4,72 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T173026Z (Ralph cycle, this run): selected item was the HTTP
+- Cycle 2026-10-03T173254Z (Ralph cycle, this run): selected item was the HTTP
+  route that exposes the stage 10 "Performance Baseline Established" gate. The
+  prior cycle named it the highest priority ready next item: the
+  `StageTenGateAssembler` / `StageTenGateRecorder`, the
+  `RecordStageTenGateCommand` / `RecordStageTenGateHandler` and the Execution
+  `PerformanceBaselinePackage` all exist, but only stages 0 through 9 had write
+  routes, so the canonical 0-10 API surface stopped at stage 9 and DoD condition 1
+  stayed unreachable. It outranked the `ClientProcess` canon gap (a
+  methodology-owner decision) and the durable `MethodVersion`/offer store (a
+  larger integrity item), because completing the canonical gate surface through
+  the real use cases is the pipeline backbone.
+- Outcome: new `POST /red/clients/{tenant_id}/stages/10/gate` in
+  `backend/redops/api/routes.py`, mapping the typed request to the Execution
+  `PerformanceBaselinePackage` and running `RecordStageTenGateHandler` through
+  `get_gate_ledger_repository` and `get_stage_run_repository`, mirroring the stage
+  9 route. The stage 9 compliance/QA construction was extracted into a shared
+  module-level `_authorize_launch_qa`, now used by the stage 9 and stage 10 routes
+  (the stage 10 baseline grounds on the ready-for-traffic stage 9 launch QA), so
+  the two cannot drift. New request schemas in `backend/redops/api/schemas.py`:
+  `MilestoneObservationInput`, `LaunchAssetPackageInput`,
+  `PerformanceBaselineInput`, `RecordStageTenGateRequest`. The route rebuilds the
+  reviewed baseline on the rebuilt authorized stage 9 QA and drives `establish`,
+  so the domain's `PerformanceBaselinePolicy` -- not the transport layer -- decides
+  whether the twelve canonical kinds may be pinned as passing evidence. The route
+  computes no rule: the grounded stage 9 dependency, the distinct
+  observed-or-pending milestones, the observed-first-qualified-traffic rule, the
+  milestone ordering, the canonical kinds, exact versions, owner/approver
+  authority, the stage 9 prerequisite and the tenant boundary stay enforced by the
+  domain, and errors map to a named 422 (SPEC.md section 4, stage 10; canon files
+  22, 23, 29-31, 33 and 34 per section 12.3).
+- Evidence: `tests/unit/test_stage_ten_gate_route.py` (7) pass: stages 0 through 9
+  are seeded through their own routes (reusing the stage 9 test's payload builders
+  so the suites cannot drift), then a passing stage 10 decision pins the twelve
+  canonical baseline kinds at version 1, the stage 10 run persists COMPLETE with
+  its owner, a stage 10 gate with no passing stage 9 is refused, a pending first
+  qualified traffic milestone prevents establishment with
+  `PerformanceBaselineIncompleteError` and no write, an omitted milestone is
+  refused the same way, an unauthorized approver is refused with no write, and the
+  decision is invisible to another tenant. The reworked stage 9 route still passes
+  its own 7 tests. `uv run pytest -q` green via `make check`/`make done`: 1723
+  passed, 1 skipped, 632 subtests; `python3 -m pyflakes backend tests` clean. The
+  canonical 0-10 gate write surface is now complete.
+- New findings: extracting `_authorize_launch_qa` proved the stage 9 QA
+  construction is reusable without behaviour change. The API-boundary integrity
+  limitation is unchanged: the caller supplies the approved
+  method/offer/message/amplifier/funnel/QA and their approval metadata because no
+  read model or store is exposed, so the "approved dependency" is data, not a
+  durable governance record. `make done` still fails at step 2 (`tests/e2e`
+  absent), so DoD 1 is not met.
+- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate routes
+  and a repeated gate POST after COMPLETE returns 422; RLS remains WHERE-clause
+  only (ADR 0004); no `MethodVersion`/offer/funnel/QA store behind the API; the
+  stage 0-10 e2e suite (DoD 1, Q30) and the migration deployment step (separate
+  GitOps chart) are absent from this repo.
+- Highest priority ready next item: the `tests/e2e` stage 0-10 suite that drives
+  one client from intake to "Performance Baseline Established" through the REST
+  API, which is DoD condition 1 (SPEC.md section 13) and the only reason `make
+  done` still fails. Prerequisites: the full 0-10 gate write surface (now done) and
+  the production-view read route. Alternative: the `ClientProcess` design artifact
+  from the canon gap register, if a methodology-owner decision is preferred; or a
+  durable `MethodVersion`/offer store so the gates stop re-stating upstream
+  approvals.
+
+### Prior cycle (2026-10-03T173026Z)
+
+- Cycle 2026-10-03T173026Z: selected item was the HTTP
   route that exposes the stage 9 "Launch Approved" gate. The prior cycle named it
   the highest priority ready next item: the `StageNineGateAssembler` /
   `StageNineGateRecorder`, the `RecordStageNineGateCommand` /
@@ -58,23 +123,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   only (ADR 0004); no `MethodVersion`/offer/funnel store behind the API; the stage
   0-10 e2e suite (DoD 1, Q30) and the migration deployment step (separate GitOps
   chart) are absent from this repo.
-- Highest priority ready next item: expose the stage 10 "Performance Baseline
-  Established" gate by `POST /red/clients/{tenant_id}/stages/10/gate`, mapping a
-  typed request to the Execution `PerformanceBaselinePackage` and running
-  `RecordStageTenGateHandler` through the ledger and stage run ports, reusing
-  `_approve_method_offer_message`, `_approve_authority_amplifier` and
-  `_complete_stage_eight_funnel` and mirroring the stage 9 route (stage 10's
-  prerequisite is a passing stage 9 decision; the checkpoint requires the stage 9
-  traffic authorization and first qualified traffic observed, with later lead,
-  appointment and sale milestones shown as pending). Prerequisites: the
-  `StageTenGateAssembler`/`StageTenGateRecorder`,
-  `RecordStageTenGateCommand`/`RecordStageTenGateHandler` and
-  `PerformanceBaselinePackage` (all present), the stage 9 route (done), and a
-  passing stage 9 decision in the ledger (enforced by governance). This completes
-  the canonical 0-10 API surface toward DoD 1. Alternative: the `ClientProcess`
-  design artifact from the canon gap register, if a methodology-owner decision is
-  preferred; or a durable `MethodVersion`/offer store so the gates stop re-stating
-  upstream approvals.
 
 ### Prior cycle (2026-10-03T172823Z)
 
