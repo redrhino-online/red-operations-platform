@@ -20,8 +20,10 @@ from redops.contexts.commercial.domain.errors import (
     InvalidMillionDollarMessageError,
     InvalidOfferError,
     InvalidOfferFunnelAuditError,
+    InvalidOfferPackageError,
     InvalidPositioningDecisionError,
     InvalidSignaturePackageError,
+    OfferTenantBoundaryError,
     SignatureTenantBoundaryError,
 )
 from redops.contexts.governance.domain.value_objects import StageAssetVersion
@@ -1018,4 +1020,110 @@ class SignaturePackage:
                 version=self.solution_version,
             )
             for kind in CANONICAL_SIGNATURE_KINDS
+        )
+
+
+CANONICAL_OFFER_KINDS: tuple[str, ...] = (
+    "delivery-model",
+    "duration",
+    "modules",
+    "responsibilities",
+    "support-cadence",
+    "stage-deliverables",
+    "outcome-measures",
+    "pricing-payments",
+    "scope",
+    "guarantee-decision",
+    "eligibility",
+    "offer-stack",
+)
+
+
+@dataclass(frozen=True)
+class OfferPackage:
+    """The reviewed stage 5 delivery, projected to the twelve canonical gate kinds.
+
+    SPEC.md section 4, stage 5 "Productize" and its "Offer Locked" checkpoint: a
+    stage is complete only when its required assets exist, pass the checkpoint
+    and receive approval for downstream use, and a passing gate pins the exact
+    evidence. The required asset package is the delivery model, duration,
+    modules, responsibilities, support cadence, stage deliverables, outcome
+    measures, pricing and payments, scope, guarantee decision, eligibility and
+    offer stack. The Commercial context reviews that as one rich
+    ``DeliverySpecification`` (the delivery model, duration, modules,
+    responsibilities, cadence, step deliveries, outcome measures, pricing,
+    scope, guarantee, eligibility and offer stack are all attributes of the same
+    delivered offer, grounded on the locked stage 4 method, and every method step
+    must carry an action, actor, deliverable, timing and measure); this package
+    is the bridge to the governance gate, which pins one exact
+    ``StageAssetVersion`` per canonical kind.
+
+    The canon (SPEC.md section 12.3: stage 5 uses canon files 11 and 12) requires
+    choosing one delivery model from the Product Matrix, outlining a
+    six-to-twelve week program that follows the signature solution, pricing by
+    outcome rather than time and materials, and stating eligibility, guarantee
+    and support terms. ``DeliverySpecification`` already enforces that coherent
+    shape and its dependency on the locked stage 4 method at construction, so
+    each canonical kind is projected from the single reviewed delivery at one
+    positive integer version, and a blank identity, a versionless delivery or a
+    cross-tenant delivery is refused rather than silently pinned (SPEC.md
+    sections 3 and 4).
+    """
+
+    package_id: str
+    tenant_id: str
+    delivery: DeliverySpecification
+    delivery_version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("offer package id", self.package_id),
+            ("offer package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidOfferPackageError(f"{label} is required")
+        if self.delivery.tenant_id != self.tenant_id:
+            raise OfferTenantBoundaryError(
+                f"stage 5 delivery {self.delivery.delivery_id!r} belongs to tenant "
+                f"{self.delivery.tenant_id!r}, not package tenant {self.tenant_id!r}"
+            )
+        if not isinstance(self.delivery_version, int) or self.delivery_version < 1:
+            raise InvalidOfferPackageError(
+                "the delivery specification version must be a positive integer so "
+                "the stage 5 gate can pin the reviewed asset at an exact version"
+            )
+
+    @property
+    def kinds(self) -> frozenset[str]:
+        """The canonical kinds the reviewed stage 5 delivery projects onto."""
+        return frozenset(CANONICAL_OFFER_KINDS)
+
+    def missing_kinds(self) -> tuple[str, ...]:
+        """Canonical stage 5 kinds not covered by the projected delivery."""
+        covered = {asset.kind for asset in self.stage_asset_versions()}
+        return tuple(
+            kind for kind in CANONICAL_OFFER_KINDS if kind not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_kinds()
+
+    def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
+        """Project the reviewed stage 5 delivery onto exact governance evidence.
+
+        Every canonical kind belongs to the same reviewed
+        ``DeliverySpecification``, so each is pinned to that delivery's identity
+        at its exact version. Governance still pins each projection for the
+        workspace tenant, so a cross-client delivery is refused rather than
+        silently authorized (SPEC.md sections 3, 4 and 11).
+        """
+        return tuple(
+            StageAssetVersion(
+                asset_id=self.delivery.delivery_id,
+                tenant_id=self.tenant_id,
+                kind=kind,
+                version=self.delivery_version,
+            )
+            for kind in CANONICAL_OFFER_KINDS
         )

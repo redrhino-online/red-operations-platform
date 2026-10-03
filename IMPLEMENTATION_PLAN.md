@@ -4,48 +4,51 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T04:37:43Z (Ralph cycle 76).
-- Selected item: wire the stage 4 "IP Architecture Locked" `GateDecision` end to
-  end, mirroring the stage 1 through 3 paths, with a `StageFourGateAssembler`,
-  `StageFourGateRecorder`, `RecordStageFourGateCommand` and
-  `RecordStageFourGateHandler`, plus named errors `NotStageFourGateError` and
-  `StageRunNotStageFourError`. Cycle 75 built the Commercial `SignaturePackage`
-  bridge that projects the reviewed Method `SignatureSolution` onto the twelve
-  canonical stage 4 kinds, so a stage 4 gate became assembleable, but nothing
-  recorded it or closed the stage 4 `StageRun`: the pipeline backbone stalled one
-  gate short of the stage 5 "Offer Locked" gate. This is the smallest
-  independently verifiable item that advances the gated pipeline backbone; it
-  outranks the stage 5 reviewed-asset bridge and gate wiring (which need a stage 4
-  ledger entry to depend on), the production-manager view and `PipelineProgress`
-  (which only read the ledger these gates write), and the deferred
-  stage-parameterized recorder refactor (a larger change now that five identical
-  shapes exist, still awaiting an explicit refactor decision rather than a genuine
-  new abstraction).
+- Cycle timestamp: 2026-10-03T04:38:52Z (Ralph cycle 77).
+- Selected item: build the stage 5 "Offer Locked" reviewed-asset bridge, a
+  Commercial `OfferPackage` projecting the reviewed stage 5
+  `DeliverySpecification` onto the twelve canonical stage 5 kinds
+  (`delivery-model`, `duration`, `modules`, `responsibilities`,
+  `support-cadence`, `stage-deliverables`, `outcome-measures`,
+  `pricing-payments`, `scope`, `guarantee-decision`, `eligibility`,
+  `offer-stack`) as exact `StageAssetVersion` evidence, plus named errors
+  `InvalidOfferPackageError` and `OfferTenantBoundaryError`. Cycle 76 wired the
+  stage 4 "IP Architecture Locked" gate and closed stage 4, so the pipeline
+  backbone advanced to stage 5, but stage 5 had no bridge from its reviewed
+  Method/Commercial delivery asset to the canonical gate kinds, so a stage 5
+  gate could not be assembled. This is the smallest independently verifiable
+  item that advances the gated pipeline backbone one step. It outranks the
+  stage 5 `GateDecision` wiring (which needs this bridge to depend on), the
+  stage 6 reviewed-asset bridge and gate wiring (which need a passing stage 5
+  ledger entry), the production-manager view and `PipelineProgress` reads (which
+  only read the ledger these gates write), and the deferred stage-parameterized
+  recorder refactor (a broader change now that five identical gate shapes exist,
+  still awaiting an explicit refactor decision rather than a genuine new
+  abstraction).
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: 22 new behavioral tests in
-  `tests/unit/engagement/test_record_stage_four_gate.py`: the reviewed
-  `SignaturePackage` assembles the canonical stage 4 gate with checkpoint "IP
-  Architecture Locked" and dependency on stage 3; every one of the twelve kinds
-  pins the solution's exact positive version and identity; a cross-tenant package,
-  an unauthorized or absent approver, a non-stage-4 gate, an authorless gate, a
-  self-approval and an unauthorized owner are all refused; one exact-version
-  approval is issued per kind; the durable decision is stored, verified progress
-  counts stages 0 through 4, and the stage 4 `StageRun` closes from the recorded
-  decision. Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
-  'test_*.py'` reports 726 passed, up from 704. `python3 -m pyflakes` on the
-  changed modules and test file is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: stage 4 mirrors stages 1 through 3 in every structural respect, so
-  it is the fifth identical gate shape (assembler, recorder, command, handler,
-  two named errors) and the strongest candidate yet for a stage-parameterized
-  refactor; that refactor remains deferred because it is a broader change than
-  this item and no defect has forced it. The stage 4 checkpoint turns on
-  `SignatureSolution`'s construction-time coherence, as stage 3 did on
-  `DiagnosticModel`, so no separate source policy was needed and the assembler,
-  like the stage 2 and 3 ones, checks only the workspace tenant boundary. The
-  stage 4 package's twelve types are all derived from one reviewed solution, so
-  the gate pins one solution identity and version rather than several. The canon
-  gap for the "thirteen transformations" (files 09, 10) remains open and
-  unchanged. All prior tests still pass.
+- Evidence: 10 new behavioral tests in
+  `tests/unit/commercial/test_offer_package.py`: the reviewed
+  `DeliverySpecification` projects onto exactly the twelve canonical stage 5
+  kinds and the canonical kinds equal the template's stage 5 required asset
+  package; every kind pins the delivery's exact positive version and identity;
+  the projection is tenant scoped; a cross-tenant delivery, a blank package
+  identity and a versionless delivery are all refused; a complete package
+  reports no missing kinds and is immutable. Running `PYTHONPATH=backend
+  python3 -m unittest discover -s tests -p 'test_*.py'` reports 736 passed, up
+  from 726. `python3 -m pyflakes` on the changed modules and test file is clean.
+  `ruff` and `mypy` remain uninstalled.
+- New findings: the stage 5 `DeliverySpecification` (cycle 24) already carries
+  all twelve canonical stage 5 fields one-to-one, so, exactly as with the stage
+  3 `DiagnosticModel` and stage 4 `SignatureSolution`, a single reviewed asset
+  projects onto every kind at one identity and version and no per-kind
+  composition is needed. Its construction-time dependency on the locked stage 4
+  `SignatureSolution` and its per-step action/actor/deliverable/timing/measure
+  invariant already enforce the "Offer Locked" checkpoint substance, so, like
+  the stage 2 through 4 assemblers, a stage 5 assembler will need no separate
+  source policy and will check only the workspace tenant boundary. This makes
+  the stage 5 gate the next natural step. The canon gap for the "thirteen
+  transformations" (files 09, 10) remains open and unchanged. All prior tests
+  still pass.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -53,33 +56,34 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Durable persistence of any
   `GateDecision`, `StageRun`, retained waiver decision or blocker still depends on
   the storage ADR; no real client approver identity may be invented. Stages 0
-  through 4 can now each be assembled and closed in pure domain, but the stage 5
-  reviewed-asset bridge and `GateDecision` wiring do not exist and per-kind stage
-  6 through 10 asset content schemas remain prose and shapes rather than typed
-  value objects. No fork or cluster facts invented; no `docs/`, fork checkout,
-  `kubectl`, `helm`, or `argocd` present.
-- Highest priority ready next item: build the stage 5 "Offer Locked"
-  reviewed-asset bridge, a Commercial package projecting the reviewed Method
-  assets (`DeliverySpecification`, plus the stage 5 offer stack the SPEC names)
-  onto the twelve canonical stage 5 kinds as exact `StageAssetVersion` evidence,
-  so a stage 5 gate can be assembled. Cycle 24 already built the Method
-  `DeliverySpecification` requiring every locked stage 4 method step to carry an
-  action, actor, deliverable, timing and measure and recording the full stage 5
-  asset package, and `OfferVersion` already pins it; the missing piece is the
-  bridge to the canonical kinds, exactly as `SignaturePackage` was for stage 4.
-  Pipeline mapping: stage 5, required asset the reviewed stage 5 offer delivery
-  specification locked as a canonical package, checkpoint "Offer Locked", approver
-  the workspace's client-designated authority, blocked downstream dependency the
-  stage 6 "Campaign Message Approved" gate. Stage 5 depends on stage 4, so the
-  ledger must already hold a passing stage 4 decision, which this cycle now
-  enables. Once that bridge exists, the stage 5 `GateDecision` wiring is the
-  following candidate.
-- Deferred cross-context items: the stage 5 reviewed-asset bridge (now the ready
-  next item) and then the stage 5 `GateDecision` wiring; the stage 6 through 10
-  reviewed-asset bridges and `GateDecision` wiring; per-kind stage 6 through 10
-  asset content schemas; a stage-parameterized gate recorder/handler refactor
-  now that five identical shapes are proven; and all persistence, blocked on the
-  storage ADR.
+  through 4 can each be assembled and closed in pure domain, and stage 5 is now
+  assembleable, but the stage 5 `GateDecision` wiring does not exist and per-kind
+  stage 6 through 10 asset content schemas remain prose and shapes rather than
+  typed value objects. No fork or cluster facts invented; no `docs/`, fork
+  checkout, `kubectl`, `helm`, or `argocd` present.
+- Highest priority ready next item: wire the stage 5 "Offer Locked" `GateDecision`
+  end to end, mirroring the stage 1 through 4 paths: a `StageFiveGateAssembler`,
+  `StageFiveGateRecorder`, `RecordStageFiveGateCommand` and
+  `RecordStageFiveGateHandler`, plus named errors `NotStageFiveGateError` and
+  `StageRunNotStageFiveError`, binding the reviewed `OfferPackage` to the
+  workspace tenant and authority registry. Pipeline mapping: stage 5, required
+  asset the reviewed stage 5 delivery specification locked as a canonical
+  package, checkpoint "Offer Locked", approver the workspace's client-designated
+  authority, blocked downstream dependency the stage 6 "Campaign Message
+  Approved" gate. Stage 5 depends on stage 4, so the ledger must already hold a
+  passing stage 4 decision, which cycle 76 enables. Once that gate exists, the
+  stage 6 reviewed-asset bridge is the following candidate.
+- Deferred cross-context items: the stage 5 `GateDecision` wiring (now the ready
+  next item); the stage 6 through 10 reviewed-asset bridges and `GateDecision`
+  wiring; per-kind stage 6 through 10 asset content schemas; a
+  stage-parameterized gate recorder/handler refactor now that five identical
+  shapes are proven; and all persistence, blocked on the storage ADR.
+  [DONE 2026-10-03 (Ralph cycle 77): built the Commercial `OfferPackage` bridge
+  (canon-informed, SPEC.md section 12.3 stage 5 files 11, 12), projecting the
+  reviewed stage 5 `DeliverySpecification` onto the twelve canonical stage 5
+  kinds as exact `StageAssetVersion` evidence; verified by
+  `tests/unit/commercial/test_offer_package.py` (10 tests), so the stage 5 gate
+  is now assembleable.]
   [DONE 2026-10-03 (Ralph cycle 76): wired the stage 4 "IP Architecture Locked"
   `GateDecision` end to end with `StageFourGateAssembler`, `StageFourGateRecorder`,
   `RecordStageFourGateCommand` and `RecordStageFourGateHandler`, plus named errors
