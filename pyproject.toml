@@ -1,0 +1,19 @@
+[project]
+name = "red-operations-platform"
+version = "0.1.0"
+description = "RED Operations Platform: RED's extension of the OpenExecutive system."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["openexecutive"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv.sources]
+# ADR 0008: OpenExecutive is a pinned dependency vendored as a git submodule and
+# reused through composition, not copied. The app backend imports it directly.
+openexecutive = { path = "vendor/openexecutive/packages/core", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["backend"]
