@@ -223,3 +223,24 @@ class DiagnosticTenantBoundaryError(CommercialError):
     pinned as this client's gate evidence.
     """
 
+
+class InvalidSignaturePackageError(CommercialError, ValueError):
+    """A stage 4 reviewed asset package was built without identity or version.
+
+    SPEC.md sections 3 and 4: a passing stage 4 gate pins the exact evidence and
+    intended downstream use, so the reviewed stage 4 ``SignatureSolution`` is
+    projected onto the twelve canonical asset kinds with a positive integer
+    version. A package that leaves its identity or the solution version
+    unspecified cannot be represented as exact gate evidence.
+    """
+
+
+class SignatureTenantBoundaryError(CommercialError):
+    """A stage 4 reviewed asset package mixed in a solution from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client, so the
+    ``SignatureSolution`` projected onto a workspace's stage 4 gate package must
+    belong to that workspace's tenant. A cross-tenant stage 4 solution cannot be
+    pinned as this client's gate evidence.
+    """
+

@@ -21,6 +21,8 @@ from redops.contexts.commercial.domain.errors import (
     InvalidOfferError,
     InvalidOfferFunnelAuditError,
     InvalidPositioningDecisionError,
+    InvalidSignaturePackageError,
+    SignatureTenantBoundaryError,
 )
 from redops.contexts.governance.domain.value_objects import StageAssetVersion
 from redops.contexts.method.domain.entities import DiagnosticModel, SignatureSolution
@@ -915,4 +917,105 @@ class DiagnosticPackage:
                 version=self.model_version,
             )
             for kind in CANONICAL_DIAGNOSTIC_KINDS
+        )
+
+
+CANONICAL_SIGNATURE_KINDS: tuple[str, ...] = (
+    "transformation-map",
+    "process-inventory",
+    "three-phases",
+    "nine-steps",
+    "named-stages",
+    "starting-state",
+    "final-state",
+    "stage-inputs",
+    "stage-actions",
+    "stage-outputs",
+    "transformation-narrative",
+    "transformation-visual",
+)
+
+
+@dataclass(frozen=True)
+class SignaturePackage:
+    """The reviewed stage 4 solution, projected to the twelve canonical gate kinds.
+
+    SPEC.md section 4, stage 4 "Package IP" and its "IP Architecture Locked"
+    checkpoint: a stage is complete only when its required assets exist, pass the
+    checkpoint and receive approval for downstream use, and a passing gate pins
+    the exact evidence. The required asset package is the transformation map,
+    process inventory, three phases, nine steps, named stages, starting and final
+    states, stage inputs/actions/outputs, narrative and visual. The Method
+    context reviews that as one rich ``SignatureSolution`` (the phases, steps,
+    inputs, actions, outputs, states, map, narrative and visual are all attributes
+    of the same coherent transformation); this package is the bridge to the
+    governance gate, which pins one exact ``StageAssetVersion`` per canonical
+    kind.
+
+    The canon (SPEC.md section 12.3: stage 4 uses canon files 09 and 10) requires
+    three main phases and nine clear steps from point A to point B, each named
+    stage carrying its own from/to transformation, titled from the million dollar
+    message. ``SignatureSolution`` already enforces that coherent shape and its
+    continuity at construction, so each canonical kind is projected from the
+    single reviewed solution at one positive integer version, and a blank
+    identity, a versionless solution or a cross-tenant solution is refused rather
+    than silently pinned (SPEC.md sections 3 and 4).
+    """
+
+    package_id: str
+    tenant_id: str
+    solution: SignatureSolution
+    solution_version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("signature package id", self.package_id),
+            ("signature package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidSignaturePackageError(f"{label} is required")
+        if self.solution.tenant_id != self.tenant_id:
+            raise SignatureTenantBoundaryError(
+                f"stage 4 solution {self.solution.solution_id!r} belongs to tenant "
+                f"{self.solution.tenant_id!r}, not package tenant {self.tenant_id!r}"
+            )
+        if not isinstance(self.solution_version, int) or self.solution_version < 1:
+            raise InvalidSignaturePackageError(
+                "the signature solution version must be a positive integer so the "
+                "stage 4 gate can pin the reviewed asset at an exact version"
+            )
+
+    @property
+    def kinds(self) -> frozenset[str]:
+        """The canonical kinds the reviewed stage 4 solution projects onto."""
+        return frozenset(CANONICAL_SIGNATURE_KINDS)
+
+    def missing_kinds(self) -> tuple[str, ...]:
+        """Canonical stage 4 kinds not covered by the projected solution."""
+        covered = {asset.kind for asset in self.stage_asset_versions()}
+        return tuple(
+            kind for kind in CANONICAL_SIGNATURE_KINDS if kind not in covered
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_kinds()
+
+    def stage_asset_versions(self) -> tuple[StageAssetVersion, ...]:
+        """Project the reviewed stage 4 solution onto exact governance evidence.
+
+        Every canonical kind belongs to the same reviewed ``SignatureSolution``,
+        so each is pinned to that solution's identity at its exact version.
+        Governance still pins each projection for the workspace tenant, so a
+        cross-client solution is refused rather than silently authorized (SPEC.md
+        sections 3, 4 and 11).
+        """
+        return tuple(
+            StageAssetVersion(
+                asset_id=self.solution.solution_id,
+                tenant_id=self.tenant_id,
+                kind=kind,
+                version=self.solution_version,
+            )
+            for kind in CANONICAL_SIGNATURE_KINDS
         )
