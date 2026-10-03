@@ -1114,8 +1114,9 @@ class RecordStageNineGateRequest(BaseModel):
     The caller supplies the reviewed launch QA and its traffic authorization, the
     approved stage 8 funnel the QA grounds on (rebuilt from the approved method,
     production ready offer, approved stage 6 message and approved stage 7
-    amplifier), the known claims that support the amplifier proof, the workspace
-    authority registry and the decision metadata. The route builds the canonical
+    amplifier), the known claims that support the amplifier proof and the decision
+    metadata; the authority registry is resolved from the durable workspace store,
+    never the body. The route builds the canonical
     gate from these through the use case; it deliberately accepts no pre-built
     gate, so the tenant boundary, approver authority, owner authority and
     exact-version evidence cannot be bypassed. Stage 9 depends on a passing stage
@@ -1125,7 +1126,6 @@ class RecordStageNineGateRequest(BaseModel):
     """
 
     workspace_id: str
-    authorities: list[ClientAuthorityInput]
     qa_package_id: str
     qa_version: int
     message: CampaignMessageInput

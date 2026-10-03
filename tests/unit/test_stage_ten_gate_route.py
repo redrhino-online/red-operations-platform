@@ -206,7 +206,10 @@ class StageTenGateRouteTests(unittest.TestCase):
         nine = self._nine.payload()
         body = {
             "workspace_id": nine["workspace_id"],
-            "authorities": nine["authorities"],
+            "authorities": [
+                {"actor": OWNER, "authority": "production-owner"},
+                {"actor": APPROVER, "authority": "client-designated-authority"},
+            ],
             "baseline_package_id": "baseline-package-3f",
             "baseline_version": 1,
             "message": nine["message"],
