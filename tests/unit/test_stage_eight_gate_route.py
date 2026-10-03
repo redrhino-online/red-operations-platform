@@ -70,6 +70,9 @@ class StageEightGateRouteTests(unittest.TestCase):
         cls.message_dependency = staticmethod(
             StageSevenGateRouteTests.message_dependency
         )
+        cls.amplifier_dependency = staticmethod(
+            StageSevenGateRouteTests.amplifier_dependency
+        )
         cls.repository_class = staticmethod(
             StageSevenGateRouteTests.repository_class
         )
@@ -85,6 +88,9 @@ class StageEightGateRouteTests(unittest.TestCase):
         cls.message_repository_class = staticmethod(
             StageSevenGateRouteTests.message_repository_class
         )
+        cls.amplifier_repository_class = staticmethod(
+            StageSevenGateRouteTests.amplifier_repository_class
+        )
         cls.funnel_kinds = CANONICAL_FUNNEL_KINDS
 
     def setUp(self) -> None:
@@ -96,6 +102,7 @@ class StageEightGateRouteTests(unittest.TestCase):
         self.method_repository = self.method_repository_class()
         self.offer_repository = self.offer_repository_class()
         self.message_repository = self.message_repository_class()
+        self.amplifier_repository = self.amplifier_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
@@ -108,6 +115,9 @@ class StageEightGateRouteTests(unittest.TestCase):
         )
         self.app.dependency_overrides[self.message_dependency] = (
             lambda: self.message_repository
+        )
+        self.app.dependency_overrides[self.amplifier_dependency] = (
+            lambda: self.amplifier_repository
         )
         self.client = TestClient(self.app)
 
@@ -285,6 +295,30 @@ class StageEightGateRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(
             response.json()["detail"]["error"], "FunnelIncompleteError"
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(8))
+
+    def test_re_stating_the_approved_amplifier_with_different_content_is_refused(
+        self,
+    ) -> None:
+        self.seed_through_stage_seven()
+
+        amplifier = self._seven.payload()["amplifier"]
+        amplifier["script"][0]["content"] = "a different promise"
+        response = self.client.post(
+            self.url(), json=self.payload(amplifier=amplifier)
+        )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"],
+            "AuthorityAmplifierVersionConflictError",
         )
 
         from redops.contexts.governance.domain.templates import (

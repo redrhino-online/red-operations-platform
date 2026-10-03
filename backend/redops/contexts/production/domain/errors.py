@@ -54,3 +54,32 @@ class AuthorityAmplifierTenantBoundaryError(ProductionError):
     belong to that workspace's tenant. A cross-tenant stage 7 amplifier cannot be
     pinned as this client's gate evidence.
     """
+
+
+class AuthorityAmplifierReadinessError(ProductionError):
+    """An approved amplifier store was asked to hold an unapproved amplifier.
+
+    SPEC.md sections 3 and 4: the stage 8 to 10 gates ground on the exact stage 7
+    ``AuthorityAmplifier`` that received creative acceptance at "Authority
+    Amplifier Approved". An amplifier that has not passed that checkpoint cannot
+    be stored as the dependency a later gate resolves.
+    """
+
+
+class AuthorityAmplifierVersionConflictError(ProductionError):
+    """A stored amplifier id was re-stated with different content.
+
+    SPEC.md sections 3 and 4: a passing gate pins the exact approved asset
+    version, and a previous approved version stays historically identifiable. The
+    store is append-only per ``(tenant_id, amplifier_id)``: an approved amplifier
+    is immutable, and a change must be a new revision under a new id.
+    """
+
+
+class AuthorityAmplifierVersionTenantBoundaryError(ProductionError):
+    """A client's approved amplifier was read or written without a tenant.
+
+    SPEC.md sections 3 and 9 make an amplifier a client resource that must carry
+    its tenant on every command and query; storing or resolving one without a
+    client would either leak across clients or create an orphaned record.
+    """

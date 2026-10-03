@@ -93,3 +93,21 @@ def script_approved_amplifier(**overrides) -> AuthorityAmplifier:
         approved_methods=(approved_method(),),
         claims=(known_claim(),),
     )
+
+
+def approved_amplifier(**overrides) -> AuthorityAmplifier:
+    """A stage 7 amplifier that received both approvals at the gate boundary.
+
+    Script approval (supported proof) comes before visual production, then the
+    separate final creative acceptance, so this is exactly the asset the stage 8
+    to 10 gates resolve from the store (SPEC.md section 4, stage 7).
+    """
+    return (
+        script_approved_amplifier(**overrides)
+        .produce_visuals(package=visual_package())
+        .approve_creative(
+            approved_by="client-authority",
+            intended_use=USE,
+            on=TODAY,
+        )
+    )

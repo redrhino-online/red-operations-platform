@@ -4,7 +4,80 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T175842Z (Ralph cycle, this run): selected item was the durable
+- Cycle 2026-10-03T180150Z (Ralph cycle, this run): selected item was the durable
+  `AuthorityAmplifierRepository` for the Production context (port, mapper,
+  migration and PostgreSQL adapter) plus the resolve-not-restate rule for the
+  stage 8 to 10 gates, the exact next item the prior cycle named (SPEC.md
+  sections 3, 4, 6 and 9; queue Q6). The stage 8 to 10 routes re-stated the
+  approved stage 7 amplifier from the request body, so a later gate could
+  silently declare a different amplifier after the stage 7 "Authority Amplifier
+  Approved" checkpoint (script approval then creative acceptance). It outranked
+  the Next.js `frontend/` shell (DoD 6, blocked on the workflow engine Q5 via
+  Q15), the larger required-kind wiring (Q28, which changes every stage's asset
+  package and route) and the stage 8 funnel store (the next re-stated asset after
+  the amplifier). The loop prioritizes exact approved asset versions and
+  persistence over downstream features.
+- Outcome: new Production application port `AuthorityAmplifierRepository`
+  (`backend/redops/contexts/production/application/ports.py`) and a new Production
+  `infrastructure` layer (`mappers.py`, `repositories.py`) mirroring the
+  Commercial stores. `authority_amplifier_to_payload`/`..._from_payload`
+  round-trip the full approved amplifier (state, pinned stage 6 `CampaignMessage`
+  via the Commercial `campaign_message...` helpers, the canonical six-section
+  script in order, the proof claim ids, the complete `VisualProductionPackage`
+  and both distinct approvals), so the amplifier cannot drift from the message
+  shape and a reload re-validates through `AuthorityAmplifier.__post_init__`.
+  `InMemoryAuthorityAmplifierRepository` and
+  `PostgresAuthorityAmplifierRepository` refuse an amplifier without creative
+  acceptance (`AuthorityAmplifierReadinessError`), a same-id different-body
+  re-statement (`AuthorityAmplifierVersionConflictError`) and a blank tenant
+  (`AuthorityAmplifierVersionTenantBoundaryError`). Migration
+  `0006_authority_amplifiers` creates `authority_amplifiers(id, tenant_id NOT
+  NULL, amplifier_id, amplifier JSONB, recorded_at, UNIQUE(tenant_id,
+  amplifier_id))`. `api/routes.py::get_authority_amplifier_repository` is an
+  env-selected generator like the method, offer and message stores, and
+  `_approve_authority_amplifier(..., amplifier_repository=)` now resolves the
+  amplifier: the stage 7 gate stores the approved candidate, a later gate reuses
+  the stored amplifier, a different same-id body is refused (422). All four stage
+  7 to 10 routes take the new dependency.
+- Evidence: `make check` -> 1860 passed, 1 skipped, 652 subtests; pyflakes clean.
+  New `tests/unit/production/test_authority_amplifier_repository.py` (7 plus 3
+  mapper tests) and `test_authority_amplifier_postgres.py` (8, against the
+  compose DB, exercising the real migration), a stage 8 re-statement refusal test
+  in `tests/unit/test_stage_eight_gate_route.py`, an app-smoke amplifier-dep
+  default test, and `tests/unit/shared/test_migrate.py` head now
+  `0006_authority_amplifiers`. The stage 7 to 10 route tests thread the amplifier
+  dep override and the e2e reuses them. `make done` clears [1/6]-[4/6] and still
+  fails at [5/6] (`frontend/` missing).
+- New findings: the durable amplifier store now satisfies DoD condition 4 for
+  `AuthorityAmplifier`; the stage 7 amplifier is tenant-scoped, immutable and
+  shared across processes, and stage 8 to 10 ground on it. The stage 8 funnel and
+  stage 9 launch QA are still re-stated from the request (no store), so the
+  resolve-not-restate rule for the stage 8 funnel remains open. Production now
+  has its first application and infrastructure layers; the funnel and launch QA
+  are Execution aggregates, so their stores will introduce Execution
+  application/infrastructure layers in the same shape.
+- Blockers: `frontend/` (DoD condition 6, Q32) is blocked on the workflow engine
+  Q5 via Q15; request idempotency (Q16) blocked on the same; RLS is a WHERE clause
+  only (ADR 0004); no durable funnel or launch-QA store; the condition 3
+  retrieval, background worker and artifact-URL layers are unbuilt; the remaining
+  canon gap register entries need named-owner decisions.
+- Highest priority ready next item: apply the same resolve-not-restate rule to
+  the stage 8 `FunnelIntegration` -- a durable funnel store (port, mapper,
+  migration and adapter in the Execution context) so the stage 9 and 10 gates
+  ground on the exact completed stage 8 funnel instead of a re-stated request
+  body (SPEC.md sections 3, 4; DoD condition 1). Stage 8 "Integrate"; required
+  asset: the approved `FunnelIntegration` at "Funnel Complete"; approver: the
+  client designated authority; blocked downstream dependency: the stage 9 Launch
+  Approved gate. Prerequisite: none beyond the method, offer, message and
+  amplifier stores now in place. The funnel nests the approved stage 7
+  `AuthorityAmplifier`, so its mapper will reuse the amplifier mapper. Alternative
+  gate-integrity item: wire the implemented canon assets as required gate kinds
+  (Q28) -- larger, changes the stage asset packages and routes. Canon gap
+  register unchanged this cycle; no new gap identified.
+
+### Prior cycle (2026-10-03T175842Z)
+
+- Cycle 2026-10-03T175842Z (Ralph cycle): selected item was the durable
   `CampaignMessageRepository` for the Commercial context (port, mapper, migration
   and PostgreSQL adapter) plus the resolve-not-restate rule for the stage 7 to 10
   gates, the exact next item the prior cycle named (SPEC.md sections 3, 4, 6 and
@@ -1267,7 +1340,7 @@ stalls:
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
 | Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key |
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test |
-| Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004) and campaign messages (0005); amplifier, funnel and launch-QA aggregates remain |
+| Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005) and authority amplifiers (0006); funnel and launch-QA aggregates remain |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
 | Q8 | `tests/security`: API, retrieval, worker and artifact URL isolation; unauthorized approval; injection guard | security | Q7 | API layer and unauthorized approval done 2026-10-03T173628Z (`tests/security/test_cross_tenant_isolation.py`, 6 tests); retrieval, worker, artifact-URL and injection-guard coverage remain, blocked on those seams |
 | Q9 | REST `/clients` and `/clients/{id}/sources` | api | Q7 | route tests, tenant scoping, pagination |

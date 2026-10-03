@@ -152,3 +152,23 @@ class AppSmokeTest(unittest.TestCase):
         finally:
             if previous is not None:
                 os.environ["DATABASE_URL"] = previous
+
+    def test_authority_amplifier_dependency_defaults_to_the_process_local_adapter(
+        self,
+    ) -> None:
+        import os
+
+        from redops.api.routes import get_authority_amplifier_repository
+        from redops.contexts.production.infrastructure.repositories import (
+            InMemoryAuthorityAmplifierRepository,
+        )
+
+        previous = os.environ.pop("DATABASE_URL", None)
+        try:
+            repository = next(get_authority_amplifier_repository())
+            self.assertIsInstance(
+                repository, InMemoryAuthorityAmplifierRepository
+            )
+        finally:
+            if previous is not None:
+                os.environ["DATABASE_URL"] = previous

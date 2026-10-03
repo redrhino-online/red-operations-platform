@@ -180,13 +180,22 @@ from redops.contexts.method.domain.value_objects import (
 from redops.contexts.method.infrastructure.repositories import (
     method_version_repository_from_env,
 )
+from redops.contexts.production.application.ports import (
+    AuthorityAmplifierRepository,
+)
 from redops.contexts.production.domain.entities import AuthorityAmplifier
-from redops.contexts.production.domain.errors import ProductionError
+from redops.contexts.production.domain.errors import (
+    AuthorityAmplifierVersionConflictError,
+    ProductionError,
+)
 from redops.contexts.production.domain.value_objects import (
     AuthorityAmplifierPackage,
     ScriptSection,
     ScriptSectionKind,
     VisualProductionPackage,
+)
+from redops.contexts.production.infrastructure.repositories import (
+    authority_amplifier_repository_from_env,
 )
 
 router = APIRouter(prefix="/red", tags=["red"])
@@ -293,6 +302,32 @@ def get_campaign_message_repository() -> Iterator[CampaignMessageRepository]:
     """
 
     repository = campaign_message_repository_from_env(
+        os.environ.get("DATABASE_URL")
+    )
+    try:
+        yield repository
+    finally:
+        repository.close()
+
+
+def get_authority_amplifier_repository() -> Iterator[
+    AuthorityAmplifierRepository
+]:
+    """Provide the approved amplifier seam to the API (SPEC.md section 6).
+
+    SPEC.md section 3 pins exact approved asset versions and intended use at a
+    passing gate, and SPEC.md section 4 keeps the approved version identifiable,
+    so the stage 8 to 10 gates must resolve the stage 7 amplifier a prior gate
+    approved rather than trust a repeated request body. The dependency owns one
+    adapter for the request and releases any connection it opened when the request
+    ends, so the resolved amplifier is read from the durable store and shared
+    across the API and worker processes. The store is chosen once from
+    ``DATABASE_URL``; a request cannot silently downgrade to a process-local
+    amplifier store, because a set-but-unusable configuration raises before the
+    route runs.
+    """
+
+    repository = authority_amplifier_repository_from_env(
         os.environ.get("DATABASE_URL")
     )
     try:
@@ -527,18 +562,24 @@ def _approve_authority_amplifier(
     message: CampaignMessage,
     amplifier_body: AuthorityAmplifierInput,
     claims_body: list[ClaimInput],
+    amplifier_repository: AuthorityAmplifierRepository,
 ) -> AuthorityAmplifier:
     """Rebuild the approved stage 7 Authority Amplifier.
 
     SPEC.md section 3: production requires approved dependencies, and the stage 8
-    funnel grounds on the stage 7 amplifier that received creative acceptance. No
-    amplifier store is exposed over the API yet, so the caller supplies the
-    reviewed amplifier and its two approvals, and the domain re-proves the
-    canonical script order, the grounded proof (every proof claim must be a claim
-    of the approved method backed by a known, directly sourced knowledge claim) and
-    the script-before-visuals-before-creative sequence -- rather than the
-    transport layer asserting them. Sharing this builder keeps the stage 7 and
-    stage 8 routes from drifting in how they re-state that upstream dependency.
+    funnel grounds on the stage 7 amplifier that received creative acceptance. The
+    reviewed amplifier is resolved from its store by exact identity rather than
+    trusted from the repeated request body: the stage 7 gate stores the approved
+    candidate, a later gate reuses the stored amplifier, and a same-identity but
+    different body is refused (``AuthorityAmplifierVersionConflictError``). The
+    caller still supplies the amplifier content, whose congruence with the
+    resolved stage 6 message and approved method the domain re-proves rather than
+    the transport layer asserting it -- the canonical script order, the grounded
+    proof (every proof claim must be a claim of the approved method backed by a
+    known, directly sourced knowledge claim) and the
+    script-before-visuals-before-creative sequence. Sharing this builder keeps the
+    stage 7 to 10 routes from drifting in how they resolve that upstream
+    dependency.
     """
 
     script = tuple(
@@ -576,7 +617,7 @@ def _approve_authority_amplifier(
         )
         for entry in claims_body
     )
-    return (
+    candidate_amplifier = (
         AuthorityAmplifier(
             amplifier_id=amplifier_body.amplifier_id,
             tenant_id=tenant_id,
@@ -598,6 +639,19 @@ def _approve_authority_amplifier(
             intended_use=amplifier_body.creative_approval.intended_use,
             on=amplifier_body.creative_approval.approved_on,
         )
+    )
+    stored_amplifier = amplifier_repository.get(
+        tenant_id, amplifier_body.amplifier_id
+    )
+    if stored_amplifier is None:
+        amplifier_repository.save(candidate_amplifier)
+        return candidate_amplifier
+    if stored_amplifier == candidate_amplifier:
+        return stored_amplifier
+    raise AuthorityAmplifierVersionConflictError(
+        f"approved authority amplifier {amplifier_body.amplifier_id!r} was "
+        f"previously pinned for tenant {tenant_id!r} with different content; "
+        "the stage gate must reuse the exact stage 7 amplifier, not re-state it"
     )
 
 
@@ -1902,6 +1956,9 @@ def record_stage_seven_gate(
     campaign_message_repository: CampaignMessageRepository = Depends(
         get_campaign_message_repository
     ),
+    authority_amplifier_repository: AuthorityAmplifierRepository = Depends(
+        get_authority_amplifier_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 7 "Authority Amplifier Approved" gate through the use case.
 
@@ -1922,9 +1979,10 @@ def record_stage_seven_gate(
     only permits when the message is approved, the method is an approved
     dependency and every proof claim is a known, directly sourced method claim),
     then ``produce_visuals``, then ``approve_creative`` -- so the canonical order is
-    enforced by the domain, not asserted. The route resolves the approved method
-    and production ready offer from their stores by exact identity instead of
-    trusting the repeated request; every integrity rule -- the canonical script order,
+    enforced by the domain, not asserted. The route resolves the approved method,
+    production ready offer and approved stage 6 message from their stores by exact
+    identity, and stores the approved stage 7 amplifier so the stage 8 to 10 gates
+    resolve it rather than trust a repeated request; every integrity rule -- the canonical script order,
     grounded proof, the approval sequence, the canonical kinds, exact versions,
     owner/approver authority and the tenant boundary -- stays enforced by the
     domain, and a rejection is a named 422 and never a partial write. The path
@@ -1956,6 +2014,7 @@ def record_stage_seven_gate(
             message=message,
             amplifier_body=body.amplifier,
             claims_body=body.claims,
+            amplifier_repository=authority_amplifier_repository,
         )
         package = AuthorityAmplifierPackage(
             package_id=body.amplifier_package_id,
@@ -2048,6 +2107,9 @@ def record_stage_eight_gate(
     campaign_message_repository: CampaignMessageRepository = Depends(
         get_campaign_message_repository
     ),
+    authority_amplifier_repository: AuthorityAmplifierRepository = Depends(
+        get_authority_amplifier_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 8 "Funnel Complete" gate through the use case.
 
@@ -2067,9 +2129,9 @@ def record_stage_eight_gate(
     rebuilt approved stage 7 amplifier and drives ``mark_funnel_complete`` with the
     prospect path dry run, so the ``FunnelCompletionPolicy`` -- not the transport
     layer -- decides whether the thirteen canonical kinds may be pinned as passing
-    evidence. The route resolves the approved method, production ready offer and
-    approved stage 6 message from their stores by exact identity, and re-states the
-    approved stage 7 amplifier because that store is not exposed over the API yet; every integrity rule -- the funnel's own completion, the
+    evidence. The route resolves the approved method, production ready offer,
+    approved stage 6 message and approved stage 7 amplifier from their stores by
+    exact identity; every integrity rule -- the funnel's own completion, the
     grounded stage 7 dependency, the canonical kinds, exact versions,
     owner/approver authority and the tenant boundary -- stays enforced by the
     domain, and a rejection is a named 422 and never a partial write. The path
@@ -2101,6 +2163,7 @@ def record_stage_eight_gate(
             message=message,
             amplifier_body=body.amplifier,
             claims_body=body.claims,
+            amplifier_repository=authority_amplifier_repository,
         )
         funnel = _complete_stage_eight_funnel(
             tenant_id, body.funnel, amplifier
@@ -2197,6 +2260,9 @@ def record_stage_nine_gate(
     campaign_message_repository: CampaignMessageRepository = Depends(
         get_campaign_message_repository
     ),
+    authority_amplifier_repository: AuthorityAmplifierRepository = Depends(
+        get_authority_amplifier_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 9 "Launch Approved" gate through the use case.
 
@@ -2216,10 +2282,10 @@ def record_stage_nine_gate(
     on the rebuilt complete stage 8 funnel and drives ``authorize_traffic``, so the
     ``LaunchApprovedPolicy`` and ``ComplianceRequiredPolicy`` -- not the transport
     layer -- decide whether the sixteen canonical kinds may be pinned as passing
-    evidence. The route resolves the approved method, production ready offer and
-    approved stage 6 message from their stores by exact identity, and re-states the
-    approved stage 7 amplifier and stage 8 funnel because those stores
-    are not exposed over the API yet; every integrity rule -- the complete
+    evidence. The route resolves the approved method, production ready offer,
+    approved stage 6 message and approved stage 7 amplifier from their stores by
+    exact identity, and re-states the stage 8 funnel because no funnel store is
+    exposed over the API yet; every integrity rule -- the complete
     same-tenant check set, the critical path outcomes, the compliance package, the
     grounded stage 8 dependency, the canonical kinds, exact versions,
     owner/approver authority and the tenant boundary -- stays enforced by the
@@ -2252,6 +2318,7 @@ def record_stage_nine_gate(
             message=message,
             amplifier_body=body.amplifier,
             claims_body=body.claims,
+            amplifier_repository=authority_amplifier_repository,
         )
         funnel = _complete_stage_eight_funnel(
             tenant_id, body.funnel, amplifier
@@ -2349,6 +2416,9 @@ def record_stage_ten_gate(
     campaign_message_repository: CampaignMessageRepository = Depends(
         get_campaign_message_repository
     ),
+    authority_amplifier_repository: AuthorityAmplifierRepository = Depends(
+        get_authority_amplifier_repository
+    ),
 ) -> dict[str, Any]:
     """Record the stage 10 "Performance Baseline Established" gate.
 
@@ -2371,9 +2441,10 @@ def record_stage_ten_gate(
     rebuilt ready-for-traffic stage 9 launch QA and drives ``establish``, so the
     ``PerformanceBaselinePolicy`` -- not the transport layer -- decides whether the
     twelve canonical kinds may be pinned as passing evidence. The route resolves
-    the approved method, production ready offer and approved stage 6 message from
-    their stores by exact identity, and re-states the approved stages 7-9 assets
-    because those stores are not exposed over the API yet; every integrity rule -- the grounded stage
+    the approved method, production ready offer, approved stage 6 message and
+    approved stage 7 amplifier from their stores by exact identity, and re-states
+    the stage 8 funnel and stage 9 launch QA because no funnel or QA store is
+    exposed over the API yet; every integrity rule -- the grounded stage
     9 dependency, the distinct
     milestones, the observed-first-traffic rule, the canonical kinds, exact
     versions, owner/approver authority and the tenant boundary -- stays enforced by
@@ -2406,6 +2477,7 @@ def record_stage_ten_gate(
             message=message,
             amplifier_body=body.amplifier,
             claims_body=body.claims,
+            amplifier_repository=authority_amplifier_repository,
         )
         funnel = _complete_stage_eight_funnel(
             tenant_id, body.funnel, amplifier

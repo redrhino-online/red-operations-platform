@@ -70,6 +70,9 @@ class StageNineGateRouteTests(unittest.TestCase):
         cls.message_dependency = staticmethod(
             StageEightGateRouteTests.message_dependency
         )
+        cls.amplifier_dependency = staticmethod(
+            StageEightGateRouteTests.amplifier_dependency
+        )
         cls.repository_class = staticmethod(
             StageEightGateRouteTests.repository_class
         )
@@ -85,6 +88,9 @@ class StageNineGateRouteTests(unittest.TestCase):
         cls.message_repository_class = staticmethod(
             StageEightGateRouteTests.message_repository_class
         )
+        cls.amplifier_repository_class = staticmethod(
+            StageEightGateRouteTests.amplifier_repository_class
+        )
         cls.launch_kinds = CANONICAL_LAUNCH_KINDS
 
     def setUp(self) -> None:
@@ -96,6 +102,7 @@ class StageNineGateRouteTests(unittest.TestCase):
         self.method_repository = self.method_repository_class()
         self.offer_repository = self.offer_repository_class()
         self.message_repository = self.message_repository_class()
+        self.amplifier_repository = self.amplifier_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
@@ -108,6 +115,9 @@ class StageNineGateRouteTests(unittest.TestCase):
         )
         self.app.dependency_overrides[self.message_dependency] = (
             lambda: self.message_repository
+        )
+        self.app.dependency_overrides[self.amplifier_dependency] = (
+            lambda: self.amplifier_repository
         )
         self.client = TestClient(self.app)
 

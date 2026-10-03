@@ -44,8 +44,14 @@ class StageSevenGateRouteTests(unittest.TestCase):
 
         try:
             StageSixGateRouteTests.setUpClass()
+            from redops.api.routes import (
+                get_authority_amplifier_repository,
+            )
             from redops.contexts.production.domain.value_objects import (
                 CANONICAL_AMPLIFIER_KINDS,
+            )
+            from redops.contexts.production.infrastructure.repositories import (
+                InMemoryAuthorityAmplifierRepository,
             )
         except unittest.SkipTest:
             raise
@@ -83,6 +89,12 @@ class StageSevenGateRouteTests(unittest.TestCase):
         cls.message_repository_class = staticmethod(
             StageSixGateRouteTests.message_repository_class
         )
+        cls.amplifier_dependency = staticmethod(
+            get_authority_amplifier_repository
+        )
+        cls.amplifier_repository_class = staticmethod(
+            InMemoryAuthorityAmplifierRepository
+        )
         cls.amplifier_kinds = CANONICAL_AMPLIFIER_KINDS
 
     def setUp(self) -> None:
@@ -94,6 +106,7 @@ class StageSevenGateRouteTests(unittest.TestCase):
         self.method_repository = self.method_repository_class()
         self.offer_repository = self.offer_repository_class()
         self.message_repository = self.message_repository_class()
+        self.amplifier_repository = self.amplifier_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
@@ -106,6 +119,9 @@ class StageSevenGateRouteTests(unittest.TestCase):
         )
         self.app.dependency_overrides[self.message_dependency] = (
             lambda: self.message_repository
+        )
+        self.app.dependency_overrides[self.amplifier_dependency] = (
+            lambda: self.amplifier_repository
         )
         self.client = TestClient(self.app)
 
