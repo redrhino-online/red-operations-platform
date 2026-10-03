@@ -18,6 +18,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from redops.api.schemas import (
+    ApprovalListResponse,
+    ApprovalRecordResponse,
+    AssetVersionResponse,
     AuthorityAmplifierInput,
     BuildListResponse,
     BuildObjectResponse,
@@ -31,6 +34,8 @@ from redops.api.schemas import (
     CreateClaimRequest,
     CreateClientWorkspaceRequest,
     CreateSourceRecordRequest,
+    DecisionListResponse,
+    DecisionRecordResponse,
     EngagementProductionViewResponse,
     FunnelIntegrationInput,
     LaunchQAInput,
@@ -3828,3 +3833,140 @@ def create_build(
         ) from exc
 
     return _build_payload(build)
+
+
+def _decision_payload(decision: Any) -> DecisionRecordResponse:
+    """Project one durable gate decision onto the decision record, computing no rule.
+
+    SPEC.md section 3 makes a Decision an append-only record of its subject,
+    choice, rationale, actor, timestamp and exact affected version. The pinned
+    required assets are sorted by kind and version so a decision's affected
+    versions render deterministically; the exact versions are exactly those the
+    gate sealed, never re-declared from a request.
+    """
+
+    return DecisionRecordResponse(
+        stage_number=decision.stage_number,
+        template_version=decision.template_version,
+        checkpoint=decision.checkpoint,
+        disposition=decision.disposition.value,
+        reviewer=decision.reviewer,
+        scope=decision.scope,
+        rationale=decision.rationale,
+        decided_on=decision.decided_on,
+        assigned_owner=decision.assigned_owner,
+        due_on=decision.due_on,
+        next_action=decision.next_action,
+        tenant_id=decision.tenant_id,
+        required_assets=[
+            AssetVersionResponse(asset_id=asset.asset_id, version=asset.version)
+            for asset in sorted(
+                decision.required_assets,
+                key=lambda asset: (asset.asset_id, asset.version),
+            )
+        ],
+    )
+
+
+@router.get("/decisions", response_model=DecisionListResponse)
+def list_decisions(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose decisions are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
+) -> DecisionListResponse:
+    """List one client tenant's append-only governance decisions (SPEC.md sections 3, 7, 9).
+
+    SPEC.md section 7 lists ``/decisions`` and section 3 makes decision history
+    append only; SPEC.md section 9 requires every query to carry the client
+    scope. The tenant is a required query parameter and the ledger read is tenant
+    scoped, so another client's decisions are unreadable here. Decisions are
+    returned in canonical stage order, and within a stage in the order they were
+    recorded, so the history never reorders or edits an earlier decision. The
+    route is read-only: a decision is recorded through its stage gate and a
+    direct write here would let a caller confer the approval governance owns
+    (SPEC.md section 4).
+    """
+
+    template = stage_zero_to_ten_template()
+    ledger = repository.load(template, tenant_id)
+    decisions = [
+        decision
+        for stage in template.stages
+        for decision in ledger.decisions_for(stage.stage_number)
+    ]
+    page = decisions[offset : offset + limit]
+    return DecisionListResponse(
+        tenant_id=tenant_id,
+        total=len(decisions),
+        limit=limit,
+        offset=offset,
+        decisions=[_decision_payload(decision) for decision in page],
+    )
+
+
+def _approval_payload(decision: Any, approval: Any) -> ApprovalRecordResponse:
+    """Project one version-specific approval from a decision, computing no rule.
+
+    SPEC.md sections 3 and 4 keep an approval pinned to one exact asset version
+    and one intended scope. The projection surfaces that exact version and scope
+    plus the requester, the designated approver and the outcome; it carries the
+    stage and decision date so an approval is traceable to the decision that
+    recorded it.
+    """
+
+    return ApprovalRecordResponse(
+        asset_id=approval.asset.asset_id,
+        version=approval.asset.version,
+        scope=approval.scope,
+        requested_by=approval.requested_by,
+        approver=approval.approver,
+        outcome=approval.outcome.value,
+        expires_on=approval.expires_on,
+        stage_number=decision.stage_number,
+        decided_on=decision.decided_on,
+    )
+
+
+@router.get("/approvals", response_model=ApprovalListResponse)
+def list_approvals(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose approvals are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
+) -> ApprovalListResponse:
+    """List one client tenant's version-specific approvals (SPEC.md sections 3, 4, 7, 9).
+
+    SPEC.md section 7 lists ``/approvals``; sections 3 and 4 keep an approval
+    version specific and scoped to one intended use, and section 9 requires the
+    client scope on every query. Each approval is read from the durable decision
+    that recorded it, so the exact asset version and scope are the ones the gate
+    sealed. The tenant is a required query parameter and the ledger read is
+    tenant scoped. The route is read-only and never grants authority: only the
+    passing decision's pinned approvals authorize downstream use, so listing an
+    approval cannot itself authorize production or traffic (SPEC.md section 4).
+    """
+
+    template = stage_zero_to_ten_template()
+    ledger = repository.load(template, tenant_id)
+    approvals = [
+        (decision, approval)
+        for stage in template.stages
+        for decision in ledger.decisions_for(stage.stage_number)
+        for approval in decision.asset_approvals
+    ]
+    page = approvals[offset : offset + limit]
+    return ApprovalListResponse(
+        tenant_id=tenant_id,
+        total=len(approvals),
+        limit=limit,
+        offset=offset,
+        approvals=[
+            _approval_payload(decision, approval)
+            for decision, approval in page
+        ],
+    )

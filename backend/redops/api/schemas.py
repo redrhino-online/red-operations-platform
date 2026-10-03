@@ -1587,3 +1587,70 @@ class BuildListResponse(BaseModel):
     limit: int
     offset: int
     builds: list[BuildObjectResponse]
+
+
+class DecisionRecordResponse(BaseModel):
+    """One append-only governance decision, read from the durable ledger.
+
+    SPEC.md section 3 makes a Decision name its subject, choice, rationale,
+    actor, timestamp and exact affected version. A stage ``GateDecision`` is the
+    governance decision record for the gated pipeline, so the read surface
+    projects its disposition, reviewer, intended scope, the exact pinned asset
+    versions and the next action; the exact asset content is retrieved through
+    the gate seam, not re-declared here.
+    """
+
+    stage_number: int
+    template_version: str
+    checkpoint: str
+    disposition: str
+    reviewer: str
+    scope: str
+    rationale: str
+    decided_on: date
+    assigned_owner: str
+    due_on: date
+    next_action: str
+    tenant_id: str
+    required_assets: list[AssetVersionResponse]
+
+
+class DecisionListResponse(BaseModel):
+    """A paginated page of one client tenant's governance decisions."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    decisions: list[DecisionRecordResponse]
+
+
+class ApprovalRecordResponse(BaseModel):
+    """One version-specific approval, read from a durable decision.
+
+    SPEC.md section 3 makes an ApprovalRequest pin a version and scope and
+    SPEC.md section 4 keeps an approval version specific, so the read surface
+    projects the exact asset version, the intended scope, the requester, the
+    designated approver and the outcome. It is never a live grant of authority:
+    only a passing gate decision authorizes downstream use.
+    """
+
+    asset_id: str
+    version: int
+    scope: str
+    requested_by: str
+    approver: str
+    outcome: str
+    expires_on: date | None
+    stage_number: int
+    decided_on: date
+
+
+class ApprovalListResponse(BaseModel):
+    """A paginated page of one client tenant's version-specific approvals."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    approvals: list[ApprovalRecordResponse]

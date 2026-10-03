@@ -4,7 +4,60 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T193035Z (Ralph cycle, this run): selected item was Q11, the
+- Cycle 2026-10-03T193430Z (Ralph cycle, this run): selected item was Q12, the
+  tenant-scoped REST surface for `/approvals` and `/decisions` (prerequisite Q11
+  met). No gate-integrity item is ready: Q17-Q27 closed the caller-supplied
+  authority defect across every stage 0-10 gate and Q29's method change impact is
+  domain-complete, while Q28 stays blocked on the named methodology-owner
+  placement decision. Q12 outranks the Q13-Q14 chain because it is the next
+  product-backbone REST resource of SPEC.md section 7 and it makes the
+  append-only governance decision log and its exact-version approvals legible,
+  which the approval inbox (Q39) and the stage 0-10 e2e (Q30) read. The
+  `frontend/` shell Q32 was again rejected: the DoD [5/6] script passes on
+  `frontend/` merely existing with no `OpenExecutive` string, so a screens-less
+  shell would falsely turn `make done` green while condition 6 (Q45) is far off.
+- Outcome: new tenant-scoped read routes `GET /red/decisions` and
+  `GET /red/approvals` in `backend/redops/api/routes.py`, projected from the
+  durable `GateLedgerRepository`. `/decisions` lists the append-only gate
+  decisions in canonical stage order, each with disposition, reviewer, intended
+  scope, rationale, exact pinned asset versions and next action; `/approvals`
+  flattens the per-asset `ApprovalRequest`s those decisions recorded, surfacing
+  the exact asset version and scope, requester, designated approver, outcome and
+  expiry. Both are read-only over the existing ledger: a decision is recorded
+  through its stage gate and a direct write would let a caller confer the
+  approval governance owns (SPEC.md section 4), and listing an approval never
+  authorizes production or traffic.
+- Evidence: `make check` -> 2111 passed, 2 skipped, 686 subtests; pyflakes
+  clean. New tests `tests/unit/governance/test_governance_read_routes.py` (6):
+  the decision is listed for its tenant with exact versions; another tenant sees
+  nothing; the approvals list carries exact version, scope, approver and outcome;
+  approvals are tenant scoped; the tenant parameter is required on both routes
+  (422); pagination applies after scoping. `make done` still fails only [5/6]
+  (`frontend/` missing, Q32); [1/6]-[4/6] pass.
+- New findings: the durable governance decision record already exists as the
+  stage `GateDecision`, which seals its per-asset approvals, so Q12 needed no new
+  store and no migration; `/decisions` and `/approvals` are read projections, not
+  a second authority path. `ApprovalRequest` still carries no `tenant_id` of its
+  own because it is stored inside its decision and inherits the decision's
+  tenant; the tenant-scoped ledger is the enforcement seam. There is no
+  standalone pending-approval write path: gates issue and decide approvals during
+  recording, so `/approvals` reads decided approvals until a lighter-approval
+  policy (SPEC.md section 4) specifies a pending queue.
+- Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
+  land shell-only; Q28 stage 8-10 required kinds blocked on the named
+  methodology-owner placement decision; Q16 idempotency keys blocked on a
+  workflow write route; Q3 agent registration blocked on the ADR 0006 /
+  vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: Q13, REST `/journeys` and `/measurements`
+  (prereq Q12 done). Required asset: the journey release and measurement records
+  exposed through tenant-scoped routes; checkpoint: none (API surface, not a
+  gate); approver: none (no gate decides). Blocked downstream dependency: Q14
+  from it; then the stage 0-10 e2e Q30 and the `frontend/` screens Q32-Q45.
+
+### Prior cycle (2026-10-03T193035Z)
+
+- Cycle 2026-10-03T193035Z (Ralph cycle): selected item was Q11, the
   tenant-scoped REST surface for `/offers` and `/builds` (prerequisite Q10 met).
   Q17-Q27 closed the caller-supplied-authority defect across every stage 0-10
   gate, so no gate-integrity item is ready (Q28 is blocked on the named
@@ -3101,7 +3154,7 @@ stalls:
 | Q9 | REST `/clients` and `/clients/{id}/sources` (done 2026-10-03T190017Z; `GET /red/clients?tenant_id=&limit=&offset=` and `POST /red/clients`, `GET`/`POST /red/clients/{tenant_id}/sources`; durable `ClientWorkspaceStore` and `SourceRecordStore` ports with in-memory and PostgreSQL adapters and migrations `0010_client_workspaces`/`0011_source_records`; tenant is a required query parameter, an unscoped read/write or a rewritten source is refused) | api | Q7 | route tests `tests/unit/engagement/test_clients_route.py` (8), adapter tests `tests/unit/engagement/test_client_workspace_store.py` and `tests/unit/knowledge/test_source_record_store.py` |
 | Q10 | REST `/claims`, `/methods` (done 2026-10-03T192641Z; `GET`/`POST /red/claims` and `GET /red/methods`, tenant required on GET and path/body-scoped to the tenant; new durable Knowledge `ClaimStore` port with in-memory and PostgreSQL adapters and migration `0012_claims`; the claim create route verifies every citation against the same tenant's stored immutable `SourceRecord` by id and checksum, and the claim store refuses a same-id non-append-only re-statement; `MethodVersionRepository.list` added so `/methods` is a tenant-scoped paginated read of approved methods, left read-only because approval is gate-owned. Tests `tests/unit/knowledge/test_claim_store.py`, `tests/unit/knowledge/test_claims_route.py`, `tests/unit/method/test_methods_route.py`) | api | Q9 | route tests |
 | Q11 | REST `/offers`, `/builds` (done 2026-10-03T193035Z; `GET /red/offers` and `GET`/`POST /red/builds`, tenant required on every read and carried on the create body; `BuildObject` now requires a `tenant_id` (SPEC.md sections 3 and 9); new Production `BuildObjectRepository` port with in-memory and PostgreSQL adapters and migration `0013_build_objects` (upsert per `(tenant_id, build_id)`); `/offers` is a tenant-scoped paginated read over the existing offer store, left read-only because production readiness is gate-owned; `/builds` list is tenant-scoped and paginated and create records an Identified proposal. Tests `tests/unit/commercial/test_offers_route.py`, `tests/unit/production/test_build_object_store.py`, `tests/unit/production/test_builds_route.py`, `tests/unit/production/test_build_object_postgres.py`) | api | Q10 | route tests |
-| Q12 | REST `/approvals`, `/decisions` with exact version approval | api | Q11 | version specific approval |
+| Q12 | REST `/approvals`, `/decisions` with exact version approval (done 2026-10-03T193430Z; `GET /red/decisions` and `GET /red/approvals`, tenant required, paginated, projected from the durable tenant-scoped `GateLedgerRepository`; `/decisions` lists the append-only gate decisions in canonical stage order with disposition, reviewer, scope, rationale, exact pinned asset versions and next action, and `/approvals` flattens the per-asset `ApprovalRequest`s with exact asset version and scope, requester, designated approver, outcome and expiry; both read-only because a decision is recorded through its stage gate and listing an approval never grants authority. Tests `tests/unit/governance/test_governance_read_routes.py` (6)) | api | Q11 | version specific approval |
 | Q13 | REST `/journeys`, `/measurements` | api | Q12 | route tests |
 | Q14 | REST `/opportunities`, `/interventions` | api | Q13 | route tests |
 | Q15 | REST `/workflows/{id}` with SSE or stable id polling (done 2026-10-03T185701Z; `GET /red/clients/{tenant_id}/workflows/{run_id}`; tenant-scoped polling read returning a stable append-only `event_id` and the transition log; 404 for a missing/foreign run. Tenant is the path authority, matching the stage routes, not the bare `/workflows/{id}`) | api | Q5 | route tests `tests/unit/workflows/test_workflow_run_route.py` (4) |
