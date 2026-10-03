@@ -5,6 +5,20 @@ REPO ?= .
 RALPH ?= ./ralph_cycle.sh
 COUNT := $(or $(n),$(N))
 
+# Local development database. The docker-compose postgres service exposes this
+# URL. Exporting it keeps the persistence adapter and migration tests running
+# (instead of skipping) for every cycle and for `make check`. An explicit
+# environment value overrides this default; a local .env overrides both
+# (ralph_cycle.sh loads .env). See .env.example.
+DATABASE_URL ?= postgresql://redops:redops@localhost:5432/redops
+export DATABASE_URL
+
+# Publish policy: a single `make run` and every non-final `make loop` cycle push
+# to origin only. The final cycle of a loop also pushes to atlas. Override with
+# PUSH_REMOTES / FINAL_PUSH_REMOTES. Never pushes to `upstream`.
+PUSH_REMOTES ?= origin
+FINAL_PUSH_REMOTES ?= origin atlas
+
 # Create case-insensitive command aliases while keeping the run logic in two targets.
 RUN_ALIASES := $(shell bash -c 's=run; for ((m=0;m<8;m++)); do out=; for ((i=0;i<3;i++)); do c=$${s:i:1}; if ((m & (1<<i))); then out+=$$(printf "%s" "$$c" | tr "[:lower:]" "[:upper:]"); else out+=$$c; fi; done; printf "%s " "$$out"; done')
 LOOP_ALIASES := $(shell bash -c 's=loop; for ((m=0;m<16;m++)); do out=; for ((i=0;i<4;i++)); do c=$${s:i:1}; if ((m & (1<<i))); then out+=$$(printf "%s" "$$c" | tr "[:lower:]" "[:upper:]"); else out+=$$c; fi; done; printf "%s " "$$out"; done')
@@ -12,7 +26,7 @@ HELP_ALIASES := $(shell bash -c 's=help; for ((m=0;m<16;m++)); do out=; for ((i=
 
 COMMAND_ALIASES := $(RUN_ALIASES) $(LOOP_ALIASES) $(HELP_ALIASES)
 
-.PHONY: run loop help reset-hosted $(COMMAND_ALIASES)
+.PHONY: run loop help check reset-hosted $(COMMAND_ALIASES)
 .DEFAULT_GOAL := help
 
 $(filter-out run,$(RUN_ALIASES)): run
@@ -24,10 +38,16 @@ help:
 	  'make run                 Run one Ralph cycle' \
 	  'make loop n=5            Run five sequential Ralph cycles' \
 	  'make run REPO=../fork    Run against a Git checkout in another folder' \
+	  'make check               Run the full test suite (with Postgres) and pyflakes' \
 	  'make reset-hosted        Wipe the hosted instance data (onboarding/people)'
 
 run:
-	@"$(RALPH)" "$(REPO)"
+	@RALPH_PUSH_REMOTES="$(PUSH_REMOTES)" RALPH_PLAN_PUSH_REMOTES="$(PUSH_REMOTES)" "$(RALPH)" "$(REPO)"
+
+check:
+	@printf 'check: pytest (unit + postgres adapters + migrations) and pyflakes\n'
+	@uv run pytest -q
+	@uv run pyflakes backend tests
 
 reset-hosted:
 	@./scripts/reset_redop_data.sh
@@ -39,8 +59,9 @@ loop:
 	    printf 'Stop requested: %s exists; halting before cycle %s\n' "$(REPO)/.ralph/STOP" "$$cycle"; \
 	    break; \
 	  fi; \
-	  printf '\nRalph cycle %s of %s\n' "$$cycle" "$(COUNT)"; \
-	  status=0; "$(RALPH)" "$(REPO)" || status=$$?; \
+	  if (( cycle == $(COUNT) )); then remotes="$(FINAL_PUSH_REMOTES)"; else remotes="$(PUSH_REMOTES)"; fi; \
+	  printf '\nRalph cycle %s of %s (publish: %s)\n' "$$cycle" "$(COUNT)" "$$remotes"; \
+	  status=0; RALPH_PUSH_REMOTES="$$remotes" RALPH_PLAN_PUSH_REMOTES="$$remotes" "$(RALPH)" "$(REPO)" || status=$$?; \
 	  if (( status == 3 )); then \
 	    printf 'Stop requested: %s exists; halting loop\n' "$(REPO)/.ralph/STOP"; \
 	    break; \

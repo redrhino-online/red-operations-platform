@@ -19,8 +19,20 @@ readonly CANON_DIR="${RALPH_CANON:-$(cd "$SCRIPT_DIR/.." && pwd -P)/canon}"
 readonly OPENCODE_BIN="${RALPH_OPENCODE:-opencode}"
 # Space-separated remote names to publish to. Each is skipped when the
 # repository does not have that remote configured. Never pushes to `upstream`.
-readonly PUSH_REMOTES="${RALPH_PUSH_REMOTES:-${RALPH_PUSH_REMOTE:-atlas origin}}"
+# Default is origin only; `make loop` asks for `origin atlas` on its final cycle.
+readonly PUSH_REMOTES="${RALPH_PUSH_REMOTES:-${RALPH_PUSH_REMOTE:-origin}}"
 readonly PLAN_PUSH_REMOTES="${RALPH_PLAN_PUSH_REMOTES:-$PUSH_REMOTES}"
+
+# Local development database. The docker-compose postgres service exposes this
+# URL; exporting it keeps the persistence adapter and migration tests running
+# instead of skipping. An explicit environment value wins; a local .env is
+# loaded first when present. See .env.example.
+if [[ -f "$SCRIPT_DIR/.env" ]]; then
+  set -a; . "$SCRIPT_DIR/.env"; set +a
+fi
+: "${DATABASE_URL:=postgresql://redops:redops@localhost:5432/redops}"
+export DATABASE_URL
+
 readonly RUN_DIR="$REPO_DIR/.ralph"
 readonly LOCK_DIR="$RUN_DIR/cycle.lock"
 

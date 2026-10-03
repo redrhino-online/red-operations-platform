@@ -66,42 +66,43 @@ Cycles are token-disciplined: they use the Serena code-memory MCP for an indexed
 
 OpenCode may also read the repo's own rules, code, tests, Git state, and past run notes to check what is true. The reference model canon and the RED training files are background sources for the product. They are not a license to claim that a client has approved a draft, and the canon is never an authority to spend, publish, or deploy.
 
-## 6. The OpenExecutive submodule
+## 6. The OpenExecutive dependency
 
-The application is built on top of the OpenExecutive fork, vendored as a git
-submodule at `vendor/openexecutive/`. This planning repository stays the spec,
-plan and reference-canon authority; the fork is the build and deploy target.
-RED code is ported into the fork under `packages/core/openexecutive/redops/`
-(see the fork's `docs/adr/0002`).
+The application is this repository. RED code lives under `backend/redops/`
+together with the RED backend entry points (`docs/adr/0008`). OpenExecutive is a
+pinned dependency, vendored as a git submodule at `vendor/openexecutive/` and
+consumed through ports and composition. RED imports the fork's orchestrator,
+workflows, agents and infrastructure rather than editing them; the submodule
+stays close to upstream and is treated as read-only.
 
-Because the submodule is the target, run cycles against it rather than the
-planning repository root:
+Run cycles against this repository, not the submodule:
 
 ```bash
-./ralph_cycle.sh vendor/openexecutive
+make run
 # or
-make run REPO=vendor/openexecutive
+make loop n=5
 ```
 
-In this mode the harness runs OpenCode from the superproject (so the spec, plan
-and submodule are all in-project), commits the code change inside the submodule,
-then commits any spec/plan change and the moved submodule pointer in this
-repository. Publishing then pushes the submodule to its configured remotes and
-this repository to its own.
+RED changes and enhancements that OpenExecutive does not provide are built here,
+in `backend/redops/`, as SOLID, clean, onion-architecture code behind ports, so
+the vendor dependency is never modified. `docs/adr/0002` (port RED into the fork
+and target it) is superseded by `docs/adr/0008`.
 
 ## 7. Publishing
 
 The harness publishes after each successful cycle. `RALPH_PUSH_REMOTES` (default
-`atlas origin`) lists the remotes to push the **target** repository to;
-`RALPH_PLAN_PUSH_REMOTES` (default: the same) does so for this **superproject**.
-A remote that is not configured is skipped. The `upstream` remote of the fork
+`origin`) lists the remotes to push the repository to; `RALPH_PLAN_PUSH_REMOTES`
+(default: the same) does so for the spec/plan superproject (identical here). A
+remote that is not configured is skipped. The `upstream` fork remote
 (SenteLabsAI) is never pushed.
 
+- `make run` and every non-final `make loop` cycle push to `origin` only. The
+  final cycle of a `make loop` also pushes to `atlas`, so a long run does not
+  push an unfinished branch to Atlas until the last round. Override with
+  `PUSH_REMOTES` and `FINAL_PUSH_REMOTES`.
 - This repository's `atlas` remote is the Atlas Gitea repository
   (`ssh://git@10.0.0.110:2222/atlas-admin/red-operations-platform.git`), not the
   platform/GitOps repo (`github.com/211lab/atlas`).
-- The fork submodule pushes to its own `origin`
-  (`redrhino-online/OpenExecutive`), never to `upstream`.
 
 Publishing is source-only for now: the container build workflow, Helm chart and
 Argo CD Application are deferred until the platform has a real HTTP service and
