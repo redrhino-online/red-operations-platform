@@ -11,3 +11,4 @@ build-board /build-board
 approval-inbox /approval-inbox
 workflow-run-detail /workflow-run-detail
 launch-readiness /launch-readiness
+performance-review /performance-review

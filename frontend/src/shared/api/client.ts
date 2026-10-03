@@ -491,6 +491,43 @@ export interface EngagementProductionView {
   metric_reporting: MetricReporting[];
 }
 
+// The stage 10 measurement read (SPEC.md sections 3, 4 and 8; Q42). Mirrors
+// `MeasurementRecordResponse`/`MeasurementListResponse` in `backend/redops/api/
+// schemas.py`. An observation pins the exact metric version, the closed window,
+// the basis and the source; `is_observed` is false for a placeholder, so a
+// placeholder never reads as a measured result.
+export interface MetricDefinitionSummary {
+  metric_id: string;
+  tenant_id: string;
+  name: string;
+  funnel_step: string;
+  unit: string;
+  direction: string;
+  version: number;
+}
+
+export interface MeasurementRecord {
+  record_id: string;
+  tenant_id: string;
+  metric: MetricDefinitionSummary;
+  value: number;
+  window_start: string;
+  window_end: string;
+  basis: string;
+  source: string;
+  sample_size: number;
+  recorded_on: string;
+  is_observed: boolean;
+}
+
+export interface MeasurementList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  records: MeasurementRecord[];
+}
+
 // Tenant-scoped reads used by the first screens. Paths match `backend/redops/
 // api/routes.py` (router prefix `/red`).
 export class RedOperationsApi extends RedApiClient {
@@ -627,6 +664,20 @@ export class RedOperationsApi extends RedApiClient {
     params: ListParams = {},
   ): Promise<LaunchQAList> {
     return this.get<LaunchQAList>("/red/launch-qas", {
+      tenant_id: tenantId,
+      ...params,
+    });
+  }
+
+  // The performance review read (SPEC.md sections 3, 4, 7 and 8; Q42). The
+  // tenant is a required query scope; the route is read-only and a recorded
+  // observation is not a gate, so reading the registry changes no metric and
+  // starts no optimization.
+  listMeasurements(
+    tenantId: string,
+    params: ListParams = {},
+  ): Promise<MeasurementList> {
+    return this.get<MeasurementList>("/red/measurements", {
       tenant_id: tenantId,
       ...params,
     });

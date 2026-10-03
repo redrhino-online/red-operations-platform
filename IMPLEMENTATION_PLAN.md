@@ -4,6 +4,79 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T203157Z (Ralph cycle, this run): selected item was Q42, the
+  performance review screen (SPEC.md sections 4 and 8 and 13 condition 6; queue
+  item Q42). It is the highest priority ready item: its only dependency Q41 is
+  done, and it is now the head of the Q42-Q45 chain for condition 6, the largest
+  unstarted DoD condition. It outranks alternatives: Q43-Q45 each depend on
+  Q42; Q28 stage 8-10 required kinds are still blocked on the named
+  methodology-owner placement decision; Q16 needs a workflow write route and a
+  connector seam; Q3/Q4 need the ADR 0006 resolution and a live key; Q8 layer
+  coverage and the condition 2 cross-client-retrieval scenario have no
+  retrieval/worker/artifact seam yet; Q47-Q50 need the Atlas cluster. Q31 also
+  blocks condition 2 on a connector idempotency seam and the deploy-only
+  scenarios. The canon gap register has no ready pipeline item: its remaining
+  entries are implemented or are candidate pipeline additions awaiting a
+  named-owner decision, so no canon-covered method artifact outranks this gate
+  work.
+- Outcome: new `frontend/src/features/performance-review/` feature.
+  `PerformanceReview.tsx` is a presentational view over two tenant-scoped reads:
+  `baselineStage`/`baselinePins` surface the stage 10 "Performance Baseline
+  Established" gate row (state, checkpoint, exact pinned baseline asset versions,
+  missing kinds, owner, due date, next action, blockers) from the engagement
+  production view, and `milestoneStates` maps each of SPEC.md section 4's four
+  distinct stage 10 milestones (first qualified traffic, lead, appointment, sale)
+  to the funnel step the canon's Metrics Matrix solves down (canon files 22-24:
+  audience, lead, appointment, customer) and marks a milestone observed only when
+  an observed (non-placeholder) `/red/measurements` record exists, otherwise
+  pending, so a missing observation is shown pending rather than guessed.
+  `PerformanceReviewScreen.tsx` owns the parallel tenant-scoped reads
+  (`getProductionView` + `listMeasurements`); route `/performance-review`
+  (`src/app/performance-review/page.tsx`) binds the `performance-review` screen
+  id now declared in `frontend/dod-screens.txt`. The API client gained the
+  `MeasurementRecord`/`MeasurementList`/`MetricDefinitionSummary` types and
+  `listMeasurements`. No product authority, gate decision or pipeline stage
+  changed; a read approves no baseline and starts no optimization.
+- Evidence: `frontend/src/features/performance-review/PerformanceReview.test.tsx`
+  (10 tests) pins `baselineStage`/`baselinePins`, `milestoneStates` (observed vs
+  pending, newest-record selection, placeholder stays pending, the sale/customer
+  mapping), the rendered baseline state/pins/owner, the milestone rows, the empty
+  baseline and no-observation states, loading/error, and a stubbed-fetch screen
+  read asserting both tenant-scoped paths (2 fetches). `npm test` -> 10 files, 84
+  passed (10 new). `npm run build` -> compiled, `/performance-review` route
+  emitted. `make check` -> 2272 passed, 2 skipped, 706 subtests passed.
+  `bash scripts/check_frontend_build.sh frontend` -> exit 0.
+  `bash scripts/check_frontend_screens.sh frontend` -> still exit 1, now 2
+  remaining section 8 ids (portfolio-opportunities, authority-settings;
+  condition 6 needs Q43-Q44). `make done` still fails first at `[2/6]` condition
+  2.
+- New findings: the stage 10 measurement registry route `GET /red/measurements`
+  already existed (Q13), so this screen needed no new backend route; however the
+  production-view route does not populate its `metric_reporting` field (it is
+  passed empty through the query), so the METRICS reporting dimension is not
+  readable from the production view and the screen reads the measurement registry
+  directly. The stage 10 baseline's milestone observations are not durably stored
+  -- the gate decision pins only the twelve canonical kinds at the baseline
+  version -- so observed/pending is derived from the measured funnel steps, a
+  documented projection, not a stored stage 10 milestone state.
+- Blockers (unchanged): `frontend/` Q43-Q44 are the path to DoD condition 6;
+  Q8's retrieval, worker and artifact-URL isolation coverage and the condition 2
+  cross-client-retrieval scenario are blocked until those seams exist; Q28 stage
+  8-10 required kinds blocked on the named methodology-owner placement decision;
+  Q16 idempotency keys blocked on a workflow write route and a connector seam;
+  Q3 agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
+  deploy-only scenarios need the Atlas cluster and a chosen backup target.
+- Highest priority ready next item: Q43, the portfolio opportunities screen.
+  Required asset: a portfolio opportunities view at a declared route showing the
+  tenant-scoped stage 10/portfolio `Opportunity` proposals and their exact
+  pinned grounding asset versions over the tenant-scoped `/opportunities` read
+  (SPEC.md sections 3, 8 and 13 condition 6), plus its browser test; checkpoint:
+  none (UI, not a gate); approver: none. Blocked downstream dependency: Q44-Q45.
+  Prerequisite: Q42 (done this cycle).
+
+### Prior cycle (2026-10-03T202836Z)
+
 - Cycle 2026-10-03T202836Z (Ralph cycle, this run): selected item was Q41, the
   launch readiness screen (SPEC.md sections 4, 7, 8 and 13 condition 6; queue
   item Q41). It is the highest priority ready item: its only dependency Q40 is
@@ -4387,7 +4460,7 @@ stalls:
 | Q39 | Approval inbox with exact version diff | ui | Q38 | Done 2026-10-03T202445Z: `frontend/src/features/approval-inbox/` (`ApprovalInbox.tsx` presentational with the `approvalHistories`/`priorApproval`/`approvalDiff`/`exactVersion` helpers, `ApprovalInboxScreen.tsx` tenant-scoped read, route `/approval-inbox`, `frontend/dod-screens.txt` declares the screen id) over `listApprovals` (`GET /red/approvals?tenant_id=`). The diff groups the append-only approvals by pinned asset kind and reports each changed field's exact prior and current value against the previous version, with a baseline notice when none exists. `npm run build` clean (`/approval-inbox` emitted), `npm test` 12 new passed (55 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 5 remaining screens |
 | Q40 | Workflow run detail | ui | Q39 | Done 2026-10-03T202643Z: `frontend/src/features/workflow-run/` (`WorkflowRunDetail.tsx` presentational with the `eventOrdinal`/`orderedTransitions` event-log helpers, `WorkflowRunDetailScreen.tsx` tenant-plus-run read, route `/workflow-run-detail`, `frontend/dod-screens.txt` declares the screen id) over `getWorkflowRun` (`GET /red/clients/{tenant_id}/workflows/{run_id}`). The client `WorkflowRunView` was corrected to the real route projection and gained `WorkflowRunTransition`. `npm run build` clean (`/workflow-run-detail` emitted), `npm test` 10 new passed (65 total), `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 4 remaining screens |
 | Q41 | Launch readiness | ui | Q40 | Done 2026-10-03T202836Z: `frontend/src/features/launch-readiness/` (`LaunchReadiness.tsx` presentational with the `checksWithOutcome`/`criticalFailures`/`exceptions`/`isAuthorized` helpers, `LaunchReadinessScreen.tsx` tenant-scoped read, route `/launch-readiness`, `frontend/dod-screens.txt` declares the screen id) over `listLaunchQAs` (`GET /red/launch-qas`). That read is new: `LaunchQARepository` gained `list` (in-memory + PostgreSQL) and the route projects each QA's state, its checks (kind, outcome, evidence, owner, `is_critical_path`) and the pinned traffic authorization. The view surfaces the stage 9 state, critical-path failures, exceptions and the exact authorization; it authorizes no traffic. `npm run build` clean (`/launch-readiness` emitted), `npm test` 9 new passed (74 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 3 remaining screens |
-| Q42 | Performance review | ui | Q41 | browser test |
+| Q42 | Performance review | ui | Q41 | Done 2026-10-03T203157Z: `frontend/src/features/performance-review/` (`PerformanceReview.tsx` presentational with the `baselineStage`/`baselinePins`/`milestoneStates` helpers, `PerformanceReviewScreen.tsx` parallel tenant-scoped read, route `/performance-review`, `frontend/dod-screens.txt` declares the screen id) over `getProductionView` (`GET /red/clients/{tenant}/engagements/{engagement}/production-view`) and `listMeasurements` (`GET /red/measurements?tenant_id=`). The view shows the stage 10 baseline gate state and exact pinned baseline asset versions, then the four distinct post-launch milestones mapped to the measured funnel steps with missing observations shown pending (a placeholder record stays pending, never a measurement). The client gained `MeasurementRecord`/`MeasurementList`/`MetricDefinitionSummary` and `listMeasurements`. `npm run build` clean (`/performance-review` emitted), `npm test` 10 new passed (84 total), `make check` 2272 passed / 2 skipped / 706 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 2 remaining screens |
 | Q43 | Portfolio opportunities | ui | Q42 | browser test |
 | Q44 | Authority settings | ui | Q43 | browser test |
 | Q45 | All screen browser suite | ui | Q44 | DoD 6. Condition 6 build/suite gate added 2026-10-03T201148Z: `scripts/check_frontend_build.sh` (run by `[5/6]` after `check_frontend_screens.sh`) requires `frontend/package.json` to declare `build` and `test` and runs both, so a green `[5/6]` requires the UI to compile and its browser suite to run, not merely exist. Red today: the shell declares no `test` script and ships no browser runner |
