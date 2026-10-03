@@ -18,6 +18,7 @@ from enum import Enum
 
 from redops.contexts.operations.domain.errors import (
     InterventionDismissalError,
+    InvalidInterventionDismissalError,
     InvalidInterventionError,
     InvalidNotificationError,
     InvalidQuietHoursError,
@@ -228,6 +229,54 @@ class Intervention:
             state=InterventionState.DISMISSED,
             resolution_note=rationale,
         )
+
+
+@dataclass(frozen=True)
+class InterventionDismissal:
+    """A durable operator decision to suppress one intervention card.
+
+    SPEC.md section 7 allows a card to be dismissed with rationale. The derived
+    cards themselves are not stored: the ranking query recomputes them from the
+    production view on every read, so only the human decision to suppress one is
+    durable. The record names the tenant and the card's deduplication key
+    (client, reason, subject) plus the operator's rationale and the actor who
+    dismissed it, so a later query can mark the matching surfaced card dismissed
+    without the operator decision being lost on restart (SPEC.md sections 7 and
+    9). A dismissal for a card that no longer surfaces is inert, never a
+    fabricated card.
+    """
+
+    tenant_id: str
+    client: str
+    reason: InterventionReason
+    subject: str
+    rationale: str
+    actor: str
+    dismissed_on: date
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("intervention dismissal tenant id", self.tenant_id),
+            ("intervention dismissal client", self.client),
+            ("intervention dismissal subject", self.subject),
+            ("intervention dismissal rationale", self.rationale),
+            ("intervention dismissal actor", self.actor),
+        ):
+            if not value or not value.strip():
+                raise InvalidInterventionDismissalError(f"{label} is required")
+        if not isinstance(self.reason, InterventionReason):
+            raise InvalidInterventionDismissalError(
+                "an intervention dismissal requires a typed reason"
+            )
+        if not isinstance(self.dismissed_on, date):
+            raise InvalidInterventionDismissalError(
+                "an intervention dismissal requires a dismissal date"
+            )
+
+    @property
+    def key(self) -> tuple[str, str, str]:
+        """The card key this dismissal suppresses (SPEC.md section 7)."""
+        return (self.client, self.reason.value, self.subject)
 
 
 class NotificationState(Enum):

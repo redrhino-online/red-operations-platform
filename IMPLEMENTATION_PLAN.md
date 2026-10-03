@@ -4,6 +4,71 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+- Cycle 2026-10-03T194645Z (Ralph cycle, this run): selected item was the
+  `/interventions` half of Q14, the tenant-scoped command center intervention
+  read and durable dismissal surface over the existing Operations
+  `InterventionRankingPolicy` (prerequisite Q13 met by the prior cycle). It
+  outranks the `/opportunities` half of Q14 and the `frontend/` Q32: SPEC.md
+  section 7 ("Command center intervention fields") fully specifies the card and
+  the domain already encodes all four reasons, the field set, deduplication and
+  dismissal, so this closes a real gap (SPEC.md section 7 lists `/interventions`,
+  but no store and no route existed) at low design risk; `/opportunities` needs a
+  new Portfolio `Opportunity` aggregate whose shape the canon only sketches (the
+  Serve and Grow entry is a named-owner pipeline decision), and `frontend/` is
+  the downstream dashboard whose shell-only form would falsely pass DoD [5/6]
+  while condition 6 (Q45) is far off. `/interventions` is the visible command
+  center's core content and the last high-value SPEC.md section 7 resource short
+  of `/opportunities`.
+- Outcome: new pure-domain `InterventionDismissal` value object (tenant, client,
+  typed reason, subject, rationale, actor, dismissed-on) with named
+  `InvalidInterventionDismissalError`; new Operations application port
+  `InterventionDismissalRepository` (`list`/`save`/`close`); in-memory and
+  PostgreSQL adapters, `intervention_dismissal_repository_from_env`,
+  `InterventionDismissalConfigurationError`, `InterventionDismissalConflictError`
+  and `InterventionDismissalTenantBoundaryError`, payload mappers; migration
+  `0016_intervention_dismissals` (NOT NULL `tenant_id`/`client`/`reason`/`subject`
+  and a unique card key); and tenant-scoped routes `GET /red/interventions`
+  (ranked cards for a client engagement, derived from the production view) and
+  `POST /red/interventions/dismiss`. The derived cards are recomputed on every
+  read; only the operator decision is durable, and a stored dismissal is applied
+  to the matching surfaced card (a dismissal whose card no longer surfaces is
+  inert). A same-key dismissal with different content is a named 409. Recording a
+  dismissal resolves no blocker and takes no production action.
+- Evidence: `make check` -> 2193 passed, 2 skipped, 697 subtests; pyflakes clean.
+  New tests `tests/unit/operations/test_intervention_dismissal.py` (5),
+  `test_intervention_dismissal_repository.py` (6) and
+  `test_intervention_dismissal_postgres.py` (4, run against the live compose
+  database) and `test_interventions_route.py` (6); `tests/unit/shared/test_migrate.py`
+  pins head `0016_intervention_dismissals` and the new table. `make done` still
+  fails only [5/6] (`frontend/` missing, Q32); [1/6]-[4/6] and [6/6] pass.
+- New findings: the intervention cards are derived from the Governance production
+  view on every read, so no card table is needed; the store holds only the
+  human dismissal keyed by `(tenant_id, client, reason, subject)`. The two
+  signals the platform itself derives (blocked critical path, overdue approval)
+  are served; failed live journeys and nearing commitments stay caller-supplied
+  signals the Execution, Measurement and Engagement contexts own, so their own
+  surfaces remain a documented follow-up rather than fabricated cards. A blocked
+  stage with a past due date legitimately surfaces two cards (blocked and
+  overdue), which the route returns as two ranked cards.
+- Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
+  land shell-only; Q28 stage 8-10 required kinds blocked on the named
+  methodology-owner placement decision; Q16 idempotency keys blocked on a
+  workflow write route; Q3 agent registration blocked on the ADR 0006 /
+  vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
+  `REDOP_LIVE_OPENROUTER_SMOKE=1`.
+- Highest priority ready next item: the `/opportunities` half of Q14, the
+  tenant-scoped Portfolio opportunity surface. Required asset: a Portfolio
+  `Opportunity` aggregate (the derivative/expansion opportunity SPEC.md section 3
+  names) exposed through a tenant-scoped route; because its shape is canon-thin
+  (canon 11, 12 Serve/Grow; SPEC.md section 12.5 records the expansion candidate
+  as needing a named-owner stage decision), the smallest safe slice is a typed
+  read/write aggregate inside the existing Portfolio context, not a new stage.
+  Checkpoint: none (API surface, not a gate); approver: none. Blocked downstream
+  dependency: Q14 completes the SPEC.md section 7 REST resource set, then the
+  `frontend/` screens Q32-Q45. The stage 0-10 e2e Q30 is already green.
+
+### Prior cycle (2026-10-03T194326Z)
+
 - Cycle 2026-10-03T194326Z (Ralph cycle, this run): selected item was the
   `/journeys` half of Q13, the tenant-scoped journey release store and REST
   surface over the Execution `JourneyRelease` aggregate (prerequisite met by the
@@ -3334,7 +3399,7 @@ stalls:
 | Q11 | REST `/offers`, `/builds` (done 2026-10-03T193035Z; `GET /red/offers` and `GET`/`POST /red/builds`, tenant required on every read and carried on the create body; `BuildObject` now requires a `tenant_id` (SPEC.md sections 3 and 9); new Production `BuildObjectRepository` port with in-memory and PostgreSQL adapters and migration `0013_build_objects` (upsert per `(tenant_id, build_id)`); `/offers` is a tenant-scoped paginated read over the existing offer store, left read-only because production readiness is gate-owned; `/builds` list is tenant-scoped and paginated and create records an Identified proposal. Tests `tests/unit/commercial/test_offers_route.py`, `tests/unit/production/test_build_object_store.py`, `tests/unit/production/test_builds_route.py`, `tests/unit/production/test_build_object_postgres.py`) | api | Q10 | route tests |
 | Q12 | REST `/approvals`, `/decisions` with exact version approval (done 2026-10-03T193430Z; `GET /red/decisions` and `GET /red/approvals`, tenant required, paginated, projected from the durable tenant-scoped `GateLedgerRepository`; `/decisions` lists the append-only gate decisions in canonical stage order with disposition, reviewer, scope, rationale, exact pinned asset versions and next action, and `/approvals` flattens the per-asset `ApprovalRequest`s with exact asset version and scope, requester, designated approver, outcome and expiry; both read-only because a decision is recorded through its stage gate and listing an approval never grants authority. Tests `tests/unit/governance/test_governance_read_routes.py` (6)) | api | Q11 | version specific approval |
 | Q13 | REST `/journeys`, `/measurements` (`/measurements` done 2026-10-03T193641Z; `GET /red/measurements` and `POST /red/measurements` over the new durable Measurement `MeasurementRegistry` (metric definitions + observations), in-memory and PostgreSQL adapters and migration `0014_measurements`; tenant required, append-only, an observation pins its exact metric version and a same-key re-statement is a 409. `/journeys` advanced 2026-10-03T194013Z: the SPEC.md section 3 `JourneyRelease` core aggregate now exists (pure domain, invariant "launch needs signed readiness and authorized release", grounded on a same-tenant ready-for-traffic `LaunchQA` whose `TrafficAuthorization` names the designated authority); `/journeys` done 2026-10-03T194326Z: new Execution `JourneyReleaseRepository` port (get/list/save/close) with in-memory and PostgreSQL adapters, migration `0015_journey_releases`, and tenant-scoped `GET`/`POST /red/journeys` grounded on the durable stage 9 launch QA by exact id; append-only, a same-id re-statement is a 409. Tests `tests/unit/execution/test_journey_release_repository.py` (7), `test_journeys_route.py` (7), `test_journey_release_postgres.py` (4)) | api | Q12 | route tests |
-| Q14 | REST `/opportunities`, `/interventions` | api | Q13 | route tests |
+| Q14 | REST `/opportunities`, `/interventions` (`/interventions` done 2026-10-03T194645Z: tenant-scoped `GET /red/interventions` ranks the command center cards for a client engagement from the Governance production view and `POST /red/interventions/dismiss` records a durable operator dismissal; new Operation `InterventionDismissal` value object and `InterventionDismissalRepository` port with in-memory and PostgreSQL adapters and migration `0016_intervention_dismissals`; the cards are derived on read, only the dismissal is stored, a same-key re-statement is a 409. Tests `tests/unit/operations/test_intervention_dismissal.py`, `test_intervention_dismissal_repository.py`, `test_intervention_dismissal_postgres.py`, `test_interventions_route.py`. `/opportunities` remains) | api | Q13 | route tests |
 | Q15 | REST `/workflows/{id}` with SSE or stable id polling (done 2026-10-03T185701Z; `GET /red/clients/{tenant_id}/workflows/{run_id}`; tenant-scoped polling read returning a stable append-only `event_id` and the transition log; 404 for a missing/foreign run. Tenant is the path authority, matching the stage routes, not the bare `/workflows/{id}`) | api | Q5 | route tests `tests/unit/workflows/test_workflow_run_route.py` (4) |
 | Q16 | Idempotency keys and optimistic version conflicts on mutations | api | Q15 | duplicate delivery one effect; stale update 409 |
 | Q17 | Stage 0 intake route hardened plus workspace and authority (API surface) (done 2026-10-03T190410Z; `RecordStageZeroGateRequest` no longer carries `authorities`; `record_stage_zero_gate` resolves the persisted `ClientWorkspace` and its authority registry through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_zero_gate_route.py` (7) and helper `tests/unit/workspace_fixture.py`) | pipeline | Q9 | stage 0 gate e2e |

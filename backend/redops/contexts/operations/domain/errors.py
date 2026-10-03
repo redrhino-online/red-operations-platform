@@ -35,6 +35,36 @@ class InvalidInterventionQueryError(OperationsError, ValueError):
     """
 
 
+class InvalidInterventionDismissalError(OperationsError, ValueError):
+    """A recorded intervention dismissal is missing a field or is malformed.
+
+    SPEC.md section 7 allows a card to be dismissed with rationale and requires
+    the card to show who owns it and why it was surfaced. A durable dismissal
+    record therefore names the tenant, client, reason and subject of the card it
+    suppresses, the operator's rationale and the actor who dismissed it; a record
+    missing any of these would suppress an intervention without a traceable
+    decision or cross a client boundary.
+    """
+
+
+class InterventionDismissalConflictError(OperationsError):
+    """A stored dismissal was re-stated with different content under its key.
+
+    A dismissal is an operator decision and is append only: recording the exact
+    same dismissal again is idempotent, but reusing a card's key with a different
+    rationale or actor would rewrite the decision history rather than add to it.
+    """
+
+
+class InterventionDismissalTenantBoundaryError(OperationsError):
+    """A dismissal was stored or resolved without a client tenant.
+
+    SPEC.md sections 3 and 9 make an intervention a client resource that must
+    carry its tenant on every command and query; storing or reading one without a
+    client would either leak across clients or create an orphaned decision.
+    """
+
+
 class InvalidQuietHoursError(OperationsError, ValueError):
     """An owner's quiet-hours preference is missing or ambiguous.
 

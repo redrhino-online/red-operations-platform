@@ -41,6 +41,10 @@ from redops.api.schemas import (
     JourneyReleaseAssetResponse,
     JourneyReleaseListResponse,
     JourneyReleaseResponse,
+    DismissInterventionRequest,
+    InterventionDismissalResponse,
+    InterventionListResponse,
+    InterventionResponse,
     LaunchQAInput,
     MethodReferenceResponse,
     MethodVersionInput,
@@ -287,6 +291,19 @@ from redops.contexts.measurement.domain.value_objects import (
 )
 from redops.contexts.measurement.infrastructure.repositories import (
     measurement_registry_from_env,
+)
+from redops.contexts.operations.application.ports import (
+    InterventionDismissalRepository,
+)
+from redops.contexts.operations.domain.errors import OperationsError
+from redops.contexts.operations.domain.policies import InterventionRankingPolicy
+from redops.contexts.operations.domain.value_objects import (
+    Intervention,
+    InterventionDismissal,
+    InterventionReason,
+)
+from redops.contexts.operations.infrastructure.repositories import (
+    intervention_dismissal_repository_from_env,
 )
 from redops.contexts.production.application.ports import (
     AuthorityAmplifierRepository,
@@ -615,6 +632,30 @@ def get_journey_release_repository() -> Iterator[JourneyReleaseRepository]:
     """
 
     repository = journey_release_repository_from_env(
+        os.environ.get("DATABASE_URL")
+    )
+    try:
+        yield repository
+    finally:
+        repository.close()
+
+
+def get_intervention_dismissal_repository() -> Iterator[
+    InterventionDismissalRepository
+]:
+    """Provide the intervention dismissal seam to the API (SPEC.md section 6).
+
+    SPEC.md section 7 exposes the command center's cards at ``/interventions`` and
+    allows dismissal with rationale, and SPEC.md section 9 keeps an operator
+    decision from being lost. The derived cards are recomputed on every read, so
+    only the dismissal is durable; the dependency owns one adapter for the request
+    and releases any connection it opened when the request ends. The store is
+    chosen once from ``DATABASE_URL``; a request cannot silently downgrade to a
+    process-local dismissal store, because a set-but-unusable configuration raises
+    before the route runs.
+    """
+
+    repository = intervention_dismissal_repository_from_env(
         os.environ.get("DATABASE_URL")
     )
     try:
@@ -4318,3 +4359,161 @@ def create_journey_release(
         ) from exc
 
     return _journey_release_payload(release)
+
+
+def _intervention_payload(card: Intervention) -> InterventionResponse:
+    """Project one ranked intervention card onto the command center read surface.
+
+    SPEC.md section 7 pins the card fields, so the payload carries them verbatim
+    and sorts the evidence and affected builds for a stable response. The route
+    computes no rule; the ranking policy and the ``Intervention`` value object
+    already validated the card.
+    """
+
+    return InterventionResponse(
+        client=card.client,
+        reason=card.reason.value,
+        severity=card.severity.value,
+        subject=card.subject,
+        explanation=card.explanation,
+        evidence=sorted(card.evidence),
+        owner=card.owner,
+        next_action=card.next_action,
+        due_on=card.due_on,
+        state=card.state.value,
+        affected_builds=sorted(card.affected_builds),
+        resolution_note=card.resolution_note,
+    )
+
+
+@router.get("/interventions", response_model=InterventionListResponse)
+def list_interventions(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose interventions are returned"
+    ),
+    engagement: str = Query(
+        ..., description="The client engagement the command center is scoped to"
+    ),
+    on: date = Query(
+        ..., description="The evaluation instant the ranking is computed against"
+    ),
+    ledger_repository: GateLedgerRepository = Depends(
+        get_gate_ledger_repository
+    ),
+    run_repository: StageRunRepository = Depends(get_stage_run_repository),
+    dismissal_repository: InterventionDismissalRepository = Depends(
+        get_intervention_dismissal_repository
+    ),
+) -> InterventionListResponse:
+    """Rank one client's command center intervention cards (SPEC.md section 7).
+
+    SPEC.md section 7 lists ``/interventions`` and requires the command center to
+    surface, per client, the blocked critical path and overdue approvals (derived
+    here from the production view) and to deduplicate them, and section 9 requires
+    every tenant resource query to carry ``tenant_id``. Failed live journeys and
+    nearing commitments are caller-supplied signals the Execution, Measurement and
+    Engagement contexts own; they are not fabricated here and their own surfaces
+    remain a follow-up, so this read currently ranks the two signals the platform
+    itself derives. Stored operator dismissals are applied to the matching derived
+    cards so a suppressed card is returned dismissed with its rationale; a
+    dismissal whose card no longer surfaces is inert. Listing a card authorizes no
+    action.
+    """
+
+    query = EngagementProductionViewQuery(
+        template=stage_zero_to_ten_template(),
+        engagement=engagement,
+        tenant_id=tenant_id,
+        on=on,
+        verified_post_launch_milestones=0,
+        activity_entries=0,
+    )
+    try:
+        view = GetEngagementProductionViewHandler(
+            ledger_repository=ledger_repository,
+            run_repository=run_repository,
+        ).handle(query)
+        cards = InterventionRankingPolicy().rank(view, on=on)
+    except (GovernanceError, ValueError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    dismissals = {
+        dismissal.key: dismissal
+        for dismissal in dismissal_repository.list(tenant_id, engagement)
+    }
+    cards = tuple(
+        card.dismiss(dismissals[card.key].rationale)
+        if card.key in dismissals
+        else card
+        for card in cards
+    )
+    return InterventionListResponse(
+        tenant_id=tenant_id,
+        engagement=engagement,
+        on=on,
+        total=len(cards),
+        interventions=[_intervention_payload(card) for card in cards],
+    )
+
+
+@router.post(
+    "/interventions/dismiss",
+    status_code=201,
+    response_model=InterventionDismissalResponse,
+)
+def dismiss_intervention(
+    body: DismissInterventionRequest,
+    repository: InterventionDismissalRepository = Depends(
+        get_intervention_dismissal_repository
+    ),
+) -> InterventionDismissalResponse:
+    """Record one operator dismissal of an intervention card (SPEC.md section 7).
+
+    SPEC.md section 7 allows a card to be dismissed with rationale. The route
+    builds the typed ``InterventionDismissal`` (which refuses a missing tenant,
+    client, reason, subject, rationale or actor) and stores it durably so the
+    decision survives a restart (SPEC.md section 9). Recording a dismissal
+    resolves no underlying blocker and takes no production action; it only
+    suppresses the matching card on later reads. A same-key re-statement with
+    different content is a named 409 rather than a rewritten decision.
+    """
+
+    try:
+        dismissal = InterventionDismissal(
+            tenant_id=body.tenant_id,
+            client=body.client,
+            reason=InterventionReason(body.reason),
+            subject=body.subject,
+            rationale=body.rationale,
+            actor=body.actor,
+            dismissed_on=body.dismissed_on,
+        )
+        repository.save(dismissal)
+    except OperationsError as exc:
+        status = (
+            409
+            if type(exc).__name__ == "InterventionDismissalConflictError"
+            else 422
+        )
+        raise HTTPException(
+            status_code=status,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return InterventionDismissalResponse(
+        tenant_id=dismissal.tenant_id,
+        client=dismissal.client,
+        reason=dismissal.reason.value,
+        subject=dismissal.subject,
+        rationale=dismissal.rationale,
+        actor=dismissal.actor,
+        dismissed_on=dismissal.dismissed_on,
+    )

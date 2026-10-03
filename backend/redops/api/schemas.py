@@ -1807,3 +1807,67 @@ class JourneyReleaseListResponse(BaseModel):
     limit: int
     offset: int
     releases: list[JourneyReleaseResponse]
+
+
+class InterventionResponse(BaseModel):
+    """One command center intervention card (SPEC.md section 7).
+
+    Carries the fields SPEC.md section 7 requires — client, severity, reason,
+    evidence, owner, next action, due time, state and affected builds — plus the
+    explanation that shows why the card was surfaced. A dismissed card carries the
+    operator's rationale in ``resolution_note``.
+    """
+
+    client: str
+    reason: str
+    severity: str
+    subject: str
+    explanation: str
+    evidence: list[str]
+    owner: str
+    next_action: str
+    due_on: date | None = None
+    state: str
+    affected_builds: list[str]
+    resolution_note: str
+
+
+class InterventionListResponse(BaseModel):
+    """The ranked, tenant-scoped intervention cards for one client engagement."""
+
+    tenant_id: str
+    engagement: str
+    on: date
+    total: int
+    interventions: list[InterventionResponse]
+
+
+class DismissInterventionRequest(BaseModel):
+    """Record one operator dismissal of a surfaced intervention card.
+
+    SPEC.md section 7 allows a card to be dismissed with rationale. The request
+    names the card's deduplication key (client, reason, subject) and the operator
+    who dismissed it, so the decision is durable and traceable rather than a
+    silent suppression. A dismissal never resolves the underlying blocker; it
+    records that the operator chose to suppress the card.
+    """
+
+    tenant_id: str
+    client: str
+    reason: str
+    subject: str
+    rationale: str
+    actor: str
+    dismissed_on: date
+
+
+class InterventionDismissalResponse(BaseModel):
+    """One durable operator dismissal, re-validated through the domain value object."""
+
+    tenant_id: str
+    client: str
+    reason: str
+    subject: str
+    rationale: str
+    actor: str
+    dismissed_on: date
