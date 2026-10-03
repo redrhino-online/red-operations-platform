@@ -4,7 +4,64 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T172003Z (Ralph cycle, this run): selected item was the HTTP
+- Cycle 2026-10-03T172133Z (Ralph cycle, this run): selected item was the HTTP
+  route that exposes the stage 5 "Offer Locked" gate. The prior cycle named it
+  the highest priority ready next item: the `StageFiveGateAssembler`
+  /`StageFiveGateRecorder`, the `RecordStageFiveGateCommand`
+  /`RecordStageFiveGateHandler` and the Commercial `OfferPackage`
+  (`DeliverySpecification`, `StepDelivery`) all exist, but only stages 0, 1, 2, 3
+  and 4 had write routes, so the canonical 0-10 API surface stopped at stage 4
+  and DoD condition 1 stayed unreachable. It outranked the stage 6 route (which
+  depends on it) and the `ClientProcess` canon gap (a methodology-owner
+  decision), because gate visibility through the real use case is the pipeline
+  backbone.
+- Outcome: new `POST /red/clients/{tenant_id}/stages/5/gate` in
+  `backend/redops/api/routes.py`, mapping the typed request to the Commercial
+  `OfferPackage` (`DeliverySpecification` and its `StepDelivery` rows, grounded
+  on the nested locked `SignatureSolution`) and running
+  `RecordStageFiveGateHandler` through `get_gate_ledger_repository` and
+  `get_stage_run_repository`, mirroring the stage 4 route. New request schemas in
+  `backend/redops/api/schemas.py`: `StepDeliveryInput`,
+  `DeliverySpecificationInput`, `RecordStageFiveGateRequest`. The route computes
+  no rule: canonical kinds, exact versions, approver authority, the delivery
+  model grounded on the same-tenant locked stage 4 method, one delivery per named
+  method step with an action, actor, deliverable, timing and measure, and the
+  stage 4 prerequisite stay enforced by the domain. Stage 5 errors map to a named
+  422, including the Commercial, Engagement, Governance and Method error
+  families. Stage 5 carries no claims, because the "Offer Locked" checkpoint
+  turns on the delivered offer's completeness against the locked method rather
+  than external customer evidence.
+- Evidence: `tests/unit/test_stage_five_gate_route.py` (6) pass: stages 0, 1, 2, 3
+  and 4 are seeded through their own routes, then a passing stage 5 decision pins
+  the twelve canonical offer kinds at version 1, the stage 5 run persists
+  COMPLETE with its owner, a stage 5 gate with no passing stage 4 is refused, a
+  delivery missing a method step is refused, an unauthorized approver is refused
+  without a write, and the decision is invisible to another tenant. `make check`
+  green: 1691 passed, 1 skipped, 632 subtests; pyflakes clean.
+- New findings: unchanged from the prior cycle for the prerequisite refusal shape
+  (`GateDecisionError` from `GateIntegrityPolicy` via `GateDecision.from_gate`,
+  not `UnsatisfiedPrerequisiteError`). The persisted
+  `GateDecision.required_assets` carry the canonical kind as `asset_id`.
+  `make done` still fails at step 2 (`tests/e2e` absent), so DoD 1 is not met.
+- Blockers: Tier 2 facts unchanged; no request idempotency key on the gate
+  routes and a repeated gate POST after COMPLETE returns 422; RLS remains
+  WHERE-clause only (ADR 0004); the stage 0-10 e2e suite (DoD 1, Q30) and the
+  migration deployment step (separate GitOps chart) are absent from this repo.
+- Highest priority ready next item: expose the stage 6 "Campaign Message
+  Approved" gate by `POST /red/clients/{tenant_id}/stages/6/gate`, mapping a
+  typed request to the Commercial `CampaignMessagePackage` and running
+  `RecordStageSixGateHandler` through the ledger and stage run ports, mirroring
+  the stage 5 route. Prerequisites: the `StageSixGateAssembler`
+  /`StageSixGateRecorder`, `RecordStageSixGateCommand`
+  /`RecordStageSixGateHandler` and `CampaignMessagePackage` (all present), the
+  stage 5 route (done), and a passing stage 5 decision in the ledger (enforced by
+  governance). This advances the stage 0-10 API surface toward DoD 1.
+  Alternative: the `ClientProcess` design artifact from the canon gap register,
+  if a methodology-owner decision is preferred.
+
+### Prior cycle (2026-10-03T172003Z)
+
+- Cycle 2026-10-03T172003Z (Ralph cycle): selected item was the HTTP
   route that exposes the stage 4 "IP Architecture Locked" gate. The prior cycle
   named it the highest priority ready next item: the `StageFourGateAssembler`
   /`StageFourGateRecorder`, the `RecordStageFourGateCommand`
@@ -437,7 +494,7 @@ stalls:
 | Q19 | Stage 2 currency gate API surface | pipeline | Q8, Q18 | Currency Locked decision |
 | Q20 | Stage 3 model gate API surface (done 2026-10-03T171835Z; `POST /red/clients/{tenant_id}/stages/3/gate`) | pipeline | Q19 | Diagnostic Model Approved |
 | Q21 | Stage 4 IP package gate plus ThirteenTransformations wiring | pipeline | Q20 | IP Architecture Locked |
-| Q22 | Stage 5 productize gate plus ProductProgram wiring | pipeline | Q21 | Offer Locked |
+| Q22 | Stage 5 productize gate API surface (done 2026-10-03T172133Z; `POST /red/clients/{tenant_id}/stages/5/gate`); ProductProgram wiring remains | pipeline | Q21 | Offer Locked |
 | Q23 | Stage 6 message gate plus ContentCrusher and roadmap wiring | pipeline | Q22 | Campaign Message Approved |
 | Q24 | Stage 7 Authority Amplifier dual approval (script before visual) | pipeline | Q23 | script approval then creative acceptance |
 | Q25 | Stage 8 integrate plus the enrollment and client-process asset and Funnel Complete | pipeline | Q24 | funnel dry run passes |

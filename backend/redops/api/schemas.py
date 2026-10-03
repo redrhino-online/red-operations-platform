@@ -375,6 +375,80 @@ class RecordStageFourGateRequest(BaseModel):
     next_action: str = ""
 
 
+class StepDeliveryInput(BaseModel):
+    """One stage 5 delivery row for a named method step (SPEC.md section 4).
+
+    The "Offer Locked" checkpoint requires every method step to carry an action,
+    actor, deliverable, timing and measure. The domain refuses a row that leaves
+    any of those unstated, so the transport layer only carries the values.
+    """
+
+    step_id: str
+    action: str
+    actor: str
+    deliverable: str
+    timing: str
+    measure: str
+
+
+class DeliverySpecificationInput(BaseModel):
+    """The reviewed stage 5 delivery and its exact version (SPEC.md section 4).
+
+    The specification grounds on the locked stage 4 transformation, so the same
+    ``SignatureSolutionInput`` shape is nested here. The domain enforces the
+    delivery model, duration, modules, responsibilities, cadence, step
+    deliveries, outcome measures, pricing, scope, guarantee, eligibility and
+    offer stack, and refuses a delivery for a step the method does not name or a
+    method step left undelivered.
+    """
+
+    delivery_id: str
+    version: int
+    signature_solution: SignatureSolutionInput
+    delivery_model: str
+    duration: str
+    modules: list[str]
+    responsibilities: list[str]
+    support_cadence: str
+    step_deliveries: list[StepDeliveryInput]
+    outcome_measures: list[str]
+    pricing_payments: str
+    scope: str
+    guarantee_decision: str
+    eligibility: str
+    offer_stack: list[str]
+
+
+class RecordStageFiveGateRequest(BaseModel):
+    """The stage 5 "Offer Locked" gate request (SPEC.md section 4).
+
+    The caller supplies the reviewed delivery values, the workspace authority
+    registry and the decision metadata. The route builds the canonical gate from
+    these through the use case; it deliberately accepts no pre-built gate, so
+    approver authority and exact-version evidence cannot be bypassed. Stage 5
+    depends on a passing stage 4 decision already in the ledger. The delivery
+    carries no claims: the "Offer Locked" checkpoint turns on every method step
+    carrying an action, actor, deliverable, timing and measure, which the domain
+    enforces at construction, rather than external customer evidence.
+    """
+
+    workspace_id: str
+    authorities: list[ClientAuthorityInput]
+    offer_package_id: str
+    delivery: DeliverySpecificationInput
+    stage_owner: str
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
 class AssetVersionResponse(BaseModel):
     """One exact asset version pinned or approved for a stage."""
 
