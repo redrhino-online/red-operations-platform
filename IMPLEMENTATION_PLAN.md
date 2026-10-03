@@ -4,7 +4,79 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T201635Z (Ralph cycle, this run): selected item was Q35, the
+- Cycle 2026-10-03T201934Z (Ralph cycle, this run): selected item was Q36, the
+  transformation map screen (SPEC.md sections 3, 4 and 8; section 13 condition
+  6; queue item Q36). It is the highest priority ready item: its only dependency
+  Q35 is done, and it is the head of the Q37-Q45 chain for condition 6, the
+  largest unstarted DoD condition. It outranks alternatives: Q37-Q45 each depend
+  on Q36; Q28 stage 8-10 required kinds are still blocked on the named
+  methodology-owner placement decision; Q16 needs a workflow write route and
+  connector seam; Q3/Q4 need the ADR 0006 resolution and a live key; Q8 layer
+  coverage and the condition 2 cross-client-retrieval scenario have no
+  retrieval/worker/artifact seam yet; Q47-Q50 need the Atlas cluster. Q31 now
+  also blocks condition 2 on a connector idempotency seam and the deploy-only
+  scenarios. The canon gap register has no ready pipeline item: its remaining
+  entries are implemented or are candidate pipeline additions awaiting a
+  named-owner decision, so no canon-covered method artifact outranks this gate
+  work.
+- Outcome: new `frontend/src/features/transformation-map/` feature.
+  `TransformationMap.tsx` is a presentational view over the tenant-scoped
+  approved methods: it renders each method's pinned stage 4 Signature Solution
+  (transformation map, declared starting and final state, narrative, three
+  phases, nine named steps by phase) and each step's start/end state and
+  inputs/actions/outputs, with the `transformationSteps` helper flattening the
+  phases into the nine-stage order; `TransformationMapScreen.tsx` owns the
+  tenant-scoped read from `GET /red/methods?tenant_id=`; route
+  `/transformation-map` (`src/app/transformation-map/page.tsx`) binds the
+  `transformation-map` screen id now declared in `frontend/dod-screens.txt`.
+  Backend: `MethodVersionResponse` gained a `signature_solution` projection
+  (`SignatureSolutionResponse` with nested `TransformationPhaseResponse` and
+  `SignatureStepResponse`), built by the existing public
+  `signature_solution_to_payload` mapper, so the read returns the exact pinned
+  structure rather than re-deriving it. The API client gained
+  `SignatureStep`, `TransformationPhase`, `SignatureSolution`, `MethodVersion`,
+  `MethodVersionList` and `listMethods`. No product authority, gate decision or
+  pipeline stage changed; the UI can approve or release nothing.
+- Evidence: `frontend/src/features/transformation-map/TransformationMap.test.tsx`
+  (7 tests) pins `transformationSteps` ordering and null handling, the pinned
+  map/states/phase-and-step counts, per-step state and inputs/actions/outputs
+  rendering, the loading/error states, the empty state, and a stubbed-fetch
+  screen read asserting the tenant-scoped request path.
+  `tests/unit/method/test_methods_route.py::test_the_pinned_signature_solution_is_projected_for_the_map`
+  asserts the route projects three phases and nine steps with exact states and
+  lists. `uv run pytest tests/unit/method/test_methods_route.py -q` -> 6 passed.
+  `npm test` -> 4 files, 23 passed (7 new). `npm run build` -> compiled,
+  `/transformation-map` route emitted. `make check` -> 2265 passed, 2 skipped,
+  704 subtests passed. `bash scripts/check_frontend_build.sh frontend` -> exit
+  0. `bash scripts/check_frontend_screens.sh frontend` -> still exit 1, now 8
+  remaining section 8 ids (offer-and-journey-editor, build-board,
+  approval-inbox, workflow-run-detail, launch-readiness, performance-review,
+  portfolio-opportunities, authority-settings; condition 6 needs Q37-Q45).
+  `make done` still fails first at `[2/6]` condition 2.
+- New findings: the method list read already carried
+  `signature_solution_id`, and the shared `signature_solution_to_payload` mapper
+  already existed for the commercial offer seam, so projecting the pinned
+  structure needed only a schema/serializer addition and no new mapper or
+  route. The stage 4 structure is stored on the approved method itself, so the
+  screen reads the exact approved version and needs no separate asset lookup.
+- Blockers (unchanged): `frontend/` Q37-Q45 are the path to DoD condition 6;
+  Q8's retrieval, worker and artifact-URL isolation coverage and the condition 2
+  cross-client-retrieval scenario are blocked until those seams exist; Q28 stage
+  8-10 required kinds blocked on the named methodology-owner placement decision;
+  Q16 idempotency keys blocked on a workflow write route and a connector seam;
+  Q3 agent registration blocked on the ADR 0006 / vendor-edit tension; Q4 live
+  smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's
+  deploy-only scenarios need the Atlas cluster and a chosen backup target.
+- Highest priority ready next item: Q37, the offer and journey editor screen.
+  Required asset: an offer and journey editor at a declared route showing the
+  approved stage 5 offer version and its journey routing (SPEC.md sections 3, 5
+  and 8) over the tenant-scoped offer read, plus its browser test; checkpoint:
+  none (UI, not a gate); approver: none. Blocked downstream dependency: Q38-Q45.
+  Prerequisite: Q36 (done this cycle).
+
+### Prior cycle (2026-10-03T201635Z)
+
+- Cycle 2026-10-03T201635Z (Ralph cycle, prior): selected item was Q35, the
   source and claim explorer screen (SPEC.md sections 3, 7 and 8; section 13
   condition 6; queue item Q35). It is the highest priority ready item: its only
   dependency Q34 is done, and it is now the head of the Q35-Q45 chain for
@@ -3966,7 +4038,7 @@ stalls:
 | Q33 | Command center screen | ui | Q32 | Done 2026-10-03T201337Z: `frontend/src/features/command-center/` (`CommandCenter.tsx` presentational, `CommandCenterScreen.tsx` tenant-scoped read, route `/command-center`, `frontend/dod-screens.txt` declares the screen id) over `listInterventions`; Vitest+jsdom browser runner (`vitest.config.ts`, `npm test` -> `vitest run`). `npm run build` clean, `npm test` 5 passed, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 11 remaining screens |
 | Q34 | Client workspace overview | ui | Q33 | Done 2026-10-03T201508Z: `frontend/src/features/client-workspace/` (`ClientWorkspaceOverview.tsx` presentational, `ClientWorkspaceOverviewScreen.tsx` tenant/engagement/date read, route `/client-workspace`, `frontend/dod-screens.txt` declares the screen id) over `getProductionView` (`GET /red/clients/{tenant}/engagements/{engagement}/production-view?on=`). `npm run build` clean, `npm test` 5 new passed (10 total), `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 10 remaining screens |
 | Q35 | Source and claim explorer | ui | Q34 | Done 2026-10-03T201635Z: `frontend/src/features/source-explorer/` (`SourceClaimExplorer.tsx` presentational with `claimsForSource`/`groundedClaims`, `SourceClaimExplorerScreen.tsx` tenant-scoped parallel read, route `/source-explorer`, `frontend/dod-screens.txt` declares the screen id) over `listSources`/`listClaims` (`GET /red/clients/{tenant}/sources` and `GET /red/claims?tenant_id=`). `npm run build` clean, `npm test` 6 new passed (16 total), `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 9 remaining screens |
-| Q36 | Transformation map | ui | Q35 | browser test |
+| Q36 | Transformation map | ui | Q35 | Done 2026-10-03T201934Z: `frontend/src/features/transformation-map/` (`TransformationMap.tsx` presentational with the `transformationSteps` phase-flattening helper, `TransformationMapScreen.tsx` tenant-scoped read, route `/transformation-map`, `frontend/dod-screens.txt` declares the screen id) over `listMethods` (`GET /red/methods?tenant_id=`). The method read now projects the pinned stage 4 `signature_solution` (transformation map, start/final states, narrative, three phases, nine named steps with inputs/actions/outputs) via the shared `signature_solution_to_payload` mapper plus `SignatureSolutionResponse`/`TransformationPhaseResponse`/`SignatureStepResponse`. `npm run build` clean (`/transformation-map` emitted), `npm test` 7 new passed (23 total), `tests/unit/method/test_methods_route.py` 6 passed, `make check` 2265 passed / 2 skipped / 704 subtests, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 8 remaining screens |
 | Q37 | Offer and journey editor | ui | Q36 | browser test |
 | Q38 | Build board with dependency view | ui | Q37 | browser test |
 | Q39 | Approval inbox with exact version diff | ui | Q38 | browser test; version diff shown |

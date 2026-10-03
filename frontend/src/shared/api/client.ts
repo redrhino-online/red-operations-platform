@@ -161,6 +161,67 @@ export interface ClaimList {
   claims: Claim[];
 }
 
+// One approved method version and its pinned stage 4 transformation structure
+// (SPEC.md sections 3, 4, 7 and 8; Q36). Mirrors `MethodVersionResponse` and its
+// nested `SignatureSolutionResponse` in `backend/redops/api/schemas.py`. The
+// transformation map screen reads the exact approved structure; the UI
+// recomputes no stage rule and can approve nothing.
+export interface SignatureStep {
+  step_id: string;
+  tenant_id: string;
+  name: string;
+  starting_state: string;
+  final_state: string;
+  inputs: string[];
+  actions: string[];
+  outputs: string[];
+}
+
+export interface TransformationPhase {
+  phase_id: string;
+  tenant_id: string;
+  name: string;
+  steps: SignatureStep[];
+}
+
+export interface SignatureSolution {
+  solution_id: string;
+  tenant_id: string;
+  transformation_map: string;
+  process_inventory: string[];
+  phases: TransformationPhase[];
+  starting_state: string;
+  final_state: string;
+  narrative: string;
+  visual: string;
+}
+
+export interface MethodVersion {
+  method_id: string;
+  tenant_id: string;
+  parent_method: string;
+  semantic_version: string;
+  stages: string[];
+  currency: string;
+  claims: string[];
+  is_approved: boolean;
+  approved_by: string | null;
+  intended_use: string | null;
+  approved_on: string | null;
+  primary_currency: string | null;
+  diagnostic_model_id: string | null;
+  signature_solution_id: string | null;
+  signature_solution: SignatureSolution | null;
+}
+
+export interface MethodVersionList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  methods: MethodVersion[];
+}
+
 // The production-manager view one client engagement (SPEC.md sections 4 and 8;
 // Q34). Mirrors `EngagementProductionViewResponse` in `backend/redops/api/
 // schemas.py`. State, provenance (exact pinned asset versions), dependencies,
@@ -297,6 +358,20 @@ export class RedOperationsApi extends RedApiClient {
 
   listClaims(tenantId: string, params: ListParams = {}): Promise<ClaimList> {
     return this.get<ClaimList>("/red/claims", {
+      tenant_id: tenantId,
+      ...params,
+    });
+  }
+
+  // The transformation map read (SPEC.md sections 3, 4, 7 and 8; Q36). The
+  // tenant is a required query scope and the route is read-only; a method is
+  // born approved through its stage gate, so the screen can read the pinned
+  // structure but can write and approve nothing.
+  listMethods(
+    tenantId: string,
+    params: ListParams = {},
+  ): Promise<MethodVersionList> {
+    return this.get<MethodVersionList>("/red/methods", {
       tenant_id: tenantId,
       ...params,
     });

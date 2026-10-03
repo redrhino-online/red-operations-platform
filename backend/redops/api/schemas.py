@@ -1467,14 +1467,64 @@ class ClaimListResponse(BaseModel):
     claims: list[ClaimResponse]
 
 
+class SignatureStepResponse(BaseModel):
+    """One named stage of an approved method's stage 4 Signature Solution.
+
+    SPEC.md section 4, stage 4: a named stage carries its starting and final
+    states and its inputs, actions and outputs. The transformation map screen
+    reads this; the platform computes no step rule in the UI.
+    """
+
+    step_id: str
+    tenant_id: str
+    name: str
+    starting_state: str
+    final_state: str
+    inputs: list[str]
+    actions: list[str]
+    outputs: list[str]
+
+
+class TransformationPhaseResponse(BaseModel):
+    """One of the three phases grouping the nine named function stages."""
+
+    phase_id: str
+    tenant_id: str
+    name: str
+    steps: list[SignatureStepResponse]
+
+
+class SignatureSolutionResponse(BaseModel):
+    """The stage 4 transformation structure an approved method pins.
+
+    SPEC.md section 4, stage 4 requires the transformation map, process
+    inventory, three phases, nine steps, starting and final states, inputs,
+    actions and outputs, narrative and visual. An approved method is exact
+    versioned evidence, so the read projects the pinned structure as data and
+    never re-derives it (SPEC.md sections 3 and 4).
+    """
+
+    solution_id: str
+    tenant_id: str
+    transformation_map: str
+    process_inventory: list[str]
+    phases: list[TransformationPhaseResponse]
+    starting_state: str
+    final_state: str
+    narrative: str
+    visual: str
+
+
 class MethodVersionResponse(BaseModel):
     """One approved method version, read back from the durable method store.
 
     SPEC.md section 3 pins an exact version and intended use at approval and
     section 4 keeps the approved version identifiable. The read surface projects
-    the method's identity, its approval and the ids of the stage 2 to 4
-    dependencies it pins; the exact asset content is retrieved through the gate
-    seam, not re-declared here.
+    the method's identity, its approval, the ids of the stage 2 to 4
+    dependencies it pins, and -- for the transformation map screen -- the pinned
+    stage 4 Signature Solution itself (the exact approved structure, not a
+    re-derivation). The stage 2 and 3 assets stay referenced by id here; their
+    exact content is retrieved elsewhere through the gate seam.
     """
 
     method_id: str
@@ -1491,6 +1541,7 @@ class MethodVersionResponse(BaseModel):
     primary_currency: str | None
     diagnostic_model_id: str | None
     signature_solution_id: str | None
+    signature_solution: SignatureSolutionResponse | None
 
 
 class MethodVersionListResponse(BaseModel):

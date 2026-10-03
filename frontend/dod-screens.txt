@@ -5,3 +5,4 @@
 portfolio-command-center /command-center
 client-workspace-overview /client-workspace
 source-and-claim-explorer /source-explorer
+transformation-map /transformation-map

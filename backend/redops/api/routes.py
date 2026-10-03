@@ -278,6 +278,9 @@ from redops.contexts.method.domain.value_objects import (
     SignatureStep,
     TransformationPhase,
 )
+from redops.contexts.method.infrastructure.mappers import (
+    signature_solution_to_payload,
+)
 from redops.contexts.method.infrastructure.repositories import (
     method_version_repository_from_env,
 )
@@ -3793,6 +3796,10 @@ def _method_payload(method: MethodVersion) -> dict[str, Any]:
         "signature_solution_id": (
             None if method.signature_solution is None
             else method.signature_solution.solution_id
+        ),
+        "signature_solution": (
+            None if method.signature_solution is None
+            else signature_solution_to_payload(method.signature_solution)
         ),
     }
 

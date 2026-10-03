@@ -79,6 +79,29 @@ class MethodsRouteTests(unittest.TestCase):
         self.assertEqual("qualified referrals", method["primary_currency"])
         self.assertIsNotNone(method["signature_solution_id"])
 
+    def test_the_pinned_signature_solution_is_projected_for_the_map(self) -> None:
+        self.methods.save(approved_method())
+
+        listed = self.client.get("/red/methods", params={"tenant_id": TENANT})
+
+        self.assertEqual(200, listed.status_code, listed.text)
+        solution = listed.json()["methods"][0]["signature_solution"]
+        self.assertEqual("solution-3f", solution["solution_id"])
+        self.assertEqual(
+            "from chaotic delivery to a launched campaign",
+            solution["transformation_map"],
+        )
+        self.assertEqual("chaotic", solution["starting_state"])
+        self.assertEqual("launched", solution["final_state"])
+        self.assertEqual(3, len(solution["phases"]))
+        steps = [step for phase in solution["phases"] for step in phase["steps"]]
+        self.assertEqual(9, len(steps))
+        self.assertEqual("step-1", steps[0]["step_id"])
+        self.assertEqual("diagnosed", steps[0]["final_state"])
+        self.assertEqual(["Diagnose inputs"], steps[0]["inputs"])
+        self.assertEqual(["Diagnose actions"], steps[0]["actions"])
+        self.assertEqual(["Diagnose outputs"], steps[0]["outputs"])
+
     def test_a_method_is_not_listed_for_another_client(self) -> None:
         self.methods.save(approved_method())
 
