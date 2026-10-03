@@ -4,86 +4,96 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T04:59:23Z (Ralph cycle 89).
-- Selected item: build the pure Governance production-manager view read model
-  (`StageProductionView`, `EngagementProductionView`, `ReportingDimension` and
-  the `PRODUCTION_REPORTING_DIMENSIONS` tuple) deriving, for each stage from the
-  versioned `StageTemplate` and the durable `GateLedger`, what should exist, what
-  is present and approved, what is missing, who is accountable, which dependency
-  blocks work, what approval is next and when it is due (SPEC.md section 4, "Gate
-  record and production manager view"). Cycle 88 closed the last gate without a
-  write path (stage 10), so the plan named this as the highest priority ready next
-  item: it is the read side of the full stage 0-10 backbone and every downstream
-  screen and command-center query needs it. This outranks the command center
-  intervention ranking (which consumes this view), the per-kind stage 9 through 10
-  content schemas (a methodology-owner decision) and the stage-parameterized gate
-  refactor (quality only, no new capability).
+- Cycle timestamp: 2026-10-03T05:01:44Z (Ralph cycle 90).
+- Selected item: build the Operations command center intervention query and
+  ranking (`Intervention`, `InterventionReason`, `InterventionSeverity`,
+  `InterventionState`, `JourneyFailure`, `Commitment` and
+  `InterventionRankingPolicy`) that surfaces, per client, the blocked critical
+  path, overdue approvals, failed live journeys and nearing commitments, carrying
+  client, severity, reason, evidence, owner, next action, due time, state and
+  affected builds, showing why each card is surfaced, allowing dismissal with
+  rationale, and deduplicating (SPEC.md section 7, "Command center intervention
+  fields"). Cycle 89 built the production view, so this read over it was the
+  plan's named highest priority ready next item. This outranks the per-kind stage
+  9 through 10 content schemas (a methodology-owner decision) and the
+  stage-parameterized gate refactor (quality only, no new capability).
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: 17 new behavioral tests in
-  `tests/unit/governance/test_production_view.py`: an empty ledger reports every
-  stage with its template asset package, none approved and all missing, names
-  stage 0 as the current stage and its checkpoint as the next approval; an
-  approved stage reports its exact pinned versions, owner, recorded approver, due
-  date and next action and advances the current stage; a fully approved pipeline
-  has no current stage; a blocked decision surfaces its blockers, its dependent
-  stages' `blocking_dependencies`, and the `blocked_stages` tuple; an expired
-  approval leaves the stage `BLOCKED` with missing assets rather than approved; an
-  approved dependency is not blocking; a scoped waiver is reported without
-  approving the stage; the eight reporting dimensions are separate (assets,
-  milestones, checkpoints, metrics, owner, dependency, status, due date) and
-  derived from the template and ledger; activity is counted separately from
-  verified progress; a blank engagement or tenant, an approved asset outside the
-  required package and an unknown dimension are refused; and both view value
-  objects are immutable. Running
-  `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 948 passed, up from 931. `python3 -m pyflakes` on the changed modules
-  and test file is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the production view is derivable entirely from the template and
-  the durable ledger, so no persistence is required to render it once the ledger
-  exists. Two of the eight reporting dimensions have no Governance source:
-  milestones are caller-supplied (Measurement owns post-launch evidence) and
-  metrics are reported empty because no context sources them yet; the empty
-  metrics dimension maps directly to the existing canon gap register entry
-  "Advertising and forecast dashboard" (canon 22, 23, 24), so it is recorded as a
-  known gap rather than invented. "When it is due" is only knowable once a
-  `GateDecision` exists; the template carries roles, not schedules, so the next
-  (undecided) stage's due date is `None` until an owner supplies a schedule —
-  this is a real prerequisite-scheduling gap, not a defect. Because a pass
-  requires every pinned asset approved, the view's `approved_assets` is the exact
-  set still effective at the evaluation instant and `missing_asset_kinds` is the
-  complement, so a blocked or expired gate never shows fabricated coverage.
+- Evidence: 18 new behavioral tests in
+  `tests/unit/operations/test_intervention_ranking.py`: an untouched pipeline
+  surfaces no card; a blocked stage surfaces one blocked-critical-path card
+  (critical severity, owner, blocker evidence, transitive affected builds) and
+  only one even though ten stages depend on it; a stage past its due date
+  surfaces an overdue-approval card while a future due date does not; a failed
+  live journey surfaces with its evidence and owner; a journey failure or
+  commitment for another client is not surfaced; a commitment inside the 14-day
+  window is nearing and one beyond it is not; the ranking orders blocked,
+  overdue, failed journey, nearing; identical signals are deduplicated on
+  (client, reason, subject); a non-positive window is refused; a card can be
+  dismissed with a rationale, a blank rationale is refused, and an
+  already-dismissed card cannot be dismissed again; a card requires client,
+  subject, owner, explanation and evidence, is immutable, and exposes its dedup
+  key. Running `PYTHONPATH=backend python3 -m unittest discover -s tests -p
+  'test_*.py'` reports 966 passed, up from 948. `python3 -m pyflakes` on the new
+  modules and test file is clean. `ruff` and `mypy` remain uninstalled.
+- New findings: the intervention query belongs to the Operations bounded context
+  named in SPEC.md section 3 ("Operations (queues, reminders, intervention)"), not
+  Governance as the cycle 89 note guessed; it reads the Governance production view
+  as a pure domain type, the same cross-context domain pattern already used by
+  Commercial -> Method/Knowledge/Governance, and this plan corrects the
+  placement. Two of the four ranked reasons depend on caller-supplied context:
+  failed live journeys are owned by Execution/Measurement and nearing commitments
+  by Engagement/Commercial, so the query refuses to invent them and filters every
+  signal by client so a foreign client's signal never surfaces (SPEC.md section
+  9). A blocked stage always carries an assigned owner because the durable
+  `GateDecision` requires one; the query falls back to the accountable role only
+  if a view ever reports otherwise. Deduplication is by (client, reason, subject)
+  within one query evaluation; cross-run notification deduplication, owner
+  routing and quiet hours remain separate Operations work (SPEC.md section 7).
+  Re-checked the method-change impact assessment while reassessing: it already
+  covers every `DependentArtifact` kind, so no gate-integrity gap was found there.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
   graph assumed in cycle 56, scheduler/worker topology, the client-designated
-  approver identities, and pilot metric targets. The full stage 0-10 gate path
-  and its production view now exist in pure domain code, but durable persistence
-  of any `GateDecision`, `StageRun`, retained waiver decision or blocker still
-  depends on the storage ADR; no real client approver identity may be invented.
-  Per-kind stage 9 through 10 asset content schemas remain prose and shapes
-  rather than typed value objects. No fork or cluster facts invented; no `docs/`,
-  fork checkout, `kubectl`, `helm`, or `argocd` present.
-- Highest priority ready next item: build the pure Governance command center
-  intervention query and ranking (`Intervention` and an intervention policy) that
-  surfaces, per client, the blocked critical path, overdue approvals, failed live
-  journeys and nearing commitments, with client, severity, reason, evidence,
-  owner, next action, due time, state and affected builds, and an explainable
-  ranking that shows why each card is surfaced (SPEC.md section 7, "Command center
-  intervention fields" and "Ranking favors blocked critical path, overdue
-  approvals, failed live journeys, and nearing commitments. Show why each card is
-  surfaced"). The production view now supplies the per-stage status, owner,
-  dependency and due-date inputs, so the intervention query can be derived from
-  it without new storage. Pipeline mapping: cross-cutting read over stages 0 to
-  10; required asset none (pure read over the template, ledger and view);
-  checkpoint n/a; approver n/a; downstream dependency the command center screen
-  and the Operations notification/deduplication work. This outranks the per-kind
-  stage 9 through 10 content schemas (which are a methodology-owner decision) and
-  the stage-parameterized gate refactor (quality only, no new capability).
-- Deferred cross-context items: the command center intervention ranking and the
-  improvement loop (now the ready next item); per-kind stage 9 through 10 asset
-  content schemas; a stage-parameterized gate recorder/handler refactor now that
-  eleven identical shapes are proven; and all persistence, blocked on the storage
-  ADR.
+  approver identities, and pilot metric targets. The full stage 0-10 gate path,
+  its production view and the command center intervention query now exist in pure
+  domain code, but durable persistence of any `GateDecision`, `StageRun`, retained
+  waiver decision, blocker or intervention still depends on the storage ADR; no
+  real client approver identity may be invented. Per-kind stage 9 through 10 asset
+  content schemas remain prose and shapes rather than typed value objects. No fork
+  or cluster facts invented; no `docs/`, fork checkout, `kubectl`, `helm`, or
+  `argocd` present.
+- Highest priority ready next item: build the Operations notification policy
+  (`Notification`, an owner quiet-hours preference and a delivery-decision
+  policy) that deduplicates notifications across query evaluations and delivers
+  each intervention to its owner only outside that owner's quiet hours, recording
+  a suppression instead of silently dropping it (SPEC.md section 7,
+  "Notifications are deduplicated and respect owner and quiet hours"). The
+  intervention cards now exist and carry a stable dedup key, owner and due time,
+  so the notification policy can be derived without new storage; quiet-hour
+  preferences are caller-supplied because Operations owns reminders and queues
+  (SPEC.md section 3) and no real operator schedule may be invented. Pipeline
+  mapping: cross-cutting read over stages 0 to 10; required asset none; checkpoint
+  n/a; approver n/a; downstream dependency the Operations delivery adapter and the
+  command center screen. This outranks the per-kind stage 9 through 10 content
+  schemas (a methodology-owner decision) and the stage-parameterized gate refactor
+  (quality only, no new capability).
+- Deferred cross-context items: the Operations notification/quiet-hours policy
+  (now the ready next item) and the improvement loop; per-kind stage 9 through 10
+  asset content schemas; a stage-parameterized gate recorder/handler refactor now
+  that eleven identical shapes are proven; and all persistence, blocked on the
+  storage ADR.
+  [DONE 2026-10-03 (Ralph cycle 90): built the Operations command center
+  intervention query and ranking (`Intervention`, `InterventionReason`,
+  `InterventionSeverity`, `InterventionState`, `JourneyFailure`, `Commitment`,
+  `InterventionRankingPolicy`) deriving per client the blocked critical path,
+  overdue approvals, failed live journeys and nearing commitments from the
+  Governance production view plus caller-supplied signals, with client, severity,
+  reason, evidence, owner, next action, due time, state and affected builds,
+  explainable surfacing, dismissal with rationale and deduplication (SPEC.md
+  section 7, "Command center intervention fields"); verified by
+  `tests/unit/operations/test_intervention_ranking.py` (18 tests), so the command
+  center can now rank owned interventions over the full stage 0-10 pipeline.]
   [DONE 2026-10-03 (Ralph cycle 89): built the pure Governance
   production-manager view read model (`StageProductionView`,
   `EngagementProductionView`, `ReportingDimension`,
@@ -369,7 +379,7 @@ CI gate order: format and types, domain and application tests, adapter contracts
 7. Implement stages 4 and 5 from grounded Signature Solution to offer approval. [DONE 2026-10-02 (Ralph cycle 14): commercial `OfferVersion` requires an accountable owner and `OfferChangeImpactPolicy` discovers dependent offers from an approved method change and marks them review required, so the SPEC.md section 11 "changing a method version identifies dependents" acceptance test is met by a real aggregate; verified by `tests/unit/commercial/test_offer_change_impact.py`. DONE 2026-10-02 (Ralph cycle 22): Method `SignatureStep`, `TransformationPhase` and frozen `SignatureSolution` require exactly three phases and nine steps, a process inventory, transformation map, narrative and visual, one continuous chain of named stages, and declared starting/final states that are the ends of that chain, so the stage 4 "IP Architecture Locked" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_signature_solution.py`. DONE 2026-10-02 (Ralph cycle 23): `MethodVersion` pins the exact tenant-checked stage 4 `SignatureSolution`, refuses approval without it, rejects a cross-tenant pin, and drops the pin on `revised`, so an approved method must carry its locked stage 4 structure; verified by `tests/unit/method/test_method_dependencies.py`. DONE 2026-10-02 (Ralph cycle 24): commercial `StepDelivery` and `DeliverySpecification` require every locked stage 4 method step to carry an action, actor, deliverable, timing and measure, record the full stage 5 asset package, and reject a missing or extra method step, a duplicate delivery, a foreign-tenant method or step delivery, and any missing package field, so the stage 5 "Offer Locked" checkpoint rule is met by a real value; verified by `tests/unit/commercial/test_delivery_specification.py`. DONE 2026-10-02 (Ralph cycle 25): `OfferVersion` pins the tenant-checked stage 5 `DeliverySpecification`, refuses production readiness without it, and `revised` drops the delivery specification and readiness (including when the method reference changes) so an approved offer must carry a complete stage 5 delivery package; verified by `tests/unit/commercial/test_offer_version.py` with a shared fixture in `tests/unit/commercial/fixtures.py`. DONE 2026-10-02 (Ralph cycle 26): `OfferReadinessPolicy` refuses production readiness when the stage 5 `DeliverySpecification.signature_solution` is not equal to the `SignatureSolution` pinned by an approved method reference, so a stage 5 package cannot describe a different transformation than the approved stage 4 method; verified by `tests/unit/commercial/test_offer_version.py`. DONE 2026-10-03 (Ralph cycle 76): Engagement `StageFourGateAssembler`, `StageFourGateRecorder`, `RecordStageFourGateCommand` and `RecordStageFourGateHandler` wire the stage 4 "IP Architecture Locked" `GateDecision` end to end, binding the reviewed `SignaturePackage` to the workspace tenant and authority registry, issuing one exact-version approval per required kind, writing the durable decision, and closing the stage 4 `StageRun`; stage 4 depends on stage 3, so the ledger must already hold a passing stage 3 decision; verified by `tests/unit/engagement/test_record_stage_four_gate.py` (22 tests). DONE 2026-10-03 (Ralph cycle 77): the Commercial `OfferPackage` bridge (canon 11, 12) projects the reviewed stage 5 `DeliverySpecification` onto the twelve canonical kinds as exact `StageAssetVersion` evidence; verified by `tests/unit/commercial/test_offer_package.py` (10 tests). DONE 2026-10-03 (Ralph cycle 78): Engagement `StageFiveGateAssembler`, `StageFiveGateRecorder`, `RecordStageFiveGateCommand` and `RecordStageFiveGateHandler` wire the stage 5 "Offer Locked" `GateDecision` end to end, binding the reviewed `OfferPackage` to the workspace tenant and authority registry, issuing one exact-version approval per required kind, writing the durable decision, and closing the stage 5 `StageRun`; stage 5 depends on stage 4, so the ledger must already hold a passing stage 4 decision; verified by `tests/unit/engagement/test_record_stage_five_gate.py` (22 tests). The stage 6 reviewed-asset bridge remains.]
 8. Implement stages 6 and 7 with message congruence and script approval before creative production. [DONE 2026-10-02 (Ralph cycle 27): commercial `CampaignMessage` records the stage 6 asset package, requires each message field, and rejects a cross-tenant offer at construction; `CampaignMessageAlignmentPolicy` refuses the "Campaign Message Approved" checkpoint unless the message is grounded on a production ready stage 5 offer and its avatar, promise, product, method, currency and problem agree with the offer and the approved method's locked stage 2 primary currency and stage 3 diagnostic model, so Phase 4's "campaign message conflicting with the offer blocks approval" example is met by a real aggregate; verified by `tests/unit/commercial/test_campaign_message.py`. DONE 2026-10-02 (Ralph cycle 28): Production `AuthorityAmplifier` records the canonical Promise, Proof, Problems, Steps, Context, Action script and the full stage 7 visual/video package, requires at least one proof claim, and rejects a cross-tenant stage 6 message at construction; `AuthorityAmplifierPolicy` refuses script approval unless the message is approved and the method is an approved dependency, and flags proof claims not backed by a known, directly sourced Knowledge claim; visual production and creative acceptance both refuse before script approval and creative acceptance also requires the complete visual package, so Phase 4's "visual Authority Amplifier production cannot be authorized by an unapproved script" and "unsupported proof is flagged" examples are met by a real aggregate; verified by `tests/unit/production/test_authority_amplifier.py`. Stage 7 wiring into a governance `GateDecision` remains, blocked on the asset-version representation decision.] DONE 2026-10-03 (Ralph cycle 79): built the Commercial `CampaignMessagePackage` bridge (canon-informed, SPEC.md section 12.3 stage 6 files 06, 15, 24, 25-28) projecting the reviewed stage 6 `CampaignMessage` onto the twelve canonical stage 6 kinds as exact `StageAssetVersion` evidence; verified by `tests/unit/commercial/test_campaign_message_package.py` (10 tests), so the stage 6 gate is now assembleable. DONE 2026-10-03 (Ralph cycle 80): wired the stage 6 "Campaign Message Approved" `GateDecision` end to end with `StageSixGateAssembler`, `StageSixGateRecorder`, `RecordStageSixGateCommand` and `RecordStageSixGateHandler`, plus named errors `NotStageSixGateError`, `StageRunNotStageSixError` and `CampaignMessageNotApprovedError`, refusing an unapproved message so the congruence checkpoint cannot be bypassed, binding the reviewed `CampaignMessagePackage` to the workspace tenant and authority registry and closing the stage 6 `StageRun` from the durable decision; verified by `tests/unit/engagement/test_record_stage_six_gate.py` (24 tests), so stage 6 can now close. DONE 2026-10-03 (Ralph cycle 81): built the Production `AuthorityAmplifierPackage` bridge (canon-informed, SPEC.md section 12.3 stage 7 files 13-18, 28) projecting the reviewed stage 7 `AuthorityAmplifier` onto the nine canonical stage 7 kinds as exact `StageAssetVersion` evidence and refusing an amplifier without its visual package, so the stage 7 gate is now assembleable; verified by `tests/unit/production/test_authority_amplifier_package.py` (12 tests). DONE 2026-10-03 (Ralph cycle 82): wired the stage 7 "Authority Amplifier Approved" `GateDecision` end to end with `StageSevenGateAssembler`, `StageSevenGateRecorder`, `RecordStageSevenGateCommand` and `RecordStageSevenGateHandler`, plus named errors `NotStageSevenGateError`, `StageRunNotStageSevenError` and `AuthorityAmplifierNotApprovedError`, refusing an amplifier without final creative acceptance (the second of the two stage 7 approvals) so the checkpoint cannot be bypassed, binding the reviewed `AuthorityAmplifierPackage` to the workspace tenant and authority registry and closing the stage 7 `StageRun` from the durable decision; verified by `tests/unit/engagement/test_record_stage_seven_gate.py` (24 tests), so stage 7 can now close and stage 8 is unblocked pending its reviewed-asset bridge.
 9. Implement stages 8 and 9 with complete prospect path and three part QA. [DONE 2026-10-02 (Ralph cycle 29): Execution `FunnelIntegration` records the complete stage 8 asset package, is grounded on the approved stage 7 `AuthorityAmplifier`, and rejects a cross-tenant amplifier at construction; `FunnelCompletionPolicy` refuses "Funnel Complete" unless the amplifier has creative acceptance and a same-tenant `ProspectPathDryRun` routed every capture, engagement and conversion handoff exactly once with a reliable record and named owner, so Phase 4's "failed prospect routing prevents Funnel Complete" example is met by a real aggregate; verified by `tests/unit/execution/test_funnel_integration.py`. DONE 2026-10-02 (Ralph cycle 30): Execution `LaunchQA` records the full stage 9 check set, requires an owner and a designated human authority distinct from the owner, is grounded on the completed stage 8 `FunnelIntegration`, and rejects a cross-tenant funnel at construction; `LaunchApprovedPolicy` refuses "Launch Approved" unless the funnel is complete, every canonical check is present, every critical-path check passed (payment and dashboard may be excepted with a named owner), and the designated authority authorizes traffic, and `TrafficAuthorization` reports readiness rather than live traffic, so Phase 4's "failed message, technical or commercial QA prevents Launch Approved" example is met by a real aggregate; verified by `tests/unit/execution/test_launch_qa.py`. Stage 8 and 9 wiring into a governance `GateDecision` remain, blocked on the asset-version representation decision. DONE 2026-10-03 (Ralph cycle 83): built the Execution `FunnelIntegrationPackage` bridge (canon-informed, SPEC.md section 12.3 stage 8 files 13, 14, 21, 22) projecting the reviewed stage 8 `FunnelIntegration` onto the thirteen canonical stage 8 kinds as exact `StageAssetVersion` evidence and refusing a funnel that has not passed Funnel Complete; verified by `tests/unit/execution/test_funnel_integration_package.py` (12 tests), so the stage 8 "Funnel Complete" gate is now assembleable and its `GateDecision` wiring is the next step. DONE 2026-10-03 (Ralph cycle 84): wired the stage 8 "Funnel Complete" `GateDecision` end to end with `StageEightGateAssembler`, `StageEightGateRecorder`, `RecordStageEightGateCommand` and `RecordStageEightGateHandler`, plus named errors `NotStageEightGateError` and `StageRunNotStageEightError` (canon-informed, SPEC.md section 12.3 stage 8 files 13, 14, 21, 22), binding the reviewed `FunnelIntegrationPackage` to the workspace tenant and authority registry, issuing one exact-version approval per canonical kind and closing the stage 8 `StageRun`; verified by `tests/unit/engagement/test_record_stage_eight_gate.py` (22 tests), so stage 8 can now close and stage 9 is unblocked pending its reviewed-asset bridge. DONE 2026-10-03 (Ralph cycle 85): built the Execution `LaunchQAPackage` bridge (canon-informed, SPEC.md section 12.3 stage 9 files 01, 08, 21, 22, 24) projecting the reviewed stage 9 `LaunchQA` onto the sixteen canonical stage 9 kinds as exact `StageAssetVersion` evidence, with a `CANONICAL_LAUNCH_KIND_CHECKS` map covering every `QACheckKind` exactly once and refusing a QA that has not passed Launch Approved; verified by `tests/unit/execution/test_launch_qa_package.py` (13 tests), so the stage 9 "Launch Approved" gate is now assembleable and its `GateDecision` wiring is the next step. DONE 2026-10-03 (Ralph cycle 86): wired the stage 9 "Launch Approved" `GateDecision` end to end with `StageNineGateAssembler`, `StageNineGateRecorder`, `RecordStageNineGateCommand` and `RecordStageNineGateHandler`, plus named errors `NotStageNineGateError` and `StageRunNotStageNineError` (canon-informed, SPEC.md section 12.3 stage 9 files 01, 08, 21, 22, 24), binding the reviewed `LaunchQAPackage` to the workspace tenant and authority registry, issuing one exact-version approval per canonical kind and closing the stage 9 `StageRun`; verified by `tests/unit/engagement/test_record_stage_nine_gate.py` (22 tests), so stage 9 can now close and the stage 10 reviewed-asset bridge is the next step.]
-10. Implement stage 10 baseline, command center and improvement loop. [DONE 2026-10-02 (Ralph cycle 31): Execution `PerformanceBaseline` records the full stage 10 asset package and the distinct first-qualified-traffic, lead, appointment and sale milestones as observed or pending, is grounded on the stage 9 `LaunchQA`, and rejects a cross-tenant QA or milestone at construction; `PerformanceBaselinePolicy` refuses "Performance Baseline Established" unless the launch QA is `READY_FOR_TRAFFIC`, every canonical milestone is recorded, and first qualified traffic is observed, so Phase 5's "launch alone cannot complete the engagement" example is met by a real aggregate; `MilestoneObservation` forbids fabricating a pending observation, and `PerformanceClaim` / `PerformanceClaimPolicy` keep observations distinct from causal conclusions (causal needs an established same-tenant baseline and an adequate caller-supplied sample, and a low-sample movement can be recorded as an interpretation), so Phase 5's milestone-distinctness, missing-baseline and low-sample examples are met; verified by `tests/unit/execution/test_performance_baseline.py`. DONE 2026-10-02 (Ralph cycle 33): pure Governance `PipelineProgress` reports verified progress as the count of approved stage gates derived from the durable `GateLedger` plus caller-supplied verified post-launch milestones, reports activity separately, revokes a gate when a later non-passing decision supersedes it, and rejects negative counts or approved gates exceeding total gates, so SPEC.md section 4's "Display progress as approved gates and verified post launch milestones, never as tasks checked off" is met by a real value; verified by `tests/unit/governance/test_pipeline_progress.py`. DONE 2026-10-03 (Ralph cycle 87): built the Execution `PerformanceBaselinePackage` bridge projecting the reviewed stage 10 baseline onto the twelve canonical kinds. DONE 2026-10-03 (Ralph cycle 88): wired the stage 10 "Performance Baseline Established" `GateDecision` end to end (`StageTenGateAssembler`, `StageTenGateRecorder`, `RecordStageTenGateCommand`, `RecordStageTenGateHandler`), so all eleven gates of the canonical 0-10 template now have a write path; verified by `tests/unit/engagement/test_record_stage_ten_gate.py` (22 tests). Command center intervention ranking and the improvement loop remain.]
+10. Implement stage 10 baseline, command center and improvement loop. [DONE 2026-10-02 (Ralph cycle 31): Execution `PerformanceBaseline` records the full stage 10 asset package and the distinct first-qualified-traffic, lead, appointment and sale milestones as observed or pending, is grounded on the stage 9 `LaunchQA`, and rejects a cross-tenant QA or milestone at construction; `PerformanceBaselinePolicy` refuses "Performance Baseline Established" unless the launch QA is `READY_FOR_TRAFFIC`, every canonical milestone is recorded, and first qualified traffic is observed, so Phase 5's "launch alone cannot complete the engagement" example is met by a real aggregate; `MilestoneObservation` forbids fabricating a pending observation, and `PerformanceClaim` / `PerformanceClaimPolicy` keep observations distinct from causal conclusions (causal needs an established same-tenant baseline and an adequate caller-supplied sample, and a low-sample movement can be recorded as an interpretation), so Phase 5's milestone-distinctness, missing-baseline and low-sample examples are met; verified by `tests/unit/execution/test_performance_baseline.py`. DONE 2026-10-02 (Ralph cycle 33): pure Governance `PipelineProgress` reports verified progress as the count of approved stage gates derived from the durable `GateLedger` plus caller-supplied verified post-launch milestones, reports activity separately, revokes a gate when a later non-passing decision supersedes it, and rejects negative counts or approved gates exceeding total gates, so SPEC.md section 4's "Display progress as approved gates and verified post launch milestones, never as tasks checked off" is met by a real value; verified by `tests/unit/governance/test_pipeline_progress.py`. DONE 2026-10-03 (Ralph cycle 87): built the Execution `PerformanceBaselinePackage` bridge projecting the reviewed stage 10 baseline onto the twelve canonical kinds. DONE 2026-10-03 (Ralph cycle 88): wired the stage 10 "Performance Baseline Established" `GateDecision` end to end (`StageTenGateAssembler`, `StageTenGateRecorder`, `RecordStageTenGateCommand`, `RecordStageTenGateHandler`), so all eleven gates of the canonical 0-10 template now have a write path; verified by `tests/unit/engagement/test_record_stage_ten_gate.py` (22 tests). Command center intervention ranking is DONE 2026-10-03 (Ralph cycle 90): built the pure Operations `Intervention` card and `InterventionRankingPolicy` ranking blocked critical path, overdue approvals, failed live journeys and nearing commitments with explainable surfacing, dismissal with rationale and deduplication (SPEC.md section 7); verified by `tests/unit/operations/test_intervention_ranking.py` (18 tests). The notification/quiet-hours policy and the improvement loop remain.]
 11. Complete operational security, backup, GitOps and acceptance drills.
 
 ## Risks and decisions
