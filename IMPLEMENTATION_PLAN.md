@@ -4,45 +4,50 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:38:05Z (Ralph cycle 109).
-- Selected item: build the canon's split-test logging as a pure Measurement
-  artifact -- the named `SplitTestMode` (pause and clone, or run both), the
-  `SplitTestChange` one-variable before/after value and the `SplitTest` change log
-  bound to a same-tenant owner-approved `ImprovementProposal`, so a stage 10
-  optimization changes exactly one variable at a time and records what changed
-  before reading the result (canon files 22, 23 and 24: "I'm not going to change
-  this headline and the image and the button text... how do I know what the hell
-  worked"; "I pause the first ad, clone it... or if I have the budget, I just run
-  them both together"; "I wait 10 days to see how it does"; SPEC.md section 4
-  stage 10). It was the named highest priority ready next item after cycle 108 and
-  outranks the Operations delivery adapter (blocked on the storage ADR) and the
-  stage 9 compliance projection (needs a named-owner decision), because it closes
-  the last remaining scope of the advertising and forecast dashboard canon gap
-  with a bounded, pure-domain change that reuses cycles 92 through 108.
+- Cycle timestamp: 2026-10-03T05:40:16Z (Ralph cycle 110).
+- Selected item: build the canon's retargeting roadmap as a pure Measurement
+  plan artifact -- the named `TrackingCode`, `ConversionGoal`, `RetargetingAudience`,
+  `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep` and the
+  `RetargetingPlan` that binds them to a named owner and one tenant, so a stage 8
+  funnel can plan and a stage 10 operator can re-engage prospects at each funnel
+  step (canon files 33 and 34: "Step one Tracking code"; "set up conversion goals";
+  "create retargeting lists... segments for user groups with a defined state within
+  a defined stage of your funnel"; "create super focused campaigns that should
+  accomplish one goal at a time"; SPEC.md section 4 stage 8 "Funnel Complete" and
+  section 12.3 retargeting at stages 8 and 10). It was the named highest priority
+  ready next item after cycle 109 and outranks the Operations delivery adapter
+  (blocked on the storage ADR) and the stage 9 compliance projection (needs a
+  named-owner decision), because it closes the retargeting-system canon gap with a
+  bounded, pure-domain change that continues the stage 10 measurement/optimization
+  substrate and reuses the canon's PAG (pixel/audience/goal) tracking already
+  named at stage 8.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: `SplitTestMode`, `SplitTestChange` and `SplitTest` now live in the
-  Measurement domain, with the named `InvalidSplitTestError`,
-  `SplitTestChangeError`, `SplitTestVariableError`, `SplitTestLeverError`,
-  `SplitTestDependencyError`, `SplitTestTenantBoundaryError`,
-  `SplitTestWindowOpenError` and `SplitTestObservationError`. A split test binds
-  to an owner-approved optimization, logs exactly one changed variable whose name
-  is the optimization's own lever, records the run mode and a closed test window,
-  refuses a no-op change, a merely proposed optimization, a cross-tenant
-  optimization and a result read before the window closes, and cannot be projected
-  to an observation. New behavioral coverage: 15 tests in
-  `tests/unit/measurement/test_split_test.py`. Running `PYTHONPATH=backend
-  python3 -m unittest discover -s tests -p 'test_*.py'` reports 1172 passed, up
-  from 1157. `python3 -m pyflakes backend/redops tests` is clean. `ruff` and
+- Evidence: the retargeting roadmap now lives in the Measurement domain with the
+  named `InvalidRetargetingError`, `RetargetingDependencyError`,
+  `RetargetingStepError`, `RetargetingTenantBoundaryError` and
+  `RetargetingObservationError`. A tracking code names its provider and installed
+  pages; a conversion goal is grounded on a same-tenant tracking code and carries
+  a placeholder-or-observed value; a retargeting list segments a named funnel step
+  on a same-tenant achieved goal and a positive lookback window; a focused campaign
+  moves a list to a named next funnel step on a named channel, sharing the list's
+  tracking code; and the plan requires a named owner, binds every list and campaign
+  to the plan's own tracking code and declared goals, reports its required sections
+  and refuses to be projected to an observation. New behavioral coverage: 35 tests
+  in `tests/unit/measurement/test_retargeting.py`. Running `PYTHONPATH=backend
+  python3 -m unittest discover -s tests -p 'test_*.py'` reports 1207 passed, up
+  from 1172. `python3 -m pyflakes backend/redops tests` is clean. `ruff` and
   `mypy` remain uninstalled.
-- New findings: the split-test log is kept deliberately distinct from the
-  improvement outcome's measured movement -- the outcome reports the observed
-  before-and-after, while the split test records what changed and which single
-  variable, so the two are never conflated. Binding the log to the approved
-  optimization and requiring its variable to equal the optimization's `lever` is
-  a stricter shape than the canon's free-form spreadsheet; it is recorded here as
-  RED's own tightening rather than canon text. The advertising and forecast
-  dashboard canon gap is now fully implemented end to end (registry, forecast,
-  scaling rule and split-test logging).
+- New findings: the canon contradicts itself on PAG ordering -- file 33 says
+  "Pixels Audiences Goals" (pixel, then list, then goal) while file 34's six-step
+  roadmap sets up conversion goals (step 2) before retargeting lists (step 3). This
+  cycle follows the plan's stated order (tracking code and goal exist before a list
+  or campaign) and the six-step roadmap, and records file 33's PAG acronym order as
+  an intentional deviation rather than canon text. The plan models the canon's
+  first four roadmap steps as typed value objects; the fifth step (effective ads)
+  is already covered one-variable-at-a-time by the stage 10 `SplitTest` and the
+  sixth (metrics) by the `MetricDefinition` registry, so the plan does not
+  duplicate them. The retargeting-system canon gap is now implemented for its
+  stages 8 and 10 planning scope.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -50,24 +55,36 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: build the canon's Retargeting Roadmap as a
-  pure-domain artifact so a stage 8 funnel can plan and a stage 10 operator can
-  re-engage prospects at each funnel step (canon files 33 and 34: tracking code
-  first, then seed traffic, goals, audience lists, focused campaigns and the
-  metrics read per step; the canon's retargeting roadmap is the stated next step
-  after the advertising metrics of files 22-24). It should require the tracking
-  code and goal to exist before a list or campaign, refuse a campaign that does
-  not target a named funnel step or list, keep a retargeting plan distinct from an
-  observed result, and record its required sections as typed value objects. It
-  outranks the Operations delivery adapter (blocked on the storage ADR) and the
-  stage 9 compliance projection (needs a named-owner decision), and it continues
-  the stage 10 measurement/optimization substrate. Prerequisite: read canon files
-  33 and 34's required roadmap sections before implementing.
+- Highest priority ready next item: build the canon's follow-up and nurture
+  lifecycle (Signature Solution Series, 5P email system, one-question survey,
+  re-engagement) as a pure-domain artifact so a stage 10 engagement can keep
+  non-converting prospects warm after launch (canon files 15, 24, 33 and 34; SPEC.md
+  section 12.3 lists it as a canon gap after stage 10 and section 12.6 records the
+  supplied canon as incomplete here). It outranks the Operations delivery adapter
+  (blocked on the storage ADR) and the stage 9 compliance projection (needs a
+  named-owner decision), and it continues the stage 10 lifecycle after the
+  retargeting plan. Prerequisite: read canon files 15, 24, 33 and 34's follow-up
+  and nurture material before implementing, and record that SPEC.md section 12.6
+  warns the dedicated email/follow-up module is absent from the supplied canon, so
+  the artifact is a documented gap rather than canon-complete. The enrollment and
+  sales call (canon 00, 13, 14, 21, 24) remains a larger named-owner pipeline
+  decision and is not selected.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; a stage-parameterized gate recorder/handler refactor;
   projecting the compliance package onto a canonical stage 9 gate kind
   (methodology-owner decision); and all persistence.
+  [DONE 2026-10-03 (Ralph cycle 110): built the canon's retargeting roadmap as the
+  pure Measurement `TrackingCode`, `ConversionGoal`, `RetargetingAudience`,
+  `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep` and
+  `RetargetingPlan` -- the plan binds a tracking code, conversion goals,
+  retargeting lists and focused campaigns to a named owner and one tenant, requires
+  the tracking code and goal prerequisite before a list or campaign, refuses a
+  campaign that targets no new named funnel step or an undeclared list, and is
+  never an observation -- so the retargeting-system canon gap is implemented for
+  its stages 8 and 10 planning scope (SPEC.md section 4 stage 8 and section 12.3;
+  canon files 33 and 34); verified by `tests/unit/measurement/test_retargeting.py`
+  (35 tests, full suite 1207 passed).]
   [DONE 2026-10-03 (Ralph cycle 109): built the canon's split-test logging as the
   pure Measurement `SplitTestMode`, `SplitTestChange` and `SplitTest` -- the log
   binds to the same-tenant owner-approved `ImprovementProposal`, changes exactly
@@ -477,7 +494,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 - Follow-up and nurture lifecycle (Signature Solution Series, 5P email, re-engagement) — canon 15, 24, 33, 34 — after stage 10 — status: candidate.
 - Advertising and forecast dashboard (Mastery Advertising Metrics Dashboard, Metrics Matrix) — canon 22, 23, 24 — stage 10 — status: candidate; the cycle 89 production view's `METRICS` reporting dimension is intentionally empty because no context sources metrics yet, so this gap is the named home for that dimension. Cycle 92 captured the optimization discipline (baseline before optimizing, one variable at a time, a logged change) as the Measurement improvement loop, and cycle 93 built the typed metric substrate (`MetricDefinition`, `MeasurementRecord`) the dashboard reads from. Cycle 105 selected populating the production view's `METRICS` dimension from that registry and the improvement loop as the highest priority ready next item, a bounded pure-domain slice of this candidate. Cycle 106 completed that slice: the METRICS dimension now reports each registered metric's newest observed figure and a measured movement via `metric_reporting_views`. Cycle 107 built the canon's forecast equation (`FunnelMetricRole`, `FunnelFigure`, `FunnelEconomics`, `FunnelForecast`, `funnel_figure`) so the metrics matrix unit economics exist before real data and a forecast stays distinct from an observed result.   Cycle 108 built the canon's scaling rule (`LearningPhase`, `ScalingAction`, `ScalingRecommendation`, `AdScalingPolicy`), so the dashboard can now turn an observed cost per lead into an owner-approved scale, hold, bid-up-the-funnel or pause-and-review recommendation. Cycle 109 built the canon's split-test logging (`SplitTestMode`, `SplitTestChange`, `SplitTest`), so a stage 10 optimization logs the one variable it changes (bound to the approved improvement's lever) before reading the result. This candidate is now fully implemented; no remaining scope.
 - Audience building and content flywheel (Content Blitz, Content Roadmap, audience campaign, syndication) — canon 25-31 — stages 6 and 10 — status: candidate.
-- Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: candidate.
+- Retargeting system (Retargeting Roadmap, invisible opt-in, banner specs) — canon 33, 34 — stages 8 and 10 — status: implemented 2026-10-03 (Ralph cycle 110) as the Measurement `RetargetingPlan` (`TrackingCode`, `ConversionGoal`, `RetargetingAudience`, `RetargetingCampaign`, `RetargetingChannel`, `RetargetingStep`), which orders the canon's tracking code, conversion goals, retargeting lists and focused campaigns and binds them to one tenant and a named owner; the canon's effective-ads step is covered by the stage 10 `SplitTest` and its metrics step by the `MetricDefinition` registry. Remaining candidate: the canon's invisible opt-in offer and banner-ad spec/swipe-file assets are delivery assets outside this planning artifact and still need a named-owner decision on where they belong.
 - Compliance suite (GDPR, disclaimers, privacy, terms) — canon 21, 34 — stage 9 — status: implemented 2026-10-03 (Ralph cycle 94) as the Execution `CompliancePackage` (`ComplianceAssetKind`, `ComplianceAsset`, `ComplianceWaiver`) with the `ComplianceRequiredPolicy` gating `LaunchQA` traffic authorization, so "Launch Approved" needs every required asset or a live owned waiver; projecting the compliance assets onto their own canonical stage 9 gate kind remains a candidate that needs a named-owner decision.
 - Positioning and decision tools (Target Market Matchmaker, awareness levels, Funnel Finder) — canon 00, 04, 13, 14 — stages 1 and 2 — status: candidate.
 - Thirteen transformations (the overall shift, three phase shifts and nine step-level from/to pairs, titled from the million dollar message) — canon 09, 10 — stage 4 — status: candidate; the SPEC stage 4 package names named stages, starting/final states and narrative but not the explicit 13 from/to transformations, so adding a required kind or field is a methodology-owner decision on the gate contract.

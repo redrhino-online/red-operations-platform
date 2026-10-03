@@ -452,3 +452,58 @@ class SplitTestObservationError(MeasurementError):
     one.
     """
 
+
+class InvalidRetargetingError(MeasurementError, ValueError):
+    """A retargeting roadmap artifact leaves a required field unspecified.
+
+    SPEC.md section 4, stage 8 requires the campaign architecture, tracking and
+    analytics assets before "Funnel Complete", and the canon's retargeting roadmap
+    (canon files 33 and 34) names the tracking code, conversion goals, retargeting
+    lists and focused campaigns, each with its provider or URL, funnel step or
+    channel. An artifact missing its identity or a required value cannot be a
+    traceable plan element.
+    """
+
+
+class RetargetingDependencyError(MeasurementError):
+    """A retargeting list or campaign is missing an earlier roadmap step.
+
+    The canon's retargeting roadmap (canon files 33 and 34) is ordered: a pixel is
+    installed before audiences are built, and a tracking code and a conversion goal
+    exist before a retargeting list or a focused campaign (canon file 34: "once
+    you've pixeled them, you can go to step two... Create an audience... set up
+    conversion goals"). A list without a typed tracking code and achieved goal, or
+    a campaign without a typed list, is refused rather than inventing its
+    prerequisite.
+    """
+
+
+class RetargetingStepError(MeasurementError):
+    """A retargeting campaign does not move a prospect to a new funnel step.
+
+    Canon file 34: a focused campaign presents "the right offer at the right time
+    for each phase of your funnel" and "should accomplish one goal at a time",
+    moving people "from point A to point B". A campaign whose target step is the
+    step its audience is already on presents no next action and cannot be a
+    focused retargeting campaign.
+    """
+
+
+class RetargetingTenantBoundaryError(MeasurementError):
+    """A retargeting artifact cites another tenant's tracking code or goal.
+
+    SPEC.md section 3: every tenant resource carries a tenant id and a query is
+    tenant scoped, so a client's retargeting plan cannot be built from a different
+    client's pixel, goal or list.
+    """
+
+
+class RetargetingObservationError(MeasurementError):
+    """A retargeting plan was projected as an observed result.
+
+    SPEC.md section 3, Measurement invariant keeps observations distinct from
+    conclusions. The retargeting roadmap is a plan of pixels, goals, lists and
+    campaigns, not the measured movement it later produces, so it is never an
+    observation and cannot be represented as one.
+    """
+

@@ -40,10 +40,15 @@ from redops.contexts.measurement.domain.errors import (
     InvalidMetricDefinitionError,
     InvalidMetricReportingError,
     InvalidMetricWindowError,
+    InvalidRetargetingError,
     InvalidScalingRecommendationError,
     InvalidSplitTestError,
     MeasurementTenantBoundaryError,
     MeasurementWindowOpenError,
+    RetargetingDependencyError,
+    RetargetingObservationError,
+    RetargetingStepError,
+    RetargetingTenantBoundaryError,
     ScalingLearningPhaseError,
     ScalingObservationError,
     ScalingRecommendationObservationError,
@@ -1301,4 +1306,439 @@ class SplitTest:
             f"split test {claim_id!r} logs the variable that changed, not an "
             "observed movement or causal conclusion, and cannot be recorded as "
             "an observation"
+        )
+
+
+class RetargetingChannel(Enum):
+    """A named ad medium a retargeting campaign runs on (canon files 33, 34).
+
+    The canon's retargeting setup (canon files 33 and 34) separates campaigns by
+    medium: Facebook newsfeed and right rail ads, the Google Display Network, and
+    Twitter retargeting, each with its own traffic requirement and ad spec. Naming
+    the channel keeps a focused campaign tied to the medium it was built for
+    rather than an untyped label.
+    """
+
+    FACEBOOK_NEWSFEED = "facebook_newsfeed"
+    FACEBOOK_RIGHT_RAIL = "facebook_right_rail"
+    GOOGLE_DISPLAY = "google_display"
+    TWITTER = "twitter"
+
+
+@dataclass(frozen=True)
+class TrackingCode:
+    """The canon's retargeting pixel on the funnel pages (canon files 33, 34).
+
+    The canon's retargeting roadmap starts with step one, the tracking code: place
+    JavaScript on every page you want to retarget, through the ad network's
+    account, so visitors can later be segmented (canon file 34: "You place some
+    JavaScript on every page of your site that you want to retarget"; canon file
+    33: "put a pixel on every page in your funnel"). The code names its provider
+    and the exact pages it is installed on, so a later list or goal is grounded on
+    a real installation rather than an assumed one. It cannot verify that every
+    page carries it (that is an integration concern), so it records the declared
+    pages explicitly.
+    """
+
+    code_id: str
+    tenant_id: str
+    provider: str
+    pages: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("tracking code id", self.code_id),
+            ("tracking code tenant id", self.tenant_id),
+            ("tracking code provider", self.provider),
+        ):
+            if not value or not value.strip():
+                raise InvalidRetargetingError(f"{label} is required")
+        if not isinstance(self.pages, tuple) or not self.pages:
+            raise InvalidRetargetingError(
+                "a tracking code must be installed on at least one page; a pixel "
+                "on no page cannot retarget anyone"
+            )
+        for page in self.pages:
+            if not page or not page.strip():
+                raise InvalidRetargetingError(
+                    "a tracking code page cannot be blank"
+                )
+
+
+@dataclass(frozen=True)
+class ConversionGoal:
+    """The canon's conversion goal at a completed funnel URL (canon files 33, 34).
+
+    The canon's retargeting roadmap sets up a conversion goal for every URL that
+    signifies a completed outcome -- an opt in, a webinar registration, a
+    requested consultation or a purchase -- and tells the operator to put a dollar
+    value on each one, even a guessed one, so return can be computed (canon file
+    34: "Every conversion goal that you set up... put a dollar amount, even if you
+    have to guess"). The goal is grounded on a same-tenant tracking code, and its
+    value carries a ``MeasurementBasis`` so an estimated value stays explicitly
+    planned while a real one is observed. The canon's example values are
+    reverse-engineered per lead or consultation, so a non-negative amount is
+    required.
+    """
+
+    goal_id: str
+    tenant_id: str
+    name: str
+    url: str
+    value: float
+    basis: MeasurementBasis
+    tracking_code: TrackingCode
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("conversion goal id", self.goal_id),
+            ("conversion goal tenant id", self.tenant_id),
+            ("conversion goal name", self.name),
+            ("conversion goal url", self.url),
+        ):
+            if not value or not value.strip():
+                raise InvalidRetargetingError(f"{label} is required")
+        if not isinstance(self.tracking_code, TrackingCode):
+            raise RetargetingDependencyError(
+                "a conversion goal must be set up on an installed tracking code, "
+                "not a free-text pixel"
+            )
+        if self.tracking_code.tenant_id != self.tenant_id:
+            raise RetargetingTenantBoundaryError(
+                f"conversion goal {self.goal_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its tracking code "
+                f"{self.tracking_code.code_id!r} belongs to tenant "
+                f"{self.tracking_code.tenant_id!r}"
+            )
+        if not isinstance(self.value, (int, float)) or isinstance(
+            self.value, bool
+        ):
+            raise InvalidRetargetingError(
+                "a conversion goal value must be a real number"
+            )
+        if self.value < 0:
+            raise InvalidRetargetingError(
+                "a conversion goal value cannot be negative"
+            )
+        if not isinstance(self.basis, MeasurementBasis):
+            raise InvalidRetargetingError(
+                "a conversion goal requires a placeholder or observed basis"
+            )
+
+    @property
+    def is_placeholder(self) -> bool:
+        return self.basis is MeasurementBasis.PLACEHOLDER
+
+    @property
+    def is_observed(self) -> bool:
+        return self.basis is MeasurementBasis.OBSERVED
+
+
+@dataclass(frozen=True)
+class RetargetingAudience:
+    """The canon's retargeting list, a funnel-step segmentation (canon 33, 34).
+
+    The canon creates a retargeting list for each funnel step: "lists of segments
+    for user groups with a defined state within a defined stage of your funnel",
+    for example people who opted in but did not book (canon file 34). The list
+    names its funnel step, the achieved conversion goal that puts a prospect in it
+    and the lookback window it retains them for, and is grounded on the same
+    tenant's tracking code. It cannot exist without the tracking code and the goal
+    it segments from, so the roadmap's order is enforced at construction rather
+    than assumed.
+    """
+
+    audience_id: str
+    tenant_id: str
+    name: str
+    funnel_step: str
+    achieved_goal: ConversionGoal
+    lookback_days: int
+    tracking_code: TrackingCode
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("retargeting audience id", self.audience_id),
+            ("retargeting audience tenant id", self.tenant_id),
+            ("retargeting audience name", self.name),
+            ("retargeting audience funnel step", self.funnel_step),
+        ):
+            if not value or not value.strip():
+                raise InvalidRetargetingError(f"{label} is required")
+        if not isinstance(self.achieved_goal, ConversionGoal):
+            raise RetargetingDependencyError(
+                "a retargeting list must segment on a typed conversion goal, not "
+                "a free-text state"
+            )
+        if not isinstance(self.tracking_code, TrackingCode):
+            raise RetargetingDependencyError(
+                "a retargeting list must be built on an installed tracking code, "
+                "not a free-text pixel"
+            )
+        if (
+            self.achieved_goal.tenant_id != self.tenant_id
+            or self.tracking_code.tenant_id != self.tenant_id
+        ):
+            raise RetargetingTenantBoundaryError(
+                f"retargeting audience {self.audience_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its goal or tracking code cites another "
+                "tenant"
+            )
+        if self.achieved_goal.tracking_code != self.tracking_code:
+            raise RetargetingDependencyError(
+                f"retargeting audience {self.audience_id!r} segments a goal "
+                f"recorded on tracking code "
+                f"{self.achieved_goal.tracking_code.code_id!r}, not its own "
+                f"tracking code {self.tracking_code.code_id!r}"
+            )
+        if not isinstance(self.lookback_days, int) or isinstance(
+            self.lookback_days, bool
+        ):
+            raise InvalidRetargetingError(
+                "a retargeting list lookback window must be an integer number of "
+                "days"
+            )
+        if self.lookback_days < 1:
+            raise InvalidRetargetingError(
+                "a retargeting list lookback window must be at least one day so "
+                "the segment is bounded"
+            )
+
+
+@dataclass(frozen=True)
+class RetargetingCampaign:
+    """The canon's focused retargeting campaign (canon files 33, 34).
+
+    The canon creates "super focused campaigns that should accomplish one goal at a
+    time" to move a named audience from one funnel step to the next, on a specific
+    medium (canon file 34). The campaign is grounded on a same-tenant retargeting
+    list and a target conversion goal that shares that list's tracking code, and it
+    must name the next funnel step; a campaign whose target step is the step its
+    audience already occupies presents no next action and is refused. It is a plan,
+    not an authorization to spend: the launching platform's owner approval gates
+    still apply (SPEC.md sections 4 and 9).
+    """
+
+    campaign_id: str
+    tenant_id: str
+    name: str
+    audience: RetargetingAudience
+    from_step: str
+    to_step: str
+    target_goal: ConversionGoal
+    channel: RetargetingChannel
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("retargeting campaign id", self.campaign_id),
+            ("retargeting campaign tenant id", self.tenant_id),
+            ("retargeting campaign name", self.name),
+            ("retargeting campaign from step", self.from_step),
+            ("retargeting campaign to step", self.to_step),
+        ):
+            if not value or not value.strip():
+                raise InvalidRetargetingError(f"{label} is required")
+        if not isinstance(self.audience, RetargetingAudience):
+            raise RetargetingDependencyError(
+                "a focused retargeting campaign must target a typed retargeting "
+                "list, not a free-text audience"
+            )
+        if not isinstance(self.target_goal, ConversionGoal):
+            raise RetargetingDependencyError(
+                "a focused retargeting campaign must target a typed conversion "
+                "goal, not a free-text outcome"
+            )
+        if not isinstance(self.channel, RetargetingChannel):
+            raise InvalidRetargetingError(
+                "a focused retargeting campaign requires a named ad channel"
+            )
+        if (
+            self.audience.tenant_id != self.tenant_id
+            or self.target_goal.tenant_id != self.tenant_id
+        ):
+            raise RetargetingTenantBoundaryError(
+                f"retargeting campaign {self.campaign_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its list or target goal cites another "
+                "tenant"
+            )
+        if self.target_goal.tracking_code != self.audience.tracking_code:
+            raise RetargetingDependencyError(
+                f"retargeting campaign {self.campaign_id!r} targets a goal on "
+                f"tracking code {self.target_goal.tracking_code.code_id!r}, not "
+                f"the tracking code {self.audience.tracking_code.code_id!r} its "
+                "list was built on"
+            )
+        if self.from_step == self.to_step:
+            raise RetargetingStepError(
+                f"retargeting campaign {self.campaign_id!r} targets step "
+                f"{self.to_step!r}, which is the step its audience is already on; "
+                "a focused campaign must move a prospect to a new step"
+            )
+
+
+class RetargetingStep(Enum):
+    """The buildable sections of the canon's retargeting roadmap (canon 33, 34).
+
+    The canon's roadmap has six steps: tracking code, conversion goals, retargeting
+    lists, focused campaigns, effective ads and metrics. This context owns the
+    planning of the first four as typed value objects; the canon's effective ads
+    step is logged one variable at a time by the stage 10 ``SplitTest``, and its
+    metrics step is grounded by the ``MetricDefinition`` registry, so the plan does
+    not duplicate them.
+    """
+
+    TRACKING_CODE = "tracking_code"
+    CONVERSION_GOALS = "conversion_goals"
+    RETARGETING_LISTS = "retargeting_lists"
+    FOCUSED_CAMPAIGNS = "focused_campaigns"
+
+
+REQUIRED_RETARGETING_STEPS: tuple[RetargetingStep, ...] = (
+    RetargetingStep.TRACKING_CODE,
+    RetargetingStep.CONVERSION_GOALS,
+    RetargetingStep.RETARGETING_LISTS,
+    RetargetingStep.FOCUSED_CAMPAIGNS,
+)
+
+
+@dataclass(frozen=True)
+class RetargetingPlan:
+    """The canon's retargeting roadmap for a client (SPEC.md section 4; canon 33, 34).
+
+    SPEC.md section 4, stage 8 requires tracking and analytics among the funnel
+    assets before "Funnel Complete", and section 12.3 maps the retargeting roadmap
+    to stage 8 and stage 10. The canon's roadmap (canon files 33 and 34) is a
+    plan of a tracking code, conversion goals, retargeting lists and focused
+    campaigns, ordered so the earlier step exists before the later one. The plan
+    binds those typed sections to a named owner and one tenant, requires every list
+    and campaign to be grounded in the plan's own tracking code and declared goals,
+    and reports the sections it is still missing.
+
+    The plan is never an observed result: it is the roadmap the campaign runs
+    against, while the measured movement it later produces is a separate
+    ``MeasurementRecord`` or ``ImprovementOutcome`` (SPEC.md section 3, Measurement
+    invariant). It does not authorize spend or traffic; that remains a named human
+    approval (SPEC.md sections 4 and 9).
+    """
+
+    plan_id: str
+    tenant_id: str
+    owner: str
+    tracking_code: TrackingCode
+    goals: tuple[ConversionGoal, ...]
+    audiences: tuple[RetargetingAudience, ...]
+    campaigns: tuple[RetargetingCampaign, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("retargeting plan id", self.plan_id),
+            ("retargeting plan tenant id", self.tenant_id),
+            ("retargeting plan owner", self.owner),
+        ):
+            if not value or not value.strip():
+                raise InvalidRetargetingError(f"{label} is required")
+        if not isinstance(self.tracking_code, TrackingCode):
+            raise RetargetingDependencyError(
+                "a retargeting plan must be grounded on a typed tracking code"
+            )
+        if self.tracking_code.tenant_id != self.tenant_id:
+            raise RetargetingTenantBoundaryError(
+                f"retargeting plan {self.plan_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its tracking code belongs to tenant "
+                f"{self.tracking_code.tenant_id!r}"
+            )
+        for goal in self.goals:
+            if not isinstance(goal, ConversionGoal):
+                raise RetargetingDependencyError(
+                    "a retargeting plan goal must be a typed conversion goal"
+                )
+            if goal.tenant_id != self.tenant_id:
+                raise RetargetingTenantBoundaryError(
+                    f"retargeting plan {self.plan_id!r} cites goal "
+                    f"{goal.goal_id!r} from another tenant"
+                )
+        for audience in self.audiences:
+            if not isinstance(audience, RetargetingAudience):
+                raise RetargetingDependencyError(
+                    "a retargeting plan list must be a typed retargeting audience"
+                )
+            if audience.tenant_id != self.tenant_id:
+                raise RetargetingTenantBoundaryError(
+                    f"retargeting plan {self.plan_id!r} cites list "
+                    f"{audience.audience_id!r} from another tenant"
+                )
+            if audience.tracking_code != self.tracking_code:
+                raise RetargetingDependencyError(
+                    f"retargeting plan {self.plan_id!r} list "
+                    f"{audience.audience_id!r} is built on a tracking code the "
+                    "plan does not declare"
+                )
+            if audience.achieved_goal not in self.goals:
+                raise RetargetingDependencyError(
+                    f"retargeting plan {self.plan_id!r} list "
+                    f"{audience.audience_id!r} segments an undeclared goal "
+                    f"{audience.achieved_goal.goal_id!r}"
+                )
+        for campaign in self.campaigns:
+            if not isinstance(campaign, RetargetingCampaign):
+                raise RetargetingDependencyError(
+                    "a retargeting plan campaign must be a typed retargeting "
+                    "campaign"
+                )
+            if campaign.tenant_id != self.tenant_id:
+                raise RetargetingTenantBoundaryError(
+                    f"retargeting plan {self.plan_id!r} cites campaign "
+                    f"{campaign.campaign_id!r} from another tenant"
+                )
+            if campaign.audience not in self.audiences:
+                raise RetargetingDependencyError(
+                    f"retargeting plan {self.plan_id!r} campaign "
+                    f"{campaign.campaign_id!r} targets an undeclared list "
+                    f"{campaign.audience.audience_id!r}"
+                )
+            if campaign.target_goal not in self.goals:
+                raise RetargetingDependencyError(
+                    f"retargeting plan {self.plan_id!r} campaign "
+                    f"{campaign.campaign_id!r} targets an undeclared goal "
+                    f"{campaign.target_goal.goal_id!r}"
+                )
+
+    @property
+    def sections(self) -> tuple[RetargetingStep, ...]:
+        """The roadmap sections present, in the canon's order."""
+        present: list[RetargetingStep] = [RetargetingStep.TRACKING_CODE]
+        if self.goals:
+            present.append(RetargetingStep.CONVERSION_GOALS)
+        if self.audiences:
+            present.append(RetargetingStep.RETARGETING_LISTS)
+        if self.campaigns:
+            present.append(RetargetingStep.FOCUSED_CAMPAIGNS)
+        return tuple(present)
+
+    def missing_sections(self) -> tuple[RetargetingStep, ...]:
+        present = set(self.sections)
+        return tuple(
+            step for step in REQUIRED_RETARGETING_STEPS if step not in present
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.missing_sections()
+
+    @property
+    def is_plan(self) -> bool:
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a retargeting plan as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The plan
+        describes the pixels, goals, lists and campaigns that will run, while any
+        measured movement is a separate observation, so a plan is never an
+        observation.
+        """
+        raise RetargetingObservationError(
+            f"retargeting plan {claim_id!r} is a roadmap of pixels, goals, lists "
+            "and campaigns, not an observed result, and cannot be recorded as an "
+            "observation"
         )
