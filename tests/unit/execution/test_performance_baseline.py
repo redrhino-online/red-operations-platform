@@ -20,12 +20,14 @@ Rules under test come from SPEC.md section 4, stage 10 "Launch":
 
 import unittest
 from dataclasses import FrozenInstanceError
+from datetime import date
 
 from redops.contexts.execution.domain.errors import (
     InvalidPerformanceBaselineError,
     InvalidPerformanceClaimError,
     PerformanceBaselineDependencyError,
     PerformanceBaselineIncompleteError,
+    PerformanceBaselinePrecedenceError,
     PerformanceClaimSupportError,
 )
 from redops.contexts.execution.domain.value_objects import (
@@ -38,8 +40,10 @@ from redops.contexts.execution.domain.value_objects import (
 )
 
 from .fixtures import (
+    authorization,
     established_baseline,
     launch_assets,
+    launch_qa,
     milestone,
     milestone_observations,
     performance_baseline,
@@ -124,6 +128,55 @@ class BaselineEstablishmentTests(unittest.TestCase):
             with self.subTest(override=override):
                 with self.assertRaises(InvalidPerformanceBaselineError):
                     performance_baseline(**override)
+
+
+class BaselinePrecedenceTests(unittest.TestCase):
+    """A baseline cannot be established before its own evidence exists.
+
+    SPEC.md section 4, stage 10: the "Performance Baseline Established"
+    checkpoint reports a baseline of the campaign that the stage 9 authority
+    authorized and that first qualified traffic reached. Canon files 23 and 24
+    ("you need a baseline of metrics", "don't touch anything for 10 days") treat
+    the baseline as accumulating only after the campaign has run, so the
+    establishment date must not precede the traffic authorization date or the
+    observed first-qualified-traffic date.
+    """
+
+    def _traffic_observed_on(self, day):
+        return tuple(
+            milestone(
+                kind,
+                status=(
+                    ObservationStatus.OBSERVED
+                    if kind is MilestoneKind.FIRST_QUALIFIED_TRAFFIC
+                    else ObservationStatus.PENDING
+                ),
+                observed_on=day,
+            )
+            for kind in MILESTONE_ORDER
+        )
+
+    def test_a_baseline_cannot_establish_before_traffic_was_observed(self):
+        observed_on = date(2026, 10, 5)
+
+        with self.assertRaises(PerformanceBaselinePrecedenceError):
+            performance_baseline(
+                milestones=self._traffic_observed_on(observed_on)
+            ).establish(on=TODAY)
+
+    def test_a_baseline_cannot_establish_before_the_stage_9_authorization(self):
+        authorized_on = date(2026, 10, 5)
+        qa = launch_qa().authorize_traffic(
+            authorization=authorization(authorized_on=authorized_on)
+        )
+
+        with self.assertRaises(PerformanceBaselinePrecedenceError):
+            performance_baseline(launch_qa=qa).establish(on=TODAY)
+
+    def test_a_baseline_can_establish_on_or_after_its_evidence_date(self):
+        established = established_baseline()
+
+        self.assertEqual(TODAY, established.established_on)
 
 
 class MilestoneObservationTests(unittest.TestCase):

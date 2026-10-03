@@ -28,6 +28,7 @@ from redops.contexts.execution.domain.errors import (
     MissingComplianceAssetError,
     PerformanceBaselineDependencyError,
     PerformanceBaselineIncompleteError,
+    PerformanceBaselinePrecedenceError,
     PerformanceClaimSupportError,
 )
 from redops.contexts.execution.domain.value_objects import (
@@ -248,6 +249,20 @@ class PerformanceBaselinePolicy:
             raise PerformanceBaselineIncompleteError(
                 f"performance baseline {baseline.baseline_id!r} cannot be "
                 "established: first qualified traffic has not been observed"
+            )
+        traffic = next(
+            observation
+            for observation in baseline.milestones
+            if observation.kind is MilestoneKind.FIRST_QUALIFIED_TRAFFIC
+        )
+        evidence_on = max(
+            qa.authorization.authorized_on, traffic.observed_on
+        )
+        if on < evidence_on:
+            raise PerformanceBaselinePrecedenceError(
+                f"performance baseline {baseline.baseline_id!r} cannot be "
+                f"established on {on.isoformat()}: the traffic it reports was "
+                f"authorized and observed on {evidence_on.isoformat()}"
             )
 
 

@@ -144,6 +144,20 @@ class PerformanceBaselineIncompleteError(PerformanceBaselineError):
     """Observations do not satisfy "Performance Baseline Established"."""
 
 
+class PerformanceBaselinePrecedenceError(PerformanceBaselineError):
+    """A baseline was established before the evidence it reports existed.
+
+    SPEC.md section 4, stage 10: "Performance Baseline Established" reports
+    first qualified traffic and the later lead, appointment and sale milestones
+    after the stage 9 authority authorized traffic. A baseline of metrics
+    accumulates only after the campaign has run (canon files 23 and 24: "you need
+    a baseline of metrics", "don't touch anything for 10 days"), so the
+    establishment date must not precede the stage 9 traffic authorization date or
+    the observed first-qualified-traffic date. Otherwise a baseline could claim
+    establishment before the traffic it reports was authorized and observed.
+    """
+
+
 class PerformanceClaimError(PerformanceBaselineError):
     """Base class for observation-versus-causal claim rule violations."""
 

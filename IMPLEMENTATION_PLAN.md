@@ -4,44 +4,41 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T05:19:18Z (Ralph cycle 100).
-- Selected item: enforce that a `MeasurementRecord` cannot be recorded before
-  the window it covers has ended (`recorded_on >= window.end`) via a value-object
-  invariant on `MeasurementRecord` and the new named `MeasurementWindowOpenError`,
-  so an observation with a still-open window cannot enter the metric registry or
-  ground any baseline or movement. This is the general form of cycles 96 through
-  99's stage 10 movement chain and applies the canon's "I wait 10 days to see how
-  it does" and "don't touch anything for 10 days" discipline (canon files 23 and
-  24) to the record itself, not only to an improvement outcome (SPEC.md section 3
-  Measurement aggregate and `MeasurementWindow`; Phase 5 "metric registry, event
-  instrumentation, observations and experiment records"). It was this plan's named
-  highest priority ready next item after cycle 99. It outranks the stage 10
-  baseline establishment-date precedence (the next gate-integrity analogue, named
-  below), the advertising and forecast dashboard (a downstream feature), the
-  Operations delivery adapter (blocked on the storage ADR), the stage 9 compliance
-  projection (needs a named-owner decision) and the stage-parameterized gate
-  refactor (quality only), because it closes the registry-level temporal edge that
-  every baseline, movement and dashboard depends on without a new artifact, stage
-  or decision.
+- Cycle timestamp: 2026-10-03T05:23:57Z (Ralph cycle 101).
+- Selected item: enforce that a stage 10 `PerformanceBaseline` cannot be
+  established before its own evidence exists -- the establishment date must not
+  precede the stage 9 traffic authorization date (`qa.authorization.authorized_on`)
+  nor the observed first-qualified-traffic milestone date -- via
+  `PerformanceBaselinePolicy` and the new named
+  `PerformanceBaselinePrecedenceError`. This is the stage 10 counterpart of cycle
+  100's registry-level closure rule and applies the canon's "you need a baseline
+  of metrics" and "don't touch anything for 10 days" discipline (canon files 23
+  and 24) to the aggregate that reports the baseline (SPEC.md section 4 stage 10
+  "Performance Baseline Established"; Phase 5 "stage 10 live traffic milestones
+  and baseline"). It was this plan's named highest priority ready next item after
+  cycle 100. It outranks the milestone-level observed-before-authorization edge
+  (the next gate-integrity analogue, named below), the advertising and forecast
+  dashboard (a downstream feature), the Operations delivery adapter (blocked on
+  the storage ADR), the stage 9 compliance projection (needs a named-owner
+  decision) and the stage-parameterized gate refactor (quality only), because it
+  closes the aggregate-level temporal edge every baseline-backed recommendation
+  and movement depends on without a new artifact, stage or decision.
 - Outcome: completed and verified (single item; no second item started).
 - Evidence: behavioral coverage in
-  `tests/unit/measurement/test_metric_registry.py` (`MeasurementRecordTests`): a
-  record whose window ends after its `recorded_on` date is refused with the named
-  `MeasurementWindowOpenError`, a record may be written exactly on the day its
-  window closes, and the default record asserts
-  `record.recorded_on >= record.window.end`. Running
+  `tests/unit/execution/test_performance_baseline.py` (`BaselinePrecedenceTests`):
+  a baseline whose first qualified traffic was observed after the establishment
+  date is refused with the named `PerformanceBaselinePrecedenceError`, a baseline
+  whose stage 9 authorization postdates the establishment date is refused, and a
+  baseline may still establish exactly on its evidence date. Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1086 passed, up from 1083. `python3 -m pyflakes backend/redops tests`
+  reports 1089 passed, up from 1086. `python3 -m pyflakes backend/redops tests`
   is clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the registry-level closure rule forced the fixture audit the prior
-  plan predicted: three `tests/unit/measurement/test_improvement_loop.py` tests
-  that deliberately build a future-window record to exercise the outcome-level
-  overlap and result-window rules now set `recorded_on` to the window end, so the
-  record is itself valid and the outcome-level named errors still fire in their
-  established order. No persistence adapter exists yet, so the invariant is
-  enforced purely at construction. The stage 10 baseline gate has the analogous
-  open edge: `PerformanceBaseline.establish` accepts any `on` date, including one
-  before the stage 9 authorization and the observed first-qualified-traffic date.
+- New findings: the precedence rule lifts the establishment floor to the later of
+  the authorization date and the observed first-qualified-traffic date, but it does
+  not constrain an observed milestone's own `observed_on`. A `MilestoneObservation`
+  can still be recorded with a date before the stage 9 authorization, and the
+  baseline then reports traffic observation that predates the authority that
+  permitted it. That milestone-level edge is the next gate-integrity analogue.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -49,28 +46,40 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   approver identities, and pilot metric targets. Persistence and the Operations
   delivery adapter still depend on the storage ADR; the stage 9 compliance
   projection still needs a named-owner decision on a canonical kind.
-- Highest priority ready next item: enforce that `PerformanceBaseline.establish`
-  cannot establish a stage 10 baseline before its own evidence exists -- the
-  establishment date must not precede the stage 9 traffic authorization date
-  (`qa.authorization.authorized_on`) nor the observed first-qualified-traffic
-  milestone date -- via `PerformanceBaselinePolicy` and a named error, so a
-  baseline cannot report establishment before the traffic it reports was
-  authorized and observed (SPEC.md section 4 stage 10 "Performance Baseline
-  Established"; canon files 23 and 24: a baseline of metrics accumulates only
-  after the campaign has run). It outranks the advertising and forecast dashboard
-  (a downstream feature), the Operations delivery adapter (blocked on the storage
-  ADR), the stage 9 compliance projection (needs a named-owner decision) and the
-  stage-parameterized gate refactor (quality only), because it is the same
-  gate-integrity temporal edge at the stage 10 gate that this cycle closed at the
-  registry. Prerequisite: satisfied (the existing `PerformanceBaselinePolicy`,
-  `TrafficAuthorization.authorized_on` and `MilestoneObservation.observed_on`); it
-  needs a fixture audit for any baseline established before its own milestones.
+- Highest priority ready next item: enforce that a stage 10 observed milestone
+  cannot be observed before the stage 9 traffic authorization date -- an observed
+  `MilestoneObservation.observed_on` must not precede `qa.authorization.authorized_on`
+  -- via `PerformanceBaselinePolicy` (or the `PerformanceBaseline` invariant) and
+  a named error, so a baseline cannot report first qualified traffic observed
+  before the authority that permitted traffic existed (SPEC.md section 4 stage 10
+  "Performance Baseline Established"; canon files 23 and 24: the baseline
+  accumulates only after the campaign runs). It outranks the advertising and
+  forecast dashboard (a downstream feature), the Operations delivery adapter
+  (blocked on the storage ADR), the stage 9 compliance projection (needs a
+  named-owner decision) and the stage-parameterized gate refactor (quality only),
+  because it is the remaining same-gate temporal edge at stage 10. Prerequisite:
+  satisfied (the existing `PerformanceBaselinePolicy`, `TrafficAuthorization`
+  `authorized_on`, and `MilestoneObservation.observed_on`); it needs a fixture
+  audit for any observed milestone dated before its QA authorization.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; the advertising and forecast dashboard; a
   stage-parameterized gate recorder/handler refactor; projecting the compliance
   package onto a canonical stage 9 gate kind (methodology-owner decision); and
   all persistence.
+  [DONE 2026-10-03 (Ralph cycle 101): required a stage 10 `PerformanceBaseline`
+  to be established only once its own evidence exists --
+  `PerformanceBaselinePolicy.require` now refuses an establishment date that
+  precedes the later of the pinned stage 9 `TrafficAuthorization.authorized_on`
+  and the observed first-qualified-traffic `MilestoneObservation.observed_on` with
+  the new named `PerformanceBaselinePrecedenceError`, so a baseline cannot claim
+  establishment before the traffic it reports was authorized and observed (SPEC.md
+  section 4 stage 10 "Performance Baseline Established"; canon files 23 and 24: a
+  baseline of metrics accumulates only after the campaign runs); verified by the
+  new `BaselinePrecedenceTests` in
+  `tests/unit/execution/test_performance_baseline.py` (28 tests, full suite 1089
+  passed), so stage 10 now carries the same temporal discipline as the metric
+  registry closed in cycle 100.]
   [DONE 2026-10-03 (Ralph cycle 100): required a `MeasurementRecord` to be
   written only once the window it covers has closed --
   `MeasurementRecord.__post_init__` now refuses a record whose `recorded_on` date
