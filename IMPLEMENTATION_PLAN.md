@@ -4,47 +4,46 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T04:46:30Z (Ralph cycle 83).
-- Selected item: build the Execution `FunnelIntegrationPackage` bridge
-  (`CANONICAL_FUNNEL_KINDS`, `FunnelIntegrationPackage`, plus named errors
-  `InvalidFunnelIntegrationPackageError` and
-  `FunnelIntegrationPackageTenantBoundaryError`) projecting the reviewed stage 8
-  `FunnelIntegration` onto the thirteen canonical stage 8 kinds as exact
-  `StageAssetVersion` evidence (canon 13, 14, 21, 22). Cycle 82 closed the stage 7
-  gate, so stage 8 is the next unblocked pipeline step; the template requires
-  thirteen asset kinds that the reviewed `FunnelIntegration` owns as one entity
-  (`FunnelAssetPackage` plus the `ProspectPathDryRun`), and this is the smallest
-  change that makes the stage 8 "Funnel Complete" gate assembleable. This
-  outranks the stage 8 gate wiring (which needs an assembleable stage 8 package
-  first), the later stage 9 through 10 reviewed-asset bridges and gate wiring, the
-  production-manager view and `PipelineProgress` reads (which only read the ledger
-  these gates write), and the deferred stage-parameterized recorder/handler
-  refactor (still awaiting an explicit named-owner decision rather than a genuine
-  new abstraction).
+- Cycle timestamp: 2026-10-03T04:47:43Z (Ralph cycle 84).
+- Selected item: wire the stage 8 "Funnel Complete" `GateDecision` end to end
+  with a `StageEightGateAssembler`, `StageEightGateRecorder`,
+  `RecordStageEightGateCommand` and `RecordStageEightGateHandler`, plus named
+  errors `NotStageEightGateError` and `StageRunNotStageEightError`, binding the
+  reviewed `FunnelIntegrationPackage` to the workspace tenant and the workspace
+  authority registry (canon 13, 14, 21, 22). Cycle 83 made the stage 8 package
+  assembleable, so stage 8 is the next unblocked pipeline step; mirroring the
+  stage 7 gate is the smallest change that lets the stage close and unblocks
+  stage 9. This outranks the stage 9 reviewed-asset bridge and gate wiring (which
+  need stage 8 closed first), the production-manager view and `PipelineProgress`
+  reads (which only read the ledger these gates write), and the deferred
+  stage-parameterized recorder/handler refactor (still awaiting an explicit
+  named-owner decision rather than a genuine new abstraction).
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: 12 new behavioral tests in
-  `tests/unit/execution/test_funnel_integration_package.py`: the reviewed
-  `FunnelIntegration` assembles all thirteen canonical stage 8 kinds pinned to the
-  funnel identity at one exact version and scoped to the workspace tenant, the
-  canonical kinds equal the seeded stage 8 template package, and the package
-  refuses a cross-tenant funnel, a blank identity, a versionless funnel, a draft
-  funnel and a review-required funnel. Running `PYTHONPATH=backend python3 -m
-  unittest discover -s tests -p 'test_*.py'` reports 840 passed, up from 828.
+- Evidence: 22 new behavioral tests in
+  `tests/unit/engagement/test_record_stage_eight_gate.py`: the reviewed
+  `FunnelIntegrationPackage` assembles the canonical stage 8 gate (thirteen
+  kinds, `Funnel Complete` checkpoint, dependency on stage 7, exact pinned
+  version), the recorder issues one exact-version approval per kind and writes
+  the durable `GateDecision`, and the use case closes the stage 8 `StageRun` so
+  `PipelineProgress` counts stages 0 through 8; the path refuses a cross-tenant
+  package, a non-stage-8 gate, an absent author or approver, an unauthorized
+  approver or owner, a self-approval, a wrong-stage or wrong-template run, and a
+  stage 8 pass while stage 7 is unapproved. Running `PYTHONPATH=backend python3
+  -m unittest discover -s tests -p 'test_*.py'` reports 862 passed, up from 840.
   `python3 -m pyflakes` on the changed modules and test file is clean. `ruff` and
   `mypy` remain uninstalled.
-- New findings: unlike stage 7, whose reviewed `AuthorityAmplifier` can exist
-  without creative acceptance, `FunnelIntegration` is constructively complete only
-  after `mark_funnel_complete` passes the checkpoint on a same-tenant
-  `ProspectPathDryRun`. The bridge therefore refuses any funnel not in
-  `FunnelState.COMPLETE` (`InvalidFunnelIntegrationPackageError`), so a draft or
-  review-required funnel cannot pin thirteen kinds as if the gate had passed
-  (SPEC.md section 4: stage completion requires gate acceptance, not merely
-  activity). Together with the stage 7 two-approval refusal, this shows each
-  bridge enforces its own checkpoint, not just entity construction. Stage 8 is now
-  assembleable, so the stage 8 "Funnel Complete" `GateDecision` wiring is the next
-  unblocked step. The canon gap for the "thirteen transformations" (files 09, 10)
-  and the stage 8 retargeting/tracking system candidate remain open and unchanged.
-  All prior tests still pass.
+- New findings: because the stage 8 `FunnelIntegrationPackage` already refuses a
+  funnel that has not reached `FunnelState.COMPLETE`, the stage 8 assembler needs
+  no separate completion check -- the bridge itself enforces the checkpoint,
+  unlike stage 6 and 7 where the assembler had to re-check approval. This
+  confirms the bridge/assembly split: the bridge owns the reviewed-asset
+  representation and its completeness, the assembler owns tenant scope, template
+  pinning and approver authority, and the recorder owns exact-version approvals
+  and the durable decision. Stage 8 is now closeable, so the stage 9
+  "Launch Approved" reviewed-asset bridge is the next unblocked step. The canon
+  gap for the "thirteen transformations" (files 09, 10) and the stage 8
+  retargeting/tracking system candidate remain open and unchanged. All prior
+  tests still pass.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant
   model given slot-based single-active-client isolation, the lifecycle transition
@@ -56,33 +55,35 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   not yet exist, and per-kind stage 9 through 10 asset content schemas remain
   prose and shapes rather than typed value objects. No fork or cluster facts
   invented; no `docs/`, fork checkout, `kubectl`, `helm`, or `argocd` present.
-- Highest priority ready next item: wire the stage 8 "Funnel Complete"
-  `GateDecision` end to end with a `StageEightGateAssembler`,
-  `StageEightGateRecorder`, `RecordStageEightGateCommand` and
-  `RecordStageEightGateHandler`, binding the reviewed `FunnelIntegrationPackage` to
-  the workspace tenant, the funnel's completed prospect path and the workspace
-  authority registry (canon 13, 14, 21, 22), mirroring the stage 7 gate. Cycle 83
-  made the stage 8 package assembleable, so the stage 8 gate is the next unblocked
-  pipeline step and this is the smallest change that lets the stage close.
-  Pipeline mapping: stage 8, required asset the reviewed stage 8 Funnel
-  Integration, checkpoint "Funnel Complete", gate requires the approved stage 7
-  amplifier plus a same-tenant `ProspectPathDryRun` routing every capture,
-  engagement and conversion handoff exactly once, approver the workspace's
-  client-designated authority, blocked downstream dependency the stage 9 "Launch
-  Approved" gate. This outranks the stage 9 reviewed-asset bridge and gate wiring
-  (which need stage 8 closed first) and the production-manager view reads.
+- Highest priority ready next item: build the Execution `LaunchQAPackage` bridge
+  projecting the reviewed stage 9 `LaunchQA` onto the sixteen canonical stage 9
+  kinds as exact `StageAssetVersion` evidence (canon 01, 08, 21, 22, 24),
+  refusing a `LaunchQA` that has not reached `READY_FOR_TRAFFIC` and a
+  cross-tenant or versionless QA. This mirrors the stage 1 through 8 bridges and
+  is the smallest change that makes the stage 9 "Launch Approved" gate
+  assembleable; the stage 9 gate wiring follows once the bridge exists. Pipeline
+  mapping: stage 9, required asset the reviewed stage 9 Launch QA, checkpoint
+  "Launch Approved", gate requires the completed stage 8 funnel plus the full
+  canonical check set with critical-path passes and designated-authority traffic
+  authorization, approver the workspace's client-designated authority, blocked
+  downstream dependency the stage 10 "Performance Baseline Established" gate.
+  This outranks the stage 9 gate wiring (which needs an assembleable stage 9
+  package first) and the production-manager view reads.
 - Deferred cross-context items: the stage 9 and 10 reviewed-asset bridges and the
-  stage 8 through 10 `GateDecision` wiring; per-kind stage 8 through 10 asset
+  stage 9 through 10 `GateDecision` wiring; per-kind stage 8 through 10 asset
   content schemas; a stage-parameterized gate recorder/handler refactor now that
   nine identical shapes are proven; and all persistence, blocked on the storage
   ADR.
-  [DONE 2026-10-03 (Ralph cycle 83): built the Execution
-  `FunnelIntegrationPackage` bridge (canon-informed, SPEC.md section 12.3 stage 8
-  files 13, 14, 21, 22) projecting the reviewed stage 8 `FunnelIntegration` onto
-  the thirteen canonical stage 8 kinds as exact `StageAssetVersion` evidence and
-  refusing a funnel that has not passed Funnel Complete; verified by
-  `tests/unit/execution/test_funnel_integration_package.py` (12 tests), so the
-  stage 8 gate is now assembleable.]
+  [DONE 2026-10-03 (Ralph cycle 84): wired the stage 8 "Funnel Complete"
+  `GateDecision` end to end with `StageEightGateAssembler`,
+  `StageEightGateRecorder`, `RecordStageEightGateCommand` and
+  `RecordStageEightGateHandler`, plus named errors `NotStageEightGateError` and
+  `StageRunNotStageEightError` (canon-informed, SPEC.md section 12.3 stage 8
+  files 13, 14, 21, 22), binding the reviewed `FunnelIntegrationPackage` to the
+  workspace tenant and authority registry, issuing one exact-version approval per
+  canonical kind and closing the stage 8 `StageRun`; verified by
+  `tests/unit/engagement/test_record_stage_eight_gate.py` (22 tests), so stage 8
+  can now close and stage 9 is unblocked pending its reviewed-asset bridge.]
   [DONE 2026-10-03 (Ralph cycle 82): wired the stage 7 "Authority Amplifier
   Approved" `GateDecision` end to end with `StageSevenGateAssembler`,
   `StageSevenGateRecorder`, `RecordStageSevenGateCommand` and
@@ -309,7 +310,7 @@ CI gate order: format and types, domain and application tests, adapter contracts
 6. Implement stages 2 and 3 from primary currency to observable Profit Pyramid. [DONE 2026-10-02 (Ralph cycle 17): Method `PrimaryCurrency` value object requires a specific audience, distinct current/desired measures, and a distinct mechanism, rejecting an unspecified person or unmeasured outcome, so the stage 2 "Currency Locked" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_primary_currency.py`. DONE 2026-10-02 (Ralph cycle 19): Method `ProfitPyramidLevel` and `DiagnosticModel` require each level's observable measures, symptoms, behaviors and problems and reject adjacent levels that cannot be told apart by an observable difference, so the stage 3 "Diagnostic Model Approved" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_diagnostic_model.py`. DONE 2026-10-02 (Ralph cycle 21): `MethodVersion` pins the exact tenant-checked stage 2 `PrimaryCurrency` and stage 3 `DiagnosticModel`, refuses approval without both pins, rejects a cross-tenant pin, and drops both pins on `revised`; verified by `tests/unit/method/test_method_dependencies.py`. DONE 2026-10-03 (Ralph cycle 71): Commercial `CurrencyInventory`, `PositioningDecision`, `MillionDollarMessage` and the `CurrencyPackage` bridge (canon 04, 05, 06) project the four reviewed stage 2 values onto the ten canonical stage 2 kinds as exact   `StageAssetVersion` evidence, refusing a blank identity, a versionless asset or a cross-tenant value, so the stage 2 "Currency Locked" gate can now be assembled; verified by `tests/unit/commercial/test_currency_package.py` (22 tests). DONE 2026-10-03 (Ralph cycle 72): Engagement `StageTwoGateAssembler`, `StageTwoGateRecorder`, `RecordStageTwoGateCommand` and `RecordStageTwoGateHandler` wire the stage 2 "Currency Locked" `GateDecision` end to end, binding the reviewed `CurrencyPackage` to the workspace tenant and authority registry, issuing one exact-version approval per required kind, writing the durable decision, and closing the stage 2 `StageRun`; stage 2 depends on stage 1, so the ledger must already hold a passing stage 1 decision; verified by `tests/unit/engagement/test_record_stage_two_gate.py` (22 tests). DONE 2026-10-03 (Ralph cycle 73): Commercial `DiagnosticPackage` bridge (canon 07, 08) completes the Method `DiagnosticModel` with the SPEC-required `visual` and `explanatory_copy` and projects the reviewed model onto the ten canonical stage 3 kinds as exact `StageAssetVersion` evidence, so the stage 3 "Diagnostic Model Approved" gate can now be assembled; verified by `tests/unit/commercial/test_diagnostic_package.py` (10 tests) plus two `DiagnosticModel` field tests. DONE 2026-10-03 (Ralph cycle 74): Engagement `StageThreeGateAssembler`, `StageThreeGateRecorder`, `RecordStageThreeGateCommand` and `RecordStageThreeGateHandler` wire the stage 3 "Diagnostic Model Approved" `GateDecision` end to end, binding the reviewed `DiagnosticPackage` to the workspace tenant and authority registry, issuing one exact-version approval per required kind, writing the durable decision, and closing the stage 3 `StageRun`; stage 3 depends on stage 2, so the ledger must already hold a passing stage 2 decision; verified by `tests/unit/engagement/test_record_stage_three_gate.py` (22 tests). DONE 2026-10-03 (Ralph cycle 75): Commercial `SignaturePackage` bridge (canon 09, 10) projects the reviewed Method `SignatureSolution` onto the twelve canonical stage 4 kinds as exact `StageAssetVersion` evidence, so the stage 4 "IP Architecture Locked" gate can now be assembled; verified by `tests/unit/commercial/test_signature_package.py` (10 tests). The stage 4 `GateDecision` wiring remains.]
 7. Implement stages 4 and 5 from grounded Signature Solution to offer approval. [DONE 2026-10-02 (Ralph cycle 14): commercial `OfferVersion` requires an accountable owner and `OfferChangeImpactPolicy` discovers dependent offers from an approved method change and marks them review required, so the SPEC.md section 11 "changing a method version identifies dependents" acceptance test is met by a real aggregate; verified by `tests/unit/commercial/test_offer_change_impact.py`. DONE 2026-10-02 (Ralph cycle 22): Method `SignatureStep`, `TransformationPhase` and frozen `SignatureSolution` require exactly three phases and nine steps, a process inventory, transformation map, narrative and visual, one continuous chain of named stages, and declared starting/final states that are the ends of that chain, so the stage 4 "IP Architecture Locked" checkpoint rule is met by a real domain value; verified by `tests/unit/method/test_signature_solution.py`. DONE 2026-10-02 (Ralph cycle 23): `MethodVersion` pins the exact tenant-checked stage 4 `SignatureSolution`, refuses approval without it, rejects a cross-tenant pin, and drops the pin on `revised`, so an approved method must carry its locked stage 4 structure; verified by `tests/unit/method/test_method_dependencies.py`. DONE 2026-10-02 (Ralph cycle 24): commercial `StepDelivery` and `DeliverySpecification` require every locked stage 4 method step to carry an action, actor, deliverable, timing and measure, record the full stage 5 asset package, and reject a missing or extra method step, a duplicate delivery, a foreign-tenant method or step delivery, and any missing package field, so the stage 5 "Offer Locked" checkpoint rule is met by a real value; verified by `tests/unit/commercial/test_delivery_specification.py`. DONE 2026-10-02 (Ralph cycle 25): `OfferVersion` pins the tenant-checked stage 5 `DeliverySpecification`, refuses production readiness without it, and `revised` drops the delivery specification and readiness (including when the method reference changes) so an approved offer must carry a complete stage 5 delivery package; verified by `tests/unit/commercial/test_offer_version.py` with a shared fixture in `tests/unit/commercial/fixtures.py`. DONE 2026-10-02 (Ralph cycle 26): `OfferReadinessPolicy` refuses production readiness when the stage 5 `DeliverySpecification.signature_solution` is not equal to the `SignatureSolution` pinned by an approved method reference, so a stage 5 package cannot describe a different transformation than the approved stage 4 method; verified by `tests/unit/commercial/test_offer_version.py`. DONE 2026-10-03 (Ralph cycle 76): Engagement `StageFourGateAssembler`, `StageFourGateRecorder`, `RecordStageFourGateCommand` and `RecordStageFourGateHandler` wire the stage 4 "IP Architecture Locked" `GateDecision` end to end, binding the reviewed `SignaturePackage` to the workspace tenant and authority registry, issuing one exact-version approval per required kind, writing the durable decision, and closing the stage 4 `StageRun`; stage 4 depends on stage 3, so the ledger must already hold a passing stage 3 decision; verified by `tests/unit/engagement/test_record_stage_four_gate.py` (22 tests). DONE 2026-10-03 (Ralph cycle 77): the Commercial `OfferPackage` bridge (canon 11, 12) projects the reviewed stage 5 `DeliverySpecification` onto the twelve canonical kinds as exact `StageAssetVersion` evidence; verified by `tests/unit/commercial/test_offer_package.py` (10 tests). DONE 2026-10-03 (Ralph cycle 78): Engagement `StageFiveGateAssembler`, `StageFiveGateRecorder`, `RecordStageFiveGateCommand` and `RecordStageFiveGateHandler` wire the stage 5 "Offer Locked" `GateDecision` end to end, binding the reviewed `OfferPackage` to the workspace tenant and authority registry, issuing one exact-version approval per required kind, writing the durable decision, and closing the stage 5 `StageRun`; stage 5 depends on stage 4, so the ledger must already hold a passing stage 4 decision; verified by `tests/unit/engagement/test_record_stage_five_gate.py` (22 tests). The stage 6 reviewed-asset bridge remains.]
 8. Implement stages 6 and 7 with message congruence and script approval before creative production. [DONE 2026-10-02 (Ralph cycle 27): commercial `CampaignMessage` records the stage 6 asset package, requires each message field, and rejects a cross-tenant offer at construction; `CampaignMessageAlignmentPolicy` refuses the "Campaign Message Approved" checkpoint unless the message is grounded on a production ready stage 5 offer and its avatar, promise, product, method, currency and problem agree with the offer and the approved method's locked stage 2 primary currency and stage 3 diagnostic model, so Phase 4's "campaign message conflicting with the offer blocks approval" example is met by a real aggregate; verified by `tests/unit/commercial/test_campaign_message.py`. DONE 2026-10-02 (Ralph cycle 28): Production `AuthorityAmplifier` records the canonical Promise, Proof, Problems, Steps, Context, Action script and the full stage 7 visual/video package, requires at least one proof claim, and rejects a cross-tenant stage 6 message at construction; `AuthorityAmplifierPolicy` refuses script approval unless the message is approved and the method is an approved dependency, and flags proof claims not backed by a known, directly sourced Knowledge claim; visual production and creative acceptance both refuse before script approval and creative acceptance also requires the complete visual package, so Phase 4's "visual Authority Amplifier production cannot be authorized by an unapproved script" and "unsupported proof is flagged" examples are met by a real aggregate; verified by `tests/unit/production/test_authority_amplifier.py`. Stage 7 wiring into a governance `GateDecision` remains, blocked on the asset-version representation decision.] DONE 2026-10-03 (Ralph cycle 79): built the Commercial `CampaignMessagePackage` bridge (canon-informed, SPEC.md section 12.3 stage 6 files 06, 15, 24, 25-28) projecting the reviewed stage 6 `CampaignMessage` onto the twelve canonical stage 6 kinds as exact `StageAssetVersion` evidence; verified by `tests/unit/commercial/test_campaign_message_package.py` (10 tests), so the stage 6 gate is now assembleable. DONE 2026-10-03 (Ralph cycle 80): wired the stage 6 "Campaign Message Approved" `GateDecision` end to end with `StageSixGateAssembler`, `StageSixGateRecorder`, `RecordStageSixGateCommand` and `RecordStageSixGateHandler`, plus named errors `NotStageSixGateError`, `StageRunNotStageSixError` and `CampaignMessageNotApprovedError`, refusing an unapproved message so the congruence checkpoint cannot be bypassed, binding the reviewed `CampaignMessagePackage` to the workspace tenant and authority registry and closing the stage 6 `StageRun` from the durable decision; verified by `tests/unit/engagement/test_record_stage_six_gate.py` (24 tests), so stage 6 can now close. DONE 2026-10-03 (Ralph cycle 81): built the Production `AuthorityAmplifierPackage` bridge (canon-informed, SPEC.md section 12.3 stage 7 files 13-18, 28) projecting the reviewed stage 7 `AuthorityAmplifier` onto the nine canonical stage 7 kinds as exact `StageAssetVersion` evidence and refusing an amplifier without its visual package, so the stage 7 gate is now assembleable; verified by `tests/unit/production/test_authority_amplifier_package.py` (12 tests). DONE 2026-10-03 (Ralph cycle 82): wired the stage 7 "Authority Amplifier Approved" `GateDecision` end to end with `StageSevenGateAssembler`, `StageSevenGateRecorder`, `RecordStageSevenGateCommand` and `RecordStageSevenGateHandler`, plus named errors `NotStageSevenGateError`, `StageRunNotStageSevenError` and `AuthorityAmplifierNotApprovedError`, refusing an amplifier without final creative acceptance (the second of the two stage 7 approvals) so the checkpoint cannot be bypassed, binding the reviewed `AuthorityAmplifierPackage` to the workspace tenant and authority registry and closing the stage 7 `StageRun` from the durable decision; verified by `tests/unit/engagement/test_record_stage_seven_gate.py` (24 tests), so stage 7 can now close and stage 8 is unblocked pending its reviewed-asset bridge.
-9. Implement stages 8 and 9 with complete prospect path and three part QA. [DONE 2026-10-02 (Ralph cycle 29): Execution `FunnelIntegration` records the complete stage 8 asset package, is grounded on the approved stage 7 `AuthorityAmplifier`, and rejects a cross-tenant amplifier at construction; `FunnelCompletionPolicy` refuses "Funnel Complete" unless the amplifier has creative acceptance and a same-tenant `ProspectPathDryRun` routed every capture, engagement and conversion handoff exactly once with a reliable record and named owner, so Phase 4's "failed prospect routing prevents Funnel Complete" example is met by a real aggregate; verified by `tests/unit/execution/test_funnel_integration.py`. DONE 2026-10-02 (Ralph cycle 30): Execution `LaunchQA` records the full stage 9 check set, requires an owner and a designated human authority distinct from the owner, is grounded on the completed stage 8 `FunnelIntegration`, and rejects a cross-tenant funnel at construction; `LaunchApprovedPolicy` refuses "Launch Approved" unless the funnel is complete, every canonical check is present, every critical-path check passed (payment and dashboard may be excepted with a named owner), and the designated authority authorizes traffic, and `TrafficAuthorization` reports readiness rather than live traffic, so Phase 4's "failed message, technical or commercial QA prevents Launch Approved" example is met by a real aggregate; verified by `tests/unit/execution/test_launch_qa.py`. Stage 8 and 9 wiring into a governance `GateDecision` remain, blocked on the asset-version representation decision. DONE 2026-10-03 (Ralph cycle 83): built the Execution `FunnelIntegrationPackage` bridge (canon-informed, SPEC.md section 12.3 stage 8 files 13, 14, 21, 22) projecting the reviewed stage 8 `FunnelIntegration` onto the thirteen canonical stage 8 kinds as exact `StageAssetVersion` evidence and refusing a funnel that has not passed Funnel Complete; verified by `tests/unit/execution/test_funnel_integration_package.py` (12 tests), so the stage 8 "Funnel Complete" gate is now assembleable and its `GateDecision` wiring is the next step.]
+9. Implement stages 8 and 9 with complete prospect path and three part QA. [DONE 2026-10-02 (Ralph cycle 29): Execution `FunnelIntegration` records the complete stage 8 asset package, is grounded on the approved stage 7 `AuthorityAmplifier`, and rejects a cross-tenant amplifier at construction; `FunnelCompletionPolicy` refuses "Funnel Complete" unless the amplifier has creative acceptance and a same-tenant `ProspectPathDryRun` routed every capture, engagement and conversion handoff exactly once with a reliable record and named owner, so Phase 4's "failed prospect routing prevents Funnel Complete" example is met by a real aggregate; verified by `tests/unit/execution/test_funnel_integration.py`. DONE 2026-10-02 (Ralph cycle 30): Execution `LaunchQA` records the full stage 9 check set, requires an owner and a designated human authority distinct from the owner, is grounded on the completed stage 8 `FunnelIntegration`, and rejects a cross-tenant funnel at construction; `LaunchApprovedPolicy` refuses "Launch Approved" unless the funnel is complete, every canonical check is present, every critical-path check passed (payment and dashboard may be excepted with a named owner), and the designated authority authorizes traffic, and `TrafficAuthorization` reports readiness rather than live traffic, so Phase 4's "failed message, technical or commercial QA prevents Launch Approved" example is met by a real aggregate; verified by `tests/unit/execution/test_launch_qa.py`. Stage 8 and 9 wiring into a governance `GateDecision` remain, blocked on the asset-version representation decision. DONE 2026-10-03 (Ralph cycle 83): built the Execution `FunnelIntegrationPackage` bridge (canon-informed, SPEC.md section 12.3 stage 8 files 13, 14, 21, 22) projecting the reviewed stage 8 `FunnelIntegration` onto the thirteen canonical stage 8 kinds as exact `StageAssetVersion` evidence and refusing a funnel that has not passed Funnel Complete; verified by `tests/unit/execution/test_funnel_integration_package.py` (12 tests), so the stage 8 "Funnel Complete" gate is now assembleable and its `GateDecision` wiring is the next step. DONE 2026-10-03 (Ralph cycle 84): wired the stage 8 "Funnel Complete" `GateDecision` end to end with `StageEightGateAssembler`, `StageEightGateRecorder`, `RecordStageEightGateCommand` and `RecordStageEightGateHandler`, plus named errors `NotStageEightGateError` and `StageRunNotStageEightError` (canon-informed, SPEC.md section 12.3 stage 8 files 13, 14, 21, 22), binding the reviewed `FunnelIntegrationPackage` to the workspace tenant and authority registry, issuing one exact-version approval per canonical kind and closing the stage 8 `StageRun`; verified by `tests/unit/engagement/test_record_stage_eight_gate.py` (22 tests), so stage 8 can now close and stage 9 is unblocked pending its reviewed-asset bridge.]
 10. Implement stage 10 baseline, command center and improvement loop. [DONE 2026-10-02 (Ralph cycle 31): Execution `PerformanceBaseline` records the full stage 10 asset package and the distinct first-qualified-traffic, lead, appointment and sale milestones as observed or pending, is grounded on the stage 9 `LaunchQA`, and rejects a cross-tenant QA or milestone at construction; `PerformanceBaselinePolicy` refuses "Performance Baseline Established" unless the launch QA is `READY_FOR_TRAFFIC`, every canonical milestone is recorded, and first qualified traffic is observed, so Phase 5's "launch alone cannot complete the engagement" example is met by a real aggregate; `MilestoneObservation` forbids fabricating a pending observation, and `PerformanceClaim` / `PerformanceClaimPolicy` keep observations distinct from causal conclusions (causal needs an established same-tenant baseline and an adequate caller-supplied sample, and a low-sample movement can be recorded as an interpretation), so Phase 5's milestone-distinctness, missing-baseline and low-sample examples are met; verified by `tests/unit/execution/test_performance_baseline.py`. DONE 2026-10-02 (Ralph cycle 33): pure Governance `PipelineProgress` reports verified progress as the count of approved stage gates derived from the durable `GateLedger` plus caller-supplied verified post-launch milestones, reports activity separately, revokes a gate when a later non-passing decision supersedes it, and rejects negative counts or approved gates exceeding total gates, so SPEC.md section 4's "Display progress as approved gates and verified post launch milestones, never as tasks checked off" is met by a real value; verified by `tests/unit/governance/test_pipeline_progress.py`. Command center intervention ranking and the improvement loop remain.]
 11. Complete operational security, backup, GitOps and acceptance drills.
 

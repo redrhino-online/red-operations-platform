@@ -40,6 +40,7 @@ from redops.contexts.engagement.domain.errors import (
     CampaignMessageNotApprovedError,
     GateApproverNotAuthorizedError,
     GateAuthorRequiredError,
+    NotStageEightGateError,
     NotStageFiveGateError,
     NotStageFourGateError,
     NotStageOneGateError,
@@ -56,6 +57,9 @@ from redops.contexts.engagement.domain.policies import (
     ProductionReadyPolicy,
 )
 from redops.contexts.engagement.domain.value_objects import IntakePackage
+from redops.contexts.execution.domain.value_objects import (
+    FunnelIntegrationPackage,
+)
 from redops.contexts.governance.domain.entities import (
     ApprovalRequest,
     GateDecision,
@@ -80,6 +84,7 @@ STAGE_FOUR = 4
 STAGE_FIVE = 5
 STAGE_SIX = 6
 STAGE_SEVEN = 7
+STAGE_EIGHT = 8
 
 
 class StageZeroGateAssembler:
@@ -1167,6 +1172,144 @@ class StageSevenGateRecorder:
                 actor=approver,
                 on=on,
                 rationale=f"stage 7 asset {asset} approved for {scope}",
+            )
+            gate.record_asset_approval(request)
+        gate.state = GateState.APPROVED
+        decision = GateDecision.from_gate(
+            gate,
+            ledger=ledger,
+            reviewer=approver,
+            scope=scope,
+            checkpoint_evidence=checkpoint_evidence,
+            disposition=GateDisposition.APPROVED,
+            rationale=rationale,
+            on=on,
+            assigned_owner=assigned_owner,
+            due_on=due_on,
+            next_action=next_action,
+        )
+        ledger.record(decision)
+        return decision
+
+
+class StageEightGateAssembler:
+    """Builds and validates the canonical stage 8 "Funnel Complete" gate.
+
+    SPEC.md section 4, stage 8 "Integrate" and its "Funnel Complete" checkpoint:
+    "a test prospect completes capture, engagement and conversion handoffs with
+    reliable records and ownership", and the stage is complete only when its
+    required assets exist, pass the checkpoint, and receive approval for
+    downstream use. The Execution ``FunnelIntegrationPackage`` (cycle 83) projects
+    the single reviewed ``FunnelIntegration`` -- the campaign architecture, pages,
+    forms, qualification, booking, sequences, CRM, tags, automation, analytics,
+    tracking, sales handoff and SOPs -- onto the thirteen canonical stage 8 asset
+    kinds as exact ``StageAssetVersion`` evidence, and the canon maps stage 8 to
+    files 13, 14, 21 and 22 (SPEC.md section 12.3).
+
+    The reviewed funnel is not constructively complete at construction: it reaches
+    ``FunnelState.COMPLETE`` only after ``mark_funnel_complete`` passes the
+    checkpoint on a same-tenant ``ProspectPathDryRun``, and the bridge package
+    itself refuses a funnel that has not passed "Funnel Complete". This assembler
+    therefore never pins a draft or review-required funnel as passing stage 8
+    evidence. It checks the reviewed package against the workspace tenant, pins the
+    gate from the template's exact stage 8 asset package, and binds the designated
+    approver to the workspace authority registry
+    (``GateApproverAuthorityPolicy``). It is a pure domain service: it returns a
+    gate and mutates nothing, invokes no persistence, and never invents a concrete
+    approver identity or authority role (SPEC.md section 11).
+    """
+
+    def assemble(
+        self,
+        *,
+        template: StageTemplate,
+        workspace: ClientWorkspace,
+        package: FunnelIntegrationPackage,
+        approver: str,
+        proposed_by: str | None = None,
+    ) -> StageGate:
+        if package.tenant_id != workspace.tenant_id:
+            raise TenantBoundaryError(
+                f"funnel integration package {package.package_id!r} belongs to "
+                f"tenant {package.tenant_id!r}, not workspace tenant "
+                f"{workspace.tenant_id!r}"
+            )
+        gate = StageGate.from_assets(
+            template,
+            STAGE_EIGHT,
+            tenant_id=workspace.tenant_id,
+            assets=package.stage_asset_versions(),
+        )
+        gate.approver = approver
+        gate.proposed_by = proposed_by
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        return gate
+
+
+class StageEightGateRecorder:
+    """Records the passing stage 8 "Funnel Complete" gate decision.
+
+    SPEC.md section 4: a passing gate pins "the exact evidence and intended
+    downstream use", approval is version specific, and the author cannot
+    impersonate the approver. Given the gate ``StageEightGateAssembler`` already
+    validated, this pure-domain path issues one version-specific
+    ``ApprovalRequest`` per required asset on behalf of the gate's author, has the
+    workspace's designated approver approve each one, records them on the gate,
+    and stores the immutable ``GateDecision`` in the durable ``GateLedger``. It
+    refuses a gate for another stage, an absent author or approver, an approver
+    who holds no authority on the workspace, and an assigned work owner who holds
+    no authority on the workspace, so the stage 8 rubric can never approve an
+    unrelated asset package, a self-issued approval or an unaccountable owner
+    (SPEC.md sections 3, 4, 5 and 11). Because stage 8 depends on stage 7,
+    ``GateDecision.from_gate`` and ``GateLedger.record`` refuse a passing decision
+    until the ledger holds a passing stage 7 decision, so a failed prerequisite
+    blocks dependent authorization (SPEC.md section 4). It mutates only the gate
+    it is given and the ledger; it never invents a concrete human identity.
+    """
+
+    def record(
+        self,
+        *,
+        gate: StageGate,
+        workspace: ClientWorkspace,
+        ledger: GateLedger,
+        scope: str,
+        checkpoint_evidence: str,
+        rationale: str,
+        assigned_owner: str,
+        due_on: date,
+        on: date,
+        next_action: str = "",
+    ) -> GateDecision:
+        if gate.stage_number != STAGE_EIGHT:
+            raise NotStageEightGateError(
+                f"stage 8 recording path cannot record a decision for stage "
+                f"{gate.stage_number}"
+            )
+        author = gate.proposed_by
+        if not author or not author.strip():
+            raise GateAuthorRequiredError(
+                "stage 8 recording requires the gate's author so an approval "
+                "request has a requester distinct from the designated approver"
+            )
+        GateApproverAuthorityPolicy().require(gate, workspace)
+        GateOwnerAuthorityPolicy().require(assigned_owner, workspace)
+        approver = gate.approver
+        if not approver or not approver.strip():
+            raise GateApproverNotAuthorizedError(
+                "stage 8 recording requires the gate's designated approver"
+            )
+        for asset in sorted(gate.required_assets, key=str):
+            request = ApprovalRequest(
+                asset=asset,
+                scope=scope,
+                requested_by=author,
+                approver=approver,
+            )
+            request.approve(
+                actor=approver,
+                on=on,
+                rationale=f"stage 8 asset {asset} approved for {scope}",
             )
             gate.record_asset_approval(request)
         gate.state = GateState.APPROVED
