@@ -4,7 +4,70 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T200255Z (Ralph cycle, this run): selected item was hardening
+- Cycle 2026-10-03T200524Z (Ralph cycle, this run): selected item was Q32, the
+  Next.js shell in `frontend/` plus the RED theme and API client (SPEC.md section
+  8; section 13 condition 6; queue item Q32). It is the plan's highest priority
+  ready item and its only dependency, Q15 (`/workflows/{id}` polling read), is
+  done. Gate integrity is complete: the prior four cycles closed the last
+  entirely unchecked DoD condition (condition 5) and the conditions 2, 3 and 6
+  gates, so condition 6 (all section 8 screens render) is now the largest
+  unstarted dependency chain (Q32-Q45). Q32 outranks Q33-Q45 because each of
+  those depends on it, and outranks the blocked alternatives: Q28 stage 8-10
+  required kinds need the named methodology-owner placement decision, Q16 needs
+  a workflow write route and a connector idempotency seam, Q8 needs the
+  retrieval, worker and artifact-serving seams, Q3 needs the ADR 0006
+  vendor-edit resolution, Q4 needs a live `OPENROUTER_API_KEY`, and Q47-Q50 need
+  the Atlas cluster. Starting the frontend is the only ready path toward DoD
+  condition 6.
+- Outcome: new self-contained Next.js 16 (React 19, TypeScript) app under
+  `frontend/`, built as a thin client carrying no RED business logic (ADR 0007).
+  `frontend/package.json` pins `next`/`react`/`react-dom` and a `build` script;
+  `next.config.ts` sets `output: "standalone"` and `reactStrictMode`;
+  `src/app/layout.tsx` renders the RED-branded shell (RED Operations Director
+  banner; `globals.css` RED palette as CSS variables); `src/app/page.tsx` lists
+  the twelve section 8 surfaces as not yet implemented; `src/app/health/route.ts`
+  serves a liveness probe; `src/shared/api/client.ts` is the typed,
+  tenant-scoped client over the `/red` REST surface (SPEC.md section 7), raising
+  `RedApiError` on a non-2xx and carrying `tenant_id` on every read. No section 8
+  screen is declared in `frontend/dod-screens.txt` yet, so the condition 6 gate
+  stays red, correctly.
+- Evidence: `npm install` added 28 packages; `npm run build` -> Next.js 16.3.8
+  compiled successfully, TypeScript clean, routes `/`, `/_not-found` and
+  `/health`; `npm run start` + `curl http://localhost:3000/health` ->
+  `{"status":"ok","service":"red-operations-ui"}`, root `/` -> HTTP 200;
+  `./scripts/check_frontend_screens.sh frontend` -> exit 1
+  `missing frontend/dod-screens.txt` (honest red, no false green); `make check`
+  -> 2257 passed, 2 skipped, 704 subtests (unchanged). Next rewrote
+  `frontend/tsconfig.json` (jsx `react-jsx`, include `.next/dev/types/**/*.ts`);
+  kept as committed.
+- New findings: the vendored OpenExecutive UI
+  (`vendor/openexecutive/packages/ui`, Next 16 / React 19 / Tailwind 4, tests via
+  `node --test scripts/*.test.mjs`) is the reuse target ADR 0008 names, but
+  copying it is rejected by that ADR, so Q32 builds RED's own minimal app and
+  Q33+ chooses a browser test runner. The condition 6 gate today only checks that
+  a test file exists and does not run the frontend build or suite, so a green
+  `[5/6]` will still depend on Q45 actually running the build and browser suite.
+  No RED authority, gate decision or pipeline stage changed.
+- Blockers (unchanged): `frontend/` Q33-Q45 are the path to DoD condition 6;
+  Q8's retrieval, worker and artifact-URL isolation coverage and the condition 2
+  cross-client-retrieval scenario are blocked until those seams exist; Q28 stage
+  8-10 required kinds blocked on the named methodology-owner placement decision;
+  Q16 idempotency keys blocked on a workflow write route and a connector seam;
+  Q3 agent registration blocked on the ADR 0006 / vendor-edit tension (and
+  condition 5's deterministic-e2e part); Q4 live smoke needs
+  `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`; Q31's deploy-only
+  scenarios (GitOps revert, backup restore) need the Atlas cluster and a chosen
+  backup target.
+- Highest priority ready next item: Q33, the portfolio command center screen, now
+  safe to start because the shell (Q32) builds, serves and exposes a typed `/red`
+  client. Required asset: the command center screen at a declared route showing
+  blockers and owners from the `GET /red/interventions` cards (SPEC.md sections 7
+  and 8); checkpoint: none (UI, not a gate); approver: none. Blocked downstream
+  dependency: Q34-Q45. Prerequisite: Q32 (done).
+
+### Prior cycle (2026-10-03T200255Z)
+
+- Cycle 2026-10-03T200255Z (Ralph cycle, prior): selected item was hardening
   the prototype definition-of-done gate so DoD condition 5 (the agent provider
   path, SPEC.md section 13) can no longer pass unverified. The gate `[1/6]`-`[6/6]`
   never checked condition 5 at all: `[2/6]` ran the stage 0-10 e2e and the
@@ -3711,7 +3774,7 @@ stalls:
 | Q29 | Method change impact assessment emits the dependent review queue | pipeline | Q21 | a change identifies its dependents |
 | Q30 | Stage 0-10 API e2e with deterministic agents | e2e | Q27 | DoD 1: one client intake to baseline |
 | Q31 | Section 11 acceptance suite (SPEC.md section 11) | e2e | Q30 | DoD 2. Condition 2 gate added 2026-10-03T200006Z: `scripts/check_acceptance_coverage.sh` requires all ten canonical scenarios declared in `tests/acceptance/covered-scenarios.txt`, each covered scenario pointing at a test file that exists with at least one test, so condition 2 cannot pass without the suite. Covered today: source-attribution, known-requires-source, unauthorized-approval-rejected, method-change-identifies-dependents, worker-restart-preserves-waiting, launch-blocked-on-failed-path. Uncovered and keeping the gate red: duplicate-delivery-one-effect (needs a connector idempotency seam, Q16), cross-client-retrieval-empty (needs the retrieval port, Q8), gitops-revert-restores and backup-restores-approval-trail (deploy-only, Q49 and a chosen backup target) |
-| Q32 | Next.js shell in `frontend/` plus RED theme plus API client | ui | Q15 | builds; health route |
+| Q32 | Next.js shell in `frontend/` plus RED theme plus API client | ui | Q15 | builds; health route. Done 2026-10-03T200524Z: `frontend/` Next.js 16 / React 19 / TypeScript app (`package.json`, `next.config.ts` `output: standalone`, RED `globals.css` palette, `layout.tsx` shell, `page.tsx` surface list, `health/route.ts` liveness, tenant-scoped `shared/api/client.ts` over `/red`); `npm run build` clean, `/health` -> `{"status":"ok"}`, `/` -> 200. No section 8 screen or `dod-screens.txt` yet, so the condition 6 gate stays honestly red |
 | Q33 | Command center screen | ui | Q32 | browser test; shows blockers and owners |
 | Q34 | Client workspace overview | ui | Q33 | browser test |
 | Q35 | Source and claim explorer | ui | Q34 | browser test |
