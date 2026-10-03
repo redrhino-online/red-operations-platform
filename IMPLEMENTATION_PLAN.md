@@ -4,60 +4,61 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle timestamp: 2026-10-03T06:12:00Z (Ralph cycle 126).
-- Selected item: build the canon's Product Matrix and perfect product program
-  (canon files 11 and 12) as the pure Commercial Design `ProductProgram`
-  (`ProductMatrixModel`, `ProgramPricingBasis`, `ProgramCadence`, `ProductModule`),
-  closing the newly recorded stage 5 "Productize" gap where the delivery model and
-  pricing were free text on the `DeliverySpecification`. It is a canon-covered,
-  decision-free stage 5 asset: SPEC.md section 4 stage 5 names the delivery model,
-  duration and pricing but is silent on their substance, so the canon governs
-  (SPEC.md section 12.1), and canon file 11 makes choosing one of the product
-  matrix's seven business models and pricing on outcomes and value, not time and
-  materials, the center of "Productize". It outranks the remaining bounded wiring
-  follow-ups (awareness map, matchmaker, funnel finder, transformations, umbrella,
-  swimlanes, enrollment, invisible opt-in, banner library, content roadmap,
-  syndication, crusher and product program into gates or views), each of which
-  still needs a methodology-owner decision on a required kind, and the blocked
-  persistence work, which needs the storage ADR. It strengthens stage 5 gate
-  integrity rather than adding a downstream feature, and it is not a new pipeline
-  stage.
+- Cycle timestamp: 2026-10-03T06:13:55Z (Ralph cycle 127).
+- Selected item: build the canon's audience sizing research (canon files 02 and
+  03) as the pure Commercial Design `AudienceReachEstimate` (`ResearchPlatform`,
+  `InterestKind`, `InterestSignal`, `AudienceDefinition` and `MarketReachPolicy`),
+  closing a newly recorded stage 1 "Diagnose" gap where RED had no typed audience
+  size or market research evidence. It is a canon-covered, decision-free stage 1
+  asset: SPEC.md section 12.3 maps audience sizing to stage 1 and the canon's
+  Market station gate is that "the market is big enough, reachable, and has a
+  problem worth solving" (canon README, canon files 02 and 03), while RED's
+  `TargetMarketCandidate.reachability` and `MarketAwarenessMap.research_evidence`
+  are free text with no sized reach behind them. It outranks the remaining
+  bounded wiring follow-ups (awareness map, matchmaker, funnel finder,
+  transformations, umbrella, swimlanes, enrollment, invisible opt-in, banner
+  library, content roadmap, syndication, crusher and product program into gates
+  or views), each of which still needs a methodology-owner decision on a
+  required kind, and the blocked persistence work, which needs the storage ADR.
+  It strengthens stage 1 gate integrity rather than adding a downstream feature,
+  and it is not a new pipeline stage.
 - Outcome: completed and verified (single item; no second item started).
-- Evidence: the product program now lives in the Commercial Design bounded
-  context as the pure, frozen value object `ProductProgram` with the named errors
-  `InvalidProductProgramError`, `ProductProgramPricingError`,
-  `ProductProgramDependencyError`, `ProductProgramTenantBoundaryError` and
-  `ProductProgramObservationError`. It chooses exactly one typed
-  `ProductMatrixModel` from the canon's seven (books and info products; training
-  and memberships; software applications; live events and workshops; group
-  consulting; one to one coaching and consulting; done for you agency), binds a
-  named owner and the same-tenant stage 4 `SignatureSolution`, requires an
-  outcome-and-value `ProgramPricingBasis` (refusing time and materials), a
-  six-to-twelve week duration on the Monday training and Thursday coaching
-  `ProgramCadence`, and at least one `ProductModule` per method step, each naming
-  its outcome and deliverable. It refuses a blank identity or owner, an untyped
-  model, basis or cadence, a time and materials price, a duration outside six to
-  twelve weeks, a foreign or absent method, a duplicate module id, two modules for
-  one step, a module for a step the method does not name, more weekly modules than
-  weeks and a cross-tenant method or module; it reports `covered_steps`,
-  `missing_steps`, `is_complete`, `module_for`, `is_recommended_model` and
-  `is_plan`, and never an observation. New behavioral coverage: 27 tests in
-  `tests/unit/commercial/test_product_program.py`. Running
+- Evidence: the audience sizing research now lives in the Commercial Design
+  bounded context as the pure, frozen value objects `AudienceReachEstimate`,
+  `AudienceDefinition`, `InterestSignal`, `ResearchPlatform` and `InterestKind`,
+  with the named errors `InvalidAudienceReachError`,
+  `AudienceReachObservationError` and `MarketReachError`. The estimate names the
+  canon research platform (Facebook Audience Insights or LinkedIn search), the
+  audience location, age, gender and at least one specific typed interest signal
+  (expert, author, book, tool, publication, association or other), a positive
+  integer estimated reach, a source note and a capture date, and binds a named
+  owner; it refuses a blank identity, owner or source note, an untyped platform,
+  audience or interest signal, a blank audience filter, no interest signal, a
+  duplicate interest signal, a non-positive reach and a missing capture date,
+  reports `is_litmus_test` and `is_plan`, and is never an observation. The
+  caller-invoked `MarketReachPolicy` refuses a market below the caller's minimum
+  viable audience (`require_reachable`) or sized on a single network
+  (`require_multiplatform`, canon file 03: confirm "in addition to Facebook ...
+  just to make sure you're climbing the right mountain"). New behavioral
+  coverage: 24 tests in `tests/unit/commercial/test_audience_reach.py`. Running
   `PYTHONPATH=backend python3 -m unittest discover -s tests -p 'test_*.py'`
-  reports 1566 passed, up from 1539. `python3 -m pyflakes backend/redops tests` is
-  clean. `ruff` and `mypy` remain uninstalled.
-- New findings: the canon gap register and the stage 5 required package had no
-  typed representation of the product matrix or the pricing basis, so a stage 5
-  `DeliverySpecification` could carry any delivery model and could be priced on
-  time and materials while still passing "Offer Locked". The canon treats the
-  model choice and outcome-based pricing as the substance of Productize (canon
-  files 11 and 12: "how to price and deliver your product" and "pricing based on
-  outcomes and value ... not time and materials"). This cycle records the gap and
-  implements it as an asset inside stage 5; wiring it into a required stage 5 gate
-  kind remains a methodology-owner decision recorded below. The program duration
-  lower bound of six weeks and the upper bound of twelve are the canon's stated
-  range, and the rule that a program cannot pack more weekly modules than it has
-  weeks comes from the weekly Monday and Thursday release cadence.
+  reports 1590 passed, up from 1566. `python3 -m pyflakes backend/redops tests`
+  is clean. `ruff` and `mypy` remain uninstalled.
+- New findings: the canon gap register and the stage 1 required package had no
+  typed audience sizing or market research evidence, so the canon's Market gate
+  ("the market is big enough, reachable", canon README) was unenforced and the
+  `TargetMarketMatchmaker`'s reachability criterion could not be checked against
+  a sized audience. The canon sizes a market with Facebook Audience Insights and
+  records "one source and audience size" (canon file 02), narrows it on specific
+  experts, authors, books, tools, publications and associations rather than broad
+  interests, and confirms it with LinkedIn search (canon file 03), calling the
+  sizing a rough first litmus test that will change. This cycle records the gap
+  and implements it as an asset inside stage 1; wiring it into the
+  `TargetMarketCandidate`, the stage 1 `DiagnosisPackage` or a required stage 1
+  gate kind remains a bounded follow-up and a methodology-owner decision. Google
+  keyword research is mentioned at the end of canon file 02 but its session is
+  absent from the supplied canon, so it is left as a recorded gap alongside
+  missing files 19 and 20.
 - Blockers: unchanged named-owner decisions -- where RED code lives (already de
   facto `backend/redops`), storage strategy given the SQLite reality, tenant model
   given slot-based single-active-client isolation, the lifecycle transition graph
@@ -66,23 +67,25 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   adapter still depend on the storage ADR; the placement of the planning assets
   built since cycle 110 (including the content roadmap, the syndication plan, the
   audience campaign, the invisible opt-in, the banner library, the crusher, the
-  content measurement loop and now the product program) in a required gate kind
-  still needs a methodology-owner decision. Any spend, send or publish
-  authorization remains a human decision (SPEC.md sections 4 and 9).
-- Highest priority ready next item: with this cycle the newly found Product Matrix
-  gap is closed and the remaining named domain work is either implemented or
-  blocked on a named-owner decision (target stage/kind, storage ADR, missing canon
-  modules). The single most useful unblocker is still a named-owner decision on
-  the storage ADR (it releases persistence for every pure artifact and the
-  Operations delivery adapter) followed by the methodology-owner decision on
-  required stage 5/6/8/10 asset kinds (it releases wiring the product program, the
-  awareness map, the matchmaker, the funnel finder, the transformations, the
-  umbrella, the swimlanes, the enrollment, the content roadmap, the content
-  syndication, the content crusher, the content measurement loop, the invisible
-  opt-in and the banner library into gates or views). Until then the next
-  implementable slice, if a decision is granted, is wiring the product program
-  into a stage 5 required kind or the content roadmap and crusher into a stage 6
-  required kind.
+  content measurement loop, the product program and now the audience reach
+  estimate) in a required gate kind still needs a methodology-owner decision.
+  Any spend, send or publish authorization remains a human decision (SPEC.md
+  sections 4 and 9).
+- Highest priority ready next item: with this cycle the newly found audience
+  sizing gap is closed and the remaining named domain work is either implemented
+  or blocked on a named-owner decision (target stage/kind, storage ADR, missing
+  canon modules). The single most useful unblocker is still a named-owner
+  decision on the storage ADR (it releases persistence for every pure artifact
+  and the Operations delivery adapter) followed by the methodology-owner
+  decision on required stage 1/5/6/8/10 asset kinds (it releases wiring the
+  audience reach estimate, the product program, the awareness map, the
+  matchmaker, the funnel finder, the transformations, the umbrella, the
+  swimlanes, the enrollment, the content roadmap, the content syndication, the
+  content crusher, the content measurement loop, the invisible opt-in and the
+  banner library into gates or views). Until then the next implementable slice,
+  if a decision is granted, is wiring the audience reach estimate into the
+  `TargetMarketCandidate` or a stage 1 required kind, or the product program into
+  a stage 5 required kind.
 - Deferred cross-context items: the Operations delivery adapter plus durable
   notification log (blocked on the storage ADR); per-kind stage 9 through 10
   asset content schemas; a stage-parameterized gate recorder/handler refactor;
@@ -95,6 +98,30 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   125 as the Measurement `AudienceBuildObservation`, with wiring an observed
   audience into the stage 10 baseline a methodology-owner decision); and all
   persistence.
+  [DONE 2026-10-03 (Ralph cycle 127): built the canon's audience sizing research
+  as the pure Commercial Design `AudienceReachEstimate` (`AudienceDefinition`,
+  `InterestSignal`, `ResearchPlatform`, `InterestKind`) with the caller-invoked
+  `MarketReachPolicy`, which names the research platform (Facebook Audience
+  Insights or LinkedIn search), the audience location, age, gender and at least
+  one specific typed interest signal (expert, author, book, tool, publication,
+  association or other), a positive integer estimated reach, a source note and
+  the capture date, and binds a named owner, refusing a blank identity, owner or
+  source note, an untyped platform, audience or interest signal, a blank
+  audience filter, no interest signal, a duplicate interest signal, a
+  non-positive reach and a missing capture date, and never representing the
+  sizing as an observation; `MarketReachPolicy.require_reachable` refuses a
+  market below the caller's minimum viable audience and `require_multiplatform`
+  refuses a single-network litmus (SPEC.md sections 4 and 12.3; canon files 02
+  and 03: "one source and audience size", the specific experts/authors/tools
+  interest approach, and confirming the market "in addition to Facebook" to know
+  you are "climbing the right mountain"), so the stage 1 market "big enough,
+  reachable" gate now has a typed research input where the `TargetMarketCandidate`
+  reachability and `MarketAwarenessMap` evidence were free text. 24 tests in
+  `tests/unit/commercial/test_audience_reach.py`, full suite 1590 passed. It is a
+  stage 1 planning asset, not a required gate kind (a methodology-owner
+  decision), and authorizes no outreach or spend. Google keyword research is
+  named at the end of canon file 02 but its session is absent from the supplied
+  canon, so it is recorded as a gap alongside files 19 and 20.]
   [DONE 2026-10-03 (Ralph cycle 126): built the canon's Product Matrix and perfect
   product program as the pure Commercial Design `ProductProgram`
   (`ProductMatrixModel`, `ProgramPricingBasis`, `ProgramCadence`, `ProductModule`),
@@ -756,6 +783,7 @@ This register tracks canon-described assets and steps the stage 0 to 10 template
 - Product Matrix and perfect product (the seven business models, group consulting, pricing on outcomes not time and materials, the six-to-twelve week program, one module per signature step, Monday training and Thursday coaching) — canon 11, 12 — stage 5 — status: implemented 2026-10-03 (Ralph cycle 126) as the pure Commercial Design `ProductProgram` (`ProductMatrixModel`, `ProgramPricingBasis`, `ProgramCadence`, `ProductModule`), which chooses one of the canon's seven business models, binds a named owner and the same-tenant stage 4 `SignatureSolution`, requires outcome-and-value pricing (refusing time and materials), a six-to-twelve week duration on the Monday training and Thursday coaching cadence, and one module per method step with an outcome and a deliverable, refuses an untyped model, basis or cadence, a foreign or absent method, a duplicate module, two modules for one step, a module for a step the method does not name, more weekly modules than weeks and a cross-tenant method or module, reports the covered and missing steps and is never an observation. This asset is inside stage 5, not a new stage; SPEC.md section 12.5 did not seed it, so it is recorded here as a newly identified gap because the stage 5 `DeliverySpecification` left the delivery model and pricing as free text. Wiring it into a required stage 5 gate kind remains a bounded follow-up and a methodology-owner decision, and any spend or client commitment stays a human decision.
 - Umbrella planning (Online Business Launch Map, Bulletproof Business Plan) — canon 00, 01 — over stages 0 to 10 — status: implemented 2026-10-03 (Ralph cycle 116) as the new Portfolio `UmbrellaPlan` (`LaunchMapSection`, `UmbrellaSection`, `BusinessTarget`, `QuarterlyReview`), which binds a named owner, a same-tenant `ClientWorkspace` and a versioned `StageTemplate` to exactly the canon's four launch-map sections (Foundation, Signature Solution, Funnel, Floodgates) covering every template stage exactly once, requires at least one specific measurable business target and an ordered 90-day revisit history, and has `UmbrellaReviewPolicy.require_current` refuse an overdue plan. Mapping the canon's four strategy parts onto stages 0-2/3-5/6-9/10 is a documented intentional deviation from the canon's 12-week calendar. Wiring the plan into the production view or a required gate kind remains a bounded follow-up and a methodology-owner decision.
 - Swimlanes channel model — canon 13, 14, 33, 34 — cross-cutting stages 8 to 10 — status: implemented 2026-10-03 (Ralph cycle 117) as the pure Execution `SwimlanesPlan` (`SwimlaneChannel`, `SwimlaneMove`), which types the canon's five channels (messages, ads, human outreach, offline and direct mail, content), maps each stalled funnel step to a distinct next step with a vehicle and one action, grounds on a same-tenant stage 8 `FunnelIntegration`, binds a named owner and reports the channels it covers and misses, and has `SwimlaneCoveragePolicy.require_all_channels` refuse a single-source plan (canon file 34: "you can't be single source dependent"). It lives in Execution because Commercial cannot import the Execution `FunnelIntegration` without a production-commercial-execution import cycle. Wiring it into the production view, the command center or a stage 8/10 kind remains a bounded follow-up and a methodology-owner decision, so it stays a planning asset rather than a required gate kind.
+- Audience sizing and market research (Facebook Audience Insights, LinkedIn search; "one source and audience size"; specific experts/authors/books/tools/publications/associations as interest signals) — canon 02, 03 — stage 1 — status: implemented 2026-10-03 (Ralph cycle 127) as the pure Commercial Design `AudienceReachEstimate` (`AudienceDefinition`, `InterestSignal`, `ResearchPlatform`, `InterestKind`) with the caller-invoked `MarketReachPolicy`, which records the platform, the audience location, age, gender and at least one typed specific interest signal, a positive integer estimated reach, a source note and capture date, binds a named owner, refuses blank or untyped or duplicate content, reports `is_litmus_test`/`is_plan` and is never an observation; `MarketReachPolicy.require_reachable` refuses a market below the caller's minimum viable audience and `require_multiplatform` refuses a single-network litmus, so the canon's Market gate that "the market is big enough, reachable" now has a typed research input. SPEC.md section 12.5 did not seed this asset, so it is recorded here as a newly identified gap; it is an asset inside stage 1, not a new stage. Wiring it into the `TargetMarketCandidate`, the stage 1 `DiagnosisPackage` or a required stage 1 gate kind remains a bounded follow-up and a methodology-owner decision. Google keyword research is named at the end of canon file 02 but its session is absent from the supplied canon, so it is recorded as a gap.
 - Missing canon files 19 and 20; promised sales/enrollment and email/follow-up modules absent — status: unresolved, request from license owner.
 
 ## Product priority: the gated production engagement

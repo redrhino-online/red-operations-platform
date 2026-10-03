@@ -23,11 +23,13 @@ from redops.contexts.commercial.domain.errors import (
     ContentSyndicationError,
     FunnelFitError,
     MarketAwarenessTargetingError,
+    MarketReachError,
     OfferReadinessError,
     TargetMarketMatchError,
     UnsourcedDiagnosisEvidenceError,
 )
 from redops.contexts.commercial.domain.value_objects import (
+    AudienceReachEstimate,
     AvatarProfile,
     BusinessSnapshot,
     ContentRoadmap,
@@ -467,3 +469,48 @@ class ContentSyndicationPolicy:
                     "canon's syndication would not reach the client's own list, "
                     "messenger or groups"
                 )
+
+
+class MarketReachPolicy:
+    """Refuses a market reach the canon cannot call big enough or reachable.
+
+    SPEC.md section 12.3 maps audience sizing research onto stage 1 "Diagnose"
+    and the canon's market gate is that "the market is big enough, reachable"
+    (canon README, the Market station, citing canon files 02 and 03). The canon
+    also confirms the market across more than one network "in addition to
+    Facebook ... just to make sure you're climbing the right mountain" (canon
+    file 03), so a single-platform litmus is not yet a confirmed reach check.
+    Both checks are caller-invoked, so the policy records a defensible stage 1
+    market reach decision without inventing a universal audience floor.
+    """
+
+    def require_reachable(
+        self, estimate: AudienceReachEstimate, *, minimum_reach: int
+    ) -> None:
+        if (
+            not isinstance(minimum_reach, int)
+            or isinstance(minimum_reach, bool)
+            or minimum_reach <= 0
+        ):
+            raise MarketReachError(
+                "the minimum viable audience must be a positive integer"
+            )
+        if estimate.estimated_reach < minimum_reach:
+            raise MarketReachError(
+                f"audience reach estimate {estimate.estimate_id!r} sizes the "
+                f"market at {estimate.estimated_reach}, below the caller's "
+                f"minimum viable audience of {minimum_reach}, so the canon's "
+                "market is not yet big enough to serve"
+            )
+
+    def require_multiplatform(
+        self, estimates: Iterable[AudienceReachEstimate]
+    ) -> None:
+        estimates = tuple(estimates)
+        platforms = {estimate.platform for estimate in estimates}
+        if len(platforms) < 2:
+            raise MarketReachError(
+                "the canon confirms a market on more than one network so you "
+                "know you are climbing the right mountain, so a single-platform "
+                "audience sizing is not yet a reachable market"
+            )

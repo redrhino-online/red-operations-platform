@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING
 
 from redops.contexts.commercial.domain.errors import (
+    AudienceReachObservationError,
     CampaignMessageTenantBoundaryError,
     ContentCrusherDependencyError,
     ContentCrusherObservationError,
@@ -27,10 +29,11 @@ from redops.contexts.commercial.domain.errors import (
     DiagnosticTenantBoundaryError,
     FunnelFinderObservationError,
     FunnelFinderTenantBoundaryError,
+    InvalidAudienceReachError,
     InvalidAvatarProfileError,
-    InvalidContentRoadmapError,
     InvalidBusinessSnapshotError,
     InvalidCampaignMessagePackageError,
+    InvalidContentRoadmapError,
     InvalidCurrencyInventoryError,
     InvalidCurrencyPackageError,
     InvalidDeliverySpecificationError,
@@ -2932,4 +2935,195 @@ class ProductProgram:
         raise ProductProgramObservationError(
             f"product program {claim_id!r} is a delivery and pricing plan, not an "
             "observed result, and cannot be recorded as an observation"
+        )
+
+
+class ResearchPlatform(Enum):
+    """The audience sizing platforms the canon uses to size a market.
+
+    SPEC.md section 12.3 maps audience sizing research onto stage 1 "Diagnose"
+    and cites canon files 02 and 03. The canon sizes a market with Facebook's
+    free Audience Insights tool -- "the most streamlined and effective way to
+    start gathering audience data" (canon file 02) -- and confirms it with the
+    native LinkedIn search "in addition to Facebook ... just to make sure you're
+    climbing the right mountain" (canon file 03).
+    """
+
+    FACEBOOK_AUDIENCE_INSIGHTS = "facebook_audience_insights"
+    LINKEDIN_SEARCH = "linkedin_search"
+
+
+class InterestKind(Enum):
+    """The kinds of interest signal the canon's audience sizing narrows on.
+
+    The canon narrows an audience with the experts, authors, books, tools,
+    publications and associations its avatar follows, not broad interests: "I
+    want to say what experts or gurus might they follow? ... I want to look at
+    authors. I want to look at books ... what publications or associations, what
+    tools would they use?" (canon file 02). The enumerated kinds are the canon's
+    own categories; ``OTHER`` keeps room for a signal the canon names but does
+    not categorize.
+    """
+
+    EXPERT = "expert"
+    AUTHOR = "author"
+    BOOK = "book"
+    TOOL = "tool"
+    PUBLICATION = "publication"
+    ASSOCIATION = "association"
+    OTHER = "other"
+
+
+@dataclass(frozen=True)
+class InterestSignal:
+    """One named interest the canon's audience sizing narrows on (canon file 02).
+
+    The canon looks up specific experts, authors, tools, publications and
+    associations because "those are general interests that aren't going to give
+    me the kind of results I want" (canon file 02). The signal is frozen and
+    reject-only, so a blank value or an untyped kind cannot be represented as an
+    interest the sizing used.
+    """
+
+    kind: InterestKind
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, InterestKind):
+            raise InvalidAudienceReachError(
+                "an interest signal requires a typed canon interest kind"
+            )
+        if not self.value or not self.value.strip():
+            raise InvalidAudienceReachError(
+                "an interest signal requires a named expert, author, book, tool, "
+                "publication or association"
+            )
+
+
+@dataclass(frozen=True)
+class AudienceDefinition:
+    """The location, age, gender and interests that define a sized audience.
+
+    The canon sizes a market by location, age and gender plus a set of specific
+    interest signals rather than broad interests (canon file 02: "Let's start
+    with the location ... the age, the location ... Both genders, and let's look
+    at some of these interests"). It is frozen and reject-only, so a blank
+    filter or an audience with no distinct interest signal cannot be represented
+    as a sized market.
+    """
+
+    location: str
+    age: str
+    gender: str
+    interests: tuple[InterestSignal, ...]
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("audience location", self.location),
+            ("audience age", self.age),
+            ("audience gender", self.gender),
+        ):
+            if not value or not value.strip():
+                raise InvalidAudienceReachError(f"{label} is required")
+        interests = tuple(self.interests)
+        if not interests:
+            raise InvalidAudienceReachError(
+                "an audience definition requires at least one specific interest "
+                "signal, not only broad interests"
+            )
+        seen: set[tuple[InterestKind, str]] = set()
+        for signal in interests:
+            if not isinstance(signal, InterestSignal):
+                raise InvalidAudienceReachError(
+                    "an audience definition interest must be a typed interest "
+                    "signal"
+                )
+            key = (signal.kind, signal.value.strip().lower())
+            if key in seen:
+                raise InvalidAudienceReachError(
+                    f"audience definition repeats the {signal.kind.value} "
+                    f"interest signal {signal.value!r}"
+                )
+            seen.add(key)
+
+
+@dataclass(frozen=True)
+class AudienceReachEstimate:
+    """A canon-shaped stage 1 estimate of how big and reachable a market is.
+
+    SPEC.md section 12.3 maps audience sizing research onto stage 1 "Diagnose"
+    (canon files 02 and 03), and the canon's market gate is that "the market is
+    big enough, reachable, and has a problem worth solving" (canon README, the
+    Market station). The estimate names the research platform the sizing ran on,
+    the audience definition it measured, the estimated reachable audience size,
+    the source note the canon records it from, and the date it was captured, and
+    it binds a named owner per SPEC.md section 12.4. The canon treats the sizing
+    as a rough first pass that will change (canon file 02: "it doesn't have to be
+    perfect. You'll probably change it"), so the estimate is a research input and
+    is never an observation (SPEC.md section 3). It is frozen and reject-only,
+    and it never authorizes outreach or spend (SPEC.md sections 4 and 9).
+    """
+
+    estimate_id: str
+    tenant_id: str
+    owner: str
+    platform: ResearchPlatform
+    audience: AudienceDefinition
+    estimated_reach: int
+    source_note: str
+    captured_on: date
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("audience reach estimate id", self.estimate_id),
+            ("audience reach estimate tenant id", self.tenant_id),
+            ("audience reach estimate owner", self.owner),
+            ("audience reach estimate source note", self.source_note),
+        ):
+            if not value or not value.strip():
+                raise InvalidAudienceReachError(f"{label} is required")
+        if not isinstance(self.platform, ResearchPlatform):
+            raise InvalidAudienceReachError(
+                "an audience reach estimate requires a typed canon research "
+                "platform"
+            )
+        if not isinstance(self.audience, AudienceDefinition):
+            raise InvalidAudienceReachError(
+                "an audience reach estimate requires a typed audience definition"
+            )
+        if (
+            not isinstance(self.estimated_reach, int)
+            or isinstance(self.estimated_reach, bool)
+            or self.estimated_reach <= 0
+        ):
+            raise InvalidAudienceReachError(
+                "an audience reach estimate requires a positive integer "
+                "reachable audience size"
+            )
+        if not isinstance(self.captured_on, date):
+            raise InvalidAudienceReachError(
+                "an audience reach estimate requires the date its sizing was "
+                "captured"
+            )
+
+    @property
+    def is_litmus_test(self) -> bool:
+        """The canon treats sizing as a first-pass litmus test, not a result."""
+        return True
+
+    @property
+    def is_plan(self) -> bool:
+        """An audience reach estimate is a research input, not activity."""
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent an audience reach estimate as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The canon
+        calls the sizing a rough first pass that will change, so the estimate is
+        a research input and any measured movement stays a separate observation.
+        """
+        raise AudienceReachObservationError(
+            f"audience reach estimate {claim_id!r} is a market research input, "
+            "not an observed result, and cannot be recorded as an observation"
         )

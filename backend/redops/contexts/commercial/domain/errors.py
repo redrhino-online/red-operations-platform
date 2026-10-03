@@ -686,3 +686,38 @@ class ProductProgramObservationError(CommercialError):
     """
 
 
+class InvalidAudienceReachError(CommercialError, ValueError):
+    """An audience reach estimate was built without its required research content.
+
+    SPEC.md section 12.3 maps the audience sizing research (Facebook Audience
+    Insights and LinkedIn search) to stage 1 "Diagnose", and the canon's market
+    gate is that "the market is big enough, reachable" (canon files 02 and 03).
+    The estimate names the research platform, where and who the audience is, the
+    interest signals that stand in for the avatar, and an estimated reachable
+    audience size. A blank identity, owner or research note, an untyped platform
+    or audience, a non-positive reach or a duplicate interest signal cannot be
+    represented as stage 1 audience sizing evidence.
+    """
+
+
+class AudienceReachObservationError(CommercialError):
+    """An audience reach estimate was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The canon
+    calls the sizing a rough first-pass litmus test that will change (canon file
+    02: "it doesn't have to be perfect. You'll probably change it"), so the
+    estimate is a research input, not a measured result.
+    """
+
+
+class MarketReachError(CommercialError):
+    """A market reach estimate failed the canon's "big and reachable" check.
+
+    The canon's market gate is that "the market is big enough, reachable" and
+    that the market is confirmed across more than one network so you know you are
+    "climbing the right mountain" (canon files 02 and 03). An estimate below the
+    caller's minimum viable audience, or a single-platform litmus, cannot be
+    represented as a defensible stage 1 market reach check.
+    """
+
+
