@@ -19,6 +19,10 @@ from redops.contexts.execution.domain.value_objects import (
     MILESTONE_ORDER,
     QA_CHECK_ORDER,
     ClaimKind,
+    ComplianceAsset,
+    ComplianceAssetKind,
+    CompliancePackage,
+    ComplianceWaiver,
     FunnelAssetPackage,
     HandoffKind,
     HandoffOutcome,
@@ -124,6 +128,74 @@ def complete_funnel(**overrides) -> FunnelIntegration:
     return funnel_integration(**overrides).mark_funnel_complete(dry_run())
 
 
+def compliance_asset(
+    kind: ComplianceAssetKind,
+    *,
+    tenant_id: str = TENANT,
+        reference: str | None = None,
+    version: int = 1,
+) -> ComplianceAsset:
+    return ComplianceAsset(
+        kind=kind,
+        tenant_id=tenant_id,
+        reference=(
+            reference
+            if reference is not None
+            else f"asset://compliance/{kind.value}"
+        ),
+        version=version,
+    )
+
+
+def compliance_assets(
+    *,
+    tenant_id: str = TENANT,
+    version: int = 1,
+    kinds=None,
+) -> tuple[ComplianceAsset, ...]:
+    kinds = tuple(ComplianceAssetKind) if kinds is None else tuple(kinds)
+    return tuple(
+        compliance_asset(kind, tenant_id=tenant_id, version=version)
+        for kind in kinds
+    )
+
+
+def compliance_waiver(
+    kind: ComplianceAssetKind,
+    *,
+    reason: str = "reviewed exception",
+    risk_owner: str = "risk-owner",
+    review_trigger: str = "before the next campaign",
+    expires_on=None,
+) -> ComplianceWaiver:
+    return ComplianceWaiver(
+        kind=kind,
+        reason=reason,
+        risk_owner=risk_owner,
+        review_trigger=review_trigger,
+        expires_on=expires_on,
+    )
+
+
+def compliance_package(
+    *,
+    package_id: str = "compliance-3f",
+    tenant_id: str = TENANT,
+    target_markets: tuple[str, ...] = ("us",),
+    assets=None,
+    waivers: tuple[ComplianceWaiver, ...] = (),
+) -> CompliancePackage:
+    return CompliancePackage(
+        package_id=package_id,
+        tenant_id=tenant_id,
+        target_markets=target_markets,
+        assets=(
+            compliance_assets(tenant_id=tenant_id) if assets is None else assets
+        ),
+        waivers=waivers,
+    )
+
+
 def launch_check(
     kind: QACheckKind,
     *,
@@ -180,6 +252,10 @@ def launch_qa(funnel=None, checks=None, **overrides) -> LaunchQA:
         "checks": launch_checks() if checks is None else checks,
     }
     values.update(overrides)
+    if "compliance" not in overrides:
+        values["compliance"] = compliance_package(
+            tenant_id=values["tenant_id"]
+        )
     return LaunchQA(**values)
 
 

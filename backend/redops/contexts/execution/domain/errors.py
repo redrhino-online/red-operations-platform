@@ -78,6 +78,46 @@ class InvalidLaunchQAPackageError(LaunchQAError, ValueError):
     """
 
 
+class ComplianceError(ExecutionError):
+    """Base class for stage 9 launch compliance and consent rule violations."""
+
+
+class InvalidComplianceError(ComplianceError, ValueError):
+    """A CompliancePackage, asset or waiver value object violates an invariant."""
+
+
+class MissingComplianceAssetError(ComplianceError):
+    """A launch-blocking compliance asset is absent and not validly waived.
+
+    SPEC.md section 4: consent and the launch compliance assets are required
+    "where applicable", and a missing required asset prevents gate completion.
+    A waiver never makes an absent asset appear present, so an uncovered missing
+    asset refuses the "Launch Approved" traffic authorization rather than being
+    silently treated as present.
+    """
+
+
+class ExpiredComplianceWaiverError(ComplianceError):
+    """A compliance waiver covering an absent asset has expired.
+
+    SPEC.md section 4: a waiver is a scoped human decision with a reason, risk
+    owner and expiry or review trigger, and "a failed or expired prerequisite
+    blocks dependent authorization until resolved". An expired waiver therefore
+    stops covering its asset and blocks launch even though a waiver was once
+    recorded.
+    """
+
+
+class ComplianceTenantBoundaryError(ComplianceError):
+    """A compliance package mixed in an asset or QA from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client, so a
+    compliance asset and the QA that pins it must belong to the same tenant. A
+    cross-tenant compliance asset cannot be represented as this client's launch
+    evidence.
+    """
+
+
 class LaunchQAPackageTenantBoundaryError(LaunchQAError):
     """A stage 9 reviewed asset package mixed in launch QA from another client.
 

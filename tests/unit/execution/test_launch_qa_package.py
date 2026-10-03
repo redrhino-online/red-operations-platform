@@ -41,6 +41,7 @@ from redops.contexts.governance.domain.templates import stage_zero_to_ten_templa
 from .fixtures import (
     TENANT,
     authorization,
+    compliance_package,
     launch_checks,
     launch_qa,
     ready_for_traffic,
@@ -58,6 +59,7 @@ def other_tenant_ready_qa() -> LaunchQA:
         owner="qa-owner",
         designated_authority="client-authority",
         checks=launch_checks(),
+        compliance=compliance_package(tenant_id=OTHER_TENANT),
     ).authorize_traffic(authorization=authorization())
 
 

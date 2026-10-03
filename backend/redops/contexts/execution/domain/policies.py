@@ -18,11 +18,14 @@ from redops.contexts.execution.domain.entities import (
     PerformanceBaseline,
 )
 from redops.contexts.execution.domain.errors import (
+    ComplianceTenantBoundaryError,
+    ExpiredComplianceWaiverError,
     FunnelDependencyError,
     FunnelIncompleteError,
     LaunchQAAuthorityError,
     LaunchQADependencyError,
     LaunchQAIncompleteError,
+    MissingComplianceAssetError,
     PerformanceBaselineDependencyError,
     PerformanceBaselineIncompleteError,
     PerformanceClaimSupportError,
@@ -148,6 +151,56 @@ class LaunchApprovedPolicy:
             raise LaunchQAAuthorityError(
                 f"traffic for launch QA {qa.qa_id!r} was not authorized by the "
                 f"designated authority {qa.designated_authority!r}"
+            )
+
+
+class ComplianceRequiredPolicy:
+    """Refuses "Launch Approved" traffic without the launch compliance assets.
+
+    SPEC.md section 4, stage 9 "QA" requires "consent where applicable" before
+    the checkpoint authorizes traffic, and section 9 requires retention, export
+    and deletion policies before onboarding production clients. The canon (SPEC.md
+    section 12.3: stage 9 uses canon files 01, 08, 21, 22 and 24; the compliance
+    suite is seeded from canon files 21 and 34) treats the GDPR consent, Facebook
+    advertising disclaimer, income and FTC disclaimer, privacy policy, terms of
+    use and attorney review as launch-blocking assets.
+
+    The reviewed ``CompliancePackage`` must be present and complete for the QA's
+    declared target markets, or a live scoped human waiver must cover each absent
+    asset. A missing required asset refuses launch, and an expired waiver stops
+    covering its asset and refuses launch with a distinct named error (SPEC.md
+    section 4: "a failed or expired prerequisite blocks dependent authorization
+    until resolved"; a waiver never makes an absent asset appear present). The
+    policy is pure: it reads the QA's pinned package and mutates nothing.
+    """
+
+    def require(self, qa: LaunchQA, *, on: date) -> None:
+        package = qa.compliance
+        if package is None:
+            raise MissingComplianceAssetError(
+                f"launch QA {qa.qa_id!r} cannot authorize traffic: no reviewed "
+                "compliance and consent package is pinned"
+            )
+        if package.tenant_id != qa.tenant_id:
+            raise ComplianceTenantBoundaryError(
+                "a launch QA cannot authorize traffic with another tenant's "
+                "compliance package"
+            )
+        expired = sorted(
+            kind.value for kind in package.expired_waived_kinds(on=on)
+        )
+        if expired:
+            raise ExpiredComplianceWaiverError(
+                f"launch QA {qa.qa_id!r} cannot authorize traffic: compliance "
+                f"waiver for {', '.join(expired)} has expired"
+            )
+        missing = sorted(
+            kind.value for kind in package.uncovered_kinds(on=on)
+        )
+        if missing:
+            raise MissingComplianceAssetError(
+                f"launch QA {qa.qa_id!r} cannot authorize traffic: missing "
+                f"required compliance assets: {', '.join(missing)}"
             )
 
 

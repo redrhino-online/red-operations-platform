@@ -22,6 +22,7 @@ from redops.contexts.execution.domain.errors import (
     PerformanceBaselineDependencyError,
 )
 from redops.contexts.execution.domain.value_objects import (
+    CompliancePackage,
     FunnelAssetPackage,
     FunnelState,
     MILESTONE_ORDER,
@@ -153,6 +154,7 @@ class LaunchQA:
     state: LaunchQAState = LaunchQAState.DRAFT
     authorization: TrafficAuthorization | None = field(default=None)
     review_reason: str | None = field(default=None)
+    compliance: CompliancePackage | None = field(default=None)
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -167,6 +169,12 @@ class LaunchQA:
             raise LaunchQADependencyError(
                 "a launch QA cannot be grounded on another tenant's funnel"
             )
+        if self.compliance is not None and (
+            self.compliance.tenant_id != self.tenant_id
+        ):
+            raise LaunchQADependencyError(
+                "a launch QA cannot pin another tenant's compliance package"
+            )
         if self.designated_authority == self.owner:
             raise LaunchQAAuthorityError(
                 "the launch QA owner cannot also be the designated human "
@@ -176,6 +184,14 @@ class LaunchQA:
         if len(kinds) != len(set(kinds)):
             raise InvalidLaunchQAError(
                 "a launch QA records each check at most once"
+            )
+        if (
+            self.state is LaunchQAState.READY_FOR_TRAFFIC
+            and self.compliance is None
+        ):
+            raise InvalidLaunchQAError(
+                "a ready-for-traffic launch QA must pin its reviewed compliance "
+                "package; a missing compliance asset prevents launch approval"
             )
 
     @property
@@ -196,14 +212,22 @@ class LaunchQA:
         designated human authority to authorize traffic. A failed critical path
         check, an incomplete funnel, or a non-designated authorizer prevents
         readiness (Phase 4 TDD example: "failed message, technical or commercial
-        QA prevents Launch Approved"). The authorization is pinned so readiness
-        is traceable to the human decision; it does not assert live traffic.
+        QA prevents Launch Approved"). SPEC.md section 4 also requires "consent
+        where applicable", so the reviewed compliance and consent package must be
+        present and complete, or a scoped human waiver must cover each absent
+        asset, before traffic is authorized (canon files 21 and 34 inform the
+        compliance asset set). The authorization is pinned so readiness is
+        traceable to the human decision; it does not assert live traffic.
         """
         from redops.contexts.execution.domain.policies import (
+            ComplianceRequiredPolicy,
             LaunchApprovedPolicy,
         )
 
         LaunchApprovedPolicy().require(self, authorization)
+        ComplianceRequiredPolicy().require(
+            self, on=authorization.authorized_on
+        )
         return replace(
             self,
             state=LaunchQAState.READY_FOR_TRAFFIC,

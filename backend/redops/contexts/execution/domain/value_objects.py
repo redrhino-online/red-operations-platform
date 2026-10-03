@@ -15,7 +15,9 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from redops.contexts.execution.domain.errors import (
+    ComplianceTenantBoundaryError,
     FunnelIntegrationPackageTenantBoundaryError,
+    InvalidComplianceError,
     InvalidFunnelError,
     InvalidFunnelIntegrationPackageError,
     InvalidLaunchQAError,
@@ -619,6 +621,244 @@ class TrafficAuthorization:
             raise InvalidLaunchQAError(
                 "traffic authorization intended use is required"
             )
+
+
+class ComplianceAssetKind(Enum):
+    """The stage 9 launch compliance and consent assets (SPEC.md sections 4 and 9).
+
+    SPEC.md section 4, stage 9 "QA" requires "consent where applicable" before the
+    "Launch Approved" checkpoint authorizes traffic, and section 9 requires
+    retention, export and deletion policies before onboarding production clients.
+    The canon (SPEC.md section 12.3: stage 9 uses canon files 01, 08, 21, 22 and
+    24; the compliance suite is seeded from canon files 21 and 34) treats the
+    GDPR consent/acknowledgment, the Facebook advertising disclaimer, the income
+    and FTC disclaimer, the privacy policy, the terms of use and attorney review
+    as launch-blocking compliance assets: "the last thing you want to do is get
+    your Facebook ad account banned".
+
+    ``GDPR_CONSENT`` is the "where applicable" asset: it is required only when the
+    campaign targets a consent jurisdiction. The other five are always required
+    before traffic. RED requires ``ATTORNEY_REVIEW`` unconditionally, a deliberate
+    stricter adaptation of the canon's "if you have the resources, do it properly
+    with an attorney" recommendation (SPEC.md section 12.1: RED may narrow or
+    adapt the reference model and records the deviation).
+    """
+
+    GDPR_CONSENT = "gdpr_consent"
+    FACEBOOK_DISCLAIMER = "facebook_disclaimer"
+    INCOME_DISCLAIMER = "income_disclaimer"
+    PRIVACY_POLICY = "privacy_policy"
+    TERMS_OF_USE = "terms_of_use"
+    ATTORNEY_REVIEW = "attorney_review"
+
+
+ALWAYS_REQUIRED_COMPLIANCE_KINDS: frozenset[ComplianceAssetKind] = frozenset(
+    {
+        ComplianceAssetKind.FACEBOOK_DISCLAIMER,
+        ComplianceAssetKind.INCOME_DISCLAIMER,
+        ComplianceAssetKind.PRIVACY_POLICY,
+        ComplianceAssetKind.TERMS_OF_USE,
+        ComplianceAssetKind.ATTORNEY_REVIEW,
+    }
+)
+
+CONSENT_JURISDICTIONS: frozenset[str] = frozenset({"eu", "eea"})
+
+
+@dataclass(frozen=True)
+class ComplianceAsset:
+    """One reviewed stage 9 compliance asset (SPEC.md sections 4 and 9).
+
+    A compliance asset names its canonical kind, the client tenant that owns it,
+    the locator where the reviewed copy lives and a positive integer version, so
+    a passing gate can pin the exact compliance evidence. The asset is frozen and
+    reject-only: a missing artifact cannot be represented as a completed stage 9
+    compliance deliverable.
+    """
+
+    kind: ComplianceAssetKind
+    tenant_id: str
+    reference: str
+    version: int
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("compliance asset tenant id", self.tenant_id),
+            ("compliance asset reference", self.reference),
+        ):
+            if not value or not value.strip():
+                raise InvalidComplianceError(f"{label} is required")
+        if not isinstance(self.version, int) or self.version < 1:
+            raise InvalidComplianceError(
+                "the compliance asset version must be a positive integer so the "
+                "stage 9 gate can pin the reviewed asset at an exact version"
+            )
+
+
+@dataclass(frozen=True)
+class ComplianceWaiver:
+    """A scoped human waiver of an absent stage 9 compliance asset.
+
+    SPEC.md section 4: "a waiver is a scoped human decision with reason, risk
+    owner, expiry or review trigger, and downstream effects. It never makes an
+    absent asset appear present. A failed or expired prerequisite blocks
+    dependent authorization until resolved." The waiver therefore carries a
+    reason, a named human risk owner and a review trigger, and an optional expiry.
+    """
+
+    kind: ComplianceAssetKind
+    reason: str
+    risk_owner: str
+    review_trigger: str
+    expires_on: date | None = None
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("compliance waiver reason", self.reason),
+            ("compliance waiver risk owner", self.risk_owner),
+            ("compliance waiver review trigger", self.review_trigger),
+        ):
+            if not value or not value.strip():
+                raise InvalidComplianceError(f"{label} is required")
+        if self.expires_on is not None and not isinstance(self.expires_on, date):
+            raise InvalidComplianceError(
+                "a compliance waiver expiry must be a date"
+            )
+
+    def is_expired(self, on: date) -> bool:
+        """Whether this waiver no longer covers its asset as of ``on``.
+
+        The expiry date is inclusive, so a waiver remains live through its expiry
+        date and blocks authorization the day after (SPEC.md section 4: an
+        expired prerequisite blocks dependent authorization).
+        """
+        return self.expires_on is not None and on > self.expires_on
+
+
+@dataclass(frozen=True)
+class CompliancePackage:
+    """The reviewed stage 9 launch compliance and consent package (SPEC.md 4/9).
+
+    SPEC.md section 4, stage 9 "QA" requires "consent where applicable" before
+    the "Launch Approved" checkpoint authorizes traffic. The package carries the
+    reviewed compliance assets, the campaign's target markets (which decide
+    whether GDPR consent is applicable) and any scoped human waivers. It is
+    frozen and reject-only: ``present_kinds`` is exactly the assets that exist, so
+    a waived asset never appears present, and a cross-tenant asset is refused
+    rather than being pinned as this client's evidence.
+    """
+
+    package_id: str
+    tenant_id: str
+    target_markets: tuple[str, ...]
+    assets: tuple[ComplianceAsset, ...]
+    waivers: tuple[ComplianceWaiver, ...] = ()
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("compliance package id", self.package_id),
+            ("compliance package tenant id", self.tenant_id),
+        ):
+            if not value or not value.strip():
+                raise InvalidComplianceError(f"{label} is required")
+        if not self.target_markets:
+            raise InvalidComplianceError(
+                "a compliance package requires at least one target market so "
+                "consent applicability can be decided"
+            )
+        markets = [market.strip().lower() for market in self.target_markets]
+        if any(not market for market in markets):
+            raise InvalidComplianceError(
+                "a compliance package target market cannot be blank"
+            )
+        if len(markets) != len(set(markets)):
+            raise InvalidComplianceError(
+                "a compliance package records each target market at most once"
+            )
+        kinds = [asset.kind for asset in self.assets]
+        if len(kinds) != len(set(kinds)):
+            raise InvalidComplianceError(
+                "a compliance package records each asset kind at most once"
+            )
+        waiver_kinds = [waiver.kind for waiver in self.waivers]
+        if len(waiver_kinds) != len(set(waiver_kinds)):
+            raise InvalidComplianceError(
+                "a compliance package records each waiver kind at most once"
+            )
+        for asset in self.assets:
+            if asset.tenant_id != self.tenant_id:
+                raise ComplianceTenantBoundaryError(
+                    f"compliance asset {asset.kind.value!r} belongs to tenant "
+                    f"{asset.tenant_id!r}, not package tenant {self.tenant_id!r}"
+                )
+
+    @property
+    def present_kinds(self) -> frozenset[ComplianceAssetKind]:
+        """The asset kinds that actually exist; waivers are excluded."""
+        return frozenset(asset.kind for asset in self.assets)
+
+    @property
+    def waived_kinds(self) -> frozenset[ComplianceAssetKind]:
+        """The asset kinds a human has waived, live or expired."""
+        return frozenset(waiver.kind for waiver in self.waivers)
+
+    @property
+    def requires_consent(self) -> bool:
+        """Whether GDPR consent is applicable for the declared target markets."""
+        return any(
+            market.strip().lower() in CONSENT_JURISDICTIONS
+            for market in self.target_markets
+        )
+
+    @property
+    def required_kinds(self) -> frozenset[ComplianceAssetKind]:
+        """The compliance kinds required for these target markets."""
+        if self.requires_consent:
+            return ALWAYS_REQUIRED_COMPLIANCE_KINDS | {
+                ComplianceAssetKind.GDPR_CONSENT
+            }
+        return ALWAYS_REQUIRED_COMPLIANCE_KINDS
+
+    @property
+    def missing_kinds(self) -> frozenset[ComplianceAssetKind]:
+        """Required kinds with no present asset, regardless of waiver status."""
+        return self.required_kinds - self.present_kinds
+
+    def waiver_for(
+        self, kind: ComplianceAssetKind
+    ) -> ComplianceWaiver | None:
+        for waiver in self.waivers:
+            if waiver.kind is kind:
+                return waiver
+        return None
+
+    def uncovered_kinds(
+        self, *, on: date
+    ) -> frozenset[ComplianceAssetKind]:
+        """Required kinds with no asset and no live owned waiver as of ``on``."""
+        uncovered = set()
+        for kind in self.required_kinds:
+            if kind in self.present_kinds:
+                continue
+            waiver = self.waiver_for(kind)
+            if waiver is None or waiver.is_expired(on):
+                uncovered.add(kind)
+        return frozenset(uncovered)
+
+    def expired_waived_kinds(
+        self, *, on: date
+    ) -> frozenset[ComplianceAssetKind]:
+        """Required kinds whose only cover is an expired waiver."""
+        return frozenset(
+            kind
+            for kind in self.missing_kinds
+            if (waiver := self.waiver_for(kind)) is not None
+            and waiver.is_expired(on)
+        )
+
+    def is_complete(self, *, on: date) -> bool:
+        """Whether every required asset exists or is validly waived as of ``on``."""
+        return not self.uncovered_kinds(on=on)
 
 
 class MilestoneKind(Enum):
