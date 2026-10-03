@@ -797,18 +797,17 @@ class RecordStageSixGateRequest(BaseModel):
     """The stage 6 "Campaign Message Approved" gate request (SPEC.md section 4).
 
     The caller supplies the reviewed message, the approved method and production
-    ready offer it grounds on, the workspace authority registry and the decision
-    metadata. The route builds the canonical gate from these through the use case;
-    it deliberately accepts no pre-built gate, so approver authority and
-    exact-version evidence cannot be bypassed. Stage 6 depends on a passing stage
-    5 decision already in the ledger. The message carries no claims: the
-    "Campaign Message Approved" checkpoint turns on the congruence of avatar,
-    currency, problem, promise, method, product and CTA, which the domain
-    enforces, rather than external customer evidence.
+    ready offer it grounds on and the decision metadata; the authority registry is
+    resolved from the durable workspace store, never the body. The route builds
+    the canonical gate from these through the use case; it deliberately accepts no
+    pre-built gate, so approver authority and exact-version evidence cannot be
+    bypassed. Stage 6 depends on a passing stage 5 decision already in the ledger.
+    The message carries no claims: the "Campaign Message Approved" checkpoint
+    turns on the congruence of avatar, currency, problem, promise, method, product
+    and CTA, which the domain enforces, rather than external customer evidence.
     """
 
     workspace_id: str
-    authorities: list[ClientAuthorityInput]
     campaign_message_package_id: str
     message_version: int
     message: CampaignMessageInput

@@ -2195,6 +2195,9 @@ def record_stage_six_gate(
     campaign_message_repository: CampaignMessageRepository = Depends(
         get_campaign_message_repository
     ),
+    workspace_store: ClientWorkspaceStore = Depends(
+        get_client_workspace_store
+    ),
 ) -> dict[str, Any]:
     """Record the stage 6 "Campaign Message Approved" gate through the use case.
 
@@ -2222,18 +2225,23 @@ def record_stage_six_gate(
     tenant, not the body, is the authoritative client scope. Stage 6 carries no
     claims: the checkpoint turns on the message's congruence with the approved
     method and offer, not external customer evidence.
+
+    SPEC.md sections 3 and 4 make the ClientWorkspace the tenant root that holds
+    the authority registry a gate approves against. The workspace is resolved
+    from the durable store by ``(tenant_id, workspace_id)`` rather than rebuilt
+    from the request body, so the approver and owner are checked against the
+    persisted registry and a caller cannot substitute its own; an unregistered
+    workspace is a named 404, not a gate (SPEC.md section 11).
     """
 
     template = stage_zero_to_ten_template()
     try:
-        workspace = ClientWorkspace(
-            workspace_id=body.workspace_id,
-            tenant_id=tenant_id,
-            authorities=tuple(
-                ClientAuthority(actor=entry.actor, authority=entry.authority)
-                for entry in body.authorities
-            ),
-        )
+        workspace = workspace_store.get(tenant_id, body.workspace_id)
+        if workspace is None:
+            raise ClientWorkspaceNotFoundError(
+                f"workspace {body.workspace_id!r} is not registered for "
+                f"{tenant_id!r}"
+            )
         method, method_reference, offer, message = _approve_method_offer_message(
             tenant_id,
             method_body=body.method,
@@ -2370,6 +2378,11 @@ def record_stage_six_gate(
         decision = RecordStageSixGateHandler().handle(command, ledger=ledger)
         repository.append(decision)
         run_repository.save(stage_run)
+    except ClientWorkspaceNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
     except (
         CommercialError,
         EngagementError,

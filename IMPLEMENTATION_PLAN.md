@@ -4,64 +4,79 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03T191558Z (Ralph cycle, this run): selected item was Q22
-  hardening, the stage 5 "Offer Locked" gate route hardened against the
-  caller-supplied-authority defect (prerequisite Q21 met). It outranked the
-  alternatives for these reasons. Q17-Q21 closed the caller-supplied-authority
-  defect on stages 0-4, but the stage 5 route still rebuilt `ClientWorkspace`
-  from `body.authorities`, so a caller could name itself the client designated
-  approver and the first gate that carries the priced product program would
-  approve against a transient registry rather than the persisted tenant root
-  (SPEC.md sections 3, 4 and 11). Stage 5 is the next dependent gate after the
-  now-hardened stage 4, so closing it keeps gate integrity ahead of the
-  remaining stages (Q23-Q27), the REST surface (Q10-Q14) and UI (Q32-Q45). The
-  `frontend/` shell Q32 was again rejected: the DoD [5/6] script passes on
-  `frontend/` merely existing with no `OpenExecutive` string, so a screens-less
-  shell would falsely turn `make done` green while condition 6 (Q45) is far off.
-  Q28 stays blocked on the named methodology-owner placement decision.
-- Outcome: `RecordStageFiveGateRequest` drops `authorities`. `record_stage_five_gate`
+- Cycle 2026-10-03T191741Z (Ralph cycle, this run): selected item was Q23
+  hardening, the stage 6 "Campaign Message Approved" / "Content Plan Locked"
+  gate route hardened against the caller-supplied-authority defect
+  (prerequisite Q22 met). It outranked the alternatives for these reasons.
+  Q17-Q22 closed the caller-supplied-authority defect on stages 0-5, but the
+  stage 6 route still rebuilt `ClientWorkspace` from `body.authorities`, so a
+  caller could name itself the client designated approver and the first gate
+  that carries the approved message, content roadmap, content crusher and
+  content plan would approve against a transient registry rather than the
+  persisted tenant root (SPEC.md sections 3, 4 and 11). Stage 6 is the next
+  dependent gate after the now-hardened stage 5, so closing it keeps gate
+  integrity ahead of the remaining stages (Q24-Q27), the REST surface
+  (Q10-Q14) and UI (Q32-Q45). The `frontend/` shell Q32 was again rejected:
+  the DoD [5/6] script passes on `frontend/` merely existing with no
+  `OpenExecutive` string, so a screens-less shell would falsely turn
+  `make done` green while condition 6 (Q45) is far off. Q28 stays blocked on
+  the named methodology-owner placement decision.
+- Outcome: `RecordStageSixGateRequest` drops `authorities`. `record_stage_six_gate`
   now depends on `get_client_workspace_store`, resolves the workspace by
   `(tenant_id, body.workspace_id)` through the `ClientWorkspaceStore` port, and
   approves against the persisted registry; an unregistered workspace is a named
   404 `ClientWorkspaceNotFoundError`, not a gate built from caller-supplied
-  authorities. `tests/unit/test_stage_five_gate_route.py` drops the `authorities`
-  key from its stage 1, stage 2, stage 3, stage 4 and stage 5 payloads and its
-  `_authorities` helper, and adds two behavioral tests: an unregistered workspace
-  is a 404 with no ledger write, and the identical request is a 422
-  `GateApproverNotAuthorizedError` when the persisted registry omits the client
-  authority. The reused stage 5 payload in `tests/unit/test_stage_six_gate_route.py`
-  (which the e2e chains back through) also drops the field; the stage 6 and stage
-  7 payloads keep their `authorities` key because those schemas are not yet
-  hardened (Q23-Q24).
-- Evidence: `make check` -> 2040 passed, 2 skipped, 684 subtests; pyflakes
+  authorities. `tests/unit/test_stage_six_gate_route.py` drops the `authorities`
+  key from its payload and its `_authorities` helper, and adds two behavioral
+  tests: an unregistered workspace is a 404 with no ledger write, and the
+  identical request is a 422 `GateApproverNotAuthorizedError` when the persisted
+  registry omits the client authority. `tests/unit/test_stage_seven_gate_route.py`
+  no longer borrows `_authorities` for its own stage 7 payload (stage 7 is not
+  yet hardened, so its schema still requires the field); the authorities are
+  inlined there. The stage 7-10 payloads that chain through `six.payload()`
+  inherit the dropped key unchanged because pydantic ignores the extra field.
+- Evidence: `make check` -> 2042 passed, 2 skipped, 684 subtests; pyflakes
   clean. `make done` still fails only [5/6] (`frontend/` missing, Q32);
   [1/6]-[4/6] pass.
-- New findings: with Q17-Q22 done, stages 0-5 resolve their tenant root and
-  authority registry from durable stores, but stages 6-10 gate routes still build
-  `ClientWorkspace` from `body.authorities` (for example `record_stage_six_gate`
-  at `backend/redops/api/routes.py`), so the caller-supplied-authority defect
-  remains on five routes. The fix is the identical pattern and each stage should
-  get it alongside its asset assembly. Pydantic ignores the now-unused
-  `authorities` key in the stage 6-10 route test payloads, so those tests pass
-  unchanged, but the field is dead and should be removed as each route is
-  hardened.
+- New findings: with Q17-Q23 done, stages 0-6 resolve their tenant root and
+  authority registry from durable stores, but stages 7-10 gate routes still
+  build `ClientWorkspace` from `body.authorities` (for example
+  `record_stage_seven_gate` at `backend/redops/api/routes.py`), so the
+  caller-supplied-authority defect remains on four routes. The stage 7-10 route
+  tests and their chained payload builders still carry `authorities` for their
+  own un-hardened schemas; each must be hardened alongside its asset assembly,
+  and the stage 7 test's inline authorities can then be dropped.
 - Blockers: `frontend/` (DoD condition 6, Q32) remains multi-cycle and must not
   land shell-only; Q28 stage 8-10 required kinds blocked on the named
   methodology-owner placement decision; Q16 idempotency keys blocked on a
   workflow write route; Q3 agent registration blocked on the ADR 0006 /
   vendor-edit tension; Q4 live smoke needs `OPENROUTER_API_KEY` and
   `REDOP_LIVE_OPENROUTER_SMOKE=1`.
-- Highest priority ready next item: Q23 hardening, extend the Q17-Q22 hardening
-  to the stage 6 "Campaign Message Approved" / "Content Plan Locked" gate
-  (resolve the persisted `ClientWorkspace` and its authority registry, 404 when
-  unregistered, drop `authorities` from `RecordStageSixGateRequest` and the
-  stage 6 route test payload). Prerequisite: Q22 (done this cycle). Required
-  asset: the stage 6 `CampaignMessagePackage` plus the wired `content-roadmap`,
-  `content-crusher` and `content-plan` kinds; checkpoint: Campaign Message
-  Approved; designated approver: the client designated authority in the persisted
-  registry. Blocked downstream dependency: the stage 7 "Authority Amplifier"
-  dual-approval gate. Then Q24-Q27 hardening for the remaining stages and
-  Q10-Q14 (remaining REST resources) and the `frontend/` screens Q32-Q45.
+- Highest priority ready next item: Q24 hardening, extend the Q17-Q23 hardening
+  to the stage 7 "Authority Amplifier Approved" gate (resolve the persisted
+  `ClientWorkspace` and its authority registry, 404 when unregistered, drop
+  `authorities` from `RecordStageSevenGateRequest` and the stage 7 route test's
+  inline authorities). Prerequisite: Q23 (done this cycle). Required asset: the
+  stage 7 `AuthorityAmplifierPackage` plus the wired claims and the dual
+  script/creative approvals; checkpoint: Authority Amplifier Approved;
+  designated approver: the client designated authority in the persisted
+  registry. Blocked downstream dependency: the stage 8 "Funnel Complete" gate.
+  Then Q25-Q27 hardening for the remaining stages and Q10-Q14 (remaining REST
+  resources) and the `frontend/` screens Q32-Q45.
+
+### Prior cycle (2026-10-03T191558Z)
+
+- Cycle 2026-10-03T191558Z (Ralph cycle): selected item was Q22 hardening, the
+  stage 5 "Offer Locked" gate route hardened against the
+  caller-supplied-authority defect. Q17-Q21 closed the defect on stages 0-4, but
+  the stage 5 route still rebuilt `ClientWorkspace` from `body.authorities`, so a
+  caller could name itself the client designated approver and the first gate that
+  carries the priced product program would approve against a transient registry
+  rather than the persisted tenant root (SPEC.md sections 3, 4 and 11). Outcome:
+  `RecordStageFiveGateRequest` dropped `authorities`; `record_stage_five_gate`
+  resolved the workspace from the `ClientWorkspaceStore` and added a named 404
+  for an unregistered workspace, with two behavioral tests. Evidence: `make
+  check` -> 2040 passed, 2 skipped, 684 subtests; `make done` failed only [5/6].
 
 ### Prior cycle (2026-10-03T191400Z)
 

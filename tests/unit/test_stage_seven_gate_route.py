@@ -212,7 +212,10 @@ class StageSevenGateRouteTests(unittest.TestCase):
     def payload(self, **overrides):
         body = {
             "workspace_id": "ws-3f",
-            "authorities": self._six._authorities(),
+            "authorities": [
+                {"actor": OWNER, "authority": "production-owner"},
+                {"actor": APPROVER, "authority": "client-designated-authority"},
+            ],
             "amplifier_package_id": "amplifier-package-3f",
             "amplifier_version": 1,
             "message": self._six._message(),
