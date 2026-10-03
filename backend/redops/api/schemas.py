@@ -81,6 +81,78 @@ class RecordStageZeroGateRequest(BaseModel):
     next_action: str = ""
 
 
+class AvatarProfileInput(BaseModel):
+    """The stage 1 avatar with the seven fields its checkpoint locks."""
+
+    avatar_id: str
+    version: int
+    name: str
+    demographics: str
+    psychographics: str
+    pains: list[str]
+    goals: list[str]
+    consequences_of_inaction: list[str]
+    awareness: str
+    customer_evidence_claim_ids: list[str]
+    voice_notes: list[str]
+
+
+class BusinessSnapshotInput(BaseModel):
+    """The stage 1 business snapshot grounded on Knowledge claims."""
+
+    snapshot_id: str
+    version: int
+    business_model: str
+    current_offers: list[str]
+    lead_sources: list[str]
+    constraints: list[str]
+    narrative: str
+    evidence_claim_ids: list[str]
+
+
+class OfferFunnelAuditInput(BaseModel):
+    """The stage 1 offer and funnel audit grounded on Knowledge claims."""
+
+    audit_id: str
+    version: int
+    offer_findings: list[str]
+    funnel_steps: list[str]
+    conversion_evidence: list[str]
+    gaps: list[str]
+    narrative: str
+    evidence_claim_ids: list[str]
+
+
+class RecordStageOneGateRequest(BaseModel):
+    """The stage 1 "Avatar Locked" gate request (SPEC.md section 4).
+
+    The caller supplies the reviewed diagnosis values, the workspace authority
+    registry, the supporting claims and the decision metadata. The route builds
+    the canonical gate from these through the use case; it deliberately accepts no
+    pre-built gate, so approver authority and sourced evidence cannot be bypassed.
+    Stage 1 depends on a passing stage 0 decision already in the ledger.
+    """
+
+    workspace_id: str
+    authorities: list[ClientAuthorityInput]
+    diagnosis_package_id: str
+    avatar: AvatarProfileInput
+    business_snapshot: BusinessSnapshotInput
+    offer_funnel_audit: OfferFunnelAuditInput
+    claims: list[ClaimInput]
+    stage_owner: str
+    approver: str
+    scope: str
+    checkpoint_evidence: str
+    rationale: str
+    assigned_owner: str
+    due_on: date
+    on: date
+    correlation_id: str
+    proposed_by: str | None = None
+    next_action: str = ""
+
+
 class AssetVersionResponse(BaseModel):
     """One exact asset version pinned or approved for a stage."""
 

@@ -19,12 +19,22 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from redops.api.schemas import (
     EngagementProductionViewResponse,
+    RecordStageOneGateRequest,
     RecordStageZeroGateRequest,
 )
+from redops.contexts.commercial.domain.errors import CommercialError
+from redops.contexts.commercial.domain.value_objects import (
+    AvatarProfile,
+    BusinessSnapshot,
+    DiagnosisPackage,
+    OfferFunnelAudit,
+)
 from redops.contexts.engagement.application.commands import (
+    RecordStageOneGateCommand,
     RecordStageZeroGateCommand,
 )
 from redops.contexts.engagement.application.handlers import (
+    RecordStageOneGateHandler,
     RecordStageZeroGateHandler,
 )
 from redops.contexts.engagement.domain.entities import ClientWorkspace
@@ -242,6 +252,176 @@ def record_stage_zero_gate(
         repository.append(decision)
         run_repository.save(stage_run)
     except (EngagementError, GovernanceError, KnowledgeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return {
+        "stage_number": decision.stage_number,
+        "template_version": decision.template_version,
+        "checkpoint": decision.checkpoint,
+        "disposition": decision.disposition.value,
+        "reviewer": decision.reviewer,
+        "scope": decision.scope,
+        "tenant_id": decision.tenant_id,
+        "decided_on": decision.decided_on.isoformat(),
+        "next_action": decision.next_action,
+        "required_assets": [
+            {
+                "asset_id": asset.asset_id,
+                "version": asset.version,
+            }
+            for asset in decision.required_assets
+        ],
+    }
+
+
+@router.post("/clients/{tenant_id}/stages/1/gate", status_code=201)
+def record_stage_one_gate(
+    tenant_id: str,
+    body: RecordStageOneGateRequest,
+    repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
+    run_repository: StageRunRepository = Depends(get_stage_run_repository),
+) -> dict[str, Any]:
+    """Record the stage 1 "Avatar Locked" gate through the use case seam.
+
+    SPEC.md section 6: the API calls the use case and never mutates persistence
+    directly. This route maps the typed request to the Engagement
+    ``RecordStageOneGateCommand``, loads the tenant's ledger through the
+    ``GateLedgerRepository`` port, runs ``RecordStageOneGateHandler`` and appends
+    the resulting ``GateDecision``. Stage 1 depends on stage 0, so governance
+    refuses the decision unless the ledger already holds a passing stage 0
+    decision (SPEC.md section 4). The stage 1 ``StageRun`` is loaded-or-created
+    and upserted through the ``StageRunRepository`` port in the same operation,
+    so its assigned owner, status and timestamps stay durable alongside the
+    decision. Every integrity rule -- canonical kinds, exact versions,
+    owner/approver authority, sourced evidence and the tenant boundary -- is
+    enforced by the domain; a rejection is a named 422 and never a partial write.
+    The path tenant, not the body, is the authoritative client scope.
+    """
+
+    template = stage_zero_to_ten_template()
+    try:
+        workspace = ClientWorkspace(
+            workspace_id=body.workspace_id,
+            tenant_id=tenant_id,
+            authorities=tuple(
+                ClientAuthority(actor=entry.actor, authority=entry.authority)
+                for entry in body.authorities
+            ),
+        )
+        claims = tuple(
+            Claim(
+                claim_id=item.claim_id,
+                tenant_id=tenant_id,
+                statement=item.statement,
+                provenance=ProvenanceClass(item.provenance),
+                citations=frozenset(
+                    SourceCitation(
+                        source_id=citation.source_id,
+                        checksum=citation.checksum,
+                        location=citation.location,
+                    )
+                    for citation in item.citations
+                ),
+                confidence_note=item.confidence_note,
+            )
+            for item in body.claims
+        )
+        package = DiagnosisPackage(
+            package_id=body.diagnosis_package_id,
+            tenant_id=tenant_id,
+            avatar=AvatarProfile(
+                avatar_id=body.avatar.avatar_id,
+                tenant_id=tenant_id,
+                name=body.avatar.name,
+                demographics=body.avatar.demographics,
+                psychographics=body.avatar.psychographics,
+                pains=tuple(body.avatar.pains),
+                goals=tuple(body.avatar.goals),
+                consequences_of_inaction=tuple(
+                    body.avatar.consequences_of_inaction
+                ),
+                awareness=body.avatar.awareness,
+                customer_evidence_claim_ids=tuple(
+                    body.avatar.customer_evidence_claim_ids
+                ),
+                voice_notes=tuple(body.avatar.voice_notes),
+            ),
+            avatar_version=body.avatar.version,
+            business_snapshot=BusinessSnapshot(
+                snapshot_id=body.business_snapshot.snapshot_id,
+                tenant_id=tenant_id,
+                business_model=body.business_snapshot.business_model,
+                current_offers=tuple(body.business_snapshot.current_offers),
+                lead_sources=tuple(body.business_snapshot.lead_sources),
+                constraints=tuple(body.business_snapshot.constraints),
+                narrative=body.business_snapshot.narrative,
+                evidence_claim_ids=tuple(body.business_snapshot.evidence_claim_ids),
+            ),
+            business_snapshot_version=body.business_snapshot.version,
+            offer_funnel_audit=OfferFunnelAudit(
+                audit_id=body.offer_funnel_audit.audit_id,
+                tenant_id=tenant_id,
+                offer_findings=tuple(body.offer_funnel_audit.offer_findings),
+                funnel_steps=tuple(body.offer_funnel_audit.funnel_steps),
+                conversion_evidence=tuple(
+                    body.offer_funnel_audit.conversion_evidence
+                ),
+                gaps=tuple(body.offer_funnel_audit.gaps),
+                narrative=body.offer_funnel_audit.narrative,
+                evidence_claim_ids=tuple(
+                    body.offer_funnel_audit.evidence_claim_ids
+                ),
+            ),
+            offer_funnel_audit_version=body.offer_funnel_audit.version,
+        )
+        stage_run = run_repository.load(
+            template.version, workspace.workspace_id, 1, tenant_id
+        )
+        if stage_run is None:
+            stage_run = StageRun(
+                engagement=workspace.workspace_id,
+                stage_number=1,
+                template_version=template.version,
+                assigned_owner=body.stage_owner,
+                tenant_id=tenant_id,
+            )
+        stage_run.record_activity(
+            actor=body.stage_owner,
+            reason="stage 1 diagnosis work began",
+            on=body.on,
+            correlation_id=body.correlation_id,
+        )
+        command = RecordStageOneGateCommand(
+            template=template,
+            workspace=workspace,
+            package=package,
+            claims=claims,
+            stage_run=stage_run,
+            approver=body.approver,
+            scope=body.scope,
+            checkpoint_evidence=body.checkpoint_evidence,
+            rationale=body.rationale,
+            assigned_owner=body.assigned_owner,
+            due_on=body.due_on,
+            on=body.on,
+            correlation_id=body.correlation_id,
+            proposed_by=body.proposed_by,
+            next_action=body.next_action,
+        )
+        ledger = repository.load(template, tenant_id)
+        decision = RecordStageOneGateHandler().handle(command, ledger=ledger)
+        repository.append(decision)
+        run_repository.save(stage_run)
+    except (
+        CommercialError,
+        EngagementError,
+        GovernanceError,
+        KnowledgeError,
+        ValueError,
+    ) as exc:
         raise HTTPException(
             status_code=422,
             detail={"error": type(exc).__name__, "message": str(exc)},
