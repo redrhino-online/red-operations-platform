@@ -50,6 +50,8 @@ A Ralph cycle is one small pass through the build:
 
 The next run reads the changed plan and picks again. The script runs one cycle at a time. The Makefile can start a set number of cycles in order. It stops on the first error. This keeps each change small enough to review. The code plan calls for domain rules to stay apart from web code, databases, and AI tools. Each new part should have one clear job and use a small, clear interface.
 
+Cycles are token-disciplined: they use the Serena code-memory MCP for an indexed first pass (symbol overview and search, and project memories) and read narrowly with offsets instead of loading the repository, and they record durable facts as memories so later cycles do not rediscover them. The harness prompt carries this as a hard rule.
+
 ## 5. Files the harness reads
 
 | File | Use |

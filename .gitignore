@@ -5,4 +5,5 @@
 project_sources/
 __pycache__/
 *.py[cod]
+.serena/
 .DS_Store
