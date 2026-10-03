@@ -172,6 +172,28 @@ class StageRunNotStageOneError(EngagementError):
     """
 
 
+class NotStageTwoGateError(EngagementError):
+    """A stage 2 recording path was handed a gate for another stage.
+
+    SPEC.md section 4 makes stage 2 "Position" the "Currency Locked" checkpoint
+    after the stage 1 "Avatar Locked" gate. The stage 2 recording path pins and
+    approves only the canonical stage 2 currency gate; a gate for another stage
+    must be recorded by that stage's own path so the wrong asset package is never
+    approved under the stage 2 rubric.
+    """
+
+
+class StageRunNotStageTwoError(EngagementError):
+    """A stage 2 closure was handed a StageRun for another stage or template.
+
+    SPEC.md sections 3 and 4 make a StageRun track one stage of one versioned
+    template. Completing a stage 2 gate must close the matching stage 2 run for
+    the same template version, so a run for another stage or version cannot be
+    closed by the stage 2 path and left showing verified progress the run does
+    not represent.
+    """
+
+
 class StageRunNotCompletableError(EngagementError):
     """A stage 0 closure was handed a StageRun whose state cannot complete.
 
