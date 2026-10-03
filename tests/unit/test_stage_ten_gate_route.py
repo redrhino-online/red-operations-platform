@@ -47,6 +47,10 @@ class StageTenGateRouteTests(unittest.TestCase):
 
         try:
             StageNineGateRouteTests.setUpClass()
+            from redops.api.routes import get_client_workspace_store
+            from redops.contexts.engagement.infrastructure.repositories import (
+                InMemoryClientWorkspaceStore,
+            )
             from redops.contexts.execution.domain.value_objects import (
                 CANONICAL_BASELINE_KINDS,
             )
@@ -62,6 +66,7 @@ class StageTenGateRouteTests(unittest.TestCase):
         cls.create_app = staticmethod(StageNineGateRouteTests.create_app)
         cls.dependency = staticmethod(StageNineGateRouteTests.dependency)
         cls.run_dependency = staticmethod(StageNineGateRouteTests.run_dependency)
+        cls.workspace_dependency = staticmethod(get_client_workspace_store)
         cls.method_dependency = staticmethod(
             StageNineGateRouteTests.method_dependency
         )
@@ -80,6 +85,7 @@ class StageTenGateRouteTests(unittest.TestCase):
         cls.run_repository_class = staticmethod(
             StageNineGateRouteTests.run_repository_class
         )
+        cls.workspace_store_class = staticmethod(InMemoryClientWorkspaceStore)
         cls.method_repository_class = staticmethod(
             StageNineGateRouteTests.method_repository_class
         )
@@ -112,6 +118,7 @@ class StageTenGateRouteTests(unittest.TestCase):
         self.app = self.create_app()
         self.repository = self.repository_class()
         self.run_repository = self.run_repository_class()
+        self.workspaces = self.workspace_store_class()
         self.method_repository = self.method_repository_class()
         self.offer_repository = self.offer_repository_class()
         self.message_repository = self.message_repository_class()
@@ -121,6 +128,9 @@ class StageTenGateRouteTests(unittest.TestCase):
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
+        )
+        self.app.dependency_overrides[self.workspace_dependency] = (
+            lambda: self.workspaces
         )
         self.app.dependency_overrides[self.method_dependency] = (
             lambda: self.method_repository
@@ -141,6 +151,20 @@ class StageTenGateRouteTests(unittest.TestCase):
             lambda: self.launch_qa_repository
         )
         self.client = TestClient(self.app)
+        self.register_workspace()
+
+    def register_workspace(
+        self, tenant_id: str = TENANT, *, with_approver: bool = True
+    ) -> None:
+        from tests.unit.workspace_fixture import register_workspace
+
+        register_workspace(
+            self.client,
+            tenant_id=tenant_id,
+            owner=OWNER,
+            approver=APPROVER,
+            with_approver=with_approver,
+        )
 
     def tearDown(self) -> None:
         self.app.dependency_overrides.clear()

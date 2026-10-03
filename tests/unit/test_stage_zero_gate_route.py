@@ -36,8 +36,12 @@ class StageZeroGateRouteTests(unittest.TestCase):
             from fastapi.testclient import TestClient
             from redops.api.app import create_app
             from redops.api.routes import (
+                get_client_workspace_store,
                 get_gate_ledger_repository,
                 get_stage_run_repository,
+            )
+            from redops.contexts.engagement.infrastructure.repositories import (
+                InMemoryClientWorkspaceStore,
             )
             from redops.contexts.governance.infrastructure.repositories import (
                 InMemoryGateLedgerRepository,
@@ -51,21 +55,49 @@ class StageZeroGateRouteTests(unittest.TestCase):
         cls.create_app = staticmethod(create_app)
         cls.dependency = staticmethod(get_gate_ledger_repository)
         cls.run_dependency = staticmethod(get_stage_run_repository)
+        cls.workspace_dependency = staticmethod(get_client_workspace_store)
         cls.repository_class = staticmethod(InMemoryGateLedgerRepository)
         cls.run_repository_class = staticmethod(InMemoryStageRunRepository)
+        cls.workspace_store_class = staticmethod(InMemoryClientWorkspaceStore)
 
     def setUp(self) -> None:
         self.app = self.create_app()
         self.repository = self.repository_class()
         self.run_repository = self.run_repository_class()
+        self.workspaces = self.workspace_store_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
         )
+        self.app.dependency_overrides[self.workspace_dependency] = (
+            lambda: self.workspaces
+        )
         self.client = self.test_client(self.app)
+        self.create_workspace()
 
     def tearDown(self) -> None:
         self.app.dependency_overrides.clear()
+
+    def create_workspace(
+        self, tenant_id: str = TENANT, *, with_approver: bool = True
+    ) -> None:
+        authorities = [{"actor": OWNER, "authority": "production-owner"}]
+        if with_approver:
+            authorities.append(
+                {
+                    "actor": APPROVER,
+                    "authority": "client-designated-authority",
+                }
+            )
+        response = self.client.post(
+            "/red/clients",
+            json={
+                "workspace_id": "ws-3f",
+                "tenant_id": tenant_id,
+                "authorities": authorities,
+            },
+        )
+        self.assertEqual(response.status_code, 201, response.text)
 
     @staticmethod
     def payload(**overrides):
@@ -75,13 +107,6 @@ class StageZeroGateRouteTests(unittest.TestCase):
 
         body = {
             "workspace_id": "ws-3f",
-            "authorities": [
-                {"actor": OWNER, "authority": "production-owner"},
-                {
-                    "actor": APPROVER,
-                    "authority": "client-designated-authority",
-                },
-            ],
             "intake_package_id": "intake-3f",
             "assets": [
                 {
@@ -227,6 +252,46 @@ class StageZeroGateRouteTests(unittest.TestCase):
         )
         self.assertIsNone(other.decision_for(0))
         self.assertFalse(other.has_passing_decision(0, on=date(2026, 10, 2)))
+
+    def test_a_gate_without_a_registered_workspace_is_a_named_404(self) -> None:
+        response = self.client.post(
+            self.url(), json=self.payload(workspace_id="ws-unregistered")
+        )
+
+        self.assertEqual(response.status_code, 404, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"], "ClientWorkspaceNotFoundError"
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(0))
+
+    def test_the_gate_approves_against_the_persisted_registry(self) -> None:
+        # The body no longer carries authorities; the approver is authorized
+        # only if the persisted workspace registry names them. Rebuild the
+        # store without a client-designated authority and the same request that
+        # passed above is refused.
+        self.workspaces = self.workspace_store_class()
+        self.create_workspace(with_approver=False)
+
+        response = self.client.post(self.url(), json=self.payload())
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(
+            response.json()["detail"]["error"],
+            "GateApproverNotAuthorizedError",
+        )
+
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+
+        reloaded = self.repository.load(stage_zero_to_ten_template(), TENANT)
+        self.assertIsNone(reloaded.decision_for(0))
 
 
 if __name__ == "__main__":

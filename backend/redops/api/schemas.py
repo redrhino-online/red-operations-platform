@@ -57,14 +57,15 @@ class IntakeAssetInput(BaseModel):
 class RecordStageZeroGateRequest(BaseModel):
     """The stage 0 "Production Ready" gate request (SPEC.md section 4).
 
-    The caller supplies the real intake assets, the workspace authority registry,
-    the supporting claims and the decision metadata. The route builds the
-    canonical gate from these through the use case; it deliberately accepts no
+    The caller supplies the registered workspace id, the real intake assets,
+    the supporting claims and the decision metadata. The route resolves the
+    workspace and its authority registry from the durable store, so the request
+    carries no authorities and cannot substitute a caller supplied registry for
+    the persisted one (SPEC.md sections 3, 4 and 11). It deliberately accepts no
     pre-built gate, so owner authority and sourced evidence cannot be bypassed.
     """
 
     workspace_id: str
-    authorities: list[ClientAuthorityInput]
     intake_package_id: str
     assets: list[IntakeAssetInput]
     claims: list[ClaimInput]

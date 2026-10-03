@@ -131,7 +131,10 @@ from redops.contexts.engagement.application.handlers import (
 )
 from redops.contexts.engagement.application.ports import ClientWorkspaceStore
 from redops.contexts.engagement.domain.entities import ClientWorkspace
-from redops.contexts.engagement.domain.errors import EngagementError
+from redops.contexts.engagement.domain.errors import (
+    ClientWorkspaceNotFoundError,
+    EngagementError,
+)
 from redops.contexts.engagement.infrastructure.repositories import (
     client_workspace_store_from_env,
 )
@@ -298,6 +301,44 @@ def get_stage_run_repository() -> Iterator[StageRunRepository]:
         yield repository
     finally:
         repository.close()
+
+
+def get_client_workspace_store() -> Iterator[ClientWorkspaceStore]:
+    """Provide the configured client workspace seam to the API (SPEC.md §6).
+
+    SPEC.md section 3 makes the ClientWorkspace the tenant root every
+    client-owned resource attaches to and the persisted authority registry a
+    gate approves against. The dependency owns one adapter for the request and
+    releases any connection it opened when the request ends; the store is chosen
+    once from ``DATABASE_URL``, and a set-but-unusable configuration raises
+    before the route runs, so a deployment cannot mistake a process-local
+    workspace store for a durable one.
+    """
+
+    store = client_workspace_store_from_env(os.environ.get("DATABASE_URL"))
+    try:
+        yield store
+    finally:
+        store.close()
+
+
+def get_source_record_store() -> Iterator[SourceRecordStore]:
+    """Provide the configured source record seam to the API (SPEC.md §6).
+
+    SPEC.md section 3 keeps a source record as the immutable original a claim
+    cites, so the ``/clients/{id}/sources`` surface must read and write the same
+    durable store the API and worker processes share. The dependency owns one
+    adapter for the request and releases any connection it opened when the
+    request ends; the store is chosen once from ``DATABASE_URL``, and a
+    set-but-unusable configuration raises before the route runs, so a deployment
+    cannot mistake a process-local source store for a durable one.
+    """
+
+    store = source_record_store_from_env(os.environ.get("DATABASE_URL"))
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 def get_method_version_repository() -> Iterator[MethodVersionRepository]:
@@ -954,6 +995,7 @@ def record_stage_zero_gate(
     body: RecordStageZeroGateRequest,
     repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
     run_repository: StageRunRepository = Depends(get_stage_run_repository),
+    workspace_store: ClientWorkspaceStore = Depends(get_client_workspace_store),
 ) -> dict[str, Any]:
     """Record the stage 0 "Production Ready" gate through the use case seam.
 
@@ -972,18 +1014,23 @@ def record_stage_zero_gate(
     enforced by the domain; a rejection is a named 422 and never a partial write
     (SPEC.md sections 3, 4, 9 and 11). The path tenant, not the body, is the
     authoritative client scope for the ledger.
+
+    SPEC.md sections 3 and 4 make the ClientWorkspace the tenant root that holds
+    the authority registry a gate approves against. The workspace is resolved
+    from the durable store by ``(tenant_id, workspace_id)`` rather than rebuilt
+    from the request body, so the approver and owner are checked against the
+    persisted registry and a caller cannot substitute its own; an unregistered
+    workspace is a named 404, not a gate (SPEC.md section 11).
     """
 
     template = stage_zero_to_ten_template()
     try:
-        workspace = ClientWorkspace(
-            workspace_id=body.workspace_id,
-            tenant_id=tenant_id,
-            authorities=tuple(
-                ClientAuthority(actor=entry.actor, authority=entry.authority)
-                for entry in body.authorities
-            ),
-        )
+        workspace = workspace_store.get(tenant_id, body.workspace_id)
+        if workspace is None:
+            raise ClientWorkspaceNotFoundError(
+                f"workspace {body.workspace_id!r} is not registered for "
+                f"{tenant_id!r}"
+            )
         claims = tuple(
             Claim(
                 claim_id=item.claim_id,
@@ -1056,6 +1103,11 @@ def record_stage_zero_gate(
         decision = RecordStageZeroGateHandler().handle(command, ledger=ledger)
         repository.append(decision)
         run_repository.save(stage_run)
+    except ClientWorkspaceNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
     except (EngagementError, GovernanceError, KnowledgeError, ValueError) as exc:
         raise HTTPException(
             status_code=422,
@@ -3098,44 +3150,6 @@ def get_workflow_run(
             for index, transition in enumerate(transitions, start=1)
         ],
     }
-
-
-def get_client_workspace_store() -> Iterator[ClientWorkspaceStore]:
-    """Provide the configured client workspace seam to the API (SPEC.md §6).
-
-    SPEC.md section 3 makes the ClientWorkspace the tenant root every
-    client-owned resource attaches to, so the ``/clients`` surface must read and
-    write the same durable store the API and worker processes share. The
-    dependency owns one adapter for the request and releases any connection it
-    opened when the request ends; the store is chosen once from ``DATABASE_URL``,
-    and a set-but-unusable configuration raises before the route runs, so a
-    deployment cannot mistake a process-local workspace store for a durable one.
-    """
-
-    store = client_workspace_store_from_env(os.environ.get("DATABASE_URL"))
-    try:
-        yield store
-    finally:
-        store.close()
-
-
-def get_source_record_store() -> Iterator[SourceRecordStore]:
-    """Provide the configured source record seam to the API (SPEC.md §6).
-
-    SPEC.md section 3 keeps a source record as the immutable original a claim
-    cites, so the ``/clients/{id}/sources`` surface must read and write the same
-    durable store the API and worker processes share. The dependency owns one
-    adapter for the request and releases any connection it opened when the
-    request ends; the store is chosen once from ``DATABASE_URL``, and a
-    set-but-unusable configuration raises before the route runs, so a deployment
-    cannot mistake a process-local source store for a durable one.
-    """
-
-    store = source_record_store_from_env(os.environ.get("DATABASE_URL"))
-    try:
-        yield store
-    finally:
-        store.close()
 
 
 def _workspace_payload(workspace: ClientWorkspace) -> dict[str, Any]:

@@ -424,3 +424,16 @@ class UnscopedClientWorkspaceError(EngagementError):
     a workspace without a client would either leak across clients or create an
     orphaned record, so the store refuses an unscoped read or write.
     """
+
+
+class ClientWorkspaceNotFoundError(EngagementError):
+    """A tenant has no workspace under the requested id.
+
+    SPEC.md sections 3 and 4 make the ClientWorkspace the tenant root that
+    carries the authority registry a gate approves against, and require the gate
+    to approve against the persisted registry rather than a repeated request
+    body. A gate that references an unregistered workspace has no authority
+    registry to resolve and must be refused rather than accepted from caller
+    supplied authorities, so this is a named error distinct from a validation
+    failure.
+    """

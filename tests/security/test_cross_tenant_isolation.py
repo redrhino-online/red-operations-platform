@@ -185,6 +185,10 @@ class CrossTenantIsolationTests(unittest.TestCase):
         six = self.driver._nine._eight._seven._six
         payload = six.stage_zero_payload()
         payload["approver"] = "stranger"
+        # Register the other client's workspace so the refusal is the authority
+        # check (the persisted registry does not name the stranger), not a
+        # missing-workspace 404.
+        self.driver.register_workspace(OTHER_TENANT)
         response = self.client.post(
             f"/red/clients/{OTHER_TENANT}/stages/0/gate", json=payload
         )

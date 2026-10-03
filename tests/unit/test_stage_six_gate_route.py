@@ -43,6 +43,7 @@ class StageSixGateRouteTests(unittest.TestCase):
             from redops.api.app import create_app
             from redops.api.routes import (
                 get_campaign_message_repository,
+                get_client_workspace_store,
                 get_gate_ledger_repository,
                 get_method_version_repository,
                 get_offer_version_repository,
@@ -58,6 +59,9 @@ class StageSixGateRouteTests(unittest.TestCase):
             )
             from redops.contexts.engagement.domain.value_objects import (
                 CANONICAL_INTAKE_KINDS,
+            )
+            from redops.contexts.engagement.infrastructure.repositories import (
+                InMemoryClientWorkspaceStore,
             )
             from redops.contexts.commercial.infrastructure.repositories import (
                 InMemoryCampaignMessageRepository,
@@ -78,6 +82,7 @@ class StageSixGateRouteTests(unittest.TestCase):
         cls.create_app = staticmethod(create_app)
         cls.dependency = staticmethod(get_gate_ledger_repository)
         cls.run_dependency = staticmethod(get_stage_run_repository)
+        cls.workspace_dependency = staticmethod(get_client_workspace_store)
         cls.method_dependency = staticmethod(get_method_version_repository)
         cls.offer_dependency = staticmethod(get_offer_version_repository)
         cls.message_dependency = staticmethod(
@@ -85,6 +90,7 @@ class StageSixGateRouteTests(unittest.TestCase):
         )
         cls.repository_class = staticmethod(InMemoryGateLedgerRepository)
         cls.run_repository_class = staticmethod(InMemoryStageRunRepository)
+        cls.workspace_store_class = staticmethod(InMemoryClientWorkspaceStore)
         cls.method_repository_class = staticmethod(
             InMemoryMethodVersionRepository
         )
@@ -106,12 +112,16 @@ class StageSixGateRouteTests(unittest.TestCase):
         self.app = self.create_app()
         self.repository = self.repository_class()
         self.run_repository = self.run_repository_class()
+        self.workspaces = self.workspace_store_class()
         self.method_repository = self.method_repository_class()
         self.offer_repository = self.offer_repository_class()
         self.message_repository = self.message_repository_class()
         self.app.dependency_overrides[self.dependency] = lambda: self.repository
         self.app.dependency_overrides[self.run_dependency] = (
             lambda: self.run_repository
+        )
+        self.app.dependency_overrides[self.workspace_dependency] = (
+            lambda: self.workspaces
         )
         self.app.dependency_overrides[self.method_dependency] = (
             lambda: self.method_repository
@@ -123,6 +133,20 @@ class StageSixGateRouteTests(unittest.TestCase):
             lambda: self.message_repository
         )
         self.client = self.test_client(self.app)
+        self.register_workspace()
+
+    def register_workspace(
+        self, tenant_id: str = TENANT, *, with_approver: bool = True
+    ) -> None:
+        from tests.unit.workspace_fixture import register_workspace
+
+        register_workspace(
+            self.client,
+            tenant_id=tenant_id,
+            owner=OWNER,
+            approver=APPROVER,
+            with_approver=with_approver,
+        )
 
     def tearDown(self) -> None:
         self.app.dependency_overrides.clear()
@@ -136,7 +160,6 @@ class StageSixGateRouteTests(unittest.TestCase):
     def stage_zero_payload(self):
         return {
             "workspace_id": "ws-3f",
-            "authorities": self._authorities(),
             "intake_package_id": "intake-3f",
             "assets": [
                 {
