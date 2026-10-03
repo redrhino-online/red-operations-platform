@@ -36,8 +36,11 @@ from redops.contexts.engagement.domain.value_objects import (
     IntakePackage,
 )
 from redops.contexts.governance.application.ports import GateLedgerRepository
-from redops.contexts.governance.domain.entities import StageRun
-from redops.contexts.governance.domain.errors import AssetPackageMismatchError
+from redops.contexts.governance.domain.entities import GateLedger, StageRun
+from redops.contexts.governance.domain.errors import (
+    AssetPackageMismatchError,
+    CrossTenantGateError,
+)
 from redops.contexts.governance.domain.templates import stage_zero_to_ten_template
 from redops.contexts.governance.domain.value_objects import (
     GateDisposition,
@@ -144,12 +147,14 @@ class GateLedgerRepositoryContractTests(unittest.TestCase):
             on=ON,
             correlation_id=CORRELATION,
         )
-        decision = self.handler.handle(command, ledger=self.repository.load(self.template))
+        decision = self.handler.handle(
+            command, ledger=self.repository.load(self.template, TENANT)
+        )
         self.repository.append(decision)
         return decision
 
     def test_a_fresh_repository_loads_an_empty_ledger(self) -> None:
-        ledger = self.repository.load(self.template)
+        ledger = self.repository.load(self.template, TENANT)
 
         self.assertIsNone(ledger.decision_for(0))
         self.assertEqual((), ledger.decisions_for(0))
@@ -157,10 +162,12 @@ class GateLedgerRepositoryContractTests(unittest.TestCase):
     def test_a_recorded_passing_gate_survives_a_reload_with_exact_versions(self) -> None:
         decision = self.record_stage_zero()
 
-        reloaded = self.repository.load(self.template)
+        reloaded = self.repository.load(self.template, TENANT)
 
         self.assertIs(decision, reloaded.decision_for(0))
         self.assertEqual(decision.required_assets, reloaded.decision_for(0).required_assets)
+        self.assertEqual(TENANT, reloaded.decision_for(0).tenant_id)
+        self.assertEqual(TENANT, reloaded.tenant_id)
         self.assertTrue(reloaded.has_passing_decision(0, on=ON))
 
     def test_history_is_append_only_and_ordered(self) -> None:
@@ -173,7 +180,7 @@ class GateLedgerRepositoryContractTests(unittest.TestCase):
         )
         self.repository.append(second)
 
-        reloaded = self.repository.load(self.template)
+        reloaded = self.repository.load(self.template, TENANT)
 
         self.assertEqual((first, second), reloaded.decisions_for(0))
         self.assertIs(second, reloaded.decision_for(0))
@@ -183,16 +190,42 @@ class GateLedgerRepositoryContractTests(unittest.TestCase):
         self.record_stage_zero()
         other = StageTemplate(version="tampered", stages=self.template.stages)
 
-        ledger = self.repository.load(other)
+        ledger = self.repository.load(other, TENANT)
 
         self.assertIsNone(ledger.decision_for(0))
+
+    def test_decisions_are_not_replayed_into_another_clients_ledger(self) -> None:
+        recorded = self.record_stage_zero()
+
+        other_client = self.repository.load(self.template, "client-other")
+
+        self.assertIsNone(other_client.decision_for(0))
+        self.assertFalse(other_client.has_passing_decision(0, on=ON))
+        self.assertNotEqual("client-other", recorded.tenant_id)
+
+    def test_append_refuses_a_decision_that_carries_no_tenant(self) -> None:
+        decision = self.record_stage_zero()
+
+        with self.assertRaises(CrossTenantGateError):
+            self.repository.append(replace(decision, tenant_id=""))
+
+    def test_load_requires_a_tenant(self) -> None:
+        with self.assertRaises(CrossTenantGateError):
+            self.repository.load(self.template, "")
+
+    def test_a_scoped_ledger_refuses_another_clients_decision(self) -> None:
+        decision = self.record_stage_zero()
+        scoped = GateLedger(self.template, tenant_id="client-other")
+
+        with self.assertRaises(CrossTenantGateError):
+            scoped.record(decision)
 
     def test_reload_refuses_a_stored_decision_the_domain_would_reject(self) -> None:
         decision = self.record_stage_zero()
         self.repository.append(replace(decision, stage_number=1))
 
         with self.assertRaises(AssetPackageMismatchError):
-            self.repository.load(self.template)
+            self.repository.load(self.template, TENANT)
 
 
 if __name__ == "__main__":

@@ -17,22 +17,34 @@ from __future__ import annotations
 
 from redops.contexts.governance.application.ports import GateLedgerRepository
 from redops.contexts.governance.domain.entities import GateDecision, GateLedger
+from redops.contexts.governance.domain.errors import CrossTenantGateError
 from redops.contexts.governance.domain.value_objects import StageTemplate
 
 
 class InMemoryGateLedgerRepository(GateLedgerRepository):
-    """Append-only, process-local gate decision store keyed by template version."""
+    """Append-only, process-local gate decision store keyed by client and template."""
 
     def __init__(self) -> None:
         self._decisions: list[GateDecision] = []
 
-    def load(self, template: StageTemplate) -> GateLedger:
-        ledger = GateLedger(template)
+    def load(self, template: StageTemplate, tenant_id: str) -> GateLedger:
+        if not tenant_id or not tenant_id.strip():
+            raise CrossTenantGateError(
+                "a tenant-scoped gate ledger load requires a non-blank tenant id"
+            )
+        ledger = GateLedger(template, tenant_id=tenant_id)
         for decision in self._decisions:
             if decision.template_version != template.version:
+                continue
+            if decision.tenant_id != tenant_id:
                 continue
             ledger.record(decision)
         return ledger
 
     def append(self, decision: GateDecision) -> None:
+        if not decision.tenant_id or not decision.tenant_id.strip():
+            raise CrossTenantGateError(
+                "a stored gate decision requires a non-blank tenant id; a gate "
+                "decision is a client resource and cannot be stored unscoped"
+            )
         self._decisions.append(decision)

@@ -59,6 +59,17 @@ class CrossTenantAssetError(GovernanceError, ValueError):
     """
 
 
+class CrossTenantGateError(GovernanceError, ValueError):
+    """A gate decision was stored, read or recorded for the wrong client.
+
+    SPEC.md sections 3 and 9 require every tenant resource to carry a tenant id
+    and every query to be tenant scoped. The gate ledger is a client resource:
+    a decision recorded for one tenant must never be replayed into another
+    client's ledger, and a decision with no tenant cannot be persisted as if it
+    were authorized for a client. It is refused rather than silently pinned.
+    """
+
+
 class AmbiguousAssetPackageError(AssetPackageMismatchError):
     """A package pins more than one version of the same asset kind.
 

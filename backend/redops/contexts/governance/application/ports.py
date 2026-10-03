@@ -26,31 +26,37 @@ from redops.contexts.governance.domain.value_objects import StageTemplate
 
 
 class GateLedgerRepository(abc.ABC):
-    """Durable, append-only store of stage gate decisions per template version.
+    """Durable, append-only store of stage gate decisions per client and template.
 
-    The port is keyed by template version because a passing gate pins the exact
-    template it was decided against (SPEC.md sections 3 and 4): a decision
-    recorded for one template version must never be replayed into another.
+    The port is keyed by tenant and template version because a passing gate pins
+    the exact template it was decided against (SPEC.md sections 3 and 4) and
+    every client resource belongs to exactly one client (SPEC.md section 3): a
+    decision recorded for one template version or one client must never be
+    replayed into another client's ledger.
     """
 
     @abc.abstractmethod
-    def load(self, template: StageTemplate) -> GateLedger:
-        """Reconstruct the ledger for ``template`` from its stored decisions.
+    def load(self, template: StageTemplate, tenant_id: str) -> GateLedger:
+        """Reconstruct the ledger for ``tenant_id`` and ``template``.
 
-        Stored decisions are replayed through ``GateLedger.record``, which
-        re-applies the canonical template, exact-package, checkpoint,
-        prerequisite and dependency rules. A decision that storage cannot
-        legally hold therefore cannot be read back as approved (SPEC.md section
-        4); a corrupt or out-of-order history fails loudly rather than
-        laundering an unapproved dependency into an approved gate.
+        The returned ledger is tenant scoped: it carries ``tenant_id`` and
+        replays only that client's stored decisions. Stored decisions are
+        replayed through ``GateLedger.record``, which re-applies the canonical
+        template, exact-package, checkpoint, prerequisite, dependency and
+        tenant rules. A decision that storage cannot legally hold therefore
+        cannot be read back as approved (SPEC.md section 4); a corrupt or
+        out-of-order history fails loudly rather than laundering an unapproved
+        dependency, or another client's decision, into an approved gate.
         """
 
     @abc.abstractmethod
     def append(self, decision: GateDecision) -> None:
-        """Persist one immutable decision to its stage's history.
+        """Persist one immutable, tenant-carrying decision to its history.
 
         History is append-only: a superseding decision is stored alongside the
-        earlier one, never edits it (SPEC.md section 3). The store does not
-        itself decide whether a decision is valid; ``load`` replays through the
-        domain ledger so integrity is enforced on the canonical aggregate.
+        earlier one, never edits it (SPEC.md section 3). A decision that carries
+        no tenant cannot be persisted, because it would be a client resource
+        with no client to scope it to (SPEC.md sections 3 and 9). The store does
+        not itself decide whether a decision is valid; ``load`` replays through
+        the domain ledger so integrity is enforced on the canonical aggregate.
         """

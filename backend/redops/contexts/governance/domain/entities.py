@@ -12,6 +12,7 @@ from redops.contexts.governance.domain.errors import (
     ApprovalExpiredError,
     AssetPackageMismatchError,
     CheckpointMismatchError,
+    CrossTenantGateError,
     GateDecisionError,
     GateLedgerError,
     PrerequisiteMismatchError,
@@ -222,12 +223,17 @@ class GateDecision:
     waiver: Waiver | None = None
     asset_approvals: tuple["ApprovalRequest", ...] = ()
     blockers: frozenset[str] = frozenset()
+    tenant_id: str = ""
 
     def __post_init__(self) -> None:
         if self.stage_number < 0:
             raise GateDecisionError("gate decision stage number must be >= 0")
         if not self.template_version or not self.template_version.strip():
             raise GateDecisionError("gate decision template version is required")
+        if self.tenant_id and not self.tenant_id.strip():
+            raise CrossTenantGateError(
+                "a gate decision tenant id must be non-blank when carried"
+            )
         if not self.reviewer or not self.reviewer.strip():
             raise GateDecisionError("gate decision reviewer is required")
         if not self.rationale or not self.rationale.strip():
@@ -338,6 +344,7 @@ class GateDecision:
         next_action: str = "",
         waiver: Waiver | None = None,
         blockers: frozenset[str] | None = None,
+        tenant_id: str | None = None,
     ) -> GateDecision:
         """Record a decision against a gate, refusing to coerce a bad gate.
 
@@ -421,6 +428,7 @@ class GateDecision:
             else:
                 resolved_blockers = frozenset()
 
+        resolved_tenant = tenant_id if tenant_id is not None else ledger.tenant_id
         return cls(
             stage_number=gate.stage_number,
             template_version=gate.template_version,
@@ -439,6 +447,7 @@ class GateDecision:
             waiver=waiver,
             asset_approvals=gate.asset_approvals,
             blockers=frozenset(resolved_blockers),
+            tenant_id=resolved_tenant,
         )
 
     @property
@@ -503,19 +512,41 @@ class GateLedger:
     approver identities remain an open decision.
     """
 
-    def __init__(self, template: StageTemplate) -> None:
+    def __init__(self, template: StageTemplate, tenant_id: str = "") -> None:
+        if tenant_id and not tenant_id.strip():
+            raise GateLedgerError(
+                "a gate ledger tenant id must be non-blank when scoped"
+            )
         self._template = template
+        self._tenant_id = tenant_id
         self._decisions: dict[int, list[GateDecision]] = {}
 
     @property
     def template(self) -> StageTemplate:
         return self._template
 
+    @property
+    def tenant_id(self) -> str:
+        """The client this ledger is scoped to, or "" for an unscoped ledger.
+
+        A ledger reconstructed from a tenant-scoped repository carries that
+        client's id, and every decision recorded through ``from_gate`` inherits
+        it, so a decision can never be persisted without naming the client it
+        authorizes (SPEC.md sections 3 and 9).
+        """
+        return self._tenant_id
+
     def record(self, decision: GateDecision) -> None:
         if decision.template_version != self._template.version:
             raise GateLedgerError(
                 f"decision template version {decision.template_version!r} does "
                 f"not match ledger template version {self._template.version!r}"
+            )
+        if self._tenant_id and decision.tenant_id != self._tenant_id:
+            raise CrossTenantGateError(
+                f"decision tenant {decision.tenant_id!r} does not match ledger "
+                f"tenant {self._tenant_id!r}; a ledger authorizes exactly one "
+                "client"
             )
         if self._template.definition_for(decision.stage_number) is None:
             raise UnknownStageError(

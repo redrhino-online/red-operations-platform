@@ -4,42 +4,48 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-- Cycle 2026-10-03: two owner actions and one policy landed before this cycle.
-- Owner decision: the capability-agent charters are approved. PR #1 (Client
-  Success and Engagement Health, slot 10) and PR #2 (Assurance, Risk and
-  Compliance, slot 11) are merged; SPEC section 5 now lists both, proposal-only
-  with no execution permission, and section 1 no longer excludes them.
-- Policy (owner): validate locally with `docker-compose.yml` (PostgreSQL that
-  matches the deployment) and only ship **tested, shippable code** to the
-  cluster. The app declares `psycopg[binary]`, `alembic` and `uvicorn`; the
-  guide documents the local loop.
-- Selected item: the Governance `GateLedgerRepository` application port plus its
-  in-memory reference adapter — the verifiable core of "wire one gate path
-  through the entry point".
-- Outcome: added `governance/application/ports.py` (`GateLedgerRepository.load`
-  / `.append`) and `governance/infrastructure/repositories.py`
-  (`InMemoryGateLedgerRepository`); `load` replays stored decisions through
-  `GateLedger.record`, so a stored decision the domain would reject cannot read
-  back as approved.
-- Evidence: `tests/unit/governance/test_gate_ledger_repository.py` (5 tests,
-  drives the real `RecordStageZeroGateHandler` through the port); domain suite
-  1608 passed, 1 skipped; app smoke 3 passed; pyflakes clean.
-- New findings: no PostgreSQL driver existed in the verified interpreters, so the
-  ADR 0003 adapter was not shipped unverified — the new local PostgreSQL compose
-  plus `uv sync` removes that blocker. `GateLedger` and `GateDecision` carry no
-  `tenant_id` (keyed only by template version), a real tenant-isolation gap
-  against SPEC sections 3 and 9; ADR 0004 authorizes tenant scoping, so fixing it
-  is ready work.
-- Blockers: Tier 2 facts still hold (see Standing decisions). New: the
-  `GateLedger`/`GateDecision` tenant scoping is a broad domain change and must
-  land before client data; the durable PostgreSQL adapter needs its migration.
-- Highest priority ready next item: finish the gate path — (a) add `tenant_id`
-  to `GateLedger`/`GateDecision` and enforce it (ADR 0004), (b) add the
-  PostgreSQL `GateLedgerRepository` adapter with a committed migration, validated
-  against the local compose database, and (c) add a RED route that runs
-  `RecordStageZeroGateHandler` through the port and returns the pinned decision,
-  with an HTTP-boundary behavioral test. Prerequisites: the port (done), the
-  local PostgreSQL (compose), and the accepted tenancy ADR.
+- Cycle 2026-10-03 (Ralph cycle 2026-10-03T142538Z):
+- Selected item: tenant-scope the gate ledger seam — the first, independently
+  verifiable slice of the previous cycle's next item (a): add `tenant_id` to
+  `GateLedger`/`GateDecision` and enforce it (ADR 0004). Chosen over the
+  PostgreSQL adapter and the RED route because those must filter by tenant
+  anyway, and over the rest of item (a) as one bounded unit because the cross
+  tenant leak is a concrete defect against SPEC sections 3 and 9.
+- Outcome: `GateDecision` now carries a validated `tenant_id`; `GateLedger`
+  takes an optional `tenant_id` and refuses to record another client's decision
+  with the new named `CrossTenantGateError`; `GateDecision.from_gate` resolves
+  the tenant from the ledger (or an explicit override) so every recorder's
+  decision inherits its client without touching the eleven stage assemblers;
+  `GateLedgerRepository.load(template, tenant_id)` is now tenant-keyed and
+  `append` refuses a decision with no tenant; `InMemoryGateLedgerRepository`
+  filters stored decisions by tenant so two engagements on the same template
+  version can no longer share a ledger.
+- Evidence: `tests/unit/governance/test_gate_ledger_repository.py` (9 tests;
+  added tenant isolation, unscoped-load refusal, unscoped-append refusal and
+  scoped-ledger cross-tenant refusal); domain suite 1612 passed, 1 skipped;
+  app smoke 3 passed; `python3 -m pyflakes backend/redops tests` clean.
+- New findings: the leak was latent because the only adapter is the in-memory
+  reference; the port is now the enforcement seam. Pure-domain callers may still
+  construct an unscoped `GateLedger(template)` (tenant defaults to ""), which
+  keeps the ~90 domain test fixtures valid; the production seam (the repository)
+  always scopes and refuses blank tenants. A decision created outside a
+  tenant-scoped ledger and appended is rejected, so production cannot persist an
+  unscoped gate. The PostgreSQL adapter must add a `tenant_id` column, a
+  (tenant, template_version, stage) index and, later, row-level policy.
+- Blockers: Tier 2 facts still hold (see Standing decisions). The durable
+  PostgreSQL adapter is still unwritten and its migration is uncommitted; no
+  PostgreSQL driver exists in the verified interpreters (the vendored core venv
+  has fastapi + pydantic only), though `psycopg[binary]`, `alembic` and
+  `uvicorn` are declared app dependencies and the local compose PostgreSQL
+  (`redop-dev-postgres-1`) is up and healthy.
+- Highest priority ready next item: finish the gate path — (b) add the
+  PostgreSQL `GateLedgerRepository` adapter with a committed migration that
+  includes `tenant_id`, validated against the local compose database, then (c)
+  add a RED route that runs `RecordStageZeroGateHandler` through the
+  tenant-scoped port and returns the pinned decision, with an HTTP-boundary
+  behavioral test. Prerequisites: the scoped port (done); a PostgreSQL driver in
+  the test interpreter (must be installed via `uv sync` or a scoped venv);
+  local compose PostgreSQL (up).
 
 ### Standing decisions (unchanged this cycle)
 
