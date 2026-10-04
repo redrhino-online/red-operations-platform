@@ -4,6 +4,26 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Owner decision 2026-10-03: backup and restore deferred (ADR 0009)
+
+- The prototype definition of done no longer requires a database backup or a
+  restore drill; both move to a production-readiness phase
+  (`docs/adr/0009-prototype-defers-backup-and-restore.md`). SPEC.md section 11
+  now names nine minimum acceptance scenarios, section 9 keeps the RPO/RTO and
+  restore-drill targets as production requirements, and the section 13 condition
+  2 evidence is updated. `scripts/check_acceptance_coverage.sh` and
+  `tests/acceptance/covered-scenarios.txt` no longer require
+  `backup-restores-approval-trail`.
+- Effect on the queue: the only remaining deploy-gated acceptance scenario is
+  `gitops-revert-restores` (the push-to-forge GitOps revert drill, Q49), so the
+  deploy slice Q47-Q50 stays on the critical path. No backup-target decision is
+  needed for the prototype. The operator also confirmed the deployment
+  mechanism (app repo issue #3): the Helm chart lives in this repository and the
+  GitOps repo holds the Argo CD Application and pinned values.
+- Superseded blockers in the cycle record below that name a "chosen backup
+  target" are resolved by this decision; the ADR 0006, live-key and Q28 blockers
+  remain.
+
 - Cycle 2026-10-03T210728Z (Ralph cycle, this run): selected item was Q8, the
   prompt-injection guard (SPEC.md sections 5, 9 and 11; distinct from the four
   condition 3 isolation layers). It is the highest priority ready item: it has
@@ -5076,7 +5096,7 @@ stalls:
 | Q28 | Apply the required-kind policy: wire each canon asset as a required kind | pipeline | Q27 | stage templates updated; gate integrity tests. Stage 1 `awareness-map` wired from the typed `MarketAwarenessMap` 2026-10-03T181228Z; `audience-reach-estimate` and `target-market-match` and stages 2-10 remain. Stage 9     `compliance-package` wired from the reviewed `CompliancePackage` 2026-10-03T182015Z; stage 5 `product-program` wired from the typed `ProductProgram` 2026-10-03T182409Z (stage 5 now thirteen kinds); stage 4 `thirteen-transformations` wired from the typed `ThirteenTransformations` 2026-10-03T182806Z (stage 4 now thirteen kinds); stage 6 `content-roadmap` wired from the typed `ContentRoadmap` 2026-10-03T183151Z (thirteen kinds); stage 6 `content-crusher` wired from the typed `ContentCrusher` 2026-10-03T183447Z (fourteen kinds); stage 6 `content-plan` wired from the typed `ContentPlan` 2026-10-03T183643Z (fifteen kinds, stage 6 content family complete); stage 7 is canon-covered by the `AuthorityAmplifierPackage`, and stages 8-10 now await the named methodology-owner placement decision for `EnrollmentPlan`, `ClientProcess`, `SwimlanesPlan` and the post-stage-10 assets |
 | Q29 | Method change impact assessment emits the dependent review queue | pipeline | Q21 | a change identifies its dependents |
 | Q30 | Stage 0-10 API e2e with deterministic agents | e2e | Q27 | DoD 1: one client intake to baseline |
-| Q31 | Section 11 acceptance suite (SPEC.md section 11) | e2e | Q30 | DoD 2. Condition 2 gate added 2026-10-03T200006Z: `scripts/check_acceptance_coverage.sh` requires all ten canonical scenarios declared in `tests/acceptance/covered-scenarios.txt`, each covered scenario pointing at a test file that exists with at least one test, so condition 2 cannot pass without the suite. Covered today: source-attribution, known-requires-source, unauthorized-approval-rejected, method-change-identifies-dependents, worker-restart-preserves-waiting, launch-blocked-on-failed-path, cross-client-retrieval-empty, duplicate-delivery-one-effect. Uncovered and keeping the gate red: gitops-revert-restores and backup-restores-approval-trail (deploy-only, Q49 and a chosen backup target) |
+| Q31 | Section 11 acceptance suite (SPEC.md section 11) | e2e | Q30 | DoD 2. Condition 2 gate added 2026-10-03T200006Z: `scripts/check_acceptance_coverage.sh` requires all ten canonical scenarios declared in `tests/acceptance/covered-scenarios.txt`, each covered scenario pointing at a test file that exists with at least one test, so condition 2 cannot pass without the suite. Covered today: source-attribution, known-requires-source, unauthorized-approval-rejected, method-change-identifies-dependents, worker-restart-preserves-waiting, launch-blocked-on-failed-path, cross-client-retrieval-empty, duplicate-delivery-one-effect. Uncovered and keeping the gate red: gitops-revert-restores (deploy-only, needs the Atlas GitOps revert drill, Q49). `backup-restores-approval-trail` was removed from the prototype DoD by ADR 0009 (backup and restore deferred to a production phase), so the suite now requires nine scenarios |
 | Q32 | Next.js shell in `frontend/` plus RED theme plus API client | ui | Q15 | builds; health route. Done 2026-10-03T200524Z: `frontend/` Next.js 16 / React 19 / TypeScript app (`package.json`, `next.config.ts` `output: standalone`, RED `globals.css` palette, `layout.tsx` shell, `page.tsx` surface list, `health/route.ts` liveness, tenant-scoped `shared/api/client.ts` over `/red`); `npm run build` clean, `/health` -> `{"status":"ok"}`, `/` -> 200. No section 8 screen or `dod-screens.txt` yet, so the condition 6 gate stays honestly red |
 | Q33 | Command center screen | ui | Q32 | Done 2026-10-03T201337Z: `frontend/src/features/command-center/` (`CommandCenter.tsx` presentational, `CommandCenterScreen.tsx` tenant-scoped read, route `/command-center`, `frontend/dod-screens.txt` declares the screen id) over `listInterventions`; Vitest+jsdom browser runner (`vitest.config.ts`, `npm test` -> `vitest run`). `npm run build` clean, `npm test` 5 passed, `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 11 remaining screens |
 | Q34 | Client workspace overview | ui | Q33 | Done 2026-10-03T201508Z: `frontend/src/features/client-workspace/` (`ClientWorkspaceOverview.tsx` presentational, `ClientWorkspaceOverviewScreen.tsx` tenant/engagement/date read, route `/client-workspace`, `frontend/dod-screens.txt` declares the screen id) over `getProductionView` (`GET /red/clients/{tenant}/engagements/{engagement}/production-view?on=`). `npm run build` clean, `npm test` 5 new passed (10 total), `scripts/check_frontend_build.sh frontend` exit 0; condition 6 stays red on the 10 remaining screens |

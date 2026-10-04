@@ -104,10 +104,12 @@ repository is both the app and the spec/plan/canon authority.
 
 ## Open decisions
 
-The contexts above are stable, but four cross-cutting decisions gate real client
+The contexts above are stable, but five cross-cutting decisions gate real client
 data (see `docs/adr/`):
 
 - ADR 0003 — storage strategy given the SQLite/ChromaDB reality.
 - ADR 0004 — tenant isolation given slot-based single-active-client switching.
 - ADR 0005 — scheduler/worker topology given the single-instance scheduler.
 - ADR 0006 — RED agent registration over the specialist registry.
+- ADR 0009 — backup and restore deferred to a production phase; excluded from
+  the prototype definition of done.

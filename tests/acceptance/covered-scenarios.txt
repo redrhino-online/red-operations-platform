@@ -8,12 +8,12 @@
 #   method-change-identifies-dependents worker-restart-preserves-waiting
 #   duplicate-delivery-one-effect cross-client-retrieval-empty
 #   launch-blocked-on-failed-path gitops-revert-restores
-#   backup-restores-approval-trail
 #
-# A scenario is "covered" only when an existing test exercises it. Two
-# scenarios have no test yet, so condition 2 (a green section 11 acceptance
-# suite) is unmet and the DoD gate keeps failing until the named seams and the
-# deployment exist.
+# A scenario is "covered" only when an existing test exercises it. One scenario
+# has no test yet, so condition 2 (a green section 11 acceptance suite) is unmet
+# and the DoD gate keeps failing until the deployment exists. Database backup
+# restore is not a prototype scenario (deferred to the production phase, ADR
+# 0009).
 
 source-attribution tests/unit/knowledge/test_source_record_store.py
 known-requires-source tests/unit/knowledge/test_claim.py
@@ -24,4 +24,3 @@ duplicate-delivery-one-effect tests/unit/execution/test_connector_idempotency.py
 cross-client-retrieval-empty tests/security/test_retrieval_isolation.py
 launch-blocked-on-failed-path tests/unit/execution/test_launch_qa.py
 gitops-revert-restores uncovered deploy-gated; needs the Atlas recovery drill (Q49)
-backup-restores-approval-trail uncovered deploy-gated; backup target unchosen

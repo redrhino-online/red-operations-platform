@@ -375,7 +375,8 @@ git push origin main && git push atlas main
 Blocking real client data (need the RED principal):
 
 - ADR 0003 storage strategy; ADR 0004 tenant isolation; ADR 0005 scheduler
-  topology; ADR 0006 RED agent registration.
+  topology; ADR 0006 RED agent registration; ADR 0009 backup and restore
+  deferred to the production phase.
 
 Next engineering steps:
 
