@@ -4,6 +4,36 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Owner decision 2026-10-04: Atlas deploy architecture (Q47-Q50)
+
+- The operator settled the deploy architecture (app repo issue #3), unblocking
+  the whole Q47-Q50 slice:
+  1. Execution: the build loop runs Q47-Q50 end-to-end with cluster access
+     (kubectl + registry + Gitea push), then verifies condition 9; the operator
+     reviews after.
+  2. Image build: Gitea Actions on the app repo (`atlas-admin/red-operations-platform`);
+     a push to the `atlas` remote triggers the build and pushes to
+     `registry.atlas.lan`.
+  3. Condition 9 surface: deploy the RED UI + API so `/` carries the
+     `RED Operations` marker `scripts/check_deployed_red_health.sh` requires.
+  4. PostgreSQL: in-cluster Postgres on the `truenas-nfs` storage class
+     (StatefulSet + PVC); the migration Job runs before the API serves.
+  5. Release topology: replace the OpenExecutive shell in namespace `redop`
+     (same namespace, ingress and release name; new chart source).
+  6. Secrets: reuse the existing `redop-secrets` (`BACKEND_SHARED_SECRET`,
+     `AUTH_SECRET`, `OPENROUTER_API_KEY`) and `redop-registry` sealed secrets.
+  7. First-release scope: api + ui + worker (full chart including migration Job,
+     ingress, PDB, probes).
+- Prerequisites for end-to-end execution: kubectl on PATH and
+  `KUBECONFIG=~/.kube/atlas-admin.yaml` in the harness environment; the `atlas`
+  remote configured (it is); a Gitea Actions workflow plus registry push
+  credentials in the app repo (Q47 adds `.gitea/workflows/build.yaml`; the
+  existing `atlas-admin/redop` workflow is the reference); write access to the
+  GitOps repo (`211lab/atlas`) for the digest/values update, or the operator
+  performs that promotion (SPEC.md section 10 manual approval).
+- Effect: Q47 is now executable as the next ready item; Q48-Q50 follow. Condition
+  9 remains the only prototype condition not met.
+
 ### Operator input 2026-10-04: live OpenRouter smoke executed; condition 5 met (Q4 done)
 
 - The operator supplied the OpenRouter key (stored in the cluster secret
