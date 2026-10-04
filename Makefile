@@ -13,10 +13,12 @@ COUNT := $(or $(n),$(N),1)
 DATABASE_URL ?= postgresql://redops:redops@localhost:5432/redops
 export DATABASE_URL
 
-# Definition-of-done health check. The Atlas cluster already serves the app at
-# this internal host; change the path if the deployment exposes health
-# elsewhere. REDOP_HEALTH_INSECURE=1 skips CA verification for the internal
-# atlas-ca, which WSL does not trust.
+# Definition-of-done health check. The Atlas cluster must serve the RED app at
+# this internal host; `[6/6]` requires the response to carry a RED identity
+# marker, so a bare 200 from another app cannot pass condition 9. Change the
+# path if the deployment exposes the RED health elsewhere.
+# REDOP_HEALTH_INSECURE=1 skips CA verification for the internal atlas-ca, which
+# WSL does not trust.
 REDOP_HEALTH_URL ?= https://redop.atlas.lan/
 REDOP_HEALTH_INSECURE ?= 1
 export REDOP_HEALTH_URL REDOP_HEALTH_INSECURE

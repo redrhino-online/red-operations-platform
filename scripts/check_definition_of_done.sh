@@ -41,12 +41,9 @@ printf '\n[5/6] RED UI: all section 8 screens render, browser tests, no OpenExec
 ./scripts/check_branding_and_notice.sh frontend vendor/openexecutive \
   || fail "RED branding or retained LICENSE/NOTICE is incomplete; condition 8 is unmet"
 
-printf '\n[6/6] deployed on Atlas k3s (Argo CD healthy; migration ran before the API served)\n'
+printf '\n[6/6] deployed RED app on Atlas k3s (Argo CD healthy; migration ran before the API served)\n'
 REDOP_HEALTH_URL="${REDOP_HEALTH_URL:-https://redop.atlas.lan/}"
-curl_args=(-fsS --max-time 10)
-if [[ "${REDOP_HEALTH_INSECURE:-1}" == "1" ]]; then curl_args+=(-k); fi
-curl "${curl_args[@]}" "$REDOP_HEALTH_URL" >/dev/null \
-  || fail "deployed health check failed at $REDOP_HEALTH_URL"
-printf 'health ok: %s\n' "$REDOP_HEALTH_URL"
+./scripts/check_deployed_red_health.sh "$REDOP_HEALTH_URL" \
+  || fail "the deployed RED app is not serving; condition 9 is unmet"
 
 printf '\nDONE-GATE PASS: the prototype meets the section 13 definition of done.\n'

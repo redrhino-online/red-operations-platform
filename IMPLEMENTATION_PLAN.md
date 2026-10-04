@@ -4,6 +4,71 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-04T050209Z (this run)
+
+- Cycle 2026-10-04T050209Z (Ralph cycle, this run): selected item was
+  hardening the prototype definition-of-done condition 9 gate (SPEC.md section 13
+  condition 9). It is the highest value ready item: `make done` was run and it
+  stops at `[2/6]` on condition 5 (the paid live OpenRouter smoke, Q4, needs a
+  real key); conditions 1, 2 and 5's deterministic half pass. While reassessing,
+  the `[6/6]` deployed-health check was found to pass on any HTTP 200. The Atlas
+  host `redop.atlas.lan` actually serves the OpenExecutive shell: `<title>Open
+  Executive</title>` and no RED route (`/red/health`, `/command-center`,
+  `/client-workspace`, `/authority-settings`, `/launch-readiness`,
+  `/source-explorer` all return 404). So condition 9 was a false pass. Fixing
+  that false pass is a missing-gate-integrity defect and outranks the deploy
+  artifacts Q47-Q50 (the repo still has no Dockerfile or `deploy/`; the deployed
+  app is not RED) and the non-ready alternatives: Q28 stages 8-10 required kinds
+  stay blocked on the named methodology-owner placement decision; Q4 needs a live
+  key; Q47-Q50 need a RED image, Helm chart and Argo Application, which are build
+  and deploy work the cycle may not perform unattended (no cluster context;
+  `kubectl` has none; deploy is out of scope). The canon gap register has no
+  ready pipeline item.
+- Outcome: new `scripts/check_deployed_red_health.sh` replaces the bare curl in
+  DoD `[6/6]`. It fetches `REDOP_HEALTH_URL` (default
+  `https://redop.atlas.lan/`) and requires the response body to carry the RED
+  identity marker `RED Operations` (`REDOP_RED_MARKER` overrides it), failing on
+  a non-2xx response or a body without the marker. A wrong app or any bare 200
+  can no longer certify condition 9. The Makefile and `.env.example` comments now
+  state the marker requirement. No route, gate rule, approval authority, pipeline
+  stage, vendored file, migration or method artifact changed.
+- Evidence: new `tests/unit/shared/test_deployed_health_check.py` (4 tests) runs
+  the gate script against a local stub server: a RED body passes, and an
+  OpenExecutive body, a marker-less body and an HTTP 500 each fail. `make check`
+  -> 2370 passed, 3 skipped, 724 subtests (was 2366; +4), `uv run pyflakes` clean.
+  Run against the real host, the gate now fails honestly:
+  `./scripts/check_deployed_red_health.sh` -> "response from
+  https://redop.atlas.lan/ does not carry the RED identity marker 'RED
+  Operations'; the deployed app is not RED (condition 9 unmet)" (exit 1).
+  `make done` still stops at `[2/6]` condition 5, unchanged.
+- New findings: condition 9 is not met. The health URL `redop.atlas.lan`
+  resolves to the OpenExecutive frontend, not RED, so the prototype is not the
+  RED-branded system deployed end to end. The deploy queue Q47-Q50 (Dockerfile,
+  Helm chart, Argo Application, secrets and smoke) is not started: there is no
+  `Dockerfile` and no `deploy/` in the repository, and no cluster context is
+  configured here, so a cycle cannot build or deploy them. Condition 9's stronger
+  evidence (Argo CD healthy release, migration Job ran before the API served)
+  still needs cluster access and a real RED image.
+- Blockers (head unchanged; new condition 9 blocker recorded): condition 5's live
+  OpenRouter smoke needs `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1`
+  (Q4). Condition 9 now honestly fails because the Atlas host serves
+  OpenExecutive, not RED; satisfying it needs the Q47-Q50 deploy slice and a
+  cluster context, both operator work. Q28 stages 8-10 required kinds remain
+  blocked on the named methodology-owner placement decision. Conditions 1-4 and
+  6-8 are met by their gates.
+- Highest priority ready next item: Q47, the Dockerfile plus health endpoint
+  (SPEC.md section 13 condition 9; PREREQUISITE Q30 met). Required artifact: a
+  container image that builds the RED API (`redops.api.app:app`, `/red/health`)
+  and, per the queue, passes a local container health check; note the vendored
+  `vendor/openexecutive` is ~1.9 GB and needs a `.dockerignore`. Checkpoint:
+  image builds and the container `/red/health` returns `{"status":"ok"}`.
+  Approver: none for the image build; the Atlas deploy and promotion remain the
+  RED principal/operator's manual approval (SPEC.md section 10). Blocked
+  downstream dependency: Q48-Q50 and condition 9 (a RED image, Helm chart, Argo
+  Application and the migration-before-serve ordering). Alternative unblocker if
+  a cycle must avoid image size: none unattended; the live key and the
+  methodology-owner placement decision are owner inputs.
+
 ### Owner decision 2026-10-04: vendor edits go through a re-triggerable overlay (ADR 0011)
 
 - The RED principal resolved the ADR 0006 / zero-vendor-edit tension that had
@@ -5192,7 +5257,7 @@ stalls:
 | Q47 | Dockerfile plus health endpoint | deploy | Q30 | image builds; health passes |
 | Q48 | Helm chart: web, api, worker, migration Job, ingress, PDB, probes | deploy | Q47 | chart lint and render |
 | Q49 | Argo CD Application plus migration before serve ordering | deploy | Q48 | Argo healthy; migration ran first |
-| Q50 | Secrets plus `REDOP_HEALTH_URL`; deployment smoke | deploy | Q49 | DoD 9; `make done` passes |
+| Q50 | Secrets plus `REDOP_HEALTH_URL`; deployment smoke | deploy | Q49 | DoD 9; `make done` passes. Condition 9 gate hardened 2026-10-04T050209Z: `[6/6]` now runs `scripts/check_deployed_red_health.sh`, which requires the response to carry the `RED Operations` identity marker (`REDOP_RED_MARKER`), so a bare 200 or the OpenExecutive shell cannot pass. The Atlas host `redop.atlas.lan` currently serves OpenExecutive (RED routes 404), so condition 9 is honestly unmet until a RED image is built and deployed |
 
 ## Production-readiness phase (after the prototype; not a prototype condition)
 
