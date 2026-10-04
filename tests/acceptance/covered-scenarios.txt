@@ -7,13 +7,12 @@
 #   source-attribution known-requires-source unauthorized-approval-rejected
 #   method-change-identifies-dependents worker-restart-preserves-waiting
 #   duplicate-delivery-one-effect cross-client-retrieval-empty
-#   launch-blocked-on-failed-path gitops-revert-restores
+#   launch-blocked-on-failed-path
 #
-# A scenario is "covered" only when an existing test exercises it. One scenario
-# has no test yet, so condition 2 (a green section 11 acceptance suite) is unmet
-# and the DoD gate keeps failing until the deployment exists. Database backup
-# restore is not a prototype scenario (deferred to the production phase, ADR
-# 0009).
+# A scenario is "covered" only when an existing test exercises it. All eight
+# prototype scenarios are covered, so condition 2 (a green section 11 acceptance
+# suite) is met. The database restore drill and the GitOps rollback drill are
+# production-readiness gates, not prototype scenarios (ADR 0009, ADR 0010).
 
 source-attribution tests/unit/knowledge/test_source_record_store.py
 known-requires-source tests/unit/knowledge/test_claim.py
@@ -23,4 +22,3 @@ worker-restart-preserves-waiting tests/unit/workflows/test_workflow_resume.py
 duplicate-delivery-one-effect tests/unit/execution/test_connector_idempotency.py
 cross-client-retrieval-empty tests/security/test_retrieval_isolation.py
 launch-blocked-on-failed-path tests/unit/execution/test_launch_qa.py
-gitops-revert-restores uncovered deploy-gated; needs the Atlas recovery drill (Q49)

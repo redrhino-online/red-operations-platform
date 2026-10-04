@@ -30,7 +30,6 @@ SCENARIOS = (
     "duplicate-delivery-one-effect",
     "cross-client-retrieval-empty",
     "launch-blocked-on-failed-path",
-    "gitops-revert-restores",
 )
 FILE = {
     scenario: f"tests/unit/acceptance/test_{scenario.replace('-', '_')}.py"
@@ -82,7 +81,7 @@ class AcceptanceCoverageCheckTests(unittest.TestCase):
             root = Path(tmp)
             result = run_check(build_acceptance(root), root)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("9 section 11 scenarios", result.stdout)
+            self.assertIn("8 section 11 scenarios", result.stdout)
 
     def test_missing_directory_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -101,11 +100,11 @@ class AcceptanceCoverageCheckTests(unittest.TestCase):
     def test_uncovered_scenario_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            acceptance = build_acceptance(root, uncovered=("gitops-revert-restores",))
+            acceptance = build_acceptance(root, uncovered=("source-attribution",))
             result = run_check(acceptance, root)
             self.assertEqual(result.returncode, 1)
             self.assertIn("condition 2 unmet", result.stderr)
-            self.assertIn("gitops-revert-restores", result.stderr)
+            self.assertIn("source-attribution", result.stderr)
 
     def test_undeclared_scenario_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -113,7 +112,7 @@ class AcceptanceCoverageCheckTests(unittest.TestCase):
             acceptance = build_acceptance(root, scenarios=SCENARIOS[:-1])
             result = run_check(acceptance, root)
             self.assertEqual(result.returncode, 1)
-            self.assertIn("gitops-revert-restores", result.stderr)
+            self.assertIn("launch-blocked-on-failed-path", result.stderr)
 
     def test_unknown_scenario_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -148,7 +147,7 @@ class AcceptanceCoverageCheckTests(unittest.TestCase):
             result = run_check(acceptance, root)
             self.assertEqual(result.returncode, 1)
             self.assertIn(
-                "declared gitops-revert-restores test file is missing",
+                "declared launch-blocked-on-failed-path test file is missing",
                 result.stderr,
             )
 
@@ -159,21 +158,19 @@ class AcceptanceCoverageCheckTests(unittest.TestCase):
             result = run_check(acceptance, root)
             self.assertEqual(result.returncode, 1)
             self.assertIn(
-                "declared gitops-revert-restores test file has no test",
+                "declared launch-blocked-on-failed-path test file has no test",
                 result.stderr,
             )
 
     def test_repository_suite_is_honest(self) -> None:
-        # One section 11 scenario has no test yet, so the gate must fail and name
-        # it rather than passing condition 2. The retrieval and duplicate-delivery
-        # scenarios are now covered, so neither may be listed as unmet. Database
-        # backup restore is not a prototype scenario (ADR 0009).
+        # All eight prototype section 11 scenarios are covered, so condition 2 is
+        # met and the gate must pass. The database restore drill and the GitOps
+        # rollback drill are production-readiness gates, not prototype scenarios
+        # (ADR 0009, ADR 0010), so neither may be required here.
         result = run_check(REPO_ROOT / "tests" / "acceptance")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("gitops-revert-restores", result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("backup-restores-approval-trail", result.stderr)
-        self.assertNotIn("cross-client-retrieval-empty", result.stderr)
-        self.assertNotIn("duplicate-delivery-one-effect", result.stderr)
+        self.assertNotIn("gitops-revert-restores", result.stderr)
 
 
 if __name__ == "__main__":

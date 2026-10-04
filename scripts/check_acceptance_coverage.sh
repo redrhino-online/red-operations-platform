@@ -28,9 +28,9 @@ fail() { printf 'acceptance coverage: %s\n' "$*" >&2; exit 1; }
 [[ -d "$acceptance_dir" ]] || fail \
   "tests/acceptance/ is missing; the DoD requires the section 11 acceptance suite"
 
-# The nine scenarios named by SPEC.md section 11 minimum acceptance scenarios.
-# Database backup restore is deferred to the production phase (ADR 0009), so it
-# is not a prototype acceptance scenario.
+# The eight scenarios named by SPEC.md section 11 minimum acceptance scenarios.
+# The database restore drill and the GitOps rollback drill are production-
+# readiness gates, not prototype scenarios (ADR 0009, ADR 0010).
 required_scenarios=(
   source-attribution
   known-requires-source
@@ -40,7 +40,6 @@ required_scenarios=(
   duplicate-delivery-one-effect
   cross-client-retrieval-empty
   launch-blocked-on-failed-path
-  gitops-revert-restores
 )
 
 manifest="$acceptance_dir/covered-scenarios.txt"
