@@ -7,9 +7,11 @@
 #   deterministic-e2e live-openrouter-smoke attribution-log
 #
 # The deterministic e2e agent path now exists (the stage 0-10 e2e drives the RED
-# agent roster through DeterministicFakeModelGateway, Q3). One part stays
-# uncovered: the paid, env-gated live OpenRouter smoke, which needs a real key.
+# agent roster through DeterministicFakeModelGateway, Q3). All three parts are
+# covered: the paid, env-gated live OpenRouter smoke was executed for real with
+# the operator-supplied key (one live call through ForkProviderModelGateway plus
+# LoggingModelGateway, 2026-10-04) and passes when the env vars are set.
 
 deterministic-e2e tests/e2e/test_stage_zero_to_ten_e2e.py
-live-openrouter-smoke uncovered a live call needs OPENROUTER_API_KEY and REDOP_LIVE_OPENROUTER_SMOKE=1; the paid human-run proof (Q4) is outstanding
+live-openrouter-smoke tests/unit/agents/test_live_openrouter_smoke.py
 attribution-log tests/unit/agents/test_llm_gateway.py

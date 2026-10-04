@@ -4,6 +4,27 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Operator input 2026-10-04: live OpenRouter smoke executed; condition 5 met (Q4 done)
+
+- The operator supplied the OpenRouter key (stored in the cluster secret
+  `redop-secrets` in namespace `redop`); it was copied into the git-ignored
+  `.env` (`OPENROUTER_API_KEY` only; `.gitignore` covers `.env`, the key is
+  never committed). `REDOP_LIVE_OPENROUTER_SMOKE` is deliberately not set in
+  `.env`, so unattended cycles do not spend.
+- Evidence: `REDOP_LIVE_OPENROUTER_SMOKE=1 uv run pytest
+  tests/unit/agents/test_live_openrouter_smoke.py -q` -> 1 passed (one live
+  call through `ForkProviderModelGateway.from_fork_registry()` plus
+  `LoggingModelGateway`, asserting the section 6 attribution).
+  `tests/unit/agents/covered-provider-paths.txt` now declares
+  `live-openrouter-smoke` covered; `scripts/check_provider_path_coverage.sh`
+  -> "provider path coverage ok: 3 condition 5 parts declared with tests";
+  the provider-path honesty test was updated to pin the passing state.
+- Effect on the queue: condition 5 is met. `make done` now passes `[1/6]`
+  through `[5/6]` (2370+ tests green, frontend builds, overlay ok) and fails
+  only at `[6/6]`: condition 9, the Atlas deployment. The head blocker is now
+  the Q47-Q50 deploy slice alone. Q28 (methodology-owner placement decision)
+  remains the only other open item, plus the production-readiness drills R1/R2.
+
 ### Cycle 2026-10-04T050209Z (this run)
 
 - Cycle 2026-10-04T050209Z (Ralph cycle, this run): selected item was
@@ -5211,7 +5232,7 @@ stalls:
 | Q1 | Deterministic fake model gateway (port plus test adapter) | agents | — | unit test; agents run offline. Done 2026-10-03T183929Z: `backend/redops/agents/` (`ModelGateway` port, `ModelRequest`/`ModelUsage`/`ModelResponse`, `DeterministicFakeModelGateway`) verified by `tests/unit/agents/test_model_gateway.py` (13 tests) |
 | Q2 | RED LLM adapter logs model, prompt version, usage, trace id | agents | Q1 | adapter contract test. Done 2026-10-03T184310Z: `ForkProviderModelGateway` wraps the fork's `get_provider` behind `ModelGateway`; `LoggingModelGateway` logs tenant/model/prompt version/trace id/context refs/tokens without prompt text; `ModelGatewayRuntimeError` guards a running loop. Verified by `tests/unit/agents/test_llm_gateway.py` (12 tests). Live smoke remains Q4 |
 | Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway. Done 2026-10-04: `backend/redops/agents/domain/red_agents.py` (`RedAgentSpec` roster: Director + slots 1-11, slots 10/11 proposal-only and tool-less), `application/registry.py` (`RedAgentRegistry`) and `application/router.py` (`RedAgentRouter` routing every agent through `ModelGateway`), verified by `tests/unit/agents/test_red_agent_registry.py` (18 tests). Vendor registration through the fork's specialist mechanism is applied by the ADR 0011 overlay (`vendor/overlay/`, `scripts/apply_vendor_overlay.sh`), verified by `tests/unit/shared/test_vendor_overlay.py` (6 tests) and the stage 0-10 e2e agent-path test |
-| Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key. Done 2026-10-03T184450Z: `tests/unit/agents/test_live_openrouter_smoke.py` skips unless `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE` are set, then drives one live call through `ForkProviderModelGateway.from_fork_registry()` plus `LoggingModelGateway` and asserts the section 6 attribution; executing it awaits a real key |
+| Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key. Done 2026-10-03T184450Z: `tests/unit/agents/test_live_openrouter_smoke.py` skips unless `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE` are set, then drives one live call through `ForkProviderModelGateway.from_fork_registry()` plus `LoggingModelGateway` and asserts the section 6 attribution. Executed 2026-10-04 with the operator-supplied key (cluster secret, staged in the git-ignored `.env`): 1 passed; `covered-provider-paths.txt` declares `live-openrouter-smoke` covered, so condition 5 is met |
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). REST `/workflows/{id}` polling read landed 2026-10-03T185701Z (Q15). The fork `workflows/resumer.py` adapter was reassessed and rejected as mis-specified: the resumer is an 809-line fork polling loop, not a per-step executor, so RED's `WorkflowStepExecutor` seam is served by connector adapters (Q16), not a resumer shim |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z). The stage 0 `ClientWorkspace` and the knowledge `SourceRecord` stores completed with Q9 2026-10-03T190017Z (`0010_client_workspaces`, `0011_source_records`); the Production `BuildObject` store completed with Q11 2026-10-03T193035Z (`0013_build_objects`, which also added the required `tenant_id` the aggregate lacked) |
 | Q7 | Tenant scoping on repositories and queries (WHERE clause; RLS deferred) | persistence | Q6 | cross tenant unit plus integration tests |
