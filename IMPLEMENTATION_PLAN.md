@@ -43,6 +43,28 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   in-cluster Postgres 16 with a 10Gi `truenas-nfs` PVC. Loop cluster access is
   provided via the git-ignored `.env` (`KUBECONFIG=~/.kube/atlas-admin.yaml`,
   `~/.local/bin` on PATH); verified `kubectl -n redop` reaches the cluster.
+- Additional deploy choices (2026-10-04): Argo CD auto-sync + self-heal; reuse
+  the `redop.atlas.lan` ingress with `atlas-ca` TLS and the `10.0.0.0/8`
+  allowlist; one replica each for api/ui/worker with small requests; **reuse the
+  existing `redop-postgres`** in namespace `redop` (Deployment
+  `postgres:16.4-alpine`, Service `redop-postgres:5432`, 10Gi `truenas-nfs` PVC,
+  secret `redop-postgres` with `DATABASE_URL`) so Q48 provisions no new
+  database; the migration Job runs on every deploy (idempotent, ADR 0010); object
+  storage deferred; prototype auth disabled and internal-only. Retention/export/
+  deletion policy and the identity provider are deferred to the production phase.
+
+### Owner decision 2026-10-04: Q28 stage 8-10 required-kind placement
+
+- The methodology owner ruled (app repo issue #6): **E2** - `EnrollmentPlan` and
+  `ClientProcess` become required kinds of the **stage 9 Launch Approved** gate;
+  **P2** (interpreted as P1 plus NurturePlan) - `SwimlanesPlan` is wired into the
+  stage 8/9 gates and `NurturePlan` becomes a required kind of the **stage 10
+  Performance Baseline Established** gate. Post-stage-10 Serve/Grow portfolio
+  effects stay out of required kinds (Portfolio context).
+- Effect: Q28 is now unblocked and fully specified; the next cycle wires
+  `enrollment-plan`, `client-process`, `swimlanes-plan` and `nurture-plan` as
+  required kinds pinned from their typed assets with gate-integrity tests. The
+  only other open prototype item is the Q47-Q50 deploy slice (condition 9).
 
 ### Operator input 2026-10-04: live OpenRouter smoke executed; condition 5 met (Q4 done)
 
@@ -5296,7 +5318,7 @@ stalls:
 | Q25 | Stage 8 integrate plus the enrollment and client-process asset and Funnel Complete (gate surface done; workspace/authority hardening done 2026-10-03T192102Z: `RecordStageEightGateRequest` no longer carries `authorities`; `record_stage_eight_gate` resolves the persisted `ClientWorkspace` through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; tests `tests/unit/test_stage_eight_gate_route.py` drop the field. The enrollment and client-process required kinds stay blocked on Q28) | pipeline | Q24 | funnel dry run passes |
 | Q26 | Stage 9 QA plus compliance gate kinds (gate surface and `compliance-package` kind done; workspace/authority hardening done 2026-10-03T192319Z: `RecordStageNineGateRequest` no longer carries `authorities`; `record_stage_nine_gate` resolves the persisted `ClientWorkspace` through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; `tests/unit/test_stage_nine_gate_route.py` drops the field; the stage 10 test's inline authorities were later dropped with Q27) | pipeline | Q25 | Launch Approved; Ready for Traffic |
 | Q27 | Stage 10 launch plus baseline plus the METRICS dimension (gate surface done; workspace/authority hardening done 2026-10-03T192509Z: `RecordStageTenGateRequest` no longer carries `authorities`; `record_stage_ten_gate` resolves the persisted `ClientWorkspace` through `ClientWorkspaceStore` and returns a named 404 `ClientWorkspaceNotFoundError` for an unregistered workspace; `tests/unit/test_stage_ten_gate_route.py` drops the field. Caller-supplied-authority defect closed across stages 0-10) | pipeline | Q26 | Performance Baseline Established |
-| Q28 | Apply the required-kind policy: wire each canon asset as a required kind | pipeline | Q27 | stage templates updated; gate integrity tests. Stage 1 `awareness-map` wired from the typed `MarketAwarenessMap` 2026-10-03T181228Z; `audience-reach-estimate` and `target-market-match` and stages 2-10 remain. Stage 9     `compliance-package` wired from the reviewed `CompliancePackage` 2026-10-03T182015Z; stage 5 `product-program` wired from the typed `ProductProgram` 2026-10-03T182409Z (stage 5 now thirteen kinds); stage 4 `thirteen-transformations` wired from the typed `ThirteenTransformations` 2026-10-03T182806Z (stage 4 now thirteen kinds); stage 6 `content-roadmap` wired from the typed `ContentRoadmap` 2026-10-03T183151Z (thirteen kinds); stage 6 `content-crusher` wired from the typed `ContentCrusher` 2026-10-03T183447Z (fourteen kinds); stage 6 `content-plan` wired from the typed `ContentPlan` 2026-10-03T183643Z (fifteen kinds, stage 6 content family complete); stage 7 is canon-covered by the `AuthorityAmplifierPackage`, and stages 8-10 now await the named methodology-owner placement decision for `EnrollmentPlan`, `ClientProcess`, `SwimlanesPlan` and the post-stage-10 assets |
+| Q28 | Apply the required-kind policy: wire each canon asset as a required kind | pipeline | Q27 | stage templates updated; gate integrity tests. Stage 1 `awareness-map` wired from the typed `MarketAwarenessMap` 2026-10-03T181228Z; `audience-reach-estimate` and `target-market-match` and stages 2-10 remain. Stage 9     `compliance-package` wired from the reviewed `CompliancePackage` 2026-10-03T182015Z; stage 5 `product-program` wired from the typed `ProductProgram` 2026-10-03T182409Z (stage 5 now thirteen kinds); stage 4 `thirteen-transformations` wired from the typed `ThirteenTransformations` 2026-10-03T182806Z (stage 4 now thirteen kinds); stage 6 `content-roadmap` wired from the typed `ContentRoadmap` 2026-10-03T183151Z (thirteen kinds); stage 6 `content-crusher` wired from the typed `ContentCrusher` 2026-10-03T183447Z (fourteen kinds); stage 6 `content-plan` wired from the typed `ContentPlan` 2026-10-03T183643Z (fifteen kinds, stage 6 content family complete); stage 7 is canon-covered by the `AuthorityAmplifierPackage`, and stages 8-10 placement was decided 2026-10-04 (owner decision, app repo issue #6): `EnrollmentPlan` and `ClientProcess` become required kinds of the stage 9 Launch Approved gate (E2); `SwimlanesPlan` is wired into the stage 8/9 gates and `NurturePlan` becomes a required kind of the stage 10 Performance Baseline Established gate (P2); post-stage-10 Serve/Grow effects stay out of required kinds. The wiring lands on the next cycle |
 | Q29 | Method change impact assessment emits the dependent review queue | pipeline | Q21 | a change identifies its dependents |
 | Q30 | Stage 0-10 API e2e with deterministic agents | e2e | Q27 | DoD 1: one client intake to baseline |
 | Q31 | Section 11 acceptance suite (SPEC.md section 11) | e2e | Q30 | DoD 2. Condition 2 gate added 2026-10-03T200006Z: `scripts/check_acceptance_coverage.sh` requires all ten canonical scenarios declared in `tests/acceptance/covered-scenarios.txt`, each covered scenario pointing at a test file that exists with at least one test, so condition 2 cannot pass without the suite. Covered today: all eight prototype scenarios (source-attribution, known-requires-source, unauthorized-approval-rejected, method-change-identifies-dependents, worker-restart-preserves-waiting, launch-blocked-on-failed-path, cross-client-retrieval-empty, duplicate-delivery-one-effect). Condition 2 passes (eight of eight covered). `backup-restores-approval-trail` was removed by ADR 0009 and `gitops-revert-restores` by ADR 0010 (both are production-readiness drills, not prototype scenarios) |
@@ -5328,7 +5350,7 @@ Owned by the RED principal. See ADR 0009 and ADR 0010.
 
 | # | Item | Area | Depends | Evidence / gate |
 | --- | --- | --- | --- | --- |
-| R1 | Choose a database backup target and run a witnessed restore drill | ops | Q49 | restore restores the approval trail; 24h RPO / 8h RTO confirmed |
+| R1 | Choose a database backup target and run a witnessed restore drill | ops | Q49 | restore restores the approval trail; 24h RPO / 8h RTO confirmed. Backup target chosen 2026-10-04: scheduled `pg_dump` logical backups to `truenas-nfs`; the operator witnesses and signs the restore drill. Retention/export/deletion policy deferred to this phase |
 | R2 | GitOps rollback drill plus the live migration round trip | ops | Q49, R1 | revert the image digest; previous compatible version serves; `REDOP_MIGRATION_ROUNDTRIP=1` upgrade -> downgrade -> upgrade passes |
 
 ## Canon reference and gap register
