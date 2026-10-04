@@ -33,6 +33,16 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   performs that promotion (SPEC.md section 10 manual approval).
 - Effect: Q47 is now executable as the next ready item; Q48-Q50 follow. Condition
   9 remains the only prototype condition not met.
+- Q47/Q48 implementation choices (2026-10-04): reuse the `redop-api`/`redop-ui`
+  image names; semver release tags (`v0.1.0-redop.N`); build on push to `main`
+  (the `atlas` remote) with an automatic GitOps digest update in `211lab/atlas`
+  (note: the harness pushes `atlas` only on the final cycle of a `make loop`, so
+  use `make loop` or push `atlas` to trigger CI); same-origin ingress routing
+  (`/red/*` -> api, `/` -> ui, `NEXT_PUBLIC_RED_API_BASE` empty); API on
+  `python:3.12-slim` built with `uv`, UI on `node:22-alpine` Next standalone;
+  in-cluster Postgres 16 with a 10Gi `truenas-nfs` PVC. Loop cluster access is
+  provided via the git-ignored `.env` (`KUBECONFIG=~/.kube/atlas-admin.yaml`,
+  `~/.local/bin` on PATH); verified `kubectl -n redop` reaches the cluster.
 
 ### Operator input 2026-10-04: live OpenRouter smoke executed; condition 5 met (Q4 done)
 
