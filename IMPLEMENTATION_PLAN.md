@@ -4,6 +4,37 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cockpit adoption 2026-10-05: the OpenExecutive cockpit is deployed (ADR 0012)
+
+- The vendored OpenExecutive UI now serves the root (`/`) as the prototype
+  shell, rebranded RED through the ADR 0011 overlay: metadata title, BrandMark,
+  and 22 files of user-facing copy; the Auth.js gate is disabled (internal-only)
+  and the `/api/backend` proxy treats every request as the principal, forwarding
+  to the mounted OpenExecutive backend at `/openexecutive` with `x-api-key`.
+- Navigation keeps the OpenExecutive groups and adds a RED Operations group
+  linking the twelve section 8 screens, now served under `/screens` (the RED
+  frontend builds with `NEXT_PUBLIC_RED_BASE_PATH=/screens`). The generic
+  C-suite persona nav entries (Departments, People, Agent Council) are removed;
+  the backend replacement with RED's agents remains a follow-up.
+- Chart: `redop-cockpit` Deployment/Service; ingress `/red` -> api,
+  `/screens` -> ui, `/api/backend` and `/` -> cockpit. CI builds
+  `redop-cockpit` and syncs the chart templates into the GitOps repo.
+- Verified live: `/` carries `RED Operations` (no `Open Executive`), `/screens`
+  and `/screens/command-center` 200, `/api/backend/health` 200, `/red/health`
+  200, health gate passes; Argo `redop` Synced/Healthy.
+- Findings and follow-ups:
+  - The Postgres password contained `/`, which broke `DATABASE_URL` parsing
+    (psycopg read host `redops`) and alembic's configparser (`%2F`). Fixed by
+    making the password URL-safe and escaping `%` for alembic (`_alembic_url`).
+    The source SealedSecret `gitops/sealed/redop-postgres.yaml` still holds the
+    old value and should be re-sealed.
+  - The Gitea Actions runner OOM-kills the cockpit `next build`; the cockpit
+    image was built locally and pushed via an in-cluster skopeo pod. The runner
+    needs more memory (or `NODE_OPTIONS=--max-old-space-size`) before CI can
+    build the cockpit.
+  - The GitOps repo keeps its own chart copy; CI now syncs the templates, but
+    the chart's source of truth is the app repo (ADR 0012).
+
 ### Owner directive 2026-10-05: navigation shell (Q51) and the cockpit-adoption vision (ADR 0012)
 
 - The owner reported the deployed prototype had no navigable screens: the Q32
@@ -5899,13 +5930,13 @@ plus a RED Operations group.
 
 | # | Item | Area | Depends | Evidence / gate |
 | --- | --- | --- | --- | --- |
-| C1 | Build and deploy the vendored OpenExecutive UI (`vendor/openexecutive/packages/ui`) as the shell | ui | Q51 | image builds; cockpit routes serve; ingress/proxy route added |
-| C2 | Rebrand via the ADR 0011 overlay (BrandMark OE to RED, titles, copy, nav labels) | ui | C1 | overlay check passes; no OpenExecutive branding (condition 8) |
-| C3 | Navigation: OpenExecutive groups plus a RED Operations group linking the twelve screens | ui | C1, Q51 | every screen reachable from the cockpit sidebar |
-| C4 | Replace generic C-suite Departments/Council/People with RED's nine agents plus slots 10/11 | ui | C1 | ADR 0006 follow-up closed; no generic personas in user-facing surfaces |
-| C5 | Disable the vendor Auth.js gate; internal-only behind the 10.0.0.0/8 allowlist | ui | C1 | unauthenticated internal access; no signin |
-| C6 | Wire the cockpit to the mounted `/openexecutive` backend; keep its own OpenExecutive SQLite/Chroma state | deploy | C1 | cockpit reads/writes its own state; RED screens keep `/red` + PostgreSQL |
-| C7 | Reconcile SPEC.md section 2 "Cockpit: Rework into portfolio command center" with the adoption | docs | C1 | spec clause amended or the adoption recorded as the rework |
+| C1 | Build and deploy the vendored OpenExecutive UI (`vendor/openexecutive/packages/ui`) as the shell | ui | Q51 | Done 2026-10-05: `Dockerfile.cockpit`; `redop-cockpit` Deployment/Service; ingress `/` and `/api/backend` -> cockpit |
+| C2 | Rebrand via the ADR 0011 overlay (BrandMark OE to RED, titles, copy, nav labels) | ui | C1 | Done 2026-10-05: title, BrandMark and 22 copy files rebranded; `/` carries `RED Operations`, no `Open Executive` |
+| C3 | Navigation: OpenExecutive groups plus a RED Operations group linking the twelve screens | ui | C1, Q51 | Done 2026-10-05: `navConfig` overlay adds the RED group; screens served under `/screens` |
+| C4 | Replace generic C-suite Departments/Council/People with RED's nine agents plus slots 10/11 | ui | C1 | Partial 2026-10-05: the persona nav entries are removed; the backend replacement with RED's agents remains a follow-up |
+| C5 | Disable the vendor Auth.js gate; internal-only behind the 10.0.0.0/8 allowlist | ui | C1 | Done 2026-10-05: middleware no-op and the `/api/backend` proxy treats requests as the principal |
+| C6 | Wire the cockpit to the mounted `/openexecutive` backend; keep its own OpenExecutive SQLite/Chroma state | deploy | C1 | Done 2026-10-05: `/api/backend/health` 200; cockpit uses the `redop-data` PVC |
+| C7 | Reconcile SPEC.md section 2 "Cockpit: Rework into portfolio command center" with the adoption | docs | C1 | Done 2026-10-05: SPEC.md section 2 row updated to "Adopt as the prototype shell, rebranded RED (ADR 0012)" |
 
 ## Production-readiness phase (after the prototype; not a prototype condition)
 

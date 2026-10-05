@@ -24,7 +24,7 @@ Fork OpenExecutive at a pinned upstream commit and record license, dependencies,
 | Workflow engine and persistence | Adapt to RED definitions | Verify resumability, version pinning, gate semantics, idempotence |
 | Approvals, audit, alerts, scheduling | Preserve behavior where sound | Verify actor identity, immutable records, delivery and retry behavior |
 | Executive persona, generic departments | Replace | Remove obsolete labels and incompatible permissions |
-| Cockpit | Rework into portfolio command center | Verify queries can be tenant scoped and explain each intervention |
+| Cockpit | Adopt as the prototype shell, rebranded RED (ADR 0012) | The OpenExecutive cockpit is reworked into the RED portfolio command center: navigation keeps the OpenExecutive groups plus a RED Operations group linking the section 8 screens; queries stay tenant scoped and explain each intervention |
 
 Retain upstream notices and licensing obligations. Keep a fork diff register with upstream commit, local decision, owner, migration note, and regression evidence. Never delete a working upstream path until its replacement has passed characterization tests. Vendor edits are allowed only through the committed, re-triggerable overlay in `vendor/overlay/` applied by `scripts/apply_vendor_overlay.sh` (ADR 0011); every local change to the pinned submodule must be overlay-declared and reproducible from this repository.
 
