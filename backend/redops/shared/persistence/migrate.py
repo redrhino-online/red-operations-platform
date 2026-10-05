@@ -61,6 +61,19 @@ def _normalise_url(database_url: str) -> str:
     return database_url
 
 
+def _alembic_url(database_url: str) -> str:
+    """Return the URL safe to hand to alembic's configparser.
+
+    alembic's ``Config`` is a configparser, which treats ``%`` as interpolation
+    syntax, so a percent-encoded password (e.g. ``%2F``) raises
+    ``ValueError: invalid interpolation syntax``. Escaping ``%`` as ``%%`` lets
+    configparser decode it back to the original URL, which SQLAlchemy/psycopg
+    then decode to the raw password.
+    """
+
+    return _normalise_url(database_url).replace("%", "%%")
+
+
 def run_migrations(database_url: str | None = None) -> None:
     """Apply every committed migration up to ``head``.
 
@@ -84,7 +97,10 @@ def run_migrations(database_url: str | None = None) -> None:
     config.set_main_option("script_location", str(_MIGRATIONS_DIR))
     config.set_main_option("prepend_sys_path", str(_BACKEND_DIR))
     config.set_main_option("path_separator", "os")
-    config.set_main_option("sqlalchemy.url", _normalise_url(url))
+    # alembic's Config is a configparser, which treats `%` as interpolation
+    # syntax. A percent-encoded password (e.g. `%2F`) must be escaped so it
+    # reaches SQLAlchemy unchanged; psycopg decodes it back to the raw password.
+    config.set_main_option("sqlalchemy.url", _alembic_url(url))
     command.upgrade(config, "head")
 
 

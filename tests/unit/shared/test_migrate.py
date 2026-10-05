@@ -25,6 +25,7 @@ from pathlib import Path
 
 from redops.shared.persistence.migrate import (
     MigrationConfigurationError,
+    _alembic_url,
     run_migrations,
 )
 
@@ -46,6 +47,18 @@ class MigrationConfigurationTests(unittest.TestCase):
             with self.subTest(blank=repr(blank)):
                 with self.assertRaises(MigrationConfigurationError):
                     run_migrations(blank)
+
+    def test_alembic_url_escapes_percent_for_configparser(self) -> None:
+        # A percent-encoded password (e.g. %2F) must be escaped so alembic's
+        # configparser does not raise "invalid interpolation syntax".
+        self.assertEqual(
+            _alembic_url("postgresql://u:p%2Fw@h:5432/db"),
+            "postgresql+psycopg://u:p%%2Fw@h:5432/db",
+        )
+        self.assertEqual(
+            _alembic_url("postgresql://u:pw@h:5432/db"),
+            "postgresql+psycopg://u:pw@h:5432/db",
+        )
 
     def test_main_without_environment_raises(self) -> None:
         from redops.shared.persistence import migrate
