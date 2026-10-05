@@ -45,3 +45,23 @@ class InvalidModelResponseError(AgentModelError, ValueError):
     an agent use case as a model result, so it is refused rather than presented
     as a completion.
     """
+
+
+class InvalidRedAgentSpecError(AgentModelError, ValueError):
+    """A RED agent specification violates the section 5 contract.
+
+    SPEC.md section 5 gives every agent a versioned charter and bounded
+    authority, and reserves capability slots 10 and 11 as proposal-only with no
+    execution permissions. A spec missing its charter, prompt version or name,
+    or a reserved slot that declares a tool, cannot be registered.
+    """
+
+
+class UnknownRedAgentError(AgentModelError, KeyError):
+    """A routing request names an agent the RED registry does not hold.
+
+    The Director routes only to chartered agents; an unknown key is refused
+    rather than answered, so no request reaches an unregistered or retired
+    agent.
+    """
+
