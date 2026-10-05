@@ -14,6 +14,12 @@ from redops.contexts.execution.domain.entities import (
     LaunchQA,
     PerformanceBaseline,
 )
+from redops.contexts.execution.domain.swimlanes import (
+    SWIMLANE_CHANNELS,
+    SwimlaneChannel,
+    SwimlaneMove,
+    SwimlanesPlan,
+)
 from redops.contexts.execution.domain.value_objects import (
     HANDOFF_ORDER,
     MILESTONE_ORDER,
@@ -126,6 +132,48 @@ def funnel_integration(amplifier=None, **overrides) -> FunnelIntegration:
 
 def complete_funnel(**overrides) -> FunnelIntegration:
     return funnel_integration(**overrides).mark_funnel_complete(dry_run())
+
+
+def swimlane_move(
+    channel: SwimlaneChannel = SwimlaneChannel.MESSAGES,
+    *,
+    tenant_id: str = TENANT,
+    stalled_step: str = "traffic",
+    next_step: str = "opt_in",
+    **overrides,
+) -> SwimlaneMove:
+    values = {
+        "move_id": f"move-{channel.value}",
+        "tenant_id": tenant_id,
+        "channel": channel,
+        "stalled_step": stalled_step,
+        "next_step": next_step,
+        "vehicle": "email",
+        "next_action": "send the reason to take the next step",
+    }
+    values.update(overrides)
+    return SwimlaneMove(**values)
+
+
+def swimlane_moves(
+    *, tenant_id: str = TENANT, channels=SWIMLANE_CHANNELS
+) -> tuple[SwimlaneMove, ...]:
+    return tuple(
+        swimlane_move(channel, tenant_id=tenant_id)
+        for channel in channels
+    )
+
+
+def swimlanes_plan(funnel=None, moves=None, **overrides) -> SwimlanesPlan:
+    values = {
+        "plan_id": "swimlanes-3f",
+        "tenant_id": TENANT,
+        "owner": "recovery-owner",
+        "funnel": complete_funnel() if funnel is None else funnel,
+        "moves": swimlane_moves() if moves is None else moves,
+    }
+    values.update(overrides)
+    return SwimlanesPlan(**values)
 
 
 def compliance_asset(

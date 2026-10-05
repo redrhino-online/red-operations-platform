@@ -16,10 +16,13 @@ offline or direct mail (postcards and print); canon file 34 warns "you can't jus
 rely on email" and "you can't be single source dependent".
 
 This is a cross-cutting planning asset over the same-tenant stage 8
-``FunnelIntegration`` used to recover stalled prospects across stages 8 to 10. It
-is a planning decision, not a new required gate kind (a methodology-owner decision,
-SPEC.md section 12.5). It does not authorize sending, publishing, spend or traffic
-(SPEC.md sections 4 and 9) and it is never an observation (SPEC.md section 3).
+``FunnelIntegration`` used to recover stalled prospects across stages 8 to 10. The
+methodology owner ruled it a canon-informed required asset kind of the stage 8
+"Funnel Complete" gate (owner decision 2026-10-04; SPEC.md sections 4 and 12.5),
+so ``SwimlanesPlan.as_stage_asset`` projects the reviewed plan onto exact
+``swimlanes-plan`` evidence. It does not authorize sending, publishing, spend or
+traffic (SPEC.md sections 4 and 9) and it is never an observation (SPEC.md
+section 3).
 """
 
 from __future__ import annotations
@@ -34,6 +37,10 @@ from redops.contexts.execution.domain.errors import (
     SwimlanesObservationError,
     SwimlanesTenantBoundaryError,
 )
+from redops.contexts.governance.domain.value_objects import StageAssetVersion
+
+
+SWIMLANES_PLAN_KIND = "swimlanes-plan"
 
 
 class SwimlaneChannel(Enum):
@@ -214,4 +221,26 @@ class SwimlanesPlan:
         raise SwimlanesObservationError(
             f"swimlanes plan {claim_id!r} is a recovery strategy to run, not an "
             "observed result, and cannot be recorded as an observation"
+        )
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the reviewed plan onto exact ``swimlanes-plan`` evidence.
+
+        The methodology owner ruled the canon Swimlanes channel model a
+        canon-informed required asset kind of the stage 8 "Funnel Complete" gate
+        (owner decision 2026-10-04; SPEC.md sections 4 and 12.5). The reviewed plan
+        is projected at a positive integer version, and a versionless projection is
+        refused rather than silently pinned, so a passing stage 8 gate records the
+        exact recovery strategy it approved (SPEC.md sections 3 and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidSwimlanesError(
+                "the swimlanes plan version must be a positive integer so the "
+                "stage 8 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.plan_id,
+            tenant_id=self.tenant_id,
+            kind=SWIMLANES_PLAN_KIND,
+            version=version,
         )

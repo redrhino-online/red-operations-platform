@@ -36,6 +36,7 @@ if TYPE_CHECKING:
         LaunchQA,
         PerformanceBaseline,
     )
+    from redops.contexts.execution.domain.swimlanes import SwimlanesPlan
 
 
 class FunnelState(Enum):
@@ -149,12 +150,13 @@ CANONICAL_FUNNEL_KINDS: tuple[str, ...] = (
     "tracking",
     "sales-handoff",
     "sops",
+    "swimlanes-plan",
 )
 
 
 @dataclass(frozen=True)
 class FunnelIntegrationPackage:
-    """The reviewed stage 8 funnel, projected to the thirteen canonical gate kinds.
+    """The reviewed stage 8 funnel, projected to the fourteen canonical gate kinds.
 
     SPEC.md section 4, stage 8 "Integrate" and its "Funnel Complete" checkpoint:
     a stage is complete only when its required assets exist, pass the checkpoint
@@ -170,14 +172,17 @@ class FunnelIntegrationPackage:
     The canon (SPEC.md section 12.3: stage 8 uses canon files 13, 14, 21 and 22)
     describes a minimum-viable CAC funnel of opt-in, amplifier, scheduling and
     confirmation pages wired to a CRM and scheduling tool, with PAG
-    (pixel/audience/goal) tracking installed on every page. ``FunnelIntegration``
-    already enforces the same-tenant approved amplifier and dry run at
-    construction and completion, so each canonical kind is projected from the
-    single reviewed funnel at one positive integer version.
+    (pixel/audience/goal) tracking installed on every page. The methodology owner
+    also made the canon Swimlanes channel model a required stage 8 kind (owner
+    decision 2026-10-04; SPEC.md sections 4 and 12.5), so the reviewed
+    ``SwimlanesPlan`` is pinned from its own identity at the ``swimlanes_version``.
+    ``FunnelIntegration`` already enforces the same-tenant approved amplifier and
+    dry run at construction and completion, so each funnel kind is projected from
+    the single reviewed funnel at one positive integer version.
 
     A ``FunnelIntegration`` only owns its completed evidence once
     ``mark_funnel_complete`` passes the checkpoint, so this package refuses a
-    funnel that has not reached ``FunnelState.COMPLETE``: thirteen kinds cannot be
+    funnel that has not reached ``FunnelState.COMPLETE``: fourteen kinds cannot be
     pinned as this client's evidence without a funnel whose capture, engagement
     and conversion handoffs actually routed (SPEC.md section 4). It also refuses a
     blank identity, a versionless funnel or a cross-tenant funnel rather than
@@ -188,6 +193,8 @@ class FunnelIntegrationPackage:
     tenant_id: str
     funnel: "FunnelIntegration"
     funnel_version: int
+    swimlanes: "SwimlanesPlan"
+    swimlanes_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -208,6 +215,25 @@ class FunnelIntegrationPackage:
             raise InvalidFunnelIntegrationPackageError(
                 "the funnel integration version must be a positive integer so "
                 "the stage 8 gate can pin the reviewed asset at an exact version"
+            )
+        from redops.contexts.execution.domain.swimlanes import SwimlanesPlan
+
+        if not isinstance(self.swimlanes, SwimlanesPlan):
+            raise InvalidFunnelIntegrationPackageError(
+                "stage 8 requires a typed swimlanes recovery plan so the "
+                "canon swimlanes-plan kind is pinned from a reviewed plan, not a "
+                "free-text reference"
+            )
+        if self.swimlanes.tenant_id != self.tenant_id:
+            raise FunnelIntegrationPackageTenantBoundaryError(
+                f"stage 8 swimlanes plan {self.swimlanes.plan_id!r} belongs to "
+                f"tenant {self.swimlanes.tenant_id!r}, not package tenant "
+                f"{self.tenant_id!r}"
+            )
+        if not isinstance(self.swimlanes_version, int) or self.swimlanes_version < 1:
+            raise InvalidFunnelIntegrationPackageError(
+                "the swimlanes plan version must be a positive integer so the "
+                "stage 8 gate can pin the reviewed asset at an exact version"
             )
         if not self.funnel.is_complete:
             raise InvalidFunnelIntegrationPackageError(
@@ -241,7 +267,9 @@ class FunnelIntegrationPackage:
         cross-client funnel is refused rather than silently authorized (SPEC.md
         sections 3, 4 and 11).
         """
-        return tuple(
+        from redops.contexts.execution.domain.swimlanes import SWIMLANES_PLAN_KIND
+
+        assets = [
             StageAssetVersion(
                 asset_id=self.funnel.integration_id,
                 tenant_id=self.tenant_id,
@@ -249,7 +277,12 @@ class FunnelIntegrationPackage:
                 version=self.funnel_version,
             )
             for kind in CANONICAL_FUNNEL_KINDS
+            if kind != SWIMLANES_PLAN_KIND
+        ]
+        assets.append(
+            self.swimlanes.as_stage_asset(version=self.swimlanes_version)
         )
+        return tuple(assets)
 
 
 @dataclass(frozen=True)

@@ -220,6 +220,32 @@ class StageEightGateRouteTests(unittest.TestCase):
         body.update(overrides)
         return body
 
+    def _swimlanes(self, **overrides):
+        channels = (
+            ("messages", "traffic", "opt_in"),
+            ("ads", "opt_in", "watch_amplifier"),
+            ("human_outreach", "watch_amplifier", "book_call"),
+            ("offline_direct_mail", "book_call", "show"),
+            ("content", "show", "enroll"),
+        )
+        body = {
+            "plan_id": "swimlanes-3f",
+            "owner": "recovery-owner",
+            "moves": [
+                {
+                    "move_id": f"move-{channel}",
+                    "channel": channel,
+                    "stalled_step": stalled,
+                    "next_step": next_step,
+                    "vehicle": "email",
+                    "next_action": "drive the prospect to the next step",
+                }
+                for channel, stalled, next_step in channels
+            ],
+        }
+        body.update(overrides)
+        return body
+
     def payload(self, **overrides):
         seven = self._seven.payload()
         body = {
@@ -232,6 +258,8 @@ class StageEightGateRouteTests(unittest.TestCase):
             "amplifier": seven["amplifier"],
             "claims": seven["claims"],
             "funnel": self._funnel(),
+            "swimlanes": self._swimlanes(),
+            "swimlanes_version": 1,
             "stage_owner": OWNER,
             "approver": APPROVER,
             "proposed_by": OWNER,

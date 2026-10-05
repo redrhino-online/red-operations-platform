@@ -997,6 +997,36 @@ class FunnelIntegrationInput(BaseModel):
     dry_run: ProspectPathDryRunInput
 
 
+class SwimlaneMoveInput(BaseModel):
+    """One canon swimlane recovery move (SPEC.md section 12.5; canon 13, 14).
+
+    The methodology owner made the canon Swimlanes channel model a required stage 8
+    kind (owner decision 2026-10-04). A move names one typed channel, the stalled
+    step, the next step it drives to, the vehicle and the next action; the domain,
+    not the transport layer, refuses an untyped channel or a move that moves no one.
+    """
+
+    move_id: str
+    channel: str
+    stalled_step: str
+    next_step: str
+    vehicle: str
+    next_action: str
+
+
+class SwimlanesPlanInput(BaseModel):
+    """The reviewed swimlanes recovery plan over the stage 8 funnel.
+
+    The plan carries its identity, owner and at least one typed recovery move; the
+    route grounds it on the completed stage 8 funnel, so the domain decides whether
+    the plan is a whole recovery strategy rather than a single-channel one.
+    """
+
+    plan_id: str
+    owner: str
+    moves: list[SwimlaneMoveInput]
+
+
 class RecordStageEightGateRequest(BaseModel):
     """The stage 8 "Funnel Complete" gate request (SPEC.md section 4).
 
@@ -1023,6 +1053,8 @@ class RecordStageEightGateRequest(BaseModel):
     amplifier: AuthorityAmplifierInput
     claims: list[ClaimInput] = Field(default_factory=list)
     funnel: FunnelIntegrationInput
+    swimlanes: SwimlanesPlanInput
+    swimlanes_version: int
     stage_owner: str
     approver: str
     scope: str

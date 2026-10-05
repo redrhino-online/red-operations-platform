@@ -218,6 +218,11 @@ from redops.contexts.execution.domain.value_objects import (
     QA_CHECK_ORDER,
     TrafficAuthorization,
 )
+from redops.contexts.execution.domain.swimlanes import (
+    SwimlaneChannel,
+    SwimlaneMove,
+    SwimlanesPlan,
+)
 from redops.contexts.execution.infrastructure.repositories import (
     funnel_integration_repository_from_env,
     journey_release_repository_from_env,
@@ -2838,8 +2843,13 @@ def record_stage_eight_gate(
     section 12.3). The route rebuilds the reviewed funnel, grounds it on the
     rebuilt approved stage 7 amplifier and drives ``mark_funnel_complete`` with the
     prospect path dry run, so the ``FunnelCompletionPolicy`` -- not the transport
-    layer -- decides whether the thirteen canonical kinds may be pinned as passing
-    evidence. The route resolves the approved method, production ready offer,
+    layer -- decides whether the fourteen canonical kinds may be pinned as passing
+    evidence. The route also rebuilds the reviewed swimlanes recovery plan over the
+    same completed funnel and pins its ``swimlanes-plan`` kind at the
+    ``swimlanes_version``, because the methodology owner made the canon Swimlanes
+    channel model a required stage 8 kind (owner decision 2026-10-04; SPEC.md
+    sections 4 and 12.5). The route resolves the approved method, production ready
+    offer,
     approved stage 6 message and approved stage 7 amplifier from their stores by
     exact identity; every integrity rule -- the funnel's own completion, the
     grounded stage 7 dependency, the canonical kinds, exact versions,
@@ -2883,11 +2893,31 @@ def record_stage_eight_gate(
         funnel = _complete_stage_eight_funnel(
             tenant_id, body.funnel, amplifier, funnel_repository
         )
+        swimlanes = SwimlanesPlan(
+            plan_id=body.swimlanes.plan_id,
+            tenant_id=tenant_id,
+            owner=body.swimlanes.owner,
+            funnel=funnel,
+            moves=tuple(
+                SwimlaneMove(
+                    move_id=move.move_id,
+                    tenant_id=tenant_id,
+                    channel=SwimlaneChannel(move.channel),
+                    stalled_step=move.stalled_step,
+                    next_step=move.next_step,
+                    vehicle=move.vehicle,
+                    next_action=move.next_action,
+                )
+                for move in body.swimlanes.moves
+            ),
+        )
         package = FunnelIntegrationPackage(
             package_id=body.funnel_package_id,
             tenant_id=tenant_id,
             funnel=funnel,
             funnel_version=body.funnel_version,
+            swimlanes=swimlanes,
+            swimlanes_version=body.swimlanes_version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 8, tenant_id

@@ -13,10 +13,11 @@ inform stages 8 and 10), shaped by the canon:
   source dependent", so the plan must use all five canon channels to some degree.
 
 The plan is a cross-cutting planning asset over the stage 8 `FunnelIntegration`.
-It is a planning decision, not a new required gate kind (a methodology-owner
-decision, SPEC.md section 12.5), it does not authorize sending, publishing, spend
-or traffic (SPEC.md sections 4 and 9) and it is never an observation (SPEC.md
-section 3).
+The methodology owner ruled it a canon-informed required asset kind of the stage 8
+"Funnel Complete" gate (owner decision 2026-10-04; SPEC.md sections 4 and 12.5), so
+`SwimlanesPlan.as_stage_asset` projects it onto exact `swimlanes-plan` evidence. It
+does not authorize sending, publishing, spend or traffic (SPEC.md sections 4 and 9)
+and it is never an observation (SPEC.md section 3).
 """
 
 import unittest
@@ -32,6 +33,7 @@ from redops.contexts.execution.domain.errors import (
 from redops.contexts.execution.domain.policies import SwimlaneCoveragePolicy
 from redops.contexts.execution.domain.swimlanes import (
     SWIMLANE_CHANNELS,
+    SWIMLANES_PLAN_KIND,
     SwimlaneChannel,
     SwimlaneMove,
     SwimlanesPlan,
@@ -182,6 +184,21 @@ class SwimlanesPlanTests(unittest.TestCase):
         self.assertTrue(swimlanes_plan().is_plan)
         with self.assertRaises(SwimlanesObservationError):
             swimlanes_plan().as_observation(claim_id="claim-1")
+
+    def test_as_stage_asset_projects_the_plan_identity_at_an_exact_version(self):
+        asset = swimlanes_plan().as_stage_asset(version=2)
+
+        self.assertEqual(SWIMLANES_PLAN_KIND, asset.kind)
+        self.assertEqual("swimlanes-plan", asset.kind)
+        self.assertEqual("swimlanes-3f", asset.asset_id)
+        self.assertEqual(TENANT, asset.tenant_id)
+        self.assertEqual(2, asset.version)
+
+    def test_as_stage_asset_refuses_a_versionless_projection(self):
+        for version in (0, -1):
+            with self.subTest(version=version):
+                with self.assertRaises(InvalidSwimlanesError):
+                    swimlanes_plan().as_stage_asset(version=version)
 
     def test_a_plan_is_immutable(self):
         with self.assertRaises(FrozenInstanceError):

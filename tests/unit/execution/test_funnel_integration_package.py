@@ -14,12 +14,15 @@ Like the stage 1 ``DiagnosisPackage`` (cycle 69), stage 2 ``CurrencyPackage``
 (cycle 71), stage 3 ``DiagnosticPackage`` (cycle 73), stage 4 ``SignaturePackage``
 (cycle 75), stage 5 ``OfferPackage`` (cycle 77), stage 6 ``CampaignMessagePackage``
 (cycle 79) and stage 7 ``AuthorityAmplifierPackage`` (cycle 81) bridges, this
-package projects the reviewed stage 8 ``FunnelIntegration`` onto the thirteen
+package projects the reviewed stage 8 ``FunnelIntegration`` onto the fourteen
 canonical stage 8 asset kinds as exact ``StageAssetVersion`` evidence so a
-canonical gate can be assembled. A ``FunnelIntegration`` only reaches
+canonical gate can be assembled. The methodology owner also made the canon
+Swimlanes channel model a required stage 8 kind (owner decision 2026-10-04), so the
+``swimlanes-plan`` kind is pinned from the reviewed ``SwimlanesPlan`` identity. A
+``FunnelIntegration`` only reaches
 ``FunnelState.COMPLETE`` after ``mark_funnel_complete`` passes the checkpoint on a
 same-tenant prospect path dry run, so the package refuses a funnel that has not
-passed "Funnel Complete" rather than pinning thirteen kinds for an incomplete
+passed "Funnel Complete" rather than pinning fourteen kinds for an incomplete
 funnel (SPEC.md section 4: a missing asset prevents gate completion and a waiver
 never makes an absent asset appear present). It also refuses a blank identity, a
 versionless funnel and a cross-tenant funnel.
@@ -61,6 +64,8 @@ from .fixtures import (
     funnel_assets,
     funnel_integration,
     handoff,
+    swimlane_moves,
+    swimlanes_plan,
 )
 
 OTHER_TENANT = "client-other"
@@ -116,18 +121,20 @@ def package(**overrides) -> FunnelIntegrationPackage:
         "tenant_id": TENANT,
         "funnel": complete_funnel(),
         "funnel_version": 1,
+        "swimlanes": swimlanes_plan(),
+        "swimlanes_version": 1,
     }
     values.update(overrides)
     return FunnelIntegrationPackage(**values)
 
 
 class FunnelIntegrationPackageProjectionTests(unittest.TestCase):
-    def test_the_package_projects_all_thirteen_canonical_stage_eight_kinds(self):
+    def test_the_package_projects_all_fourteen_canonical_stage_eight_kinds(self):
         assets = package().stage_asset_versions()
 
         kinds = {asset.kind for asset in assets}
         self.assertEqual(frozenset(CANONICAL_FUNNEL_KINDS), kinds)
-        self.assertEqual(13, len(assets))
+        self.assertEqual(14, len(assets))
 
     def test_the_canonical_kinds_match_the_template_stage_eight_package(self):
         template_kinds = stage_zero_to_ten_template().required_asset_kinds(8)
@@ -135,17 +142,21 @@ class FunnelIntegrationPackageProjectionTests(unittest.TestCase):
         self.assertEqual(template_kinds, frozenset(CANONICAL_FUNNEL_KINDS))
 
     def test_every_kind_pins_the_reviewed_funnel_at_its_exact_version(self):
-        assets = package(funnel_version=4).stage_asset_versions()
+        assets = package(funnel_version=4, swimlanes_version=3).stage_asset_versions()
 
-        self.assertEqual(13, len(assets))
+        self.assertEqual(14, len(assets))
         for asset in assets:
-            self.assertEqual(4, asset.version)
+            expected = 3 if asset.kind == "swimlanes-plan" else 4
+            self.assertEqual(expected, asset.version)
 
     def test_each_kind_pins_the_reviewed_funnel_identity(self):
         assets = package().stage_asset_versions()
 
         for asset in assets:
-            self.assertEqual("funnel-3f", asset.asset_id)
+            if asset.kind == "swimlanes-plan":
+                self.assertEqual("swimlanes-3f", asset.asset_id)
+            else:
+                self.assertEqual("funnel-3f", asset.asset_id)
 
     def test_the_projected_evidence_is_tenant_scoped(self):
         for asset in package().stage_asset_versions():
@@ -178,6 +189,22 @@ class FunnelIntegrationPackageBoundaryTests(unittest.TestCase):
             with self.subTest(override=override):
                 with self.assertRaises(InvalidFunnelIntegrationPackageError):
                     package(**override)
+
+    def test_a_versionless_swimlanes_plan_is_refused(self):
+        for override in ({"swimlanes_version": 0}, {"swimlanes_version": -1}):
+            with self.subTest(override=override):
+                with self.assertRaises(InvalidFunnelIntegrationPackageError):
+                    package(**override)
+
+    def test_a_cross_tenant_swimlanes_plan_is_refused(self):
+        plan = swimlanes_plan(
+            funnel=other_tenant_complete_funnel(),
+            tenant_id=OTHER_TENANT,
+            moves=swimlane_moves(tenant_id=OTHER_TENANT),
+        )
+
+        with self.assertRaises(FunnelIntegrationPackageTenantBoundaryError):
+            package(swimlanes=plan)
 
     def test_a_draft_funnel_is_refused(self):
         with self.assertRaises(InvalidFunnelIntegrationPackageError):

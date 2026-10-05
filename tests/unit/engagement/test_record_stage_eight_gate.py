@@ -12,7 +12,7 @@ client-designated authority and an agent cannot confer human approval upon
 itself; every output has an owner and a source.
 
 Cycle 83 added the Execution ``FunnelIntegrationPackage`` bridge that projects the
-reviewed stage 8 ``FunnelIntegration`` onto the thirteen canonical stage 8 asset
+reviewed stage 8 ``FunnelIntegration`` onto the fourteen canonical stage 8 asset
 kinds as exact ``StageAssetVersion`` evidence, so a canonical stage 8 gate can now
 be assembled. This cycle wires the stage 8 "Funnel Complete" gate end to end,
 mirroring the stage 7 path: a pure Engagement assembler validates the reviewed
@@ -84,6 +84,8 @@ from ..execution.fixtures import (
     complete_funnel,
     funnel_assets,
     handoff,
+    swimlane_moves,
+    swimlanes_plan,
 )
 from ..method.fixtures import signature_solution
 from ..production.fixtures import (
@@ -166,6 +168,8 @@ def package(**overrides) -> FunnelIntegrationPackage:
         "tenant_id": TENANT,
         "funnel": complete_funnel(),
         "funnel_version": 1,
+        "swimlanes": swimlanes_plan(),
+        "swimlanes_version": 1,
     }
     values.update(overrides)
     return FunnelIntegrationPackage(**values)
@@ -177,6 +181,12 @@ def other_tenant_package(**overrides) -> FunnelIntegrationPackage:
         "tenant_id": OTHER_TENANT,
         "funnel": other_tenant_complete_funnel(),
         "funnel_version": 1,
+        "swimlanes": swimlanes_plan(
+            funnel=other_tenant_complete_funnel(),
+            tenant_id=OTHER_TENANT,
+            moves=swimlane_moves(tenant_id=OTHER_TENANT),
+        ),
+        "swimlanes_version": 1,
     }
     values.update(overrides)
     return FunnelIntegrationPackage(**values)
@@ -272,19 +282,22 @@ class StageEightGateAssemblerTests(unittest.TestCase):
             self.template.required_asset_kinds(8),
             {ref.asset_id for ref in gate.required_assets},
         )
-        self.assertEqual(13, len(gate.required_assets))
+        self.assertEqual(14, len(gate.required_assets))
         self.assertEqual(
             frozenset(CANONICAL_FUNNEL_KINDS),
             {ref.asset_id for ref in gate.required_assets},
         )
 
     def test_the_gate_pins_the_exact_version_the_reviewed_funnel_carries(self):
-        gate = self.assemble(package_=package(funnel_version=5))
+        gate = self.assemble(
+            package_=package(funnel_version=5, swimlanes_version=2)
+        )
 
         versions = {ref.asset_id: ref.version for ref in gate.required_assets}
-        self.assertEqual(13, len(versions))
+        self.assertEqual(14, len(versions))
         for kind, version in versions.items():
-            self.assertEqual(5, version, msg=kind)
+            expected = 2 if kind == "swimlanes-plan" else 5
+            self.assertEqual(expected, version, msg=kind)
 
     def test_the_assembler_records_the_author_distinct_from_the_approver(self):
         gate = self.assemble(proposed_by=OWNER)
@@ -342,7 +355,7 @@ class StageEightGateRecorderTests(unittest.TestCase):
             ledger=ledger,
             scope=overrides.pop("scope", SCOPE_EIGHT),
             checkpoint_evidence=overrides.pop(
-                "checkpoint_evidence", "all thirteen stage 8 kinds reviewed"
+                "checkpoint_evidence", "all fourteen stage 8 kinds reviewed"
             ),
             rationale=overrides.pop(
                 "rationale", "the prospect path completed capture, engagement and conversion handoffs"
@@ -371,7 +384,7 @@ class StageEightGateRecorderTests(unittest.TestCase):
 
         decision = self.record(self.assembled_gate(), ledger)
 
-        self.assertEqual(13, len(decision.asset_approvals))
+        self.assertEqual(14, len(decision.asset_approvals))
         for request in decision.asset_approvals:
             self.assertEqual(SCOPE_EIGHT, request.scope)
             self.assertEqual(APPROVER, request.approver)
@@ -451,7 +464,7 @@ class RecordStageEightGateHandlerTests(unittest.TestCase):
             "approver": APPROVER,
             "proposed_by": OWNER,
             "scope": SCOPE_EIGHT,
-            "checkpoint_evidence": "all thirteen stage 8 kinds reviewed",
+            "checkpoint_evidence": "all fourteen stage 8 kinds reviewed",
             "rationale": "the prospect path completed capture, engagement and conversion handoffs",
             "assigned_owner": OWNER,
             "due_on": DUE,

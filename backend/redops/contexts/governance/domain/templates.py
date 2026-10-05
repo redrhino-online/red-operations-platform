@@ -244,6 +244,7 @@ def stage_zero_to_ten_template(
                         "tracking",
                         "sales-handoff",
                         "sops",
+                        "swimlanes-plan",
                     }
                 ),
             ),
