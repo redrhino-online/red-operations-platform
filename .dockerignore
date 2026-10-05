@@ -1,0 +1,23 @@
+# Keep the Docker build context small. The pinned OpenExecutive submodule is
+# ~1.9 GB on disk, almost all of it a local .venv and tool caches that must
+# never enter an image; only its source tree is needed. See SPEC.md section 10
+# and the Q47 deploy slice in IMPLEMENTATION_PLAN.md.
+.git
+.gitignore
+.ralph
+.serena
+.pytest_cache
+.venv
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.mypy_cache
+**/.pytest_cache
+**/.ruff_cache
+**/node_modules
+**/.next
+site
+project_sources
+.env
+.env.*
+!.env.example

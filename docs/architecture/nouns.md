@@ -202,6 +202,8 @@ Stages are **production checkpoints**, not the client's nine-step transformation
 | **image registry** (`registry.atlas.lan`) | The forge's OCI registry. | Source of the deployed `redop-api`/`redop-ui` images. |
 | **GitOps repo** (`211lab/atlas`) | Holds `apps/redop/chart` and `gitops/apps/redop.yaml`. | The desired state Argo reconciles; a release pins an image digest/tag here. |
 | **Helm chart** | web/api/worker, migration Job, ingress, PDB, probes. | The deployable unit. |
+| **`Dockerfile.api` / `Dockerfile.ui`** | Multi-stage images: the RED API (`uv sync --locked`, `redops.api.app:app`) and the Next.js standalone UI. | The buildable units CI pushes to the registry (Q47). |
+| **build workflow** (`.gitea/workflows/build.yaml`) | Gitea Actions job that builds/pushes both images and promotes `apiTag`/`uiTag` into the GitOps chart. | Turns a push to the `atlas` remote into a reconciled release (Q47). |
 | **migration Job** | Runs migrations before the API serves. | Condition 9 requires migration-before-serve ordering. |
 | **SealedSecret** | Encrypted Kubernetes secret committed to Git. | Secrets never land in Git in plaintext. |
 | **ingress / Traefik / cert-manager (`atlas-ca`)** | HTTP entry, router, internal CA. | Serves `redop.atlas.lan` on the lab network only. |

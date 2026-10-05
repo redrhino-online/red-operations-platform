@@ -1,0 +1,74 @@
+# RED Operations Platform image build and GitOps promotion (Q47; SPEC.md
+# sections 10 and 13 condition 9; owner decision 2026-10-04).
+#
+# Modeled on the platform's reference workflow
+# (`examples/demo-app/.gitea/workflows/build.yaml` in the GitOps repo). On a
+# push to `main` (the `atlas` remote) or a `v*` tag it builds the RED API and
+# UI images, pushes them to the in-cluster registry, and promotes the resulting
+# tag into the GitOps repo so Argo CD reconciles the new release. The harness
+# publishes the `atlas` remote only on the final cycle of a `make loop`, so this
+# workflow runs then; a manual `git push atlas main` triggers it too.
+#
+# Required repository secrets (same names as the reference workflow):
+#   REGISTRY_USER   - registry.atlas.lan user
+#   REGISTRY_TOKEN  - registry.atlas.lan token, also used to clone the Gitea
+#                     repos over HTTP (oauth2:<token>)
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    container:
+      image: docker:25-git
+    env:
+      REGISTRY: registry.atlas.lan
+      REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+      REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+      GITEA_URL: http://gitea-http.gitea.svc.cluster.local:3000
+    steps:
+      - name: Checkout
+        run: |
+          git clone "http://oauth2:${REGISTRY_TOKEN}@gitea-http.gitea.svc.cluster.local:3000/atlas-admin/red-operations-platform.git" .
+
+      - name: Configure registry auth
+        run: |
+          mkdir -p ~/.docker
+          AUTH=$(printf '%s:%s' "${REGISTRY_USER}" "${REGISTRY_TOKEN}" | base64 | tr -d '\n')
+          printf '{"auths":{"%s":{"auth":"%s"}}}' "${REGISTRY}" "${AUTH}" > ~/.docker/config.json
+
+      - name: Build and push
+        run: |
+          set -e
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="sha-$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          fi
+          echo "Building RED images at ${TAG}"
+          docker build -f Dockerfile.api -t "${REGISTRY}/atlas-admin/redop-api:${TAG}" .
+          docker push "${REGISTRY}/atlas-admin/redop-api:${TAG}"
+          docker build -f Dockerfile.ui -t "${REGISTRY}/atlas-admin/redop-ui:${TAG}" .
+          docker push "${REGISTRY}/atlas-admin/redop-ui:${TAG}"
+
+      # GitOps promotion: commit the new tag into the platform repo. Gitea then
+      # webhooks Argo CD, which syncs. No registry poller.
+      - name: Promote tag to GitOps repo
+        run: |
+          set -e
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="sha-$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          fi
+          git clone "http://oauth2:${REGISTRY_TOKEN}@gitea-http.gitea.svc.cluster.local:3000/atlas-admin/atlas.git" /tmp/gitops
+          cd /tmp/gitops
+          sed -i -E "s|^apiTag: .*|apiTag: ${TAG}|; s|^uiTag: .*|uiTag: ${TAG}|" apps/redop/chart/values.yaml
+          if git diff --quiet; then echo "already at ${TAG}"; exit 0; fi
+          git -c user.email=ci@atlas.lan -c user.name=atlas-ci commit -am "ci: promote redop ${TAG}"
+          git push origin main

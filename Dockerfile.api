@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1.6
+# RED API image (Q47; SPEC.md sections 6, 10 and 13 condition 9).
+#
+# Builds the RED FastAPI app (`redops.api.app:app`), which composes the pinned
+# OpenExecutive shell through the composition seam (ADR 0008) and serves RED's
+# own REST surface under `/red`, including the `/red/health` liveness probe the
+# Atlas deployment smoke checks. The image is built from this repository's
+# `uv.lock`, so the pinned OpenExecutive submodule and every transitive
+# dependency (torch CPU, chromadb, sentence-transformers, ...) resolve exactly
+# as they do in CI. `redops` is imported from `backend/` via PYTHONPATH, the
+# same way `make check` runs it, so the project itself is not installed.
+#
+# The build context is the repository root; `.dockerignore` keeps the submodule
+# `.venv` and tool caches out of it.
+FROM python:3.12-slim AS api
+
+WORKDIR /app
+
+# git and curl: the OpenExecutive shell's MCP gateway launches tools via `uvx`
+# and the deployment health check uses curl. python:*-slim ships neither.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir uv
+
+# Copy the lock and the editable OpenExecutive source before syncing: the lock
+# installs `openexecutive` as an editable path dependency, so its source must be
+# present. `--locked` fails the build if uv.lock is stale relative to
+# pyproject.toml; `--no-dev` drops test-only deps; `--no-install-project` skips
+# the virtual RED project (imported from backend/ instead); `--inexact` leaves
+# the pip-installed `uv` in place. UV_PROJECT_ENVIRONMENT targets the system
+# interpreter so the runtime CMD finds the packages.
+COPY pyproject.toml uv.lock ./
+COPY vendor/openexecutive/packages/core/ ./vendor/openexecutive/packages/core/
+COPY backend/ ./backend/
+RUN UV_PROJECT_ENVIRONMENT=/usr/local \
+    uv sync --locked --no-dev --no-install-project --inexact
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/backend
+
+EXPOSE 8000
+
+CMD ["uvicorn", "redops.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

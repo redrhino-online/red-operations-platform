@@ -35,7 +35,62 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 - **Maintenance rule:** a cycle that adds a noun (aggregate, seam, env var,
   pipeline concept) adds its row to `docs/architecture/nouns.md`.
 
-### Cycle 2026-10-05T034410Z (this run)
+### Cycle 2026-10-05T040540Z (this run)
+
+- Cycle 2026-10-05T040540Z (Ralph cycle, this run): selected item was Q47, the
+  RED API and UI container images plus the Gitea build/promote workflow (SPEC.md
+  sections 10 and 13 condition 9; owner decision 2026-10-04). It is the highest
+  value ready item: condition 9 is the only unmet prototype condition, and Q47 is
+  its first and smallest independently verifiable slice. The owner decision
+  unblocked the whole Q47-Q50 slice for the build loop, and the loop now has
+  cluster access (kubectl via the git-ignored `.env` `KUBECONFIG`), a working
+  Docker daemon and a reachable registry, so the prior "no cluster context"
+  blocker is stale. It outranks Q48-Q50 (larger, follow this slice) and all
+  non-condition work.
+- Outcome: new `Dockerfile.api` (python:3.12-slim; `uv sync --locked` from the
+  committed root lock with the editable OpenExecutive source present;
+  `PYTHONPATH=/app/backend`; `uvicorn redops.api.app:app`), `Dockerfile.ui`
+  (node:22-alpine multi-stage Next.js standalone), `.dockerignore` (keeps the
+  pinned submodule's ~1.9 GB local `.venv` and tool caches out of the build
+  context), `.gitea/workflows/build.yaml` (modeled on the platform reference
+  workflow `examples/demo-app/.gitea/workflows/build.yaml`; builds and pushes
+  `redop-api` and `redop-ui` to `registry.atlas.lan` and promotes `apiTag`/
+  `uiTag` into `apps/redop/chart/values.yaml` in the Gitea GitOps repo
+  `atlas-admin/atlas`), and `tests/unit/shared/test_deploy_artifacts.py` (six
+  structural guards). No domain, gate, approval, pipeline stage, vendored file,
+  migration or method artifact changed.
+- Evidence: `docker build -f Dockerfile.api` exit 0; the container's
+  `/red/health` returns `{"status":"ok"}` HTTP 200; `docker build -f
+  Dockerfile.ui` exit 0; the UI container's `/` returns `<title>RED Operations
+  Platform</title>` and carries the `RED Operations` marker; `make check` ->
+  2396 passed, 3 skipped, 741 subtests (was 2390; +6); `uv run pyflakes` clean.
+  `make done` still stops at `[6/6]`: `redop.atlas.lan` still serves the
+  OpenExecutive shell (`<title>Open Executive</title>`, no RED marker), so
+  condition 9 is honestly unmet.
+- New findings: the Atlas cluster is reachable from the loop and the existing
+  `redop` deployment is the OpenExecutive shell (images
+  `registry.atlas.lan/atlas-admin/redop-api|redop-ui:v0.4.6-redop.2`) with an
+  Argo CD Application `redop` Synced/Healthy pointing at Gitea
+  `atlas-admin/atlas` path `apps/redop/chart`; the existing chart is
+  `apps/redop/chart` in the GitOps repo and already exposes `apiTag`/`uiTag`.
+  The reference build/promote workflow is
+  `examples/demo-app/.gitea/workflows/build.yaml`. The workflow cannot be
+  exercised unattended because the harness publishes the `atlas` remote only on
+  the final loop cycle; the images themselves are verified locally.
+- Blockers: condition 9 remains unmet. Q48 (RED Helm chart under `deploy/`,
+  replacing the OpenExecutive chart in the same namespace/ingress/release), Q49
+  (Argo CD Application with migration-before-serve ordering) and Q50 (secrets,
+  `REDOP_HEALTH_URL` and the deployment smoke) follow. No prototype condition
+  other than 9 is unmet.
+- Highest priority ready next item: Q48, the RED Helm chart (SPEC.md section 10;
+  owner decision 2026-10-04). Prerequisites: Q47 met. Required artifact: a chart
+  with api/ui/worker, a migration Job that runs before the API serves, ingress,
+  probes, PDB, resources, reusing the existing `redop-postgres` and
+  `redop-secrets`. Checkpoint: `helm template` renders and the migration-before-
+  serve ordering is enforced. Approver: the RED principal for the cluster
+  release. Blocked downstream dependency: Q49/Q50 and condition 9.
+
+### Cycle 2026-10-05T034410Z
 
 - Cycle 2026-10-05T034410Z (Ralph cycle, this run): selected item was the last
   slice of Q28: wire the canon follow-up and nurture lifecycle as a required
