@@ -246,6 +246,99 @@ class StageNineGateRouteTests(unittest.TestCase):
         body.update(overrides)
         return body
 
+    def _program(self, **overrides):
+        step_names = [
+            "Extract the diagnosis",
+            "Draft the map",
+            "Name the phases",
+            "Write the steps",
+            "Bind the inputs",
+            "Define the actions",
+            "Pin the outputs",
+            "Write the narrative",
+            "Draw the visual",
+        ]
+        body = {
+            "program_id": "program-3f",
+            "version": 1,
+            "owner": "red-offer-owner",
+            "model": "group_consulting",
+            "pricing_basis": "outcome_value",
+            "duration_weeks": 9,
+            "cadence": "monday_training_thursday_coaching",
+            "modules": [
+                {
+                    "module_id": f"module-{index + 1}",
+                    "signature_step": name,
+                    "position": index + 1,
+                    "outcome": f"the client reaches {name}",
+                    "deliverable": f"the {name} worksheet",
+                }
+                for index, name in enumerate(step_names)
+            ],
+        }
+        body.update(overrides)
+        return body
+
+    def _client_process(self, **overrides):
+        body = {
+            "process_id": "process-3f",
+            "owner": "red-process-owner",
+            "approver": AUTHORITY,
+            "strategy": "paid-strategy-session",
+            "homework": {
+                "signature_step": "Extract the diagnosis",
+                "questions": [
+                    "what is your current measure?",
+                    "what is stopping you?",
+                ],
+                "booking_window_days": 3,
+            },
+            "steps": [
+                {
+                    "step_kind": kind,
+                    "purpose": f"run the {kind} part",
+                    "prompt": f"the client's own wording for {kind}",
+                }
+                for kind in (
+                    "frame",
+                    "discover-problems",
+                    "prescription",
+                    "application",
+                    "invitation",
+                    "objection-crusher",
+                )
+            ],
+            "checkpoints": [
+                {
+                    "kind": kind,
+                    "question": f"the client's question for {kind}",
+                    "on_fail_action": "step back and reset before continuing",
+                }
+                for kind in (
+                    "intent",
+                    "commitment",
+                    "value",
+                    "confidence",
+                    "desire",
+                )
+            ],
+            "acceptance_criteria": ["existing business with a delivered offer"],
+            "rejection_criteria": ["no product and no revenue"],
+            "objections": [
+                {
+                    "concern": "how much does it cost?",
+                    "answer": "the client asks how many clients make it pay",
+                }
+            ],
+            "terms": {
+                "price_floor": 3000,
+                "no_show_rules": ["confirm within the booking window"],
+            },
+        }
+        body.update(overrides)
+        return body
+
     def payload(self, **overrides):
         eight = self._eight.payload()
         body = {
@@ -262,6 +355,9 @@ class StageNineGateRouteTests(unittest.TestCase):
             "swimlanes_version": eight["swimlanes_version"],
             "enrollment": self._enrollment(),
             "enrollment_version": 1,
+            "product_program": self._program(),
+            "client_process": self._client_process(),
+            "client_process_version": 1,
             "qa": self._qa(),
             "stage_owner": OWNER,
             "approver": APPROVER,

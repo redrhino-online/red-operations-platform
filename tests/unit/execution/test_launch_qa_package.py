@@ -26,6 +26,7 @@ import unittest
 from dataclasses import FrozenInstanceError
 
 from redops.contexts.execution.domain.entities import LaunchQA
+from redops.contexts.execution.domain.client_process import CLIENT_PROCESS_KIND
 from redops.contexts.execution.domain.enrollment import ENROLLMENT_PLAN_KIND
 from redops.contexts.execution.domain.errors import (
     InvalidLaunchQAPackageError,
@@ -52,6 +53,10 @@ from .fixtures import (
     swimlanes_plan,
 )
 from .test_enrollment import enrollment_plan
+from .test_client_process import (
+    client_process,
+    other_tenant_client_process,
+)
 from .test_funnel_integration_package import other_tenant_complete_funnel
 from ..method.fixtures import signature_solution
 
@@ -96,18 +101,20 @@ def package(**overrides) -> LaunchQAPackage:
         "swimlanes_version": 1,
         "enrollment": enrollment_plan(),
         "enrollment_version": 1,
+        "client_process": client_process(),
+        "client_process_version": 1,
     }
     values.update(overrides)
     return LaunchQAPackage(**values)
 
 
 class LaunchQAPackageProjectionTests(unittest.TestCase):
-    def test_the_package_projects_all_nineteen_canonical_stage_nine_kinds(self):
+    def test_the_package_projects_all_twenty_canonical_stage_nine_kinds(self):
         assets = package().stage_asset_versions()
 
         kinds = {asset.kind for asset in assets}
         self.assertEqual(frozenset(CANONICAL_LAUNCH_KINDS), kinds)
-        self.assertEqual(19, len(assets))
+        self.assertEqual(20, len(assets))
 
     def test_the_canonical_kinds_match_the_template_stage_nine_package(self):
         template_kinds = stage_zero_to_ten_template().required_asset_kinds(9)
@@ -129,13 +136,23 @@ class LaunchQAPackageProjectionTests(unittest.TestCase):
         self.assertEqual(
             frozenset(CANONICAL_LAUNCH_KINDS),
             frozenset(CANONICAL_LAUNCH_KIND_CHECKS)
-            | {COMPLIANCE_PACKAGE_KIND, SWIMLANES_PLAN_KIND, ENROLLMENT_PLAN_KIND},
+            | {
+                COMPLIANCE_PACKAGE_KIND,
+                SWIMLANES_PLAN_KIND,
+                ENROLLMENT_PLAN_KIND,
+                CLIENT_PROCESS_KIND,
+            },
         )
 
     def test_every_kind_pins_the_reviewed_qa_at_its_exact_version(self):
-        assets = package(qa_version=4, swimlanes_version=4, enrollment_version=4).stage_asset_versions()
+        assets = package(
+            qa_version=4,
+            swimlanes_version=4,
+            enrollment_version=4,
+            client_process_version=4,
+        ).stage_asset_versions()
 
-        self.assertEqual(19, len(assets))
+        self.assertEqual(20, len(assets))
         for asset in assets:
             self.assertEqual(4, asset.version)
 
@@ -147,6 +164,7 @@ class LaunchQAPackageProjectionTests(unittest.TestCase):
                 COMPLIANCE_PACKAGE_KIND,
                 SWIMLANES_PLAN_KIND,
                 ENROLLMENT_PLAN_KIND,
+                CLIENT_PROCESS_KIND,
             ):
                 continue
             self.assertEqual("qa-3f", asset.asset_id)
@@ -180,6 +198,16 @@ class LaunchQAPackageProjectionTests(unittest.TestCase):
         self.assertEqual(1, len(enrollment))
         self.assertEqual("enrollment-3f", enrollment[0].asset_id)
         self.assertEqual(3, enrollment[0].version)
+
+    def test_the_client_process_kind_pins_the_reviewed_client_process(self):
+        assets = package(client_process_version=3).stage_asset_versions()
+
+        process = [
+            asset for asset in assets if asset.kind == CLIENT_PROCESS_KIND
+        ]
+        self.assertEqual(1, len(process))
+        self.assertEqual("process-3f", process[0].asset_id)
+        self.assertEqual(3, process[0].version)
 
     def test_the_projected_evidence_is_tenant_scoped(self):
         for asset in package().stage_asset_versions():
@@ -239,6 +267,19 @@ class LaunchQAPackageBoundaryTests(unittest.TestCase):
 
     def test_a_versionless_enrollment_plan_is_refused(self):
         for override in ({"enrollment_version": 0}, {"enrollment_version": -1}):
+            with self.subTest(override=override):
+                with self.assertRaises(InvalidLaunchQAPackageError):
+                    package(**override)
+
+    def test_a_cross_tenant_client_process_is_refused(self):
+        with self.assertRaises(LaunchQAPackageTenantBoundaryError):
+            package(client_process=other_tenant_client_process())
+
+    def test_a_versionless_client_process_is_refused(self):
+        for override in (
+            {"client_process_version": 0},
+            {"client_process_version": -1},
+        ):
             with self.subTest(override=override):
                 with self.assertRaises(InvalidLaunchQAPackageError):
                     package(**override)

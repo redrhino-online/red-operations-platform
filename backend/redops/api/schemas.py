@@ -1197,6 +1197,75 @@ class EnrollmentPlanInput(BaseModel):
     payment: EnrollmentPaymentInput
 
 
+class ClientProcessStepInput(BaseModel):
+    """One part of the client's own enrollment process (SPEC.md 12.7; canon 39-45).
+
+    The methodology owner placed the client-authored process as a required stage 9
+    ``client-process`` kind (owner decision 2026-10-04, E2). Each part names the
+    client's purpose and prompt for that canon part; the domain, not the transport
+    layer, refuses an untyped part or a blank purpose or prompt.
+    """
+
+    step_kind: str
+    purpose: str
+    prompt: str
+
+
+class ClientCheckpointInput(BaseModel):
+    """One pass-or-fail checkpoint the client's call must clear (canon 39-43)."""
+
+    kind: str
+    question: str
+    on_fail_action: str
+
+
+class ClientObjectionAnswerInput(BaseModel):
+    """The client's answer to one common enrollment objection (canon file 45)."""
+
+    concern: str
+    answer: str
+
+
+class ClientProcessHomeworkInput(BaseModel):
+    """The client's pre-call homework qualifier (canon files 36, 41, 47)."""
+
+    signature_step: str
+    questions: list[str]
+    booking_window_days: int
+
+
+class ClientProcessCommitmentTermsInput(BaseModel):
+    """The client's price floor and no-show rules (canon file 47)."""
+
+    price_floor: int
+    no_show_rules: list[str]
+
+
+class ClientProcessInput(BaseModel):
+    """The reviewed client-authored enrollment process (SPEC.md section 12.7).
+
+    The process carries its identity, owner, client approver, chosen
+    strategy-session model, pre-call homework, the six canon process parts, the
+    five pass-or-fail checkpoints, the acceptance and rejection line, the objection
+    answers and the commitment terms. The route grounds it on the approved stage 2
+    primary currency, stage 3 diagnostic model, stage 4 Signature Solution and
+    stage 5 product program, so the domain decides whether the process is the
+    client's own authority-preserving sales process rather than a free-text script.
+    """
+
+    process_id: str
+    owner: str
+    approver: str
+    strategy: str
+    homework: ClientProcessHomeworkInput
+    steps: list[ClientProcessStepInput]
+    checkpoints: list[ClientCheckpointInput]
+    acceptance_criteria: list[str]
+    rejection_criteria: list[str]
+    objections: list[ClientObjectionAnswerInput]
+    terms: ClientProcessCommitmentTermsInput
+
+
 class RecordStageNineGateRequest(BaseModel):
     """The stage 9 "Launch Approved" gate request (SPEC.md section 4).
 
@@ -1227,6 +1296,9 @@ class RecordStageNineGateRequest(BaseModel):
     swimlanes_version: int
     enrollment: EnrollmentPlanInput
     enrollment_version: int
+    product_program: ProductProgramInput
+    client_process: ClientProcessInput
+    client_process_version: int
     qa: LaunchQAInput
     stage_owner: str
     approver: str

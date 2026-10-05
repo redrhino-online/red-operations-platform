@@ -26,6 +26,7 @@ from dataclasses import FrozenInstanceError
 from redops.contexts.execution.domain.client_process import (
     CANON_REFERENCE,
     CLIENT_CHECKPOINT_ORDER,
+    CLIENT_PROCESS_KIND,
     CLIENT_PROCESS_STEP_ORDER,
     MAXIMUM_BOOKING_WINDOW_DAYS,
     ClientCheckpoint,
@@ -56,6 +57,8 @@ from ..method.fixtures import (
     signature_solution,
 )
 from .fixtures import TENANT
+
+OTHER_TENANT = "client-other"
 
 STEP_PURPOSES = {
     ClientProcessStepKind.FRAME: "set the frame, goals and decision maker",
@@ -154,6 +157,26 @@ def client_process(**overrides) -> ClientProcess:
     }
     values.update(overrides)
     return ClientProcess(**values)
+
+
+def other_tenant_client_process() -> ClientProcess:
+    """A client process grounded entirely on another tenant's assets."""
+    solution = signature_solution(OTHER_TENANT)
+    return client_process(
+        process_id="process-other",
+        tenant_id=OTHER_TENANT,
+        currency=primary_currency(OTHER_TENANT),
+        model=diagnostic_model(OTHER_TENANT),
+        method=solution,
+        program=product_program(
+            method=solution,
+            tenant_id=OTHER_TENANT,
+            modules=tuple(
+                product_module(step.name, index + 1, tenant_id=OTHER_TENANT)
+                for index, step in enumerate(solution.steps)
+            ),
+        ),
+    )
 
 
 class ClientProcessShapeTests(unittest.TestCase):
@@ -312,6 +335,25 @@ class ClientProcessGroundingTests(unittest.TestCase):
     def test_a_process_cannot_be_recorded_as_an_observation(self) -> None:
         with self.assertRaises(ClientProcessObservationError):
             client_process().as_observation(claim_id="claim-1")
+
+
+class ClientProcessStageAssetTests(unittest.TestCase):
+    def test_the_reviewed_process_projects_onto_exact_client_process_evidence(
+        self,
+    ) -> None:
+        asset = client_process().as_stage_asset(version=3)
+
+        self.assertEqual("process-3f", asset.asset_id)
+        self.assertEqual(TENANT, asset.tenant_id)
+        self.assertEqual(CLIENT_PROCESS_KIND, asset.kind)
+        self.assertEqual("client-process", asset.kind)
+        self.assertEqual(3, asset.version)
+
+    def test_a_versionless_projection_is_refused(self) -> None:
+        for version in (0, -1, "1"):
+            with self.subTest(version=version):
+                with self.assertRaises(InvalidClientProcessError):
+                    client_process().as_stage_asset(version=version)
 
 
 class ClientProcessReadinessPolicyTests(unittest.TestCase):

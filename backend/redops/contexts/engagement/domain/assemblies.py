@@ -1352,7 +1352,7 @@ class StageNineGateAssembler:
     ``LaunchQA`` -- the recorded message, technical and commercial tests on
     desktop and mobile, forms, CRM, email, automation, booking, tracking, payment
     when relevant, handoff, client approval, budget, creative, dashboard and the
-    launch decision -- onto the eighteen canonical stage 9 asset kinds as exact
+    launch decision -- onto the twenty canonical stage 9 asset kinds as exact
     ``StageAssetVersion`` evidence, and the canon maps stage 9 to files 01, 08, 21,
     22 and 24 (SPEC.md section 12.3).
 

@@ -36,6 +36,7 @@ if TYPE_CHECKING:
         LaunchQA,
         PerformanceBaseline,
     )
+    from redops.contexts.execution.domain.client_process import ClientProcess
     from redops.contexts.execution.domain.enrollment import EnrollmentPlan
     from redops.contexts.execution.domain.swimlanes import SwimlanesPlan
 
@@ -505,6 +506,7 @@ CANONICAL_LAUNCH_KINDS: tuple[str, ...] = (
     "compliance-package",
     "swimlanes-plan",
     "enrollment-plan",
+    "client-process",
 )
 
 
@@ -536,7 +538,7 @@ CANONICAL_LAUNCH_KIND_CHECKS: dict[str, tuple[QACheckKind, ...]] = {
 
 @dataclass(frozen=True)
 class LaunchQAPackage:
-    """The reviewed stage 9 launch QA, projected to the nineteen canonical gate kinds.
+    """The reviewed stage 9 launch QA, projected to the twenty canonical gate kinds.
 
     SPEC.md section 4, stage 9 "QA" and its "Launch Approved" checkpoint: a stage
     is complete only when its required assets exist, pass the checkpoint and
@@ -569,17 +571,21 @@ class LaunchQAPackage:
     sections 4 and 12.5). The ``enrollment-plan`` kind is projected from the
     reviewed ``EnrollmentPlan`` at its own identity and version, because the
     methodology owner placed the canon enrollment and sales call as a required
-    stage 9 kind (owner decision 2026-10-04, E2; SPEC.md sections 4 and 12.5).
+    stage 9 kind (owner decision 2026-10-04, E2; SPEC.md sections 4 and 12.5). The
+    ``client-process`` kind is projected from the reviewed ``ClientProcess`` at its
+    own identity and version, because the methodology owner placed the
+    client-authored enrollment process as a required stage 9 kind (owner decision
+    2026-10-04, E2; SPEC.md sections 4, 12.5 and 12.7).
 
     A ``LaunchQA`` only owns its launch evidence once ``authorize_traffic`` passes
     the checkpoint, so this package refuses a QA that has not reached
-    ``LaunchQAState.READY_FOR_TRAFFIC``: nineteen kinds cannot be pinned as this
+    ``LaunchQAState.READY_FOR_TRAFFIC``: twenty kinds cannot be pinned as this
     client's evidence without a QA that actually passed and was authorized to
     begin traffic (SPEC.md section 4). It also refuses a blank identity, a
     versionless QA, a QA whose reviewed compliance package is absent, a foreign or
-    versionless swimlanes plan, a foreign or versionless enrollment plan and a
-    cross-tenant QA rather than silently pinning inexact or foreign evidence
-    (SPEC.md sections 3 and 4).
+    versionless swimlanes plan, a foreign or versionless enrollment plan, a foreign
+    or versionless client process and a cross-tenant QA rather than silently
+    pinning inexact or foreign evidence (SPEC.md sections 3 and 4).
     """
 
     package_id: str
@@ -590,6 +596,8 @@ class LaunchQAPackage:
     swimlanes_version: int
     enrollment: "EnrollmentPlan"
     enrollment_version: int
+    client_process: "ClientProcess"
+    client_process_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -611,7 +619,7 @@ class LaunchQAPackage:
         if not self.qa.is_ready_for_traffic:
             raise InvalidLaunchQAPackageError(
                 f"stage 9 launch QA {self.qa.qa_id!r} has not passed Launch "
-                "Approved, so its eighteen asset kinds cannot be pinned as exact "
+                "Approved, so its twenty asset kinds cannot be pinned as exact "
                 "evidence"
             )
         compliance = self.qa.compliance
@@ -671,6 +679,28 @@ class LaunchQAPackage:
                 "the enrollment plan version must be a positive integer so the "
                 "stage 9 gate can pin the reviewed asset at an exact version"
             )
+        from redops.contexts.execution.domain.client_process import ClientProcess
+
+        if not isinstance(self.client_process, ClientProcess):
+            raise InvalidLaunchQAPackageError(
+                "stage 9 requires a typed client process so the canon "
+                "client-process kind is pinned from a reviewed process, not a "
+                "free-text reference"
+            )
+        if self.client_process.tenant_id != self.tenant_id:
+            raise LaunchQAPackageTenantBoundaryError(
+                f"stage 9 client process {self.client_process.process_id!r} "
+                f"belongs to tenant {self.client_process.tenant_id!r}, not package "
+                f"tenant {self.tenant_id!r}"
+            )
+        if (
+            not isinstance(self.client_process_version, int)
+            or self.client_process_version < 1
+        ):
+            raise InvalidLaunchQAPackageError(
+                "the client process version must be a positive integer so the "
+                "stage 9 gate can pin the reviewed asset at an exact version"
+            )
 
     @property
     def kinds(self) -> frozenset[str]:
@@ -703,11 +733,18 @@ class LaunchQAPackage:
         The ``enrollment-plan`` kind is pinned from the reviewed ``EnrollmentPlan``
         at the ``enrollment_version`` (owner decision 2026-10-04, E2; SPEC.md
         sections 4 and 12.5), because the stage 9 launch decision must pin the
-        enrollment and sales call at its own identity and version.
+        enrollment and sales call at its own identity and version. The
+        ``client-process`` kind is pinned from the reviewed ``ClientProcess`` at the
+        ``client_process_version`` (owner decision 2026-10-04, E2; SPEC.md sections
+        4, 12.5 and 12.7), because the stage 9 launch decision must pin the
+        client-authored enrollment process at its own identity and version.
         Governance still pins each projection for the workspace tenant, so a
         cross-client QA, package, plan or enrollment is refused rather than
         silently authorized (SPEC.md sections 3, 4 and 11).
         """
+        from redops.contexts.execution.domain.client_process import (
+            CLIENT_PROCESS_KIND,
+        )
         from redops.contexts.execution.domain.enrollment import (
             ENROLLMENT_PLAN_KIND,
         )
@@ -726,6 +763,7 @@ class LaunchQAPackage:
                 COMPLIANCE_PACKAGE_KIND,
                 SWIMLANES_PLAN_KIND,
                 ENROLLMENT_PLAN_KIND,
+                CLIENT_PROCESS_KIND,
             )
         ]
         assets.append(
@@ -736,6 +774,11 @@ class LaunchQAPackage:
         )
         assets.append(
             self.enrollment.as_stage_asset(version=self.enrollment_version)
+        )
+        assets.append(
+            self.client_process.as_stage_asset(
+                version=self.client_process_version
+            )
         )
         return tuple(assets)
 

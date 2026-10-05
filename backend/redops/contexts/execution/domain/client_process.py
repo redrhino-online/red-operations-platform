@@ -46,10 +46,17 @@ from redops.contexts.execution.domain.errors import (
     ClientProcessTenantBoundaryError,
     InvalidClientProcessError,
 )
+from redops.contexts.governance.domain.value_objects import StageAssetVersion
 from redops.contexts.method.domain.entities import DiagnosticModel, SignatureSolution
 from redops.contexts.method.domain.value_objects import PrimaryCurrency
 
 CANON_REFERENCE = "35-49"
+
+# The methodology owner placed the client-authored process as a required
+# ``client-process`` kind of the stage 9 "Launch Approved" gate (owner decision
+# 2026-10-04, E2; SPEC.md sections 4, 12.5 and 12.7), so a passing stage 9 gate
+# pins the exact reviewed process.
+CLIENT_PROCESS_KIND = "client-process"
 
 # Canon file 47 bounds the booking window: "we never let them book more than 72
 # hours out", which the pre-call material repeats as "within 72 hours. No more".
@@ -280,11 +287,12 @@ class ClientProcess:
     the Signature Solution actually names, the parts and checkpoints must be
     exactly the canon's in order, the acceptance and rejection lines must both
     exist and not overlap, at least one objection must be answered, the strategy
-    model and terms must be typed. It is a planning asset inside stage 8/9, not a
-    new required gate kind (a methodology-owner decision, SPEC.md section 12.5), it
-    does not authorize spend, sending, publishing, payment or any client
-    commitment (SPEC.md sections 4 and 9) and it is never an observation (SPEC.md
-    section 3).
+    model and terms must be typed. It is a planning asset inside stage 8/9, and the
+    methodology owner placed it as a required ``client-process`` kind of the stage 9
+    "Launch Approved" gate (owner decision 2026-10-04, E2; SPEC.md sections 4, 12.5
+    and 12.7), so a passing stage 9 gate pins the exact reviewed process. It does
+    not authorize spend, sending, publishing, payment or any client commitment
+    (SPEC.md sections 4 and 9) and it is never an observation (SPEC.md section 3).
     """
 
     process_id: str
@@ -471,4 +479,27 @@ class ClientProcess:
         raise ClientProcessObservationError(
             f"client process {claim_id!r} is a process to run, not an observed "
             "result, and cannot be recorded as an observation"
+        )
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the reviewed process onto exact ``client-process`` evidence.
+
+        The methodology owner placed the client-authored enrollment process as a
+        required ``client-process`` kind of the stage 9 "Launch Approved" gate
+        (owner decision 2026-10-04, E2; SPEC.md sections 4, 12.5 and 12.7). The
+        reviewed process is projected at a positive integer version, and a
+        versionless projection is refused rather than silently pinned, so a passing
+        stage 9 gate records the exact client process it approved (SPEC.md sections
+        3 and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidClientProcessError(
+                "the client process version must be a positive integer so the "
+                "stage 9 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.process_id,
+            tenant_id=self.tenant_id,
+            kind=CLIENT_PROCESS_KIND,
+            version=version,
         )

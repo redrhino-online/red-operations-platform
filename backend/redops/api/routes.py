@@ -227,6 +227,17 @@ from redops.contexts.execution.domain.enrollment import (
     EnrollmentStep,
     EnrollmentStepKind,
 )
+from redops.contexts.execution.domain.client_process import (
+    ClientCheckpoint,
+    ClientCheckpointKind,
+    ClientObjectionAnswer,
+    ClientProcess,
+    ClientProcessCommitmentTerms,
+    ClientProcessHomework,
+    ClientProcessStep,
+    ClientProcessStepKind,
+    StrategySessionModel,
+)
 from redops.contexts.execution.domain.swimlanes import (
     SwimlaneChannel,
     SwimlaneMove,
@@ -3049,7 +3060,7 @@ def record_stage_nine_gate(
     08, 21, 22 and 24 per SPEC.md section 12.3). The route rebuilds the reviewed QA
     on the rebuilt complete stage 8 funnel and drives ``authorize_traffic``, so the
     ``LaunchApprovedPolicy`` and ``ComplianceRequiredPolicy`` -- not the transport
-    layer -- decide whether the nineteen canonical kinds may be pinned as passing
+    layer -- decide whether the twenty canonical kinds may be pinned as passing
     evidence. The route also rebuilds the reviewed swimlanes recovery plan over the
     same completed funnel and pins its ``swimlanes-plan`` kind at the
     ``swimlanes_version``, because the methodology owner made the canon Swimlanes
@@ -3058,7 +3069,13 @@ def record_stage_nine_gate(
     call over the same completed funnel and the approved stage 4 Signature
     Solution and pins its ``enrollment-plan`` kind at the ``enrollment_version``,
     because the methodology owner placed the canon enrollment block as a required
-    stage 9 kind (owner decision 2026-10-04, E2; SPEC.md sections 4 and 12.5). The
+    stage 9 kind (owner decision 2026-10-04, E2; SPEC.md sections 4 and 12.5). It
+    rebuilds the reviewed client-authored enrollment process over the approved
+    stage 2 primary currency, stage 3 diagnostic model, stage 4 Signature Solution
+    and the rebuilt stage 5 product program and pins its ``client-process`` kind at
+    the ``client_process_version``, because the methodology owner placed the
+    client process design service as a required stage 9 kind (owner decision
+    2026-10-04, E2; SPEC.md sections 4, 12.5 and 12.7). The
     route resolves the approved method,
     production ready offer,
     approved stage 6 message and approved stage 7 amplifier from their stores by
@@ -3162,6 +3179,81 @@ def record_stage_nine_gate(
                 collected_live=body.enrollment.payment.collected_live,
             ),
         )
+        product_program = ProductProgram(
+            program_id=body.product_program.program_id,
+            tenant_id=tenant_id,
+            owner=body.product_program.owner,
+            method=method.signature_solution,
+            model=ProductMatrixModel(body.product_program.model),
+            pricing_basis=ProgramPricingBasis(body.product_program.pricing_basis),
+            duration_weeks=body.product_program.duration_weeks,
+            cadence=ProgramCadence(body.product_program.cadence),
+            modules=tuple(
+                ProductModule(
+                    module_id=module.module_id,
+                    tenant_id=tenant_id,
+                    signature_step=module.signature_step,
+                    position=module.position,
+                    outcome=module.outcome,
+                    deliverable=module.deliverable,
+                )
+                for module in body.product_program.modules
+            ),
+        )
+        client_process = ClientProcess(
+            process_id=body.client_process.process_id,
+            tenant_id=tenant_id,
+            owner=body.client_process.owner,
+            approver=body.client_process.approver,
+            version=body.client_process_version,
+            currency=method.primary_currency,
+            model=method.diagnostic_model,
+            method=method.signature_solution,
+            program=product_program,
+            strategy=StrategySessionModel(body.client_process.strategy),
+            homework=ClientProcessHomework(
+                signature_step=body.client_process.homework.signature_step,
+                questions=tuple(body.client_process.homework.questions),
+                booking_window_days=(
+                    body.client_process.homework.booking_window_days
+                ),
+            ),
+            steps=tuple(
+                ClientProcessStep(
+                    step_kind=ClientProcessStepKind(step.step_kind),
+                    purpose=step.purpose,
+                    prompt=step.prompt,
+                )
+                for step in body.client_process.steps
+            ),
+            checkpoints=tuple(
+                ClientCheckpoint(
+                    kind=ClientCheckpointKind(item.kind),
+                    question=item.question,
+                    on_fail_action=item.on_fail_action,
+                )
+                for item in body.client_process.checkpoints
+            ),
+            acceptance_criteria=tuple(
+                body.client_process.acceptance_criteria
+            ),
+            rejection_criteria=tuple(
+                body.client_process.rejection_criteria
+            ),
+            objections=tuple(
+                ClientObjectionAnswer(
+                    concern=item.concern,
+                    answer=item.answer,
+                )
+                for item in body.client_process.objections
+            ),
+            terms=ClientProcessCommitmentTerms(
+                price_floor=body.client_process.terms.price_floor,
+                no_show_rules=tuple(
+                    body.client_process.terms.no_show_rules
+                ),
+            ),
+        )
         package = LaunchQAPackage(
             package_id=body.qa_package_id,
             tenant_id=tenant_id,
@@ -3171,6 +3263,8 @@ def record_stage_nine_gate(
             swimlanes_version=body.swimlanes_version,
             enrollment=enrollment,
             enrollment_version=body.enrollment_version,
+            client_process=client_process,
+            client_process_version=body.client_process_version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 9, tenant_id
