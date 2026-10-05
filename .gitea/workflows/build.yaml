@@ -76,6 +76,11 @@ jobs:
           fi
           git clone "http://oauth2:${REGISTRY_TOKEN}@gitea-http.gitea.svc.cluster.local:3000/atlas-admin/atlas.git" /tmp/gitops
           cd /tmp/gitops
+          # Sync the chart templates from the app repo (the chart's source of
+          # truth, ADR 0012) into the GitOps repo, then pin the promoted tags.
+          rm -rf apps/redop/chart/templates
+          mkdir -p apps/redop/chart
+          cp -r "${GITHUB_WORKSPACE}/deploy/charts/redop/." apps/redop/chart/
           sed -i -E "s|^apiTag: .*|apiTag: ${TAG}|; s|^uiTag: .*|uiTag: ${TAG}|; s|^cockpitTag: .*|cockpitTag: ${TAG}|" apps/redop/chart/values.yaml
           if git diff --quiet; then echo "already at ${TAG}"; exit 0; fi
           git -c user.email=ci@atlas.lan -c user.name=atlas-ci commit -am "ci: promote redop ${TAG}"
