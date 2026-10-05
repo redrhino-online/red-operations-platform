@@ -4,7 +4,60 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Owner decision 2026-10-04: vendor edits go through a re-triggerable overlay (ADR 0011)
+
+- The RED principal resolved the ADR 0006 / zero-vendor-edit tension that had
+  stopped the loop: vendor edits are allowed, but only through a committed,
+  idempotent, re-triggerable overlay owned by this repository. RED-authored
+  vendor additions live under `vendor/overlay/`; `scripts/apply_vendor_overlay.sh`
+  applies them onto `vendor/openexecutive/` (idempotent; re-run after any upstream
+  submodule bump), and `scripts/apply_vendor_overlay.sh --check` proves the tree
+  equals the overlay with no unaccounted vendor change
+  (`docs/adr/0011-vendor-edits-through-a-retriggerable-overlay.md`, which amends
+  ADR 0008's "minimal (ideally none)" stance).
+- Effect on the contract: SPEC.md section 13 condition 7 and DoD `[4/6]` change
+  from "the submodule is clean" to "every vendor change is overlay-declared and
+  reproducible from this repository". SPEC.md section 2 records the overlay rule.
+- Superseded blockers in the cycle record below that say a change was rejected
+  because "DoD condition 7 requires zero vendor edits" (the agent-registration and
+  routing seams in the Q3/Q30 lineage) are resolved by this decision: such edits
+  are now allowed through the overlay. The ADR 0006 tension is closed; the live
+  key (Q4) and the Atlas cluster (Q47-Q50/condition 9) remain.
+
+- Cycle 2026-10-04 (Ralph cycle, this run): selected item was Q3, register the RED
+  Director and specialist agents behind ports (SPEC.md section 5; ADR 0006),
+  now unblocked by ADR 0011. It is the highest priority ready item: it closes the
+  last architectural blocker on condition 5's deterministic agent path.
+- Outcome: the RED agent roster is a pure-domain registry in
+  `backend/redops/agents/` — `RedAgentSpec` (charter, routing key, prompt version,
+  authority class) for the Director plus capability slots 1-11, with slots 10/11
+  proposal-only and tool-less by construction; `RedAgentRegistry` (duplicate and
+  unknown-key refusal); and `RedAgentRouter`, which routes every agent through the
+  `ModelGateway` port carrying tenant, model, prompt version, trace id and context
+  references. The vendor overlay registers RED's nine core specialists through the
+  fork's own mechanism (`agents/redops_agents.py`, `prompts/redops_prompts.py`,
+  knowledge, an eval scenario, and marked hooks merging
+  `SPECIALIST_REGISTRY`/`SPECIALIST_DESCRIPTIONS`/`SPECIALIST_TOOLS` enum and
+  `_AREAS`). The generic personas remain registered; retiring them stays a
+  separate characterised change (ADR 0006).
+- Evidence: `scripts/apply_vendor_overlay.sh --check` ->
+  "vendor overlay check ok" and re-apply is a no-op;
+  `tests/unit/agents/test_red_agent_registry.py` (18 tests) pins the roster,
+  registry and routing; `tests/unit/shared/test_vendor_overlay.py` (6 tests) pins
+  idempotent apply, unaccounted-change failure, missing-anchor failure and the
+  real repository; the stage 0-10 e2e now also drives all twelve RED agents
+  through `DeterministicFakeModelGateway` and proves the fork registry exposes the
+  nine RED specialists. `tests/unit/agents/covered-provider-paths.txt` declares
+  `deterministic-e2e`, so `check_provider_path_coverage.sh` reports condition 5's
+  only remaining part as the paid live smoke (Q4).
+- Blocker (make done head): condition 5's live OpenRouter smoke needs
+  `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE=1` (Q4), and condition 9
+  needs the Atlas cluster. No unattended item is ready, so `.ralph/DONE` is
+  touched and the loop stops rather than inventing work or making a named-owner
+  decision.
+
 ### Owner decision 2026-10-03: backup and restore deferred (ADR 0009)
+
 
 - The prototype definition of done no longer requires a database backup or a
   restore drill; both move to a production-readiness phase
@@ -5047,8 +5100,9 @@ pyflakes) is the per-cycle gate. DoD decisions confirmed 2026-10-03 (owner RED
 principal): stage 0-10 API e2e plus the section 11 acceptance and cross-tenant
 suites; RED domain on PostgreSQL with OpenExecutive's SQLite and Chroma behind
 ports; a deterministic fake model gateway for e2e plus a live OpenRouter smoke;
-all section 8 screens; zero edits to the vendored OpenExecutive; RED branding on
-product surfaces only with LICENSE and NOTICE retained; deployed on Atlas k3s.
+all section 8 screens; vendor edits only through the committed re-triggerable
+overlay (`vendor/overlay/`, ADR 0011) with LICENSE and NOTICE retained; RED
+branding on product surfaces only; deployed on Atlas k3s.
 
 ## Prototype ready queue
 
@@ -5091,7 +5145,7 @@ stalls:
 | --- | --- | --- | --- | --- |
 | Q1 | Deterministic fake model gateway (port plus test adapter) | agents | — | unit test; agents run offline. Done 2026-10-03T183929Z: `backend/redops/agents/` (`ModelGateway` port, `ModelRequest`/`ModelUsage`/`ModelResponse`, `DeterministicFakeModelGateway`) verified by `tests/unit/agents/test_model_gateway.py` (13 tests) |
 | Q2 | RED LLM adapter logs model, prompt version, usage, trace id | agents | Q1 | adapter contract test. Done 2026-10-03T184310Z: `ForkProviderModelGateway` wraps the fork's `get_provider` behind `ModelGateway`; `LoggingModelGateway` logs tenant/model/prompt version/trace id/context refs/tokens without prompt text; `ModelGatewayRuntimeError` guards a running loop. Verified by `tests/unit/agents/test_llm_gateway.py` (12 tests). Live smoke remains Q4 |
-| Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway |
+| Q3 | Register the RED Director and specialist agents behind ports | agents | Q1 | routing reaches each agent via the fake gateway. Done 2026-10-04: `backend/redops/agents/domain/red_agents.py` (`RedAgentSpec` roster: Director + slots 1-11, slots 10/11 proposal-only and tool-less), `application/registry.py` (`RedAgentRegistry`) and `application/router.py` (`RedAgentRouter` routing every agent through `ModelGateway`), verified by `tests/unit/agents/test_red_agent_registry.py` (18 tests). Vendor registration through the fork's specialist mechanism is applied by the ADR 0011 overlay (`vendor/overlay/`, `scripts/apply_vendor_overlay.sh`), verified by `tests/unit/shared/test_vendor_overlay.py` (6 tests) and the stage 0-10 e2e agent-path test |
 | Q4 | Live OpenRouter smoke test (env gated, skipped without a key) | agents | Q2 | one live call passes with a key. Done 2026-10-03T184450Z: `tests/unit/agents/test_live_openrouter_smoke.py` skips unless `OPENROUTER_API_KEY` and `REDOP_LIVE_OPENROUTER_SMOKE` are set, then drives one live call through `ForkProviderModelGateway.from_fork_registry()` plus `LoggingModelGateway` and asserts the section 6 attribution; executing it awaits a real key |
 | Q5 | Workflow engine wiring: versioned definitions, durable run state, approval wait survives restart, idempotent effects | workflows | — | resume test. Slice 2026-10-03T184653Z: pure domain + application contract in `backend/redops/workflows/` (versioned `WorkflowDefinition`, `WorkflowRun` state machine, `WorkflowRunStore`/`WorkflowStepExecutor` ports, `RunWorkflowHandler`) verified by `tests/unit/workflows/test_workflow_resume.py` (17 tests). Durable store 2026-10-03T185523Z: `backend/redops/workflows/infrastructure/` (`workflow_run_to_payload`/`workflow_run_from_payload`, `InMemoryWorkflowRunStore`, `PostgresWorkflowRunStore`, `workflow_run_store_from_env`, `CrossTenantWorkflowRunError`) and migration `0009_workflow_runs`, verified by `tests/unit/workflows/test_workflow_run_store.py` (14 tests) and `tests/unit/shared/test_migrate.py` (head `0009_workflow_runs`). REST `/workflows/{id}` polling read landed 2026-10-03T185701Z (Q15). The fork `workflows/resumer.py` adapter was reassessed and rejected as mis-specified: the resumer is an 809-line fork polling loop, not a per-step executor, so RED's `WorkflowStepExecutor` seam is served by connector adapters (Q16), not a resumer shim |
 | Q6 | Postgres repository adapters and migrations for the remaining aggregates | persistence | — | adapter contract tests; migration head matches models. Done for gate decisions, stage runs, method versions (0003), offer versions (0004), campaign messages (0005), authority amplifiers (0006), funnel integrations (0007) and launch QAs (0008); every named aggregate is now durable (complete 2026-10-03T180944Z). The stage 0 `ClientWorkspace` and the knowledge `SourceRecord` stores completed with Q9 2026-10-03T190017Z (`0010_client_workspaces`, `0011_source_records`); the Production `BuildObject` store completed with Q11 2026-10-03T193035Z (`0013_build_objects`, which also added the required `tenant_id` the aggregate lacked) |
