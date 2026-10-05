@@ -35,6 +35,9 @@ jobs:
       - name: Checkout
         run: |
           git clone "http://oauth2:${REGISTRY_TOKEN}@gitea-http.gitea.svc.cluster.local:3000/atlas-admin/red-operations-platform.git" .
+          # The API image needs the pinned OpenExecutive source. The submodule
+          # URL is HTTPS (public upstream), so the in-cluster runner can fetch it.
+          git submodule update --init --recursive
 
       - name: Configure registry auth
         run: |

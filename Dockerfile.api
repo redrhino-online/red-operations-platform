@@ -33,6 +33,12 @@ RUN pip install --no-cache-dir uv
 # interpreter so the runtime CMD finds the packages.
 COPY pyproject.toml uv.lock ./
 COPY vendor/openexecutive/packages/core/ ./vendor/openexecutive/packages/core/
+# Apply the committed RED overlay (ADR 0011) so the image matches the repository:
+# the overlay registers RED's specialists in the fork's own registry. The script
+# is stdlib-only and needs no git.
+COPY scripts/vendor_overlay.py ./scripts/vendor_overlay.py
+COPY vendor/overlay/ ./vendor/overlay/
+RUN python scripts/vendor_overlay.py apply
 COPY backend/ ./backend/
 RUN UV_PROJECT_ENVIRONMENT=/usr/local \
     uv sync --locked --no-dev --no-install-project --inexact
