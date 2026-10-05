@@ -24,6 +24,25 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   auth disabled internal-only, cockpit on its own OpenExecutive state. Recorded
   as the Cockpit adoption phase below; not part of the current prototype DoD.
 
+### Deploy fix 2026-10-05: CI credentials, submodule init, overlay in the API image
+
+- The first push to `atlas` failed CI at checkout: the repo's `REGISTRY_USER`/
+  `REGISTRY_TOKEN` Actions secrets were stale (set 2026-10-03). Re-set them from
+  the Argo CD repo token (`repo-gitea-atlas`); Gitea 1.27 expects the raw secret
+  value, not base64.
+- The next run failed building the API image: the CI checkout never initialized
+  the vendored submodule, so `vendor/openexecutive/packages/core` was absent.
+  Fixed by pointing `.gitmodules` at the public HTTPS upstream (the in-cluster
+  runner reaches GitHub over HTTPS but has no SSH key), initializing the
+  submodule in the workflow, and applying the ADR 0011 overlay inside
+  `Dockerfile.api`.
+- Result: build run 6 (`7744a1e`) succeeded, promoted `sha-7744a1e` into
+  `apps/redop/chart/values.yaml`, and Argo CD synced `redop` to `8ba1add`
+  (Synced/Healthy). The deployed UI now serves the navigation shell (all twelve
+  links, no false copy); the health gate passes.
+- Doc correction: the registry pull secret is `gitea-registry` (created from the
+  sealed file `redop-registry.yaml`), not `redop-registry`.
+
 ### Owner directive 2026-10-05 (highest priority): comprehensive developer docs site
 
 - **Directive (owner):** build and maintain a comprehensive developer
@@ -479,7 +498,8 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   5. Release topology: replace the OpenExecutive shell in namespace `redop`
      (same namespace, ingress and release name; new chart source).
   6. Secrets: reuse the existing `redop-secrets` (`BACKEND_SHARED_SECRET`,
-     `AUTH_SECRET`, `OPENROUTER_API_KEY`) and `redop-registry` sealed secrets.
+     `AUTH_SECRET`, `OPENROUTER_API_KEY`) and `gitea-registry` (registry pull;
+     created from the sealed file `redop-registry.yaml`).
   7. First-release scope: api + ui + worker (full chart including migration Job,
      ingress, PDB, probes).
 - Prerequisites for end-to-end execution: kubectl on PATH and

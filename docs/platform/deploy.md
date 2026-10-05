@@ -13,8 +13,8 @@ Argo CD reconciles a Helm release.
 | Ingress host | `redop.atlas.lan` (Traefik; `atlas-ca` TLS; `10.0.0.0/8` allowlist) |
 | Images | `registry.atlas.lan/atlas-admin/redop-api` and `redop-ui` |
 | PostgreSQL | in-cluster `postgres:16.4-alpine`, 10Gi `truenas-nfs` PVC, `redop-postgres` service |
-| Secrets | `redop-secrets` (backend/auth/OpenRouter), `redop-registry`, `redop-postgres` (SealedSecrets) |
-| GitOps repo | `211lab/atlas` → `apps/redop/chart`, `gitops/apps/redop.yaml` |
+| Secrets | `redop-secrets` (backend/auth/OpenRouter), `gitea-registry` (registry pull; sealed file `redop-registry.yaml`), `redop-postgres` (SealedSecrets) |
+| GitOps repo | `atlas-admin/atlas` (Gitea) → `apps/redop/chart`, `gitops/apps/redop.yaml` |
 | Chart source | `deploy/charts/redop` in this repo (Q48); Argo CD reconciles it into `redop` |
 | Access | `KUBECONFIG=~/.kube/atlas-admin.yaml` |
 
@@ -26,14 +26,16 @@ push/tag on atlas-admin/red-operations-platform
         ▼
 build + push redop-api / redop-ui ──▶ registry.atlas.lan
         │
-        └─ commit the tag into apps/redop/chart/values.yaml (211lab/atlas)
+        └─ commit the tag into apps/redop/chart/values.yaml (atlas-admin/atlas)
                      │  Gitea webhook
                      ▼
               Argo CD syncs the redop Application
 ```
 
-- The app repo's CI (`.gitea/workflows/build.yaml`) builds both images on a push
-  to `main` and, on a `v*` tag, promotes the tag into the GitOps chart values.
+- The app repo's CI (`.gitea/workflows/build.yaml`) builds both images and
+  promotes the tag on a push to `main` (`sha-<short>`) or a `v*` tag. The
+  checkout initializes the vendored submodule (HTTPS upstream) and the API image
+  applies the ADR 0011 overlay.
 - Argo CD auto-syncs with self-heal. The migration Job runs **before** the API
   serves (condition 9): it is a Helm pre-install/pre-upgrade hook and an Argo CD
   PreSync hook at sync-wave -1, and the API Deployment (sync-wave 0) waits for
@@ -54,7 +56,7 @@ condition 9.
   (24h RPO / 8h RTO). Per ADR 0009/0010 this is a production-readiness gate, not
   a prototype condition.
 - **C1** Q47 may proceed before Q30; migration Job on every deploy; reuse the
-  existing `redop-postgres`, `redop-secrets`, `redop-registry`; api + ui + worker;
+  existing `redop-postgres`, `redop-secrets`, `gitea-registry`; api + ui + worker;
   same-origin ingress (`/red/*` → api, `/` → ui).
 
 ## Operations
