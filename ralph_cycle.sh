@@ -7,7 +7,8 @@
 # directory). When the target repository differs from the spec/plan repository,
 # the cycle commits code in the target and spec/plan changes in their own repo.
 # Optional environment: RALPH_SPEC, RALPH_PLAN, RALPH_CANON, RALPH_OPENCODE,
-# RALPH_MODEL, RALPH_PUSH_REMOTES, RALPH_PLAN_PUSH_REMOTES.
+# RALPH_MODEL, RALPH_PUSH_REMOTES, RALPH_PLAN_PUSH_REMOTES, RALPH_DB_PREFLIGHT,
+# RALPH_DB_WAIT, RALPH_DB_PROBE_TIMEOUT.
 
 set -Eeuo pipefail
 
@@ -87,6 +88,8 @@ command -v "$OPENCODE_BIN" >/dev/null 2>&1 || die "OpenCode CLI is unavailable: 
 # Cooperative stop: `touch .ralph/STOP` in the target repository halts a loop
 # before this cycle starts. Exit status 3 means "stopped cleanly", so the loop
 # driver breaks instead of treating it as a failure. The file is not removed.
+# The database preflight below also writes this file when it cannot reach the
+# database, so a wedged database stops the loop instead of hanging it.
 if [[ -e "$RUN_DIR/STOP" ]]; then
   printf 'ralph: STOP present at %s; not starting a cycle\n' "$RUN_DIR/STOP" >&2
   exit 3
@@ -101,6 +104,67 @@ fi
 # A repository is required so the agent can inspect changes and the operator can review them.
 git -C "$REPO_DIR" rev-parse --show-toplevel >/dev/null 2>&1 || die "target must be a git repository"
 mkdir -p "$RUN_DIR"
+
+# Database preflight. `make check` runs the Postgres-backed persistence and
+# migration tests. When the local database is down, psycopg's connect hangs
+# (WSL drops the SYN instead of refusing), so the cycle wedges with no log
+# output. Verify the endpoint before the agent runs, start the compose service
+# when it is local and available, and, if it still cannot be reached, leave a
+# STOP file so the loop halts cleanly for a human instead of hanging. Disable
+# with RALPH_DB_PREFLIGHT=0.
+if [[ "${RALPH_DB_PREFLIGHT:-1}" == "1" ]]; then
+  db_url="${DATABASE_URL:-}"
+  db_rest="${db_url#*://}"
+  db_hostport="${db_rest##*@}"
+  db_hostport="${db_hostport%%/*}"
+  db_host="${db_hostport%%:*}"
+  db_port="${db_hostport##*:}"
+  [[ -z "$db_port" || "$db_port" == "$db_host" ]] && db_port=5432
+  [[ -n "$db_host" ]] || db_host=localhost
+
+  db_reachable() {
+    timeout "${RALPH_DB_PROBE_TIMEOUT:-3}" \
+      bash -c "exec 3<>/dev/tcp/$db_host/$db_port" 2>/dev/null
+  }
+
+  if ! db_reachable; then
+    case "$db_host" in
+      localhost|127.0.0.1|::1) db_local=1 ;;
+      *) db_local=0 ;;
+    esac
+    if (( db_local )) && command -v docker >/dev/null 2>&1 \
+       && [[ -f "$SCRIPT_DIR/docker-compose.yml" ]]; then
+      printf 'ralph: database %s:%s unreachable; starting compose postgres\n' \
+        "$db_host" "$db_port" >&2
+      docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d postgres >&2 || true
+      deadline=$(( $(date +%s) + ${RALPH_DB_WAIT:-60} ))
+      while ! db_reachable; do
+        if (( $(date +%s) >= deadline )); then break; fi
+        sleep 2
+      done
+    fi
+  fi
+
+  if ! db_reachable; then
+    {
+      printf 'Database preflight failed: %s:%s is not reachable.\n' "$db_host" "$db_port"
+      printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
+      printf '\n'
+      printf 'make check runs the Postgres-backed tests; with the database down the\n'
+      printf 'connection hangs instead of failing, so the cycle would wedge.\n'
+      printf '\n'
+      printf 'Fix: start the database (docker compose up -d postgres), then remove\n'
+      printf 'this file to let the loop resume.\n'
+      printf '\n'
+      printf 'Written %s by ralph_cycle.sh (pid %s).\n' "$(date -u +%FT%TZ)" "$$"
+    } > "$RUN_DIR/STOP"
+    printf 'ralph: database preflight failed; wrote %s and stopping cleanly\n' \
+      "$RUN_DIR/STOP" >&2
+    exit 3
+  fi
+  printf 'ralph: database preflight ok (%s:%s)\n' "$db_host" "$db_port" >&2
+fi
+
 # Keep the harness's own run directory out of commits without relying on the
 # target repository's .gitignore. Adding an ignored path as an explicit git
 # pathspec makes `git add` fail, so we register the exclusion in the repo-local
