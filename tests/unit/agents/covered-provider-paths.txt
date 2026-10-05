@@ -6,10 +6,10 @@
 # Canonical part ids are fixed by scripts/check_provider_path_coverage.sh:
 #   deterministic-e2e live-openrouter-smoke attribution-log
 #
-# Two parts are uncovered, so condition 5 (a proven agent provider path) is unmet
-# and the DoD gate keeps failing until the deterministic e2e agent path exists and
-# a human runs the paid live smoke.
+# The deterministic e2e agent path now exists (the stage 0-10 e2e drives the RED
+# agent roster through DeterministicFakeModelGateway, Q3). One part stays
+# uncovered: the paid, env-gated live OpenRouter smoke, which needs a real key.
 
-deterministic-e2e uncovered the stage 0-10 e2e drives no agent/model path; agent registration (Q3) is blocked on the ADR 0006 / zero-vendor-edit tension
+deterministic-e2e tests/e2e/test_stage_zero_to_ten_e2e.py
 live-openrouter-smoke uncovered a live call needs OPENROUTER_API_KEY and REDOP_LIVE_OPENROUTER_SMOKE=1; the paid human-run proof (Q4) is outstanding
 attribution-log tests/unit/agents/test_llm_gateway.py

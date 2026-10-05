@@ -148,11 +148,12 @@ class ProviderPathCoverageCheckTests(unittest.TestCase):
             self.assertIn("declared attribution-log test file has no test", result.stderr)
 
     def test_repository_suite_is_honest(self) -> None:
-        # The deterministic e2e agent path and the live smoke proof do not exist
-        # yet, so the gate must fail and name them rather than passing condition 5.
+        # The deterministic e2e agent path now exists (Q3, ADR 0011), but the
+        # paid live smoke proof does not, so the gate must fail and name only the
+        # live smoke rather than passing condition 5.
         result = run_check(REPO_ROOT / "tests" / "unit" / "agents")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("deterministic-e2e", result.stderr)
+        self.assertNotIn("deterministic-e2e (", result.stderr)
         self.assertIn("live-openrouter-smoke", result.stderr)
         self.assertNotIn("attribution-log (", result.stderr)
 

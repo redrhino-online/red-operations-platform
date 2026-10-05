@@ -133,5 +133,59 @@ class StageZeroToTenE2ETests(unittest.TestCase):
             )
 
 
+RED_TENANT = "3fmindset"
+
+
+class RedAgentProviderPathE2ETests(unittest.TestCase):
+    """Condition 5: the deterministic fake gateway drives the 3F agent path.
+
+    SPEC.md section 13 condition 5 requires the agent path to run
+    deterministically in e2e through a fake model gateway. This class drives the
+    RED Director and every chartered specialist through the ``ModelGateway`` port
+    with ``DeterministicFakeModelGateway`` for the 3F workspace, and proves the
+    fork's specialist registry (which the vendor overlay registers RED agents
+    into, ADR 0006/0011) exposes them. No network and no credential is used.
+    """
+
+    def test_routes_every_red_agent_through_the_fake_gateway(self) -> None:
+        from redops.agents.application.registry import RedAgentRegistry
+        from redops.agents.application.router import RedAgentRouter
+        from redops.agents.infrastructure.fake_gateway import (
+            DeterministicFakeModelGateway,
+        )
+
+        gateway = DeterministicFakeModelGateway()
+        router = RedAgentRouter(gateway)
+        responses = router.route_all(
+            "draft the stage 1 diagnosis for the 3F pilot",
+            tenant_id=RED_TENANT,
+            trace_id="trace-3f-e2e",
+        )
+
+        registry = RedAgentRegistry.canonical()
+        self.assertEqual(set(registry.keys()), set(responses))
+        self.assertEqual(12, len(responses))
+        self.assertEqual(12, len(gateway.calls))
+        for key, response in responses.items():
+            agent = registry.get(key)
+            self.assertEqual(agent.model, response.model, key)
+            self.assertEqual(agent.prompt_version, response.prompt_version, key)
+            self.assertEqual("trace-3f-e2e", response.trace_id, key)
+
+    def test_fork_registry_exposes_the_red_specialists(self) -> None:
+        try:
+            from openexecutive.agents.redops_agents import (
+                RED_SPECIALIST_REGISTRY,
+            )
+            from openexecutive.orchestrator.router import SPECIALIST_REGISTRY
+        except ImportError as exc:  # pragma: no cover - domain-only interpreter
+            self.skipTest(f"vendored openexecutive unavailable: {exc}")
+
+        red_keys = set(RED_SPECIALIST_REGISTRY)
+        self.assertEqual(9, len(red_keys))
+        self.assertTrue(red_keys.issubset(set(SPECIALIST_REGISTRY)))
+
+
+
 if __name__ == "__main__":
     unittest.main()
