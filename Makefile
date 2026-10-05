@@ -43,7 +43,7 @@ HELP_ALIASES := $(shell bash -c 's=help; for ((m=0;m<16;m++)); do out=; for ((i=
 
 COMMAND_ALIASES := $(RUN_ALIASES) $(LOOP_ALIASES) $(HELP_ALIASES)
 
-.PHONY: run loop help check done canon-lock canon-pin reset-hosted $(COMMAND_ALIASES)
+.PHONY: run loop help check done docs docs-serve canon-lock canon-pin reset-hosted $(COMMAND_ALIASES)
 .DEFAULT_GOAL := help
 
 $(filter-out run,$(RUN_ALIASES)): run
@@ -59,6 +59,8 @@ help:
 	  'make run REPO=../fork    Run against a Git checkout in another folder' \
 	  'make check               Run the full test suite (with Postgres) and pyflakes' \
 	  'make done                Run the prototype definition-of-done gate (SPEC section 13)' \
+	  'make docs                Build the developer docs site into site/ (strict)' \
+	  'make docs-serve          Serve the developer docs locally with live reload' \
 	  'make canon-lock          Lock the current canon content at the start of a run (idempotent)' \
 	  'make canon-pin           Force re-pin the canon content hash in canon.lock' \
 	  'make reset-hosted        Wipe the hosted instance data (onboarding/people)'
@@ -75,6 +77,15 @@ check:
 
 done:
 	@./scripts/check_definition_of_done.sh
+
+# Developer docs site (MkDocs Material). Requires mkdocs-material; use
+# `make docs-serve` for a live preview. Publishing is automatic via
+# .github/workflows/docs.yml on push to main.
+docs:
+	@uv run --with mkdocs-material mkdocs build --strict
+
+docs-serve:
+	@uv run --with mkdocs-material mkdocs serve
 
 # Lock the canon at the start of a run so a cycle never trips the strict pin,
 # and so a mid-run canon change still halts the loop. Writes canon.lock only

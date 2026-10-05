@@ -8,3 +8,4 @@ __pycache__/
 *.py[cod]
 .serena/
 .DS_Store
+site/

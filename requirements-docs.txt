@@ -1,0 +1,7 @@
+# Build dependencies for the developer docs site (docs/, mkdocs.yml).
+# Install and preview:
+#   pip install -r requirements-docs.txt
+#   mkdocs serve
+# or with the repo's uv:
+#   make docs-serve
+mkdocs-material>=9.5

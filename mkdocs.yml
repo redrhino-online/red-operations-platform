@@ -1,0 +1,101 @@
+site_name: RED Operations Platform — Developer Docs
+site_description: Comprehensive developer documentation for the RED Operations Platform (app repository; the vendored OpenExecutive internals are out of scope).
+site_url: https://redrhino-online.github.io/red-operations-platform/
+repo_url: https://github.com/redrhino-online/red-operations-platform
+repo_name: redrhino-online/red-operations-platform
+edit_uri: edit/main/docs/
+docs_dir: docs
+use_directory_urls: true
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+    - toc.integrate
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+# New pages are picked up automatically; keep the build warning-free without
+# having to list every file (ADRs, charters) in the nav.
+validation:
+  omitted_files: ignore
+  absolute_links: ignore
+  unrecognized_links: ignore
+  anchors: ignore
+
+nav:
+  - Home: index.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Bounded contexts: architecture/contexts.md
+      - Nouns and their RED significance: architecture/nouns.md
+      - Seams, ports and adapters: architecture/seams.md
+  - Pipeline:
+      - Stages and gates: pipeline/stages-and-gates.md
+      - Agent roster: pipeline/agents.md
+  - Platform:
+      - REST API: platform/api.md
+      - Frontend: platform/frontend.md
+      - Deployment on Atlas: platform/deploy.md
+      - Vendor overlay: platform/vendor-overlay.md
+  - Operations:
+      - Build harness and tests: operations/harness-and-tests.md
+  - Contributing: contributing.md
+  - Reference:
+      - Developer guide: DEVELOPER_GUIDE.md
+      - Bounded context map: context_map.md
+      - Fork inventory: fork_inventory.md
+  - ADRs:
+      - adr/0001-record-architecture-decisions.md
+      - adr/0002-place-red-code-in-the-fork.md
+      - adr/0003-storage-strategy.md
+      - adr/0004-tenant-isolation.md
+      - adr/0005-scheduler-worker-topology.md
+      - adr/0006-red-agent-registration.md
+      - adr/0007-python-core-typescript-ui.md
+      - adr/0008-red-lives-in-the-app.md
+      - adr/0009-prototype-defers-backup-and-restore.md
+      - adr/0010-reversible-migrations-and-production-readiness-gates.md
+      - adr/0011-vendor-edits-through-a-retriggerable-overlay.md
+  - Agent charters:
+      - agents/charter-01-discovery-diagnosis.md
+      - agents/charter-02-ip-structuring.md
+      - agents/charter-03-offer-journey-design.md
+      - agents/charter-04-knowledge-management.md
+      - agents/charter-05-governance-approval.md
+      - agents/charter-06-asset-production.md
+      - agents/charter-07-campaign-execution.md
+      - agents/charter-08-insight-performance.md
+      - agents/charter-09-ip-portfolio.md
+      - agents/charter-10-client-success.md
+      - agents/charter-11-assurance-compliance.md

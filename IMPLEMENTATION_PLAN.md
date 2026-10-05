@@ -4,6 +4,37 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Owner directive 2026-10-05 (highest priority): comprehensive developer docs site
+
+- **Directive (owner):** build and maintain a comprehensive developer
+  documentation of the whole system — every noun and its significance to RED —
+  excluding the vendored OpenExecutive internals but **including the vendor
+  overlay script**. It must be easy to build and maintain and publish to GitHub
+  Pages with a workflow. The owner marked it the highest priority, above the Q28
+  stage 9/10 slices and the Q47-Q50 deploy slice.
+- **Outcome:** a MkDocs Material site at the repo root (`mkdocs.yml`,
+  `requirements-docs.txt`) with pages under `docs/`: `index.md`,
+  `architecture/{overview,contexts,nouns,seams}.md`,
+  `pipeline/{stages-and-gates,agents}.md`,
+  `platform/{api,frontend,deploy,vendor-overlay}.md`,
+  `operations/harness-and-tests.md`, `contributing.md`, plus the existing
+  `DEVELOPER_GUIDE.md`, `context_map.md`, `fork_inventory.md`, all ADRs and all
+  agent charters in the nav. The centrepiece `docs/architecture/nouns.md` defines
+  every domain, architecture, pipeline, delivery, overlay and harness noun with
+  its RED significance, in nineteen sections.
+- **Ease and publishing:** `make docs` (strict build) and `make docs-serve`
+  (live preview) via `uv run --with mkdocs-material`;
+  `.github/workflows/docs.yml` builds on push to `main` (paths `docs/**`,
+  `mkdocs.yml`) and deploys to GitHub Pages at
+  `https://redrhino-online.github.io/red-operations-platform/`. New pages are
+  auto-included; `validation.omitted_files: ignore` keeps the build clean.
+- **Evidence:** `uv run --with mkdocs-material mkdocs build --strict` is clean
+  (0 warnings). Vendor internals are excluded; `platform/vendor-overlay.md`
+  documents the in-scope overlay (`vendor/overlay/`,
+  `scripts/apply_vendor_overlay.sh`).
+- **Maintenance rule:** a cycle that adds a noun (aggregate, seam, env var,
+  pipeline concept) adds its row to `docs/architecture/nouns.md`.
+
 ### Cycle 2026-10-05T015336Z (this run)
 
 - Cycle 2026-10-05T015336Z (Ralph cycle, this run): selected item was the next
