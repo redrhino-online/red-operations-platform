@@ -23,7 +23,7 @@ Fork OpenExecutive at a pinned upstream commit and record license, dependencies,
 | Client storage and retrieval | Adapt per tenant | Verify namespace enforcement and source citation behavior |
 | Workflow engine and persistence | Adapt to RED definitions | Verify resumability, version pinning, gate semantics, idempotence |
 | Approvals, audit, alerts, scheduling | Preserve behavior where sound | Verify actor identity, immutable records, delivery and retry behavior |
-| Executive persona, generic departments | Replace | Remove obsolete labels and incompatible permissions |
+| Executive persona, generic departments | Replace with RED's nine required agents | Ship all nine agents (section 5); retire the OpenExecutive generic C-suite registry; remove obsolete labels and incompatible permissions |
 | Cockpit | Adopt as the prototype shell, rebranded RED (ADR 0012) | The OpenExecutive cockpit is reworked into the RED portfolio command center: navigation keeps the OpenExecutive groups plus a RED Operations group linking the section 8 screens; queries stay tenant scoped and explain each intervention |
 
 Retain upstream notices and licensing obligations. Keep a fork diff register with upstream commit, local decision, owner, migration note, and regression evidence. Never delete a working upstream path until its replacement has passed characterization tests. Vendor edits are allowed only through the committed, re-triggerable overlay in `vendor/overlay/` applied by `scripts/apply_vendor_overlay.sh` (ADR 0011); every local change to the pinned submodule must be overlay-declared and reproducible from this repository.
@@ -101,7 +101,7 @@ Every agent has a versioned charter, allowed tools, input schema, output schema,
 | Insight and Performance | measurement and evaluation | baseline, review, recommendation | unsupported causal conclusion |
 | IP Portfolio Development | derivative opportunity | roadmap, investment case | investment and launch |
 
-Capability slots 10 and 11 are chartered (charters in `docs/agents/`), proposal-only with no execution permissions:
+The nine agents above are a required set, not a menu: RED ships all nine, and the OpenExecutive generic C-suite registry they replace is retired (ADR 0006, ADR 0011). A deployment that omits any of the nine does not satisfy this contract. Capability slots 10 and 11 are chartered (charters in `docs/agents/`), proposal-only with no execution permissions:
 
 | Agent | Owns | Main outputs | Must escalate |
 | --- | --- | --- | --- |
