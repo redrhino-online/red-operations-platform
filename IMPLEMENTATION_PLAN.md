@@ -4,6 +4,72 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-05T015336Z (this run)
+
+- Cycle 2026-10-05T015336Z (Ralph cycle, this run): selected item was the next
+  slice of Q28 after the 2026-10-04 methodology-owner placement decision: wire the
+  canon Swimlanes channel model as a required stage 9 "Launch Approved" kind
+  (SPEC.md sections 4, 12.3 and 12.5; canon files 13, 14, 33 and 34). It is the
+  smallest independently verifiable ready item. It outranks the alternative
+  condition 9 deploy slice because that slice is not a single bounded item: the
+  repo still has no Dockerfile, Helm chart or Argo Application, the API image
+  pulls in the vendored 1.9 GB `openexecutive` core with torch, chromadb and
+  sentence-transformers, and the harness pushes the `atlas` remote only on the
+  final cycle, so no unattended cycle can build and verify the deploy. Cluster
+  access (kubectl, `registry.atlas.lan`, Gitea) is now reachable, but building the
+  multi-GB image and promoting it is a multi-cycle effort (Q47-Q50). It also
+  outranks the stage 9 `enrollment-plan`/`client-process` halves, which need new
+  cross-context request schemas (currency, model, program rebuild) and the
+  stage 10 `nurture-plan` slice. It advances missing gate integrity and exact
+  asset versions, which the cycle instructions rank first.
+- Outcome: `CANONICAL_LAUNCH_KINDS` grew by `swimlanes-plan`, and
+  `LaunchQAPackage` gained same-tenant typed `swimlanes` plus a positive
+  `swimlanes_version`, projecting the `swimlanes-plan` kind from the plan's own
+  identity and version (not the QA identity). The kind was added to the stage 9
+  `StageTemplate` package, and `RecordStageNineGateRequest` gained `swimlanes`
+  and `swimlanes_version`; the stage 9 route rebuilds the reviewed
+  `SwimlanesPlan` over the same completed stage 8 funnel (reusing the stage 8
+  pattern), so a stage 9 gate cannot pass without a reviewed, same-tenant
+  recovery strategy. This is an asset inside an existing stage, never a new or
+  renamed stage (owner decision 2026-10-04).
+- Evidence: `tests/unit/execution/test_launch_qa_package.py` (eighteen kinds,
+  swimlanes identity/version, cross-tenant and versionless refusal),
+  `tests/unit/engagement/test_record_stage_nine_gate.py` (eighteen pins),
+  `tests/unit/test_stage_nine_gate_route.py` and `test_stage_ten_gate_route.py`
+  and `tests/e2e/test_stage_zero_to_ten_e2e.py` (stage 9 payload carries the
+  swimlanes plan) all green. `make check` -> 2377 passed, 3 skipped, 730
+  subtests; `uv run pyflakes backend/redops tests` clean. `make done` passes
+  `[1/6]` through `[5/6]` and stops at `[6/6]`: the deployed RED health check
+  still fails because `redop.atlas.lan` serves OpenExecutive, not RED.
+- New findings: the `EnrollmentPlan` and `ClientProcess` class docstrings still
+  assert they are "not a new required gate kind"; the 2026-10-04 owner decision
+  E2 supersedes that for stage 9, so those docstrings must be updated when those
+  two kinds are wired. The stage 9 `enrollment-plan` and `client-process` kinds
+  remain; they need new request schemas because no durable stores exist for the
+  plans and `ClientProcess` grounds on stage 2/3/5 Commercial assets that the
+  stage 9 route would have to rebuild. The remaining Q28 wiring after this cycle:
+  stage 9 `enrollment-plan` and `client-process`, and stage 10 `nurture-plan`
+  (cross-context, Commercial) or the Q47-Q50 deploy slice.
+- Blockers (head unchanged): condition 9's deploy slice (Q47-Q50) needs image
+  builds, a Helm chart and an Argo Application, and the harness publishes `atlas`
+  only on the final loop cycle, so no unattended cycle can verify the deploy.
+  Condition 5 is met (operator ran the live smoke 2026-10-04). No prototype
+  condition other than 9 is unmet.
+- Highest priority ready next item: the stage 9 `client-process` +
+  `enrollment-plan` Q28 slice (SPEC.md sections 4, 12.5 and 12.7; owner decision
+  2026-10-04, E2). Prerequisites: `EnrollmentPlan` and `ClientProcess` already
+  exist in the Execution context with their policies; required artifacts are the
+  two `as_stage_asset(version=)` projections and kind constants, the
+  `CANONICAL_LAUNCH_KINDS`/stage 9 template additions, the new
+  `RecordStageNineGateRequest` schemas plus route builders (rebuilding the
+  grounded Commercial assets), and gate-integrity tests pinning exact versions.
+  Checkpoint: the stage 9 gate pins all required kinds from typed, same-tenant,
+  versioned assets and refuses a missing or foreign plan. Approver: the
+  client-designated authority on the gate. Blocked downstream dependency: the
+  stage 10 `nurture-plan` slice and then condition 9's deploy slice. Alternative
+  ready item if the larger cross-context payload must be avoided: the narrower
+  stage 10 `nurture-plan` slice.
+
 ### Owner decision 2026-10-04: Atlas deploy architecture (Q47-Q50)
 
 - The operator settled the deploy architecture (app repo issue #3), unblocking

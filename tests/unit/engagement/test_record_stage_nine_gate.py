@@ -13,7 +13,7 @@ itself; every output has an owner and a source. Stage 9 shows Ready for Traffic,
 not live or completed.
 
 Cycle 85 added the Execution ``LaunchQAPackage`` bridge that projects the reviewed
-stage 9 ``LaunchQA`` onto the seventeen canonical stage 9 asset kinds as exact
+stage 9 ``LaunchQA`` onto the eighteen canonical stage 9 asset kinds as exact
 ``StageAssetVersion`` evidence, so a canonical stage 9 gate can now be assembled.
 This cycle wires the stage 9 "Launch Approved" gate end to end, mirroring the
 stage 8 path: a pure Engagement assembler validates the reviewed package against
@@ -78,6 +78,8 @@ from ..execution.fixtures import (
     compliance_package,
     launch_checks,
     ready_for_traffic,
+    swimlane_moves,
+    swimlanes_plan,
 )
 from ..execution.test_funnel_integration_package import (
     other_tenant_complete_funnel,
@@ -123,6 +125,8 @@ def package(**overrides) -> LaunchQAPackage:
         "tenant_id": TENANT,
         "qa": ready_for_traffic(),
         "qa_version": 1,
+        "swimlanes": swimlanes_plan(),
+        "swimlanes_version": 1,
     }
     values.update(overrides)
     return LaunchQAPackage(**values)
@@ -134,6 +138,12 @@ def other_tenant_package(**overrides) -> LaunchQAPackage:
         "tenant_id": OTHER_TENANT,
         "qa": other_tenant_ready_qa(),
         "qa_version": 1,
+        "swimlanes": swimlanes_plan(
+            tenant_id=OTHER_TENANT,
+            funnel=other_tenant_complete_funnel(),
+            moves=swimlane_moves(tenant_id=OTHER_TENANT),
+        ),
+        "swimlanes_version": 1,
     }
     values.update(overrides)
     return LaunchQAPackage(**values)
@@ -229,17 +239,19 @@ class StageNineGateAssemblerTests(unittest.TestCase):
             self.template.required_asset_kinds(9),
             {ref.asset_id for ref in gate.required_assets},
         )
-        self.assertEqual(17, len(gate.required_assets))
+        self.assertEqual(18, len(gate.required_assets))
         self.assertEqual(
             frozenset(CANONICAL_LAUNCH_KINDS),
             {ref.asset_id for ref in gate.required_assets},
         )
 
     def test_the_gate_pins_the_exact_version_the_reviewed_qa_carries(self):
-        gate = self.assemble(package_=package(qa_version=5))
+        gate = self.assemble(
+            package_=package(qa_version=5, swimlanes_version=5)
+        )
 
         versions = {ref.asset_id: ref.version for ref in gate.required_assets}
-        self.assertEqual(17, len(versions))
+        self.assertEqual(18, len(versions))
         for kind, version in versions.items():
             self.assertEqual(5, version, msg=kind)
 
@@ -299,7 +311,7 @@ class StageNineGateRecorderTests(unittest.TestCase):
             ledger=ledger,
             scope=overrides.pop("scope", SCOPE_NINE),
             checkpoint_evidence=overrides.pop(
-                "checkpoint_evidence", "all seventeen stage 9 kinds reviewed"
+                "checkpoint_evidence", "all eighteen stage 9 kinds reviewed"
             ),
             rationale=overrides.pop(
                 "rationale", "every critical path check passed and the client authority authorized traffic"
@@ -328,7 +340,7 @@ class StageNineGateRecorderTests(unittest.TestCase):
 
         decision = self.record(self.assembled_gate(), ledger)
 
-        self.assertEqual(17, len(decision.asset_approvals))
+        self.assertEqual(18, len(decision.asset_approvals))
         for request in decision.asset_approvals:
             self.assertEqual(SCOPE_NINE, request.scope)
             self.assertEqual(APPROVER, request.approver)
@@ -408,7 +420,7 @@ class RecordStageNineGateHandlerTests(unittest.TestCase):
             "approver": APPROVER,
             "proposed_by": OWNER,
             "scope": SCOPE_NINE,
-            "checkpoint_evidence": "all seventeen stage 9 kinds reviewed",
+            "checkpoint_evidence": "all eighteen stage 9 kinds reviewed",
             "rationale": "every critical path check passed and the client authority authorized traffic",
             "assigned_owner": OWNER,
             "due_on": DUE,

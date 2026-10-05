@@ -1166,6 +1166,8 @@ class RecordStageNineGateRequest(BaseModel):
     amplifier: AuthorityAmplifierInput
     claims: list[ClaimInput] = Field(default_factory=list)
     funnel: FunnelIntegrationInput
+    swimlanes: SwimlanesPlanInput
+    swimlanes_version: int
     qa: LaunchQAInput
     stage_owner: str
     approver: str

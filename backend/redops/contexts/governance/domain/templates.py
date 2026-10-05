@@ -271,6 +271,7 @@ def stage_zero_to_ten_template(
                         "launch-dashboard",
                         "launch-decision",
                         "compliance-package",
+                        "swimlanes-plan",
                     }
                 ),
             ),

@@ -30,6 +30,7 @@ from redops.contexts.execution.domain.errors import (
     InvalidLaunchQAPackageError,
     LaunchQAPackageTenantBoundaryError,
 )
+from redops.contexts.execution.domain.swimlanes import SWIMLANES_PLAN_KIND
 from redops.contexts.execution.domain.value_objects import (
     CANONICAL_LAUNCH_KIND_CHECKS,
     CANONICAL_LAUNCH_KINDS,
@@ -46,6 +47,8 @@ from .fixtures import (
     launch_checks,
     launch_qa,
     ready_for_traffic,
+    swimlane_moves,
+    swimlanes_plan,
 )
 from .test_funnel_integration_package import other_tenant_complete_funnel
 
@@ -64,24 +67,34 @@ def other_tenant_ready_qa() -> LaunchQA:
     ).authorize_traffic(authorization=authorization())
 
 
+def other_tenant_swimlanes_plan():
+    return swimlanes_plan(
+        tenant_id=OTHER_TENANT,
+        funnel=other_tenant_complete_funnel(),
+        moves=swimlane_moves(tenant_id=OTHER_TENANT),
+    )
+
+
 def package(**overrides) -> LaunchQAPackage:
     values = {
         "package_id": "launch-package-3f",
         "tenant_id": TENANT,
         "qa": ready_for_traffic(),
         "qa_version": 1,
+        "swimlanes": swimlanes_plan(),
+        "swimlanes_version": 1,
     }
     values.update(overrides)
     return LaunchQAPackage(**values)
 
 
 class LaunchQAPackageProjectionTests(unittest.TestCase):
-    def test_the_package_projects_all_seventeen_canonical_stage_nine_kinds(self):
+    def test_the_package_projects_all_eighteen_canonical_stage_nine_kinds(self):
         assets = package().stage_asset_versions()
 
         kinds = {asset.kind for asset in assets}
         self.assertEqual(frozenset(CANONICAL_LAUNCH_KINDS), kinds)
-        self.assertEqual(17, len(assets))
+        self.assertEqual(18, len(assets))
 
     def test_the_canonical_kinds_match_the_template_stage_nine_package(self):
         template_kinds = stage_zero_to_ten_template().required_asset_kinds(9)
@@ -102,13 +115,14 @@ class LaunchQAPackageProjectionTests(unittest.TestCase):
         self.assertEqual(len(mapped), len(set(mapped)))
         self.assertEqual(
             frozenset(CANONICAL_LAUNCH_KINDS),
-            frozenset(CANONICAL_LAUNCH_KIND_CHECKS) | {COMPLIANCE_PACKAGE_KIND},
+            frozenset(CANONICAL_LAUNCH_KIND_CHECKS)
+            | {COMPLIANCE_PACKAGE_KIND, SWIMLANES_PLAN_KIND},
         )
 
     def test_every_kind_pins_the_reviewed_qa_at_its_exact_version(self):
-        assets = package(qa_version=4).stage_asset_versions()
+        assets = package(qa_version=4, swimlanes_version=4).stage_asset_versions()
 
-        self.assertEqual(17, len(assets))
+        self.assertEqual(18, len(assets))
         for asset in assets:
             self.assertEqual(4, asset.version)
 
@@ -116,7 +130,7 @@ class LaunchQAPackageProjectionTests(unittest.TestCase):
         assets = package().stage_asset_versions()
 
         for asset in assets:
-            if asset.kind == COMPLIANCE_PACKAGE_KIND:
+            if asset.kind in (COMPLIANCE_PACKAGE_KIND, SWIMLANES_PLAN_KIND):
                 continue
             self.assertEqual("qa-3f", asset.asset_id)
 
@@ -129,6 +143,16 @@ class LaunchQAPackageProjectionTests(unittest.TestCase):
         self.assertEqual(1, len(compliance))
         self.assertEqual("compliance-3f", compliance[0].asset_id)
         self.assertEqual(1, compliance[0].version)
+
+    def test_the_swimlanes_kind_pins_the_reviewed_recovery_plan(self):
+        assets = package(swimlanes_version=3).stage_asset_versions()
+
+        swimlanes = [
+            asset for asset in assets if asset.kind == SWIMLANES_PLAN_KIND
+        ]
+        self.assertEqual(1, len(swimlanes))
+        self.assertEqual("swimlanes-3f", swimlanes[0].asset_id)
+        self.assertEqual(3, swimlanes[0].version)
 
     def test_the_projected_evidence_is_tenant_scoped(self):
         for asset in package().stage_asset_versions():
@@ -171,6 +195,16 @@ class LaunchQAPackageBoundaryTests(unittest.TestCase):
 
         with self.assertRaises(InvalidLaunchQAPackageError):
             package(qa=qa)
+
+    def test_a_cross_tenant_swimlanes_plan_is_refused(self):
+        with self.assertRaises(LaunchQAPackageTenantBoundaryError):
+            package(swimlanes=other_tenant_swimlanes_plan())
+
+    def test_a_versionless_swimlanes_plan_is_refused(self):
+        for override in ({"swimlanes_version": 0}, {"swimlanes_version": -1}):
+            with self.subTest(override=override):
+                with self.assertRaises(InvalidLaunchQAPackageError):
+                    package(**override)
 
 
 if __name__ == "__main__":

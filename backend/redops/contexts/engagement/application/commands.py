@@ -382,7 +382,7 @@ class RecordStageNineGateCommand:
     """Request to assemble and record the stage 9 "Launch Approved" gate.
 
     The command carries the reviewed ``LaunchQAPackage`` (the bridge that projects
-    the single ready-for-traffic stage 9 ``LaunchQA`` onto the seventeen canonical
+    the single ready-for-traffic stage 9 ``LaunchQA`` onto the eighteen canonical
     kinds), the workspace authority registry and the exact decision metadata; it
     deliberately carries no ``StageGate``. The use case builds the canonical gate
     itself from the package, so a caller cannot substitute a hand-built gate and

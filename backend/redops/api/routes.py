@@ -3040,8 +3040,13 @@ def record_stage_nine_gate(
     08, 21, 22 and 24 per SPEC.md section 12.3). The route rebuilds the reviewed QA
     on the rebuilt complete stage 8 funnel and drives ``authorize_traffic``, so the
     ``LaunchApprovedPolicy`` and ``ComplianceRequiredPolicy`` -- not the transport
-    layer -- decide whether the seventeen canonical kinds may be pinned as passing
-    evidence. The route resolves the approved method, production ready offer,
+    layer -- decide whether the eighteen canonical kinds may be pinned as passing
+    evidence. The route also rebuilds the reviewed swimlanes recovery plan over the
+    same completed funnel and pins its ``swimlanes-plan`` kind at the
+    ``swimlanes_version``, because the methodology owner made the canon Swimlanes
+    channel model a required stage 8 and stage 9 kind (owner decision 2026-10-04;
+    SPEC.md sections 4 and 12.5). The route resolves the approved method,
+    production ready offer,
     approved stage 6 message and approved stage 7 amplifier from their stores by
     exact identity, and resolves the completed stage 8 funnel from its store by
     exact identity rather than trusting the repeated request body; every integrity
@@ -3091,11 +3096,31 @@ def record_stage_nine_gate(
         qa = _authorize_launch_qa(
             tenant_id, body.qa, funnel, launch_qa_repository
         )
+        swimlanes = SwimlanesPlan(
+            plan_id=body.swimlanes.plan_id,
+            tenant_id=tenant_id,
+            owner=body.swimlanes.owner,
+            funnel=funnel,
+            moves=tuple(
+                SwimlaneMove(
+                    move_id=move.move_id,
+                    tenant_id=tenant_id,
+                    channel=SwimlaneChannel(move.channel),
+                    stalled_step=move.stalled_step,
+                    next_step=move.next_step,
+                    vehicle=move.vehicle,
+                    next_action=move.next_action,
+                )
+                for move in body.swimlanes.moves
+            ),
+        )
         package = LaunchQAPackage(
             package_id=body.qa_package_id,
             tenant_id=tenant_id,
             qa=qa,
             qa_version=body.qa_version,
+            swimlanes=swimlanes,
+            swimlanes_version=body.swimlanes_version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 9, tenant_id

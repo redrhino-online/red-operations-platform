@@ -219,6 +219,8 @@ class StageNineGateRouteTests(unittest.TestCase):
             "amplifier": eight["amplifier"],
             "claims": eight["claims"],
             "funnel": eight["funnel"],
+            "swimlanes": eight["swimlanes"],
+            "swimlanes_version": eight["swimlanes_version"],
             "qa": self._qa(),
             "stage_owner": OWNER,
             "approver": APPROVER,

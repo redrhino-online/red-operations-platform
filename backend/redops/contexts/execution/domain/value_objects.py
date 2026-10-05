@@ -502,6 +502,7 @@ CANONICAL_LAUNCH_KINDS: tuple[str, ...] = (
     "launch-dashboard",
     "launch-decision",
     "compliance-package",
+    "swimlanes-plan",
 )
 
 
@@ -533,7 +534,7 @@ CANONICAL_LAUNCH_KIND_CHECKS: dict[str, tuple[QACheckKind, ...]] = {
 
 @dataclass(frozen=True)
 class LaunchQAPackage:
-    """The reviewed stage 9 launch QA, projected to the seventeen canonical gate kinds.
+    """The reviewed stage 9 launch QA, projected to the eighteen canonical gate kinds.
 
     SPEC.md section 4, stage 9 "QA" and its "Launch Approved" checkpoint: a stage
     is complete only when its required assets exist, pass the checkpoint and
@@ -559,22 +560,28 @@ class LaunchQAPackage:
     desktop and mobile), so ``CANONICAL_LAUNCH_KIND_CHECKS`` records which checks
     evidence each kind; the ``compliance-package`` kind is projected from the
     reviewed ``CompliancePackage`` itself, because SPEC.md section 12.5 makes the
-    canon's compliance suite a required stage 9 asset.
+    canon's compliance suite a required stage 9 asset. The ``swimlanes-plan`` kind
+    is projected from the reviewed ``SwimlanesPlan`` at its own identity and
+    version, because the methodology owner wired the canon Swimlanes channel model
+    into the stage 8 and stage 9 gates (owner decision 2026-10-04; SPEC.md
+    sections 4 and 12.5).
 
     A ``LaunchQA`` only owns its launch evidence once ``authorize_traffic`` passes
     the checkpoint, so this package refuses a QA that has not reached
-    ``LaunchQAState.READY_FOR_TRAFFIC``: seventeen kinds cannot be pinned as this
+    ``LaunchQAState.READY_FOR_TRAFFIC``: eighteen kinds cannot be pinned as this
     client's evidence without a QA that actually passed and was authorized to
     begin traffic (SPEC.md section 4). It also refuses a blank identity, a
-    versionless QA, a QA whose reviewed compliance package is absent and a
-    cross-tenant QA rather than silently pinning inexact or foreign evidence
-    (SPEC.md sections 3 and 4).
+    versionless QA, a QA whose reviewed compliance package is absent, a foreign or
+    versionless swimlanes plan and a cross-tenant QA rather than silently pinning
+    inexact or foreign evidence (SPEC.md sections 3 and 4).
     """
 
     package_id: str
     tenant_id: str
     qa: "LaunchQA"
     qa_version: int
+    swimlanes: "SwimlanesPlan"
+    swimlanes_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -596,7 +603,7 @@ class LaunchQAPackage:
         if not self.qa.is_ready_for_traffic:
             raise InvalidLaunchQAPackageError(
                 f"stage 9 launch QA {self.qa.qa_id!r} has not passed Launch "
-                "Approved, so its seventeen asset kinds cannot be pinned as exact "
+                "Approved, so its eighteen asset kinds cannot be pinned as exact "
                 "evidence"
             )
         compliance = self.qa.compliance
@@ -611,6 +618,28 @@ class LaunchQAPackage:
                 f"stage 9 launch QA {self.qa.qa_id!r} carries compliance package "
                 f"{compliance.package_id!r} from tenant {compliance.tenant_id!r}, "
                 f"not package tenant {self.tenant_id!r}"
+            )
+        from redops.contexts.execution.domain.swimlanes import SwimlanesPlan
+
+        if not isinstance(self.swimlanes, SwimlanesPlan):
+            raise InvalidLaunchQAPackageError(
+                "stage 9 requires a typed swimlanes recovery plan so the canon "
+                "swimlanes-plan kind is pinned from a reviewed plan, not a "
+                "free-text reference"
+            )
+        if self.swimlanes.tenant_id != self.tenant_id:
+            raise LaunchQAPackageTenantBoundaryError(
+                f"stage 9 swimlanes plan {self.swimlanes.plan_id!r} belongs to "
+                f"tenant {self.swimlanes.tenant_id!r}, not package tenant "
+                f"{self.tenant_id!r}"
+            )
+        if (
+            not isinstance(self.swimlanes_version, int)
+            or self.swimlanes_version < 1
+        ):
+            raise InvalidLaunchQAPackageError(
+                "the swimlanes plan version must be a positive integer so the "
+                "stage 9 gate can pin the reviewed asset at an exact version"
             )
 
     @property
@@ -637,10 +666,16 @@ class LaunchQAPackage:
         version. The ``compliance-package`` kind is pinned from the reviewed
         ``CompliancePackage`` itself, at the same reviewed QA version, so the
         gate records the exact compliance evidence rather than only asserting the
-        package was present. Governance still pins each projection for the
-        workspace tenant, so a cross-client QA or package is refused rather than
-        silently authorized (SPEC.md sections 3, 4 and 11).
+        package was present. The ``swimlanes-plan`` kind is pinned from the
+        reviewed ``SwimlanesPlan`` at the ``swimlanes_version`` (owner decision
+        2026-10-04; SPEC.md sections 4 and 12.5), because the stage 9 launch
+        decision must pin the recovery strategy at its own identity and version.
+        Governance still pins each projection for the workspace tenant, so a
+        cross-client QA, package or plan is refused rather than silently
+        authorized (SPEC.md sections 3, 4 and 11).
         """
+        from redops.contexts.execution.domain.swimlanes import SWIMLANES_PLAN_KIND
+
         assets = [
             StageAssetVersion(
                 asset_id=self.qa.qa_id,
@@ -649,10 +684,13 @@ class LaunchQAPackage:
                 version=self.qa_version,
             )
             for kind in CANONICAL_LAUNCH_KINDS
-            if kind != COMPLIANCE_PACKAGE_KIND
+            if kind not in (COMPLIANCE_PACKAGE_KIND, SWIMLANES_PLAN_KIND)
         ]
         assets.append(
             self.qa.compliance.as_stage_asset(version=self.qa_version)
+        )
+        assets.append(
+            self.swimlanes.as_stage_asset(version=self.swimlanes_version)
         )
         return tuple(assets)
 
