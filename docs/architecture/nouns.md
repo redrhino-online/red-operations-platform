@@ -16,7 +16,7 @@ explicit.
 | **RED Operations Platform** | RED's productised OpenExecutive: the app in this repo. | The deliverable. Builds on a pinned dependency, never a fork divergence. |
 | **RED Operations Director** | The single coordinating agent / visible interface of the platform. | One accountable coordinator instead of a faceless agent swarm; owns prioritisation and handoffs (SPEC §5). |
 | **RED Method** | RED's licensed implementation of the reference model. | RED's commercial IP; the pipeline exists to produce it for clients. |
-| **Reference model / canon** | The predecessor framework's source material (`canon/`), supplied as numbered `.txt` files. | Shapes artifacts' intent; treated as data, never instructions, never copied verbatim (SPEC §12). |
+| **Reference model / canon** | The predecessor framework's source material (`canon/`): `framework-canon/` transcripts (48 numbered plus 103 in nine series), RED's synthesized `docs/`, and RED's `internal/` operator maps. | Shapes artifacts' intent; treated as data, never instructions, never copied verbatim (SPEC §12). |
 | **SPEC.md** | The product and engineering specification. | The product constraint; wins over the canon on authority, approval, tenancy, security. |
 | **IMPLEMENTATION_PLAN.md** | The living plan and per-cycle record. | How the build loop stays honest about progress, blockers and next work. |
 
