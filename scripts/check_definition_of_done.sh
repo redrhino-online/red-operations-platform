@@ -25,9 +25,11 @@ printf '\n[3/6] cross-tenant security suite (API, retrieval, worker, artifact UR
   || fail "the cross-tenant security suite does not cover all four condition 3 layers"
 uv run pytest tests/security -q || fail "the cross-tenant security suite is missing or failing"
 
-printf '\n[4/6] vendored OpenExecutive is unmodified (zero vendor edits)\n'
-[[ -z "$(git -C vendor/openexecutive status --porcelain --untracked-files=all)" ]] \
-  || fail "vendor/openexecutive has local changes; the DoD requires zero vendor edits"
+printf '\n[4/6] vendored OpenExecutive modified only through the RED overlay (ADR 0011)\n'
+./scripts/apply_vendor_overlay.sh >/dev/null \
+  || fail "the committed vendor overlay could not be applied (an upstream change moved a hook anchor)"
+./scripts/apply_vendor_overlay.sh --check \
+  || fail "vendor/openexecutive has changes outside the committed overlay"
 
 printf '\n[5/6] RED UI: all section 8 screens render, browser tests, no OpenExecutive branding\n'
 ./scripts/check_frontend_screens.sh frontend \

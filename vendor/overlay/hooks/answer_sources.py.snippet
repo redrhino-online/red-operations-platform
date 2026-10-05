@@ -1,0 +1,10 @@
+try:
+    from openexecutive.agents.redops_agents import RED_SPECIALIST_AREAS
+
+    _AREAS.update(RED_SPECIALIST_AREAS)
+except Exception:  # pragma: no cover - the overlay is optional at runtime
+    import logging as _logging
+
+    _logging.getLogger(__name__).warning(
+        "RED specialist areas not applied", exc_info=True
+    )
