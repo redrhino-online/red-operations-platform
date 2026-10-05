@@ -36,6 +36,7 @@ if TYPE_CHECKING:
         LaunchQA,
         PerformanceBaseline,
     )
+    from redops.contexts.execution.domain.enrollment import EnrollmentPlan
     from redops.contexts.execution.domain.swimlanes import SwimlanesPlan
 
 
@@ -503,6 +504,7 @@ CANONICAL_LAUNCH_KINDS: tuple[str, ...] = (
     "launch-decision",
     "compliance-package",
     "swimlanes-plan",
+    "enrollment-plan",
 )
 
 
@@ -534,7 +536,7 @@ CANONICAL_LAUNCH_KIND_CHECKS: dict[str, tuple[QACheckKind, ...]] = {
 
 @dataclass(frozen=True)
 class LaunchQAPackage:
-    """The reviewed stage 9 launch QA, projected to the eighteen canonical gate kinds.
+    """The reviewed stage 9 launch QA, projected to the nineteen canonical gate kinds.
 
     SPEC.md section 4, stage 9 "QA" and its "Launch Approved" checkpoint: a stage
     is complete only when its required assets exist, pass the checkpoint and
@@ -564,16 +566,20 @@ class LaunchQAPackage:
     is projected from the reviewed ``SwimlanesPlan`` at its own identity and
     version, because the methodology owner wired the canon Swimlanes channel model
     into the stage 8 and stage 9 gates (owner decision 2026-10-04; SPEC.md
-    sections 4 and 12.5).
+    sections 4 and 12.5). The ``enrollment-plan`` kind is projected from the
+    reviewed ``EnrollmentPlan`` at its own identity and version, because the
+    methodology owner placed the canon enrollment and sales call as a required
+    stage 9 kind (owner decision 2026-10-04, E2; SPEC.md sections 4 and 12.5).
 
     A ``LaunchQA`` only owns its launch evidence once ``authorize_traffic`` passes
     the checkpoint, so this package refuses a QA that has not reached
-    ``LaunchQAState.READY_FOR_TRAFFIC``: eighteen kinds cannot be pinned as this
+    ``LaunchQAState.READY_FOR_TRAFFIC``: nineteen kinds cannot be pinned as this
     client's evidence without a QA that actually passed and was authorized to
     begin traffic (SPEC.md section 4). It also refuses a blank identity, a
     versionless QA, a QA whose reviewed compliance package is absent, a foreign or
-    versionless swimlanes plan and a cross-tenant QA rather than silently pinning
-    inexact or foreign evidence (SPEC.md sections 3 and 4).
+    versionless swimlanes plan, a foreign or versionless enrollment plan and a
+    cross-tenant QA rather than silently pinning inexact or foreign evidence
+    (SPEC.md sections 3 and 4).
     """
 
     package_id: str
@@ -582,6 +588,8 @@ class LaunchQAPackage:
     qa_version: int
     swimlanes: "SwimlanesPlan"
     swimlanes_version: int
+    enrollment: "EnrollmentPlan"
+    enrollment_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -641,6 +649,28 @@ class LaunchQAPackage:
                 "the swimlanes plan version must be a positive integer so the "
                 "stage 9 gate can pin the reviewed asset at an exact version"
             )
+        from redops.contexts.execution.domain.enrollment import EnrollmentPlan
+
+        if not isinstance(self.enrollment, EnrollmentPlan):
+            raise InvalidLaunchQAPackageError(
+                "stage 9 requires a typed enrollment plan so the canon "
+                "enrollment-plan kind is pinned from a reviewed plan, not a "
+                "free-text reference"
+            )
+        if self.enrollment.tenant_id != self.tenant_id:
+            raise LaunchQAPackageTenantBoundaryError(
+                f"stage 9 enrollment plan {self.enrollment.plan_id!r} belongs to "
+                f"tenant {self.enrollment.tenant_id!r}, not package tenant "
+                f"{self.tenant_id!r}"
+            )
+        if (
+            not isinstance(self.enrollment_version, int)
+            or self.enrollment_version < 1
+        ):
+            raise InvalidLaunchQAPackageError(
+                "the enrollment plan version must be a positive integer so the "
+                "stage 9 gate can pin the reviewed asset at an exact version"
+            )
 
     @property
     def kinds(self) -> frozenset[str]:
@@ -670,10 +700,17 @@ class LaunchQAPackage:
         reviewed ``SwimlanesPlan`` at the ``swimlanes_version`` (owner decision
         2026-10-04; SPEC.md sections 4 and 12.5), because the stage 9 launch
         decision must pin the recovery strategy at its own identity and version.
+        The ``enrollment-plan`` kind is pinned from the reviewed ``EnrollmentPlan``
+        at the ``enrollment_version`` (owner decision 2026-10-04, E2; SPEC.md
+        sections 4 and 12.5), because the stage 9 launch decision must pin the
+        enrollment and sales call at its own identity and version.
         Governance still pins each projection for the workspace tenant, so a
-        cross-client QA, package or plan is refused rather than silently
-        authorized (SPEC.md sections 3, 4 and 11).
+        cross-client QA, package, plan or enrollment is refused rather than
+        silently authorized (SPEC.md sections 3, 4 and 11).
         """
+        from redops.contexts.execution.domain.enrollment import (
+            ENROLLMENT_PLAN_KIND,
+        )
         from redops.contexts.execution.domain.swimlanes import SWIMLANES_PLAN_KIND
 
         assets = [
@@ -684,13 +721,21 @@ class LaunchQAPackage:
                 version=self.qa_version,
             )
             for kind in CANONICAL_LAUNCH_KINDS
-            if kind not in (COMPLIANCE_PACKAGE_KIND, SWIMLANES_PLAN_KIND)
+            if kind
+            not in (
+                COMPLIANCE_PACKAGE_KIND,
+                SWIMLANES_PLAN_KIND,
+                ENROLLMENT_PLAN_KIND,
+            )
         ]
         assets.append(
             self.qa.compliance.as_stage_asset(version=self.qa_version)
         )
         assets.append(
             self.swimlanes.as_stage_asset(version=self.swimlanes_version)
+        )
+        assets.append(
+            self.enrollment.as_stage_asset(version=self.enrollment_version)
         )
         return tuple(assets)
 

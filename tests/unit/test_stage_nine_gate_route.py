@@ -207,6 +207,45 @@ class StageNineGateRouteTests(unittest.TestCase):
         body.update(overrides)
         return body
 
+    def _enrollment(self, **overrides):
+        body = {
+            "plan_id": "enrollment-3f",
+            "owner": "journey-owner",
+            "closer": "sales-closer",
+            "homework": {
+                "signature_step": "Extract the diagnosis",
+                "questions": [
+                    "what are your current sales?",
+                    "what is holding you back?",
+                ],
+                "max_days_to_call": 3,
+            },
+            "steps": [
+                {
+                    "step_kind": kind,
+                    "purpose": f"run the {kind} stage",
+                    "opt_out_check": "confirm the prospect wants this now",
+                }
+                for kind in (
+                    "frame",
+                    "examine",
+                    "prescribe",
+                    "prognosis",
+                )
+            ],
+            "qualification": {
+                "accept_criteria": ["established business at 10k per month"],
+                "reject_criteria": ["still has a day job with no revenue"],
+            },
+            "payment": {
+                "method": "card",
+                "deposit_amount": 2000,
+                "collected_live": True,
+            },
+        }
+        body.update(overrides)
+        return body
+
     def payload(self, **overrides):
         eight = self._eight.payload()
         body = {
@@ -221,6 +260,8 @@ class StageNineGateRouteTests(unittest.TestCase):
             "funnel": eight["funnel"],
             "swimlanes": eight["swimlanes"],
             "swimlanes_version": eight["swimlanes_version"],
+            "enrollment": self._enrollment(),
+            "enrollment_version": 1,
             "qa": self._qa(),
             "stage_owner": OWNER,
             "approver": APPROVER,

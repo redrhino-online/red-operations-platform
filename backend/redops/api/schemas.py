@@ -1140,6 +1140,63 @@ class LaunchQAInput(BaseModel):
     authorization: TrafficAuthorizationInput
 
 
+class EnrollmentStepInput(BaseModel):
+    """One canon enrollment call stage (SPEC.md section 12.5; canon 00, 21).
+
+    The methodology owner placed the canon enrollment and sales call as a required
+    stage 9 ``enrollment-plan`` kind (owner decision 2026-10-04, E2). Each stage
+    names its purpose and the red-flag opt-out check the closer applies before the
+    conversation advances; the domain, not the transport layer, refuses an untyped
+    stage or a missing check.
+    """
+
+    step_kind: str
+    purpose: str
+    opt_out_check: str
+
+
+class EnrollmentHomeworkInput(BaseModel):
+    """The pre-call homework qualifier (canon file 21)."""
+
+    signature_step: str
+    questions: list[str]
+    max_days_to_call: int
+
+
+class EnrollmentQualificationInput(BaseModel):
+    """The canon "red velvet rope" accept and reject criteria (canon file 06)."""
+
+    accept_criteria: list[str]
+    reject_criteria: list[str]
+
+
+class EnrollmentPaymentInput(BaseModel):
+    """The live payment and checkout terms (canon file 21)."""
+
+    method: str
+    deposit_amount: int
+    collected_live: bool
+
+
+class EnrollmentPlanInput(BaseModel):
+    """The reviewed enrollment and sales call over the stage 8 funnel.
+
+    The plan carries its identity, owner, accountable closer, pre-call homework,
+    the canon call stages, the red velvet rope and the live payment terms; the
+    route grounds it on the completed stage 8 funnel and the approved stage 4
+    Signature Solution, so the domain decides whether the plan is the canon's
+    authority-preserving enrollment process rather than a free-text script.
+    """
+
+    plan_id: str
+    owner: str
+    closer: str
+    homework: EnrollmentHomeworkInput
+    steps: list[EnrollmentStepInput]
+    qualification: EnrollmentQualificationInput
+    payment: EnrollmentPaymentInput
+
+
 class RecordStageNineGateRequest(BaseModel):
     """The stage 9 "Launch Approved" gate request (SPEC.md section 4).
 
@@ -1168,6 +1225,8 @@ class RecordStageNineGateRequest(BaseModel):
     funnel: FunnelIntegrationInput
     swimlanes: SwimlanesPlanInput
     swimlanes_version: int
+    enrollment: EnrollmentPlanInput
+    enrollment_version: int
     qa: LaunchQAInput
     stage_owner: str
     approver: str

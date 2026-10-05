@@ -46,7 +46,10 @@ from redops.contexts.execution.domain.errors import (
     EnrollmentTenantBoundaryError,
     InvalidEnrollmentError,
 )
+from redops.contexts.governance.domain.value_objects import StageAssetVersion
 from redops.contexts.method.domain.entities import SignatureSolution
+
+ENROLLMENT_PLAN_KIND = "enrollment-plan"
 
 
 class EnrollmentStepKind(Enum):
@@ -235,10 +238,12 @@ class EnrollmentPlan:
     velvet rope and the live payment terms. The homework must draw on a step the
     plan's Signature Solution actually names (canon file 21: the homework gives
     away "a piece of my signature solution"), so a free-text step cannot be
-    represented as that piece. It is a planning decision, not a new required gate
-    kind (a methodology-owner decision, SPEC.md section 12.5), it does not
-    authorize spend, payment, external commitment or traffic (SPEC.md sections 4
-    and 9) and it is never an observation (SPEC.md section 3).
+    represented as that piece. The methodology owner placed it as a required
+    ``enrollment-plan`` kind of the stage 9 "Launch Approved" gate (owner decision
+    2026-10-04, E2; SPEC.md sections 4 and 12.5), so a passing stage 9 gate pins
+    the exact reviewed plan. It does not authorize spend, payment, external
+    commitment or traffic (SPEC.md sections 4 and 9) and it is never an
+    observation (SPEC.md section 3).
     """
 
     plan_id: str
@@ -349,4 +354,27 @@ class EnrollmentPlan:
         raise EnrollmentObservationError(
             f"enrollment plan {claim_id!r} is a call to run, not an observed "
             "result, and cannot be recorded as an observation"
+        )
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the reviewed plan onto exact ``enrollment-plan`` evidence.
+
+        The methodology owner placed the canon enrollment and sales call as a
+        required ``enrollment-plan`` kind of the stage 9 "Launch Approved" gate
+        (owner decision 2026-10-04, E2; SPEC.md sections 4 and 12.5). The reviewed
+        plan is projected at a positive integer version, and a versionless
+        projection is refused rather than silently pinned, so a passing stage 9
+        gate records the exact enrollment plan it approved (SPEC.md sections 3
+        and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidEnrollmentError(
+                "the enrollment plan version must be a positive integer so the "
+                "stage 9 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.plan_id,
+            tenant_id=self.tenant_id,
+            kind=ENROLLMENT_PLAN_KIND,
+            version=version,
         )

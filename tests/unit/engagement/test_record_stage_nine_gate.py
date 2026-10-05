@@ -81,9 +81,11 @@ from ..execution.fixtures import (
     swimlane_moves,
     swimlanes_plan,
 )
+from ..execution.test_enrollment import enrollment_plan
 from ..execution.test_funnel_integration_package import (
     other_tenant_complete_funnel,
 )
+from ..method.fixtures import signature_solution
 
 ON = date(2026, 10, 3)
 DUE = date(2026, 10, 17)
@@ -127,6 +129,8 @@ def package(**overrides) -> LaunchQAPackage:
         "qa_version": 1,
         "swimlanes": swimlanes_plan(),
         "swimlanes_version": 1,
+        "enrollment": enrollment_plan(),
+        "enrollment_version": 1,
     }
     values.update(overrides)
     return LaunchQAPackage(**values)
@@ -144,6 +148,12 @@ def other_tenant_package(**overrides) -> LaunchQAPackage:
             moves=swimlane_moves(tenant_id=OTHER_TENANT),
         ),
         "swimlanes_version": 1,
+        "enrollment": enrollment_plan(
+            tenant_id=OTHER_TENANT,
+            funnel=other_tenant_complete_funnel(),
+            method=signature_solution(tenant_id=OTHER_TENANT),
+        ),
+        "enrollment_version": 1,
     }
     values.update(overrides)
     return LaunchQAPackage(**values)
@@ -239,7 +249,7 @@ class StageNineGateAssemblerTests(unittest.TestCase):
             self.template.required_asset_kinds(9),
             {ref.asset_id for ref in gate.required_assets},
         )
-        self.assertEqual(18, len(gate.required_assets))
+        self.assertEqual(19, len(gate.required_assets))
         self.assertEqual(
             frozenset(CANONICAL_LAUNCH_KINDS),
             {ref.asset_id for ref in gate.required_assets},
@@ -247,11 +257,13 @@ class StageNineGateAssemblerTests(unittest.TestCase):
 
     def test_the_gate_pins_the_exact_version_the_reviewed_qa_carries(self):
         gate = self.assemble(
-            package_=package(qa_version=5, swimlanes_version=5)
+            package_=package(
+                qa_version=5, swimlanes_version=5, enrollment_version=5
+            )
         )
 
         versions = {ref.asset_id: ref.version for ref in gate.required_assets}
-        self.assertEqual(18, len(versions))
+        self.assertEqual(19, len(versions))
         for kind, version in versions.items():
             self.assertEqual(5, version, msg=kind)
 
@@ -340,7 +352,7 @@ class StageNineGateRecorderTests(unittest.TestCase):
 
         decision = self.record(self.assembled_gate(), ledger)
 
-        self.assertEqual(18, len(decision.asset_approvals))
+        self.assertEqual(19, len(decision.asset_approvals))
         for request in decision.asset_approvals:
             self.assertEqual(SCOPE_NINE, request.scope)
             self.assertEqual(APPROVER, request.approver)

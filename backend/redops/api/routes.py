@@ -218,6 +218,15 @@ from redops.contexts.execution.domain.value_objects import (
     QA_CHECK_ORDER,
     TrafficAuthorization,
 )
+from redops.contexts.execution.domain.enrollment import (
+    EnrollmentHomework,
+    EnrollmentPayment,
+    EnrollmentPaymentMethod,
+    EnrollmentPlan,
+    EnrollmentQualification,
+    EnrollmentStep,
+    EnrollmentStepKind,
+)
 from redops.contexts.execution.domain.swimlanes import (
     SwimlaneChannel,
     SwimlaneMove,
@@ -3040,12 +3049,17 @@ def record_stage_nine_gate(
     08, 21, 22 and 24 per SPEC.md section 12.3). The route rebuilds the reviewed QA
     on the rebuilt complete stage 8 funnel and drives ``authorize_traffic``, so the
     ``LaunchApprovedPolicy`` and ``ComplianceRequiredPolicy`` -- not the transport
-    layer -- decide whether the eighteen canonical kinds may be pinned as passing
+    layer -- decide whether the nineteen canonical kinds may be pinned as passing
     evidence. The route also rebuilds the reviewed swimlanes recovery plan over the
     same completed funnel and pins its ``swimlanes-plan`` kind at the
     ``swimlanes_version``, because the methodology owner made the canon Swimlanes
     channel model a required stage 8 and stage 9 kind (owner decision 2026-10-04;
-    SPEC.md sections 4 and 12.5). The route resolves the approved method,
+    SPEC.md sections 4 and 12.5). It rebuilds the reviewed enrollment and sales
+    call over the same completed funnel and the approved stage 4 Signature
+    Solution and pins its ``enrollment-plan`` kind at the ``enrollment_version``,
+    because the methodology owner placed the canon enrollment block as a required
+    stage 9 kind (owner decision 2026-10-04, E2; SPEC.md sections 4 and 12.5). The
+    route resolves the approved method,
     production ready offer,
     approved stage 6 message and approved stage 7 amplifier from their stores by
     exact identity, and resolves the completed stage 8 funnel from its store by
@@ -3114,6 +3128,40 @@ def record_stage_nine_gate(
                 for move in body.swimlanes.moves
             ),
         )
+        enrollment = EnrollmentPlan(
+            plan_id=body.enrollment.plan_id,
+            tenant_id=tenant_id,
+            owner=body.enrollment.owner,
+            closer=body.enrollment.closer,
+            funnel=funnel,
+            method=method.signature_solution,
+            homework=EnrollmentHomework(
+                signature_step=body.enrollment.homework.signature_step,
+                questions=tuple(body.enrollment.homework.questions),
+                max_days_to_call=body.enrollment.homework.max_days_to_call,
+            ),
+            steps=tuple(
+                EnrollmentStep(
+                    step_kind=EnrollmentStepKind(step.step_kind),
+                    purpose=step.purpose,
+                    opt_out_check=step.opt_out_check,
+                )
+                for step in body.enrollment.steps
+            ),
+            qualification=EnrollmentQualification(
+                accept_criteria=tuple(
+                    body.enrollment.qualification.accept_criteria
+                ),
+                reject_criteria=tuple(
+                    body.enrollment.qualification.reject_criteria
+                ),
+            ),
+            payment=EnrollmentPayment(
+                method=EnrollmentPaymentMethod(body.enrollment.payment.method),
+                deposit_amount=body.enrollment.payment.deposit_amount,
+                collected_live=body.enrollment.payment.collected_live,
+            ),
+        )
         package = LaunchQAPackage(
             package_id=body.qa_package_id,
             tenant_id=tenant_id,
@@ -3121,6 +3169,8 @@ def record_stage_nine_gate(
             qa_version=body.qa_version,
             swimlanes=swimlanes,
             swimlanes_version=body.swimlanes_version,
+            enrollment=enrollment,
+            enrollment_version=body.enrollment_version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 9, tenant_id

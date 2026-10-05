@@ -272,6 +272,7 @@ def stage_zero_to_ten_template(
                         "launch-decision",
                         "compliance-package",
                         "swimlanes-plan",
+                        "enrollment-plan",
                     }
                 ),
             ),
