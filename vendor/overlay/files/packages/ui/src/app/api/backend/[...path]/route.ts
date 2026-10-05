@@ -48,8 +48,7 @@ async function proxy(req: NextRequest, params: { path: string[] }): Promise<Resp
   // 10.0.0.0/8 ingress allowlist), so the proxy treats every request as the
   // principal. The backend reads a request with no `x-caller-email` as the
   // principal.
-  const session = null;
-  const callerEmail = undefined;
+  const callerEmail: string | undefined = undefined;
   if (CALLER_SIGNER_BROKEN) {
     return new Response(JSON.stringify({ error: "caller signing is misconfigured" }), {
       status: 500,
@@ -97,7 +96,7 @@ async function proxy(req: NextRequest, params: { path: string[] }): Promise<Resp
   // filtering on /audit, /today, etc.). Source: the verified NextAuth
   // session — clients have no way to set this themselves (stripped
   // above).
-  if (callerEmail && !session?.localLogin) {
+  if (callerEmail) {
     headers.set("x-caller-email", callerEmail);
   }
 
@@ -108,8 +107,8 @@ async function proxy(req: NextRequest, params: { path: string[] }): Promise<Resp
     headers.set(
       CALLER_ASSERTION_HEADER,
       mintCallerAssertion(CALLER_SIGNER, {
-        kind: session?.localLogin ? "operator" : "user",
-        email: session?.localLogin ? "" : (callerEmail ?? ""),
+        kind: "user",
+        email: callerEmail ?? "",
         method: req.method,
         target: `${url.pathname}${url.search}`,
       }),

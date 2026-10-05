@@ -39,7 +39,7 @@ interface BuildOpts {
   /** Pending + needs-revision count shown on the Review entry. */
   reviewBadge?: number;
   /**
-   * "solo" (one person using Open Executive just for themselves) swaps the
+   * "solo" (one person using RED Operations just for themselves) swaps the
    * Company group — Departments, People, Company profile — for "You":
    * Goals, People and the profile, named for `roleKind` (see
    * `profileWording`). Defaults to "team".
