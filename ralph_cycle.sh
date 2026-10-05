@@ -8,7 +8,7 @@
 # the cycle commits code in the target and spec/plan changes in their own repo.
 # Optional environment: RALPH_SPEC, RALPH_PLAN, RALPH_CANON, RALPH_OPENCODE,
 # RALPH_MODEL, RALPH_PUSH_REMOTES, RALPH_PLAN_PUSH_REMOTES, RALPH_DB_PREFLIGHT,
-# RALPH_DB_WAIT, RALPH_DB_PROBE_TIMEOUT.
+# RALPH_DB_WAIT, RALPH_DB_PROBE_TIMEOUT, RALPH_SNAPSHOT, RALPH_OPENCODE_CONFIG.
 
 set -Eeuo pipefail
 
@@ -284,6 +284,19 @@ EOF
 
 printf 'ralph: starting one cycle; log: %s\n' "$LOG_FILE"
 cd "$RUN_CWD"
+
+# Disable opencode's filesystem snapshots for harness runs. A snapshot embeds a
+# full git diff of every changed file in each message.updated event; a cycle
+# that touches node_modules or thousands of files then writes multi-MB events
+# and bloats the session database. The harness commits after every cycle, so
+# opencode's revert/undo is unnecessary. Set RALPH_SNAPSHOT=1 to keep snapshots.
+if [[ "${RALPH_SNAPSHOT:-0}" != "1" ]]; then
+  RALPH_OPENCODE_CONFIG="${RALPH_OPENCODE_CONFIG:-$RUN_DIR/opencode.json}"
+  printf '{"$schema":"https://opencode.ai/config.json","snapshot":false}\n' > "$RALPH_OPENCODE_CONFIG"
+  export OPENCODE_CONFIG="$RALPH_OPENCODE_CONFIG"
+  printf 'ralph: snapshots disabled for this run (config %s)\n' "$RALPH_OPENCODE_CONFIG" >&2
+fi
+
 opencode_args=(run)
 if [[ -n "${RALPH_MODEL:-}" ]]; then
   opencode_args+=(--model "$RALPH_MODEL")
