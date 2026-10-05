@@ -16,19 +16,24 @@ Roadmap.
 Like the stage 1 through 9 reviewed-asset bridges, this package projects the
 reviewed stage 10 ``PerformanceBaseline`` onto the twelve canonical stage 10
 asset kinds as exact ``StageAssetVersion`` evidence so a canonical gate can be
-assembled. A ``PerformanceBaseline`` only reaches
-``PerformanceBaselineState.ESTABLISHED`` after ``establish`` passes the
-checkpoint on the stage 9 traffic authorization and an observed first qualified
-traffic milestone, so the package refuses a baseline that has not passed
-"Performance Baseline Established" rather than pinning twelve kinds for an
-unestablished baseline (SPEC.md section 4: a missing asset prevents gate
-completion and a waiver never makes an absent asset appear present). It also
-refuses a blank identity, a versionless baseline and a cross-tenant baseline.
+assembled. The ``nurture-plan`` kind is projected from the reviewed Commercial
+Design ``NurturePlan`` at its own identity and version, because the methodology
+owner placed the canon follow-up and nurture lifecycle as a required stage 10 kind
+(owner decision 2026-10-04, P2; SPEC.md sections 4 and 12.5). A
+``PerformanceBaseline`` only reaches ``PerformanceBaselineState.ESTABLISHED``
+after ``establish`` passes the checkpoint on the stage 9 traffic authorization and
+an observed first qualified traffic milestone, so the package refuses a baseline
+that has not passed "Performance Baseline Established" rather than pinning
+thirteen kinds for an unestablished baseline (SPEC.md section 4: a missing asset
+prevents gate completion and a waiver never makes an absent asset appear present).
+It also refuses a blank identity, a versionless baseline, a foreign or versionless
+nurture plan and a cross-tenant baseline.
 """
 
 import unittest
 from dataclasses import FrozenInstanceError
 
+from redops.contexts.commercial.domain.value_objects import NurtureModality
 from redops.contexts.execution.domain.entities import PerformanceBaseline
 from redops.contexts.execution.domain.errors import (
     InvalidPerformanceBaselinePackageError,
@@ -48,6 +53,12 @@ from .fixtures import (
     performance_baseline,
 )
 from .test_launch_qa_package import other_tenant_ready_qa
+from ..commercial.test_nurture_lifecycle import (
+    nurture_message,
+    nurture_plan,
+    nurture_sequence,
+)
+from ..method.fixtures import signature_solution
 from ..production.fixtures import TODAY
 
 OTHER_TENANT = "client-other"
@@ -64,41 +75,78 @@ def other_tenant_established_baseline() -> PerformanceBaseline:
     ).establish(on=TODAY)
 
 
+def other_tenant_nurture_plan():
+    return nurture_plan(
+        tenant_id=OTHER_TENANT,
+        method=signature_solution(tenant_id=OTHER_TENANT),
+        sequences=(
+            nurture_sequence(
+                tenant_id=OTHER_TENANT,
+                messages=(
+                    nurture_message(tenant_id=OTHER_TENANT),
+                    nurture_message(
+                        message_id="nurture-2",
+                        tenant_id=OTHER_TENANT,
+                        name="book a referral diagnostic",
+                        modality=NurtureModality.PROMOTION,
+                        subject="your referral diagnostic is open",
+                        purpose="promote the next step",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
 def package(**overrides) -> PerformanceBaselinePackage:
     values = {
         "package_id": "baseline-package-3f",
         "tenant_id": TENANT,
         "baseline": established_baseline(),
         "baseline_version": 1,
+        "nurture": nurture_plan(),
+        "nurture_version": 1,
     }
     values.update(overrides)
     return PerformanceBaselinePackage(**values)
 
 
 class PerformanceBaselinePackageProjectionTests(unittest.TestCase):
-    def test_the_package_projects_all_twelve_canonical_stage_ten_kinds(self):
+    def test_the_package_projects_all_thirteen_canonical_stage_ten_kinds(self):
         assets = package().stage_asset_versions()
 
         kinds = {asset.kind for asset in assets}
         self.assertEqual(frozenset(CANONICAL_BASELINE_KINDS), kinds)
-        self.assertEqual(12, len(assets))
+        self.assertEqual(13, len(assets))
 
     def test_the_canonical_kinds_match_the_template_stage_ten_package(self):
         template_kinds = stage_zero_to_ten_template().required_asset_kinds(10)
 
         self.assertEqual(template_kinds, frozenset(CANONICAL_BASELINE_KINDS))
 
-    def test_every_kind_pins_the_reviewed_baseline_at_its_exact_version(self):
+    def test_every_baseline_kind_pins_the_reviewed_baseline_at_its_version(self):
         assets = package(baseline_version=4).stage_asset_versions()
 
-        self.assertEqual(12, len(assets))
-        for asset in assets:
+        baseline_assets = [
+            asset for asset in assets if asset.kind != "nurture-plan"
+        ]
+        self.assertEqual(12, len(baseline_assets))
+        for asset in baseline_assets:
             self.assertEqual(4, asset.version)
 
-    def test_each_kind_pins_the_reviewed_baseline_identity(self):
+    def test_the_nurture_kind_pins_the_reviewed_plan_at_its_own_version(self):
+        assets = package(nurture_version=7).stage_asset_versions()
+
+        nurture = next(asset for asset in assets if asset.kind == "nurture-plan")
+        self.assertEqual("nurture-3f", nurture.asset_id)
+        self.assertEqual(7, nurture.version)
+
+    def test_each_baseline_kind_pins_the_reviewed_baseline_identity(self):
         assets = package().stage_asset_versions()
 
         for asset in assets:
+            if asset.kind == "nurture-plan":
+                continue
             self.assertEqual("baseline-3f", asset.asset_id)
 
     def test_the_projected_evidence_is_tenant_scoped(self):
@@ -121,6 +169,10 @@ class PerformanceBaselinePackageBoundaryTests(unittest.TestCase):
         with self.assertRaises(PerformanceBaselinePackageTenantBoundaryError):
             package(baseline=other_tenant_established_baseline())
 
+    def test_a_cross_tenant_nurture_plan_is_refused(self):
+        with self.assertRaises(PerformanceBaselinePackageTenantBoundaryError):
+            package(nurture=other_tenant_nurture_plan())
+
     def test_a_blank_package_identity_is_refused(self):
         for override in ({"package_id": ""}, {"tenant_id": "   "}):
             with self.subTest(override=override):
@@ -129,6 +181,12 @@ class PerformanceBaselinePackageBoundaryTests(unittest.TestCase):
 
     def test_a_versionless_reviewed_baseline_is_refused(self):
         for override in ({"baseline_version": 0}, {"baseline_version": -1}):
+            with self.subTest(override=override):
+                with self.assertRaises(InvalidPerformanceBaselinePackageError):
+                    package(**override)
+
+    def test_a_versionless_nurture_plan_is_refused(self):
+        for override in ({"nurture_version": 0}, {"nurture_version": -1}):
             with self.subTest(override=override):
                 with self.assertRaises(InvalidPerformanceBaselinePackageError):
                     package(**override)

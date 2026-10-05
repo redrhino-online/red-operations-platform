@@ -13,7 +13,7 @@ confer human approval upon itself; every output has an owner and a source. Campa
 activation alone does not complete an engagement.
 
 Cycle 87 added the Execution ``PerformanceBaselinePackage`` bridge that projects the
-reviewed stage 10 ``PerformanceBaseline`` onto the twelve canonical stage 10 asset
+reviewed stage 10 ``PerformanceBaseline`` onto the twelve canonical stage 10 asset kinds plus the nurture plan
 kinds as exact ``StageAssetVersion`` evidence, so a canonical stage 10 gate can now
 be assembled. This cycle wires the stage 10 "Performance Baseline Established" gate
 end to end, mirroring the stage 9 path: a pure Engagement assembler validates the
@@ -50,6 +50,7 @@ from redops.contexts.engagement.domain.errors import (
 )
 from redops.contexts.engagement.domain.value_objects import ClientAuthority
 from redops.contexts.execution.domain.entities import PerformanceBaseline
+from redops.contexts.commercial.domain.value_objects import NurtureModality
 from redops.contexts.execution.domain.value_objects import (
     CANONICAL_BASELINE_KINDS,
     MILESTONE_ORDER,
@@ -80,6 +81,12 @@ from ..execution.fixtures import (
     performance_baseline,
 )
 from ..execution.test_launch_qa_package import other_tenant_ready_qa
+from ..commercial.test_nurture_lifecycle import (
+    nurture_message,
+    nurture_plan,
+    nurture_sequence,
+)
+from ..method.fixtures import signature_solution
 from ..production.fixtures import TODAY
 
 ON = date(2026, 10, 3)
@@ -120,6 +127,8 @@ def package(**overrides) -> PerformanceBaselinePackage:
         "tenant_id": TENANT,
         "baseline": established_baseline(),
         "baseline_version": 1,
+        "nurture": nurture_plan(),
+        "nurture_version": 1,
     }
     values.update(overrides)
     return PerformanceBaselinePackage(**values)
@@ -131,6 +140,27 @@ def other_tenant_package(**overrides) -> PerformanceBaselinePackage:
         "tenant_id": OTHER_TENANT,
         "baseline": other_tenant_established_baseline(),
         "baseline_version": 1,
+        "nurture": nurture_plan(
+            tenant_id=OTHER_TENANT,
+            method=signature_solution(tenant_id=OTHER_TENANT),
+            sequences=(
+                nurture_sequence(
+                    tenant_id=OTHER_TENANT,
+                    messages=(
+                        nurture_message(tenant_id=OTHER_TENANT),
+                        nurture_message(
+                            message_id="nurture-2",
+                            tenant_id=OTHER_TENANT,
+                            name="book a referral diagnostic",
+                            modality=NurtureModality.PROMOTION,
+                            subject="your referral diagnostic is open",
+                            purpose="promote the next step",
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        "nurture_version": 1,
     }
     values.update(overrides)
     return PerformanceBaselinePackage(**values)
@@ -226,7 +256,7 @@ class StageTenGateAssemblerTests(unittest.TestCase):
             self.template.required_asset_kinds(10),
             {ref.asset_id for ref in gate.required_assets},
         )
-        self.assertEqual(12, len(gate.required_assets))
+        self.assertEqual(13, len(gate.required_assets))
         self.assertEqual(
             frozenset(CANONICAL_BASELINE_KINDS),
             {ref.asset_id for ref in gate.required_assets},
@@ -236,9 +266,12 @@ class StageTenGateAssemblerTests(unittest.TestCase):
         gate = self.assemble(package_=package(baseline_version=5))
 
         versions = {ref.asset_id: ref.version for ref in gate.required_assets}
-        self.assertEqual(12, len(versions))
+        self.assertEqual(13, len(versions))
         for kind, version in versions.items():
-            self.assertEqual(5, version, msg=kind)
+            if kind == "nurture-plan":
+                self.assertEqual(1, version, msg=kind)
+            else:
+                self.assertEqual(5, version, msg=kind)
 
     def test_the_assembler_records_the_author_distinct_from_the_approver(self):
         gate = self.assemble(proposed_by=OWNER)
@@ -296,7 +329,7 @@ class StageTenGateRecorderTests(unittest.TestCase):
             ledger=ledger,
             scope=overrides.pop("scope", SCOPE_TEN),
             checkpoint_evidence=overrides.pop(
-                "checkpoint_evidence", "all twelve stage 10 kinds reviewed"
+                "checkpoint_evidence", "all thirteen stage 10 kinds reviewed"
             ),
             rationale=overrides.pop(
                 "rationale", "first qualified traffic observed and later milestones pending"
@@ -325,7 +358,7 @@ class StageTenGateRecorderTests(unittest.TestCase):
 
         decision = self.record(self.assembled_gate(), ledger)
 
-        self.assertEqual(12, len(decision.asset_approvals))
+        self.assertEqual(13, len(decision.asset_approvals))
         for request in decision.asset_approvals:
             self.assertEqual(SCOPE_TEN, request.scope)
             self.assertEqual(APPROVER, request.approver)
@@ -405,7 +438,7 @@ class RecordStageTenGateHandlerTests(unittest.TestCase):
             "approver": APPROVER,
             "proposed_by": OWNER,
             "scope": SCOPE_TEN,
-            "checkpoint_evidence": "all twelve stage 10 kinds reviewed",
+            "checkpoint_evidence": "all thirteen stage 10 kinds reviewed",
             "rationale": "first qualified traffic observed and later milestones pending",
             "assigned_owner": OWNER,
             "due_on": DUE,

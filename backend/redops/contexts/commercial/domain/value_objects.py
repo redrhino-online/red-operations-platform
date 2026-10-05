@@ -1768,6 +1768,9 @@ class NurtureSequence:
             )
 
 
+NURTURE_PLAN_KIND = "nurture-plan"
+
+
 @dataclass(frozen=True)
 class NurturePlan:
     """The canon's follow-up and nurture lifecycle for a client (SPEC.md 12).
@@ -1779,6 +1782,12 @@ class NurturePlan:
     same-tenant stage 4 ``SignatureSolution`` so every message derives from one of
     the solution's named steps, binds the sequences to a named owner and one
     tenant, and reports the prospect states it does not yet cover.
+
+    The methodology owner placed the plan as a required ``nurture-plan`` kind of
+    the stage 10 "Performance Baseline Established" gate (owner decision
+    2026-10-04, P2; SPEC.md sections 4 and 12.5), so the stage 10 gate pins the
+    reviewed follow-up lifecycle at its own identity and version. It is an asset
+    inside an existing stage, never a new or renamed stage.
 
     The plan is never an observed result: it is the follow-up content that will
     run, while any measured movement stays a separate observation (SPEC.md section
@@ -1863,6 +1872,28 @@ class NurturePlan:
     @property
     def is_plan(self) -> bool:
         return True
+
+    def as_stage_asset(self, *, version: int) -> StageAssetVersion:
+        """Project the plan onto exact ``nurture-plan`` evidence.
+
+        SPEC.md sections 4 and 12.5: a canon-informed asset already implemented
+        in a bounded context becomes a required asset kind of its target stage
+        gate, so the stage 10 "Performance Baseline Established" gate pins the
+        reviewed follow-up lifecycle as one exact ``StageAssetVersion`` (owner
+        decision 2026-10-04, P2). A versionless projection is refused rather than
+        silently pinned (SPEC.md sections 3 and 4).
+        """
+        if not isinstance(version, int) or version < 1:
+            raise InvalidNurtureError(
+                "the nurture plan version must be a positive integer so the "
+                "stage 10 gate can pin the reviewed asset at an exact version"
+            )
+        return StageAssetVersion(
+            asset_id=self.plan_id,
+            tenant_id=self.tenant_id,
+            kind=NURTURE_PLAN_KIND,
+            version=version,
+        )
 
     def as_observation(self, *, claim_id: str) -> None:
         """Refuse to represent a nurture plan as an observed result.

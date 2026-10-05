@@ -31,6 +31,7 @@ from redops.contexts.execution.domain.errors import (
 from redops.contexts.governance.domain.value_objects import StageAssetVersion
 
 if TYPE_CHECKING:
+    from redops.contexts.commercial.domain.value_objects import NurturePlan
     from redops.contexts.execution.domain.entities import (
         FunnelIntegration,
         LaunchQA,
@@ -1215,6 +1216,7 @@ CANONICAL_BASELINE_KINDS: tuple[str, ...] = (
     "acquisition-cost",
     "attribution",
     "issue-log",
+    "nurture-plan",
 )
 
 
@@ -1242,21 +1244,28 @@ class PerformanceBaselinePackage:
     ``PerformanceBaseline`` already enforces the same-tenant stage 9 authorization,
     the distinct observed milestones and the pending-not-omitted rule at
     construction and establishment, so each canonical kind is projected from the
-    single reviewed baseline at one positive integer version.
+    single reviewed baseline at one positive integer version. The ``nurture-plan``
+    kind is projected from the reviewed Commercial Design ``NurturePlan`` at its
+    own identity and version, because the methodology owner placed the canon
+    follow-up and nurture lifecycle as a required stage 10 kind (owner decision
+    2026-10-04, P2; SPEC.md sections 4 and 12.5).
 
     A ``PerformanceBaseline`` only owns its launch evidence once ``establish``
     passes the checkpoint, so this package refuses a baseline that has not reached
-    ``PerformanceBaselineState.ESTABLISHED``: twelve kinds cannot be pinned as this
-    client's evidence without a launch whose first qualified traffic was actually
-    observed (SPEC.md section 4). It also refuses a blank identity, a versionless
-    baseline or a cross-tenant baseline rather than silently pinning inexact or
-    foreign evidence (SPEC.md sections 3 and 4).
+    ``PerformanceBaselineState.ESTABLISHED``: thirteen kinds cannot be pinned as
+    this client's evidence without a launch whose first qualified traffic was
+    actually observed (SPEC.md section 4). It also refuses a blank identity, a
+    versionless baseline, a foreign or versionless nurture plan and a cross-tenant
+    baseline rather than silently pinning inexact or foreign evidence (SPEC.md
+    sections 3 and 4).
     """
 
     package_id: str
     tenant_id: str
     baseline: "PerformanceBaseline"
     baseline_version: int
+    nurture: "NurturePlan"
+    nurture_version: int
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -1281,8 +1290,27 @@ class PerformanceBaselinePackage:
         if not self.baseline.is_established:
             raise InvalidPerformanceBaselinePackageError(
                 f"stage 10 baseline {self.baseline.baseline_id!r} has not passed "
-                "Performance Baseline Established, so its twelve asset kinds "
+                "Performance Baseline Established, so its thirteen asset kinds "
                 "cannot be pinned as exact evidence"
+            )
+        from redops.contexts.commercial.domain.value_objects import NurturePlan
+
+        if not isinstance(self.nurture, NurturePlan):
+            raise InvalidPerformanceBaselinePackageError(
+                "stage 10 requires a typed nurture plan so the canon "
+                "nurture-plan kind is pinned from a reviewed plan, not a "
+                "free-text reference"
+            )
+        if self.nurture.tenant_id != self.tenant_id:
+            raise PerformanceBaselinePackageTenantBoundaryError(
+                f"stage 10 nurture plan {self.nurture.plan_id!r} belongs to "
+                f"tenant {self.nurture.tenant_id!r}, not package tenant "
+                f"{self.tenant_id!r}"
+            )
+        if not isinstance(self.nurture_version, int) or self.nurture_version < 1:
+            raise InvalidPerformanceBaselinePackageError(
+                "the nurture plan version must be a positive integer so the "
+                "stage 10 gate can pin the reviewed asset at an exact version"
             )
 
     @property
@@ -1305,12 +1333,20 @@ class PerformanceBaselinePackage:
         """Project the reviewed stage 10 baseline onto exact governance evidence.
 
         Every canonical kind belongs to the same reviewed ``PerformanceBaseline``,
-        so each is pinned to that baseline's identity at its exact version.
-        Governance still pins each projection for the workspace tenant, so a
-        cross-client baseline is refused rather than silently authorized (SPEC.md
+        so each is pinned to that baseline's identity at its exact version. The
+        ``nurture-plan`` kind is pinned from the reviewed Commercial Design
+        ``NurturePlan`` at the ``nurture_version`` (owner decision 2026-10-04, P2;
+        SPEC.md sections 4 and 12.5), because the stage 10 baseline decision must
+        pin the follow-up lifecycle at its own identity and version. Governance
+        still pins each projection for the workspace tenant, so a cross-client
+        baseline or plan is refused rather than silently authorized (SPEC.md
         sections 3, 4 and 11).
         """
-        return tuple(
+        from redops.contexts.commercial.domain.value_objects import (
+            NURTURE_PLAN_KIND,
+        )
+
+        assets = [
             StageAssetVersion(
                 asset_id=self.baseline.baseline_id,
                 tenant_id=self.tenant_id,
@@ -1318,7 +1354,12 @@ class PerformanceBaselinePackage:
                 version=self.baseline_version,
             )
             for kind in CANONICAL_BASELINE_KINDS
+            if kind != NURTURE_PLAN_KIND
+        ]
+        assets.append(
+            self.nurture.as_stage_asset(version=self.nurture_version)
         )
+        return tuple(assets)
 
 
 class PerformanceBaselineState(Enum):

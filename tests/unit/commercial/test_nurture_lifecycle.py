@@ -37,6 +37,7 @@ from redops.contexts.commercial.domain.errors import (
     NurtureTenantBoundaryError,
 )
 from redops.contexts.commercial.domain.value_objects import (
+    NURTURE_PLAN_KIND,
     NurtureAudienceState,
     NurtureMessage,
     NurtureModality,
@@ -421,6 +422,22 @@ class NurturePlanTests(unittest.TestCase):
         self.assertTrue(plan.is_plan)
         with self.assertRaises(NurtureObservationError):
             plan.as_observation(claim_id="claim-nurture")
+
+
+class NurturePlanStageAssetTests(unittest.TestCase):
+    def test_the_plan_projects_the_nurture_plan_kind_at_its_own_identity(self):
+        asset = nurture_plan().as_stage_asset(version=3)
+
+        self.assertEqual(NURTURE_PLAN_KIND, asset.kind)
+        self.assertEqual("nurture-3f", asset.asset_id)
+        self.assertEqual(TENANT, asset.tenant_id)
+        self.assertEqual(3, asset.version)
+
+    def test_a_versionless_projection_is_refused(self):
+        for version in (0, -1):
+            with self.subTest(version=version):
+                with self.assertRaises(InvalidNurtureError):
+                    nurture_plan().as_stage_asset(version=version)
 
 
 if __name__ == "__main__":

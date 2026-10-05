@@ -123,6 +123,11 @@ from redops.contexts.commercial.domain.value_objects import (
     MarketAwarenessMap,
     MethodReference,
     MillionDollarMessage,
+    NurtureAudienceState,
+    NurtureMessage,
+    NurtureModality,
+    NurturePlan,
+    NurtureSequence,
     OfferFunnelAudit,
     OfferPackage,
     PositioningDecision,
@@ -3473,11 +3478,43 @@ def record_stage_ten_gate(
                 for entry in body.baseline.milestones
             ),
         ).establish(on=body.on)
+        nurture = NurturePlan(
+            plan_id=body.nurture.plan_id,
+            tenant_id=tenant_id,
+            owner=body.nurture.owner,
+            method=method.signature_solution,
+            sequences=tuple(
+                NurtureSequence(
+                    sequence_id=sequence.sequence_id,
+                    tenant_id=tenant_id,
+                    audience_state=NurtureAudienceState(sequence.audience_state),
+                    messages=tuple(
+                        NurtureMessage(
+                            message_id=message.message_id,
+                            tenant_id=tenant_id,
+                            name=message.name,
+                            audience_state=NurtureAudienceState(
+                                message.audience_state
+                            ),
+                            modality=NurtureModality(message.modality),
+                            signature_step=message.signature_step,
+                            subject=message.subject,
+                            purpose=message.purpose,
+                            question=message.question,
+                        )
+                        for message in sequence.messages
+                    ),
+                )
+                for sequence in body.nurture.sequences
+            ),
+        )
         package = PerformanceBaselinePackage(
             package_id=body.baseline_package_id,
             tenant_id=tenant_id,
             baseline=baseline,
             baseline_version=body.baseline_version,
+            nurture=nurture,
+            nurture_version=body.nurture_version,
         )
         stage_run = run_repository.load(
             template.version, workspace.workspace_id, 10, tenant_id

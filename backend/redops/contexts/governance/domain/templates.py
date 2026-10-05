@@ -295,6 +295,7 @@ def stage_zero_to_ten_template(
                         "acquisition-cost",
                         "attribution",
                         "issue-log",
+                        "nurture-plan",
                     }
                 ),
             ),

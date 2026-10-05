@@ -202,6 +202,40 @@ class StageTenGateRouteTests(unittest.TestCase):
         body.update(overrides)
         return body
 
+    def _nurture(self, **overrides):
+        body = {
+            "plan_id": "nurture-3f",
+            "owner": "campaign-operator",
+            "sequences": [
+                {
+                    "sequence_id": "sequence-opted",
+                    "audience_state": "opted_in_not_booked",
+                    "messages": [
+                        {
+                            "message_id": "nurture-1",
+                            "name": "what stalls your referrals",
+                            "audience_state": "opted_in_not_booked",
+                            "modality": "problem",
+                            "signature_step": "Extract the diagnosis",
+                            "subject": "the referral question you keep avoiding",
+                            "purpose": "name the problem so the lead recognizes it",
+                        },
+                        {
+                            "message_id": "nurture-2",
+                            "name": "book a referral diagnostic",
+                            "audience_state": "opted_in_not_booked",
+                            "modality": "promotion",
+                            "signature_step": "Extract the diagnosis",
+                            "subject": "your referral diagnostic is open",
+                            "purpose": "promote the next step",
+                        },
+                    ],
+                }
+            ],
+        }
+        body.update(overrides)
+        return body
+
     def payload(self, **overrides):
         nine = self._nine.payload()
         body = {
@@ -216,6 +250,8 @@ class StageTenGateRouteTests(unittest.TestCase):
             "funnel": nine["funnel"],
             "qa": nine["qa"],
             "baseline": self._baseline(),
+            "nurture": self._nurture(),
+            "nurture_version": 1,
             "stage_owner": OWNER,
             "approver": APPROVER,
             "proposed_by": OWNER,

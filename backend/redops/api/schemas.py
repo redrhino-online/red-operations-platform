@@ -1368,6 +1368,48 @@ class PerformanceBaselineInput(BaseModel):
     milestones: list[MilestoneObservationInput]
 
 
+class NurtureMessageInput(BaseModel):
+    """One follow-up message in the canon nurture lifecycle (canon 15, 24, 33).
+
+    The message names its prospect state, one of the 5P modalities, the Signature
+    Solution step it derives from, its subject and purpose; a ping carries exactly
+    one question. The domain, not the transport layer, refuses an untyped message
+    or a ping without a question.
+    """
+
+    message_id: str
+    name: str
+    audience_state: str
+    modality: str
+    signature_step: str
+    subject: str
+    purpose: str
+    question: str | None = None
+
+
+class NurtureSequenceInput(BaseModel):
+    """An ordered follow-up sequence for one prospect state (canon 15, 24)."""
+
+    sequence_id: str
+    audience_state: str
+    messages: list[NurtureMessageInput]
+
+
+class NurturePlanInput(BaseModel):
+    """The reviewed follow-up and nurture lifecycle (SPEC.md sections 4, 12.5).
+
+    The plan carries its identity, owner and the per-state sequences; the route
+    grounds it on the approved stage 4 Signature Solution, so the domain decides
+    whether every message derives from a named solution step rather than a
+    free-text mailing list. The methodology owner placed it as a required stage 10
+    ``nurture-plan`` kind (owner decision 2026-10-04, P2).
+    """
+
+    plan_id: str
+    owner: str
+    sequences: list[NurtureSequenceInput]
+
+
 class RecordStageTenGateRequest(BaseModel):
     """The stage 10 "Performance Baseline Established" gate request.
 
@@ -1396,6 +1438,8 @@ class RecordStageTenGateRequest(BaseModel):
     funnel: FunnelIntegrationInput
     qa: LaunchQAInput
     baseline: PerformanceBaselineInput
+    nurture: NurturePlanInput
+    nurture_version: int
     stage_owner: str
     approver: str
     scope: str
