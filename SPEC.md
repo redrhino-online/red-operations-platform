@@ -26,7 +26,7 @@ Fork OpenExecutive at a pinned upstream commit and record license, dependencies,
 | Executive persona, generic departments | Replace | Remove obsolete labels and incompatible permissions |
 | Cockpit | Rework into portfolio command center | Verify queries can be tenant scoped and explain each intervention |
 
-Retain upstream notices and licensing obligations. Keep a fork diff register with upstream commit, local decision, owner, migration note, and regression evidence. Never delete a working upstream path until its replacement has passed characterization tests.
+Retain upstream notices and licensing obligations. Keep a fork diff register with upstream commit, local decision, owner, migration note, and regression evidence. Never delete a working upstream path until its replacement has passed characterization tests. Vendor edits are allowed only through the committed, re-triggerable overlay in `vendor/overlay/` applied by `scripts/apply_vendor_overlay.sh` (ADR 0011); every local change to the pinned submodule must be overlay-declared and reproducible from this repository.
 
 ## 3. Domain boundaries
 
@@ -272,7 +272,7 @@ The prototype is the RED branded version of the OpenExecutive system, running en
 | 4 | RED aggregates, gates and the ledger persist in PostgreSQL, and OpenExecutive keeps its SQLite and Chroma state behind ports | adapter and migration tests run with `DATABASE_URL` set, and no store leaks across the seam |
 | 5 | Agent paths run deterministically in e2e, and the real provider path is proven | a deterministic fake model gateway drives the e2e; a separate live OpenRouter smoke passes and the LLM adapter logs model, prompt version, usage and trace id |
 | 6 | All section 8 screens render | the frontend builds and browser tests cover the portfolio command center, client workspace, source and claim explorer, transformation map, offer and journey editor, build board with dependency view, approval inbox with exact version diff, workflow run detail, launch readiness, performance review, portfolio opportunities and authority settings |
-| 7 | The vendored OpenExecutive is unmodified | the pinned submodule is clean; every gap is closed in `backend/redops/` through ports, adapters and composition (onion, SOLID, clean) |
+| 7 | The vendored OpenExecutive is modified only through the re-triggerable RED overlay | `scripts/apply_vendor_overlay.sh --check` proves the pinned submodule working tree equals the committed `vendor/overlay/` applied onto the pinned commit, with no vendor change outside the overlay; RED domain and app code otherwise lives in `backend/redops/` through ports, adapters and composition (ADR 0011) |
 | 8 | Product surfaces carry RED branding | the Director name, agent charters and UI copy are RED with no OpenExecutive branding in user facing surfaces, and LICENSE and NOTICE are retained |
 | 9 | The platform is deployed on the Atlas k3s cluster | Argo CD reports a healthy release, the migration Job ran before the API served, and the deployed health check passes |
 

@@ -4,6 +4,7 @@
 - Date: 2026-10-03
 - Owner: RED principal
 - Supersedes: ADR 0002
+- Amended by: ADR 0011 (vendor edits go through a re-triggerable overlay)
 
 ## Context
 
@@ -32,6 +33,10 @@ code and RED docs are removed from the fork.
 - RED's code, docs and tests live in one app repository with the spec and plan.
 - Reuse is explicit through ports: RED imports the fork's orchestrator,
   workflows, agents and infrastructure rather than editing them.
+- ADR 0011 amends the "minimal (ideally none)" vendor-edit stance: where the
+  fork's own mechanism requires in-package artifacts (ADR 0006 agent
+  registration), edits are allowed but only through the committed,
+  re-triggerable `vendor/overlay/` applied by `scripts/apply_vendor_overlay.sh`.
 - The `openexecutive` package must be available to this repository's backend
   (a path dependency on the vendored submodule) or accessed over its API.
 - TypeScript remains UI-only (ADR 0007), now rooted in this app's frontend,
