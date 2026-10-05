@@ -4,6 +4,26 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Owner directive 2026-10-05: navigation shell (Q51) and the cockpit-adoption vision (ADR 0012)
+
+- The owner reported the deployed prototype had no navigable screens: the Q32
+  home page listed the twelve section 8 screens as plain text, said they were
+  "not yet implemented" (false), and nothing linked to them. Condition 6 only
+  ever required each screen to exist with a browser test, so navigation was
+  never built.
+- Outcome (Q51): a landing dashboard and a persistent sidebar built from one
+  source of truth (`frontend/src/shared/nav/screens.ts`), grouping the twelve
+  screens by area (Command, Knowledge & Method, Commercial & Production,
+  Governance, Delivery & Insight); the false copy is gone. `npm run build` and
+  `npm test` (102 tests, +4) pass; `check_frontend_screens.sh` and
+  `check_frontend_build.sh` pass.
+- Declared vision (ADR 0012): adopt the vendored OpenExecutive cockpit UI as the
+  prototype shell in a phase between the prototype DoD and production readiness -
+  rebranded via the ADR 0011 overlay, navigation = OpenExecutive groups plus a
+  RED Operations group, generic C-suite personas replaced with RED's agents,
+  auth disabled internal-only, cockpit on its own OpenExecutive state. Recorded
+  as the Cockpit adoption phase below; not part of the current prototype DoD.
+
 ### Owner directive 2026-10-05 (highest priority): comprehensive developer docs site
 
 - **Directive (owner):** build and maintain a comprehensive developer
@@ -5848,6 +5868,24 @@ stalls:
 | Q48 | Helm chart: web, api, worker, migration Job, ingress, PDB, probes | deploy | Q47 | chart lint and render |
 | Q49 | Argo CD Application plus migration before serve ordering | deploy | Q48 | Argo healthy; migration ran first |
 | Q50 | Secrets plus `REDOP_HEALTH_URL`; deployment smoke | deploy | Q49 | DoD 9; `make done` passes. Condition 9 gate hardened 2026-10-04T050209Z: `[6/6]` now runs `scripts/check_deployed_red_health.sh`, which requires the response to carry the `RED Operations` identity marker (`REDOP_RED_MARKER`), so a bare 200 or the OpenExecutive shell cannot pass. The Atlas host `redop.atlas.lan` currently serves OpenExecutive (RED routes 404), so condition 9 is honestly unmet until a RED image is built and deployed |
+| Q51 | Navigation shell: landing dashboard plus a persistent sidebar linking all twelve section 8 screens | ui | Q44 | every screen reachable; browser test. Done 2026-10-05: `frontend/src/shared/nav/screens.ts` (single source of truth), `shared/nav/AppNav.tsx`, a landing dashboard (`app/page.tsx`) and shell CSS; the false "not yet implemented" copy is removed. `npm run build` and `npm test` (102 tests, +4) pass; `check_frontend_screens.sh` and `check_frontend_build.sh` pass |
+
+## Cockpit adoption phase (declared vision; between the prototype DoD and production readiness)
+
+Owner directive 2026-10-05; ADR 0012. Not part of the current prototype
+definition of done (which passes). Adopts the vendored OpenExecutive UI as the
+prototype shell, rebranded RED, with navigation following the OpenExecutive UI
+plus a RED Operations group.
+
+| # | Item | Area | Depends | Evidence / gate |
+| --- | --- | --- | --- | --- |
+| C1 | Build and deploy the vendored OpenExecutive UI (`vendor/openexecutive/packages/ui`) as the shell | ui | Q51 | image builds; cockpit routes serve; ingress/proxy route added |
+| C2 | Rebrand via the ADR 0011 overlay (BrandMark OE to RED, titles, copy, nav labels) | ui | C1 | overlay check passes; no OpenExecutive branding (condition 8) |
+| C3 | Navigation: OpenExecutive groups plus a RED Operations group linking the twelve screens | ui | C1, Q51 | every screen reachable from the cockpit sidebar |
+| C4 | Replace generic C-suite Departments/Council/People with RED's nine agents plus slots 10/11 | ui | C1 | ADR 0006 follow-up closed; no generic personas in user-facing surfaces |
+| C5 | Disable the vendor Auth.js gate; internal-only behind the 10.0.0.0/8 allowlist | ui | C1 | unauthenticated internal access; no signin |
+| C6 | Wire the cockpit to the mounted `/openexecutive` backend; keep its own OpenExecutive SQLite/Chroma state | deploy | C1 | cockpit reads/writes its own state; RED screens keep `/red` + PostgreSQL |
+| C7 | Reconcile SPEC.md section 2 "Cockpit: Rework into portfolio command center" with the adoption | docs | C1 | spec clause amended or the adoption recorded as the rework |
 
 ## Production-readiness phase (after the prototype; not a prototype condition)
 
