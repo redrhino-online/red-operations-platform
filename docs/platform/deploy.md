@@ -15,6 +15,7 @@ Argo CD reconciles a Helm release.
 | PostgreSQL | in-cluster `postgres:16.4-alpine`, 10Gi `truenas-nfs` PVC, `redop-postgres` service |
 | Secrets | `redop-secrets` (backend/auth/OpenRouter), `redop-registry`, `redop-postgres` (SealedSecrets) |
 | GitOps repo | `211lab/atlas` → `apps/redop/chart`, `gitops/apps/redop.yaml` |
+| Chart source | `deploy/charts/redop` in this repo (Q48); Argo CD reconciles it into `redop` |
 | Access | `KUBECONFIG=~/.kube/atlas-admin.yaml` |
 
 ## Delivery pipeline
@@ -34,7 +35,9 @@ build + push redop-api / redop-ui ──▶ registry.atlas.lan
 - The app repo's CI (`.gitea/workflows/build.yaml`) builds both images on a push
   to `main` and, on a `v*` tag, promotes the tag into the GitOps chart values.
 - Argo CD auto-syncs with self-heal. The migration Job runs **before** the API
-  serves (condition 9).
+  serves (condition 9): it is a Helm pre-install/pre-upgrade hook and an Argo CD
+  PreSync hook at sync-wave -1, and the API Deployment (sync-wave 0) waits for
+  the Job's success in a `wait-for-migration` initContainer.
 
 ## Health gate
 
@@ -72,10 +75,13 @@ make reset-hosted      # or scripts/reset_redop_data.sh --yes
 ## Current status (as of the last cycle)
 
 The `redop` release is Synced/Healthy but runs the **un-customized OpenExecutive
-shell** (`v0.4.6-redop.2`), so `make done` fails only `[6/6]` condition 9. The path
-to a real condition 9 is the **Q47-Q50** slice: Dockerfile + health endpoint, Helm
-chart, Argo CD Application with migration-before-serve ordering, secrets + smoke.
-This is the prototype's head blocker.
+shell** (`v0.4.6-redop.2`), so `make done` fails only `[6/6]` condition 9. The
+RED Helm chart now exists at `deploy/charts/redop` (Q48: api/ui, migration Job
+ordered before the API serves, same-origin ingress, PDB, probes; worker present
+but disabled until a RED worker entrypoint exists). The remaining path to a real
+condition 9 is **Q49** (Argo CD Application reconciling the RED chart) and
+**Q50** (secrets, `REDOP_HEALTH_URL`, deployment smoke). This is the prototype's
+head blocker.
 
 ## Production-readiness phase (beyond the prototype)
 

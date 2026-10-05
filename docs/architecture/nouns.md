@@ -201,10 +201,10 @@ Stages are **production checkpoints**, not the client's nine-step transformation
 | **Gitea forge** (`git.atlas.lan`) | Self-hosted Git + Actions + registry on the lab network. | Builds and stores RED images. |
 | **image registry** (`registry.atlas.lan`) | The forge's OCI registry. | Source of the deployed `redop-api`/`redop-ui` images. |
 | **GitOps repo** (`211lab/atlas`) | Holds `apps/redop/chart` and `gitops/apps/redop.yaml`. | The desired state Argo reconciles; a release pins an image digest/tag here. |
-| **Helm chart** | web/api/worker, migration Job, ingress, PDB, probes. | The deployable unit. |
+| **Helm chart** (`deploy/charts/redop`) | api/ui/worker, migration Job, ingress, PDB, probes. | The deployable unit; authored in the app repo (Q48). |
 | **`Dockerfile.api` / `Dockerfile.ui`** | Multi-stage images: the RED API (`uv sync --locked`, `redops.api.app:app`) and the Next.js standalone UI. | The buildable units CI pushes to the registry (Q47). |
 | **build workflow** (`.gitea/workflows/build.yaml`) | Gitea Actions job that builds/pushes both images and promotes `apiTag`/`uiTag` into the GitOps chart. | Turns a push to the `atlas` remote into a reconciled release (Q47). |
-| **migration Job** | Runs migrations before the API serves. | Condition 9 requires migration-before-serve ordering. |
+| **migration Job** | Runs `alembic upgrade head` before the API serves; Helm pre-install/pre-upgrade hook and Argo CD PreSync at sync-wave -1, with an API initContainer that waits for its success. | Condition 9 requires migration-before-serve ordering. |
 | **SealedSecret** | Encrypted Kubernetes secret committed to Git. | Secrets never land in Git in plaintext. |
 | **ingress / Traefik / cert-manager (`atlas-ca`)** | HTTP entry, router, internal CA. | Serves `redop.atlas.lan` on the lab network only. |
 | **`redop.atlas.lan`** | The deployed host. | The health gate fetches it and requires the RED identity marker. |

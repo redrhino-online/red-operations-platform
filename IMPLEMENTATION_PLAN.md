@@ -35,7 +35,61 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 - **Maintenance rule:** a cycle that adds a noun (aggregate, seam, env var,
   pipeline concept) adds its row to `docs/architecture/nouns.md`.
 
-### Cycle 2026-10-05T040540Z (this run)
+### Cycle 2026-10-05T041656Z (this run)
+
+- Cycle 2026-10-05T041656Z (Ralph cycle, this run): selected item was Q48, the
+  RED Helm chart under `deploy/` (SPEC.md sections 6, 10 and 13 condition 9;
+  owner decision 2026-10-04). It is the highest value ready item: condition 9 is
+  the only unmet prototype condition, Q47 (images + CI) is met, and Q48 is the
+  next smallest independently verifiable slice. It outranks Q49 (Argo CD
+  Application) and Q50 (secrets + deployment smoke), which depend on it, and all
+  non-condition work. It advances missing gate integrity and exact asset
+  versions, which the cycle instructions rank first.
+- Outcome: new chart `deploy/charts/redop/` (`Chart.yaml`, `values.yaml`,
+  `templates/{_helpers.tpl,serviceaccount.yaml,migration-job.yaml,
+  deployment-api.yaml,deployment-ui.yaml,deployment-worker.yaml,service.yaml,
+  ingress.yaml,pdb.yaml,NOTES.txt}`). It replaces the OpenExecutive shell in
+  namespace `redop` with the RED API and UI, reuses the existing
+  `redop-postgres` database and `redop-secrets` (provisions no database), and
+  routes `/red` to the API and `/` to the UI same-origin. Migration-before-serve
+  is enforced three ways: the migration Job is a Helm pre-install/pre-upgrade
+  hook at weight -5 and an Argo CD PreSync hook at sync-wave -1; the API
+  Deployment is sync-wave 0; and the API has a `wait-for-migration` initContainer
+  that polls the Job's success through the Kubernetes API (new ServiceAccount,
+  Role and RoleBinding granting `get` on jobs only). The worker Deployment is
+  present but `worker.enabled: false` by default because no RED worker entrypoint
+  exists yet (plan line 886); enabling it before the entrypoint lands would
+  crashloop and break the Argo CD health condition 9 requires. New
+  `tests/unit/shared/test_red_helm_chart.py` (8 tests: structural guards plus
+  `helm template` render assertions, skipped when helm is absent).
+- Evidence: `helm lint deploy/charts/redop` -> 0 failed; `helm template redop
+  deploy/charts/redop --namespace redop` exit 0; `kubectl apply --dry-run=server`
+  on the rendered manifests validates every resource against the live cluster
+  (PDB, ServiceAccount, Role, RoleBinding, Service, Deployment, Ingress,
+  Middleware, Job) with no schema errors; `make check` -> 2404 passed, 3 skipped,
+  741 subtests (was 2396; +8); `uv run pyflakes` clean. `make done` still stops
+  at `[6/6]`: `redop.atlas.lan` still serves the OpenExecutive shell, so
+  condition 9 is honestly unmet.
+- New findings: the live `redop` namespace already has the `redop-ipallow`
+  Traefik Middleware (`10.0.0.0/8`), the `redop-tls` secret, the `redop-data`
+  PVC and the `redop-postgres` Deployment/Service/secret; the chart reproduces
+  the middleware and reuses the rest. The existing ingress routes only `/` to
+  the UI; the RED chart adds the `/red` API path. The API image already carries
+  `alembic` and `alembic.ini`, so the migration Job needs no extra image.
+- Blockers: condition 9 remains unmet. Q49 (Argo CD Application pointing at the
+  RED chart with migration-before-serve ordering) and Q50 (secrets,
+  `REDOP_HEALTH_URL` and the deployment smoke) follow. The worker entrypoint is
+  still missing, so the owner's "api + ui + worker" first-release scope is only
+  two-thirds deployable; record it as a candidate item, not a silent omission.
+- Highest priority ready next item: Q49, the Argo CD Application (SPEC.md
+  section 10; owner decision 2026-10-04). Prerequisites: Q48 met. Required
+  artifact: an Application (or GitOps repo chart source) that reconciles
+  `deploy/charts/redop` into namespace `redop` with the migration Job ordered
+  before the API serves. Checkpoint: Argo CD reports the release Synced/Healthy
+  and the migration Job ran before the API served. Approver: the RED principal
+  for the cluster release. Blocked downstream dependency: Q50 and condition 9.
+
+### Cycle 2026-10-05T040540Z
 
 - Cycle 2026-10-05T040540Z (Ralph cycle, this run): selected item was Q47, the
   RED API and UI container images plus the Gitea build/promote workflow (SPEC.md
