@@ -56,8 +56,13 @@ jobs:
           echo "Building RED images at ${TAG}"
           docker build -f Dockerfile.api -t "${REGISTRY}/atlas-admin/redop-api:${TAG}" .
           docker push "${REGISTRY}/atlas-admin/redop-api:${TAG}"
-          docker build -f Dockerfile.ui -t "${REGISTRY}/atlas-admin/redop-ui:${TAG}" .
+          # ADR 0012: the cockpit owns the root, so the RED screens build under
+          # /screens.
+          docker build -f Dockerfile.ui --build-arg NEXT_PUBLIC_RED_BASE_PATH=/screens \
+            -t "${REGISTRY}/atlas-admin/redop-ui:${TAG}" .
           docker push "${REGISTRY}/atlas-admin/redop-ui:${TAG}"
+          docker build -f Dockerfile.cockpit -t "${REGISTRY}/atlas-admin/redop-cockpit:${TAG}" .
+          docker push "${REGISTRY}/atlas-admin/redop-cockpit:${TAG}"
 
       # GitOps promotion: commit the new tag into the platform repo. Gitea then
       # webhooks Argo CD, which syncs. No registry poller.
@@ -71,7 +76,7 @@ jobs:
           fi
           git clone "http://oauth2:${REGISTRY_TOKEN}@gitea-http.gitea.svc.cluster.local:3000/atlas-admin/atlas.git" /tmp/gitops
           cd /tmp/gitops
-          sed -i -E "s|^apiTag: .*|apiTag: ${TAG}|; s|^uiTag: .*|uiTag: ${TAG}|" apps/redop/chart/values.yaml
+          sed -i -E "s|^apiTag: .*|apiTag: ${TAG}|; s|^uiTag: .*|uiTag: ${TAG}|; s|^cockpitTag: .*|cockpitTag: ${TAG}|" apps/redop/chart/values.yaml
           if git diff --quiet; then echo "already at ${TAG}"; exit 0; fi
           git -c user.email=ci@atlas.lan -c user.name=atlas-ci commit -am "ci: promote redop ${TAG}"
           git push origin main

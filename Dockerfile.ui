@@ -16,6 +16,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/ ./
 ENV NEXT_TELEMETRY_DISABLED=1
+# ADR 0012: the cockpit owns the root, so the RED screens are served under a
+# subpath. The chart passes /screens; empty for local builds.
+ARG NEXT_PUBLIC_RED_BASE_PATH=""
+ENV NEXT_PUBLIC_RED_BASE_PATH=$NEXT_PUBLIC_RED_BASE_PATH
 RUN npm run build
 
 FROM node:22-alpine AS runtime

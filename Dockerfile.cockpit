@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1.6
+# RED cockpit image (ADR 0012; SPEC.md sections 8, 10 and 13 condition 9).
+#
+# Builds the vendored OpenExecutive UI (`vendor/openexecutive/packages/ui`) as
+# the prototype shell, rebranded RED through the ADR 0011 overlay. The overlay
+# files under `vendor/overlay/files/packages/ui/` are copied over the vendor
+# tree, so the image matches the repository's declared vendor state without
+# running the overlay script (which also targets the core package).
+#
+# Runtime env: BACKEND_BASE_URL=http://redop-api:8000/openexecutive and
+# BACKEND_SHARED_SECRET (the proxy sends x-api-key), AUTH_SECRET.
+FROM node:22-alpine AS deps
+WORKDIR /app
+COPY vendor/openexecutive/packages/ui/package.json vendor/openexecutive/packages/ui/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY vendor/openexecutive/packages/ui/ ./
+COPY vendor/overlay/files/packages/ui/ ./
+ENV NEXT_TELEMETRY_DISABLED=1
+# next-auth needs an AUTH_SECRET at build; the real one is provided at runtime.
+ENV AUTH_SECRET=build-only-secret
+RUN npm run build
+
+FROM node:22-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
+
+COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+EXPOSE 3000
+CMD ["node", "server.js"]
