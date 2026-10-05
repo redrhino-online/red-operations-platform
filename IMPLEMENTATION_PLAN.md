@@ -35,7 +35,62 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 - **Maintenance rule:** a cycle that adds a noun (aggregate, seam, env var,
   pipeline concept) adds its row to `docs/architecture/nouns.md`.
 
-### Cycle 2026-10-05T041656Z (this run)
+### Cycle 2026-10-05T052159Z (this run)
+
+- Cycle 2026-10-05T052159Z (Ralph cycle, this run): selected item was the
+  last-mile of the Q49/Q50 deploy slice: make the RED chart's
+  migration-before-serve ordering actually work on the live cluster so SPEC.md
+  section 13 condition 9 passes. It is the highest value ready item because
+  condition 9 is the only unmet prototype condition, the Argo CD Application
+  already reconciles the RED chart, and the release was stuck one bug away from
+  Healthy. It outranks all non-condition work and the production-readiness phase
+  (which begins only after the first cluster release exists).
+- Outcome: fixed the `wait-for-migration` initContainer in
+  `deploy/charts/redop/templates/deployment-api.yaml`. It grepped the brittle
+  `"succeeded":1`, but the Kubernetes API returns pretty-printed JSON
+  (`"succeeded": 1` with a space), so the pattern never matched and the API pod
+  hung in `Init:0/1` until the 600s deadline. The check now tolerates optional
+  whitespace (`grep -Eq '"succeeded"[[:space:]]*:[[:space:]]*[1-9]'`). Added
+  `test_wait_for_migration_tolerates_pretty_printed_job_json` to
+  `tests/unit/shared/test_red_helm_chart.py`. Also restored the CI-promoted
+  `apiTag`/`uiTag` (`v0.1.0-redop.1`) in the GitOps chart
+  (`apps/redop/chart/values.yaml` in `atlas-admin/atlas`) after a chart copy
+  clobbered them with empty strings, which had rendered `redop-api:0.1.0`
+  (Chart.AppVersion) and caused `ImagePullBackOff` on the migration Job. The
+  local chart keeps empty tags by design; the GitOps repo carries the promoted
+  tags.
+- Evidence: `make done` -> `DONE-GATE PASS: the prototype meets the section 13
+  definition of done`; `[6/6] deployed RED app on Atlas k3s (Argo CD healthy;
+  migration ran before the API served)`; `deployed RED health ok:
+  https://redop.atlas.lan/ carries RED Operations`. Argo CD Application `redop`
+  is `Synced`/`Healthy` at revision `b4595df`; the migration Job
+  `redop-migrate-rj9t5` completed before the API pod became ready;
+  `https://redop.atlas.lan/red/health` -> HTTP 200 `{"status":"ok"}`; the UI
+  serves `<title>RED Operations Platform</title>` with the `RED Operations`
+  marker. `make check` -> 2408 passed, 3 skipped, 741 subtests (was 2404; +4
+  from the chart tests). `helm template` renders and `kubectl apply
+  --dry-run=server` validates.
+- New findings: the Kubernetes API server returns pretty-printed JSON for a
+  plain `curl` GET with no `Accept` header, so any in-cluster JSON grep must
+  tolerate whitespace. Argo CD PreSync hook Jobs are not re-rendered while a
+  sync operation is stuck; aborting the operation
+  (`DELETE /api/v1/applications/redop/operation`) and letting auto-sync re-run
+  is what picked up the corrected revision. The `redop` Application uses
+  `helm.valueFiles: [values.yaml]` under `apps/redop/chart`; the promoted tags
+  live there, not in the app repo chart.
+- Blockers: none for the prototype. Condition 9 is met and `make done` passes.
+  The worker entrypoint is still missing, so the owner's "api + ui + worker"
+  first-release scope is two-thirds deployed; recorded as a candidate item, not
+  a silent omission. The production-readiness phase (backup target, witnessed
+  restore drill, GitOps rollback drill; ADR 0009/0010) is the next phase and is
+  not a prototype condition.
+- Highest priority ready next item: none. The prototype definition of done
+  (SPEC.md section 13) is satisfied; `.ralph/DONE` is touched. The next work is
+  the production-readiness phase, which needs named-owner decisions (backup
+  target, recovery point/time, restore and rollback drill witnesses) and must
+  not be started unattended.
+
+### Cycle 2026-10-05T041656Z
 
 - Cycle 2026-10-05T041656Z (Ralph cycle, this run): selected item was Q48, the
   RED Helm chart under `deploy/` (SPEC.md sections 6, 10 and 13 condition 9;

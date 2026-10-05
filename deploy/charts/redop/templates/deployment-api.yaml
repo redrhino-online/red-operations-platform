@@ -7,6 +7,9 @@ metadata:
     app.kubernetes.io/component: api
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+    # The previous chart's Deployment used a different immutable selector
+    # (`app: redop-api`). Replace rather than patch so Argo CD can adopt it.
+    argocd.argoproj.io/sync-options: Replace=true
 spec:
   replicas: {{ .Values.api.replicas }}
   selector:
@@ -41,12 +44,12 @@ spec:
               set -eu
               ns="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
               token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
-              url="https://kubernetes.default.svc/apis/batch/v1/namespaces/${ns}/jobs/{{ include "redop.migrationJobName" . }}/status"
+              url="https://kubernetes.default.svc/apis/batch/v1/namespaces/${ns}/jobs/{{ include "redop.migrationJobName" . }}"
               i=0
               while [ "$i" -lt 120 ]; do
                 code="$(curl -s -o /tmp/job-status -w '%{http_code}' -k \
                   -H "Authorization: Bearer ${token}" "$url" || true)"
-                if [ "$code" = "200" ] && grep -q '"succeeded":1' /tmp/job-status; then
+                if [ "$code" = "200" ] && grep -Eq '"succeeded"[[:space:]]*:[[:space:]]*[1-9]' /tmp/job-status; then
                   echo "migration complete"
                   exit 0
                 fi

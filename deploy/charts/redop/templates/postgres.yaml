@@ -1,0 +1,75 @@
+{{- if .Values.postgres.enabled }}
+{{- /*
+  In-cluster PostgreSQL (owner decision 2026-10-04; SPEC.md sections 6 and 10).
+
+  The RED chart adopts the existing `redop-postgres` Deployment, Service and
+  `redop-postgres-data` PVC rather than provisioning a new database. It must
+  declare them: the Argo CD Application has `prune: true`, so a resource the
+  previous chart created but the RED chart omits would be deleted on sync,
+  taking the database down. Declaring the same names and specs is idempotent and
+  leaves the bound PVC untouched.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.postgres.name }}
+  labels:
+    {{- include "redop.labels" . | nindent 4 }}
+    app: {{ .Values.postgres.name }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ .Values.postgres.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.postgres.name }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          ports:
+            - containerPort: {{ .Values.postgres.port }}
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.database | quote }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.user | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.secretName }}
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgres.user | quote }}, "-d", {{ .Values.postgres.database | quote }}]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.postgres.persistence.claimName }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.postgres.name }}
+  labels:
+    {{- include "redop.labels" . | nindent 4 }}
+    app: {{ .Values.postgres.name }}
+spec:
+  selector:
+    app: {{ .Values.postgres.name }}
+  ports:
+    - name: postgres
+      port: {{ .Values.postgres.port }}
+      targetPort: {{ .Values.postgres.port }}
+{{- end }}

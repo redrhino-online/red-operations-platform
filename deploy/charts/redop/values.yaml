@@ -90,10 +90,40 @@ migration:
   backoffLimit: 3
   activeDeadlineSeconds: 600
 
-# Reuse the existing in-cluster PostgreSQL. The chart never creates it.
+# Reuse the existing in-cluster PostgreSQL. The chart adopts the existing
+# Deployment, Service and PVC (same names and specs) so the Argo CD Application's
+# `prune: true` does not delete the database the previous chart created. It
+# provisions no new database.
 postgres:
+  enabled: true
+  name: redop-postgres
   secretName: redop-postgres
   databaseUrlKey: DATABASE_URL
+  image: postgres:16.4-alpine
+  port: 5432
+  database: redops
+  user: redops
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  persistence:
+    claimName: redop-postgres-data
+    size: 10Gi
+    storageClassName: truenas-nfs
+
+# The `redop-data` PVC holds OpenExecutive shell state (SQLite episodic memory,
+# Chroma vector store, company profile) and is mounted by the API. Declared so
+# Argo CD keeps it.
+persistence:
+  data:
+    enabled: true
+    claimName: redop-data
+    size: 10Gi
+    storageClassName: truenas-nfs
 
 # Reuse the existing sealed application secrets.
 secrets:

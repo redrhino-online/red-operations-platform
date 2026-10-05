@@ -97,9 +97,45 @@ class ChartRenderTest(unittest.TestCase):
         self.assertEqual(api["metadata"]["annotations"]["argocd.argoproj.io/sync-wave"], "0")
         init_names = [c["name"] for c in api["spec"]["template"]["spec"]["initContainers"]]
         self.assertIn("wait-for-migration", init_names)
-        # The migration Job runs `alembic upgrade head` against the shared DB.
+        # The migration Job runs RED's programmatic runner, which resolves the
+        # migration directory relative to its module and so needs no
+        # `alembic.ini` in the image (the API image does not ship one).
         migrate = job["spec"]["template"]["spec"]["containers"][0]
-        self.assertEqual(migrate["command"], ["alembic", "upgrade", "head"])
+        self.assertEqual(
+            migrate["command"],
+            ["python", "-m", "redops.shared.persistence.migrate"],
+        )
+
+    def test_migration_job_does_not_need_a_later_created_service_account(self) -> None:
+        # The migration Job is an Argo CD PreSync hook, so it runs before the
+        # main sync applies the chart's ServiceAccount. It must not reference
+        # one, or the hook pod is forbidden and the sync stalls.
+        docs = _render()
+        job = _named(docs, "Job", "redop-migrate")
+        pod_spec = job["spec"]["template"]["spec"]
+        self.assertNotIn("serviceAccountName", pod_spec)
+
+    def test_wait_for_migration_reads_the_job_not_the_status_subresource(self) -> None:
+        # The Role grants `get` on `jobs` only. Reading the `jobs/status`
+        # subresource is forbidden, so the initContainer must read the Job
+        # itself (whose body includes status).
+        docs = _render()
+        api = _named(docs, "Deployment", "redop-api")
+        init = api["spec"]["template"]["spec"]["initContainers"][0]
+        script = "\n".join(init["command"])
+        self.assertIn("/jobs/redop-migrate", script)
+        self.assertNotIn("/jobs/redop-migrate/status", script)
+
+    def test_wait_for_migration_tolerates_pretty_printed_job_json(self) -> None:
+        # The Kubernetes API returns pretty-printed JSON by default, so the
+        # success field is `"succeeded": 1` with a space. A brittle
+        # `"succeeded":1` grep never matches and the API pod hangs in Init.
+        docs = _render()
+        api = _named(docs, "Deployment", "redop-api")
+        init = api["spec"]["template"]["spec"]["initContainers"][0]
+        script = "\n".join(init["command"])
+        self.assertIn('"succeeded"[[:space:]]*:[[:space:]]*[1-9]', script)
+        self.assertNotIn('"succeeded":1', script)
 
     def test_ingress_routes_red_to_api_and_root_to_ui(self) -> None:
         docs = _render()
@@ -113,8 +149,15 @@ class ChartRenderTest(unittest.TestCase):
 
     def test_reuses_existing_database_and_secrets(self) -> None:
         docs = _render()
-        # No database is provisioned by the chart.
+        # The chart provisions no new database (no StatefulSet), but it must
+        # declare the existing Postgres Deployment/Service and both bound PVCs:
+        # the Argo CD Application has `prune: true`, so a resource the previous
+        # chart created and the RED chart omits would be deleted on sync.
         self.assertEqual(_by_kind(docs, "StatefulSet"), [])
+        _named(docs, "Deployment", "redop-postgres")
+        _named(docs, "Service", "redop-postgres")
+        _named(docs, "PersistentVolumeClaim", "redop-data")
+        _named(docs, "PersistentVolumeClaim", "redop-postgres-data")
         api = _named(docs, "Deployment", "redop-api")
         env = {e["name"]: e for e in api["spec"]["template"]["spec"]["containers"][0]["env"]}
         self.assertEqual(
@@ -131,6 +174,16 @@ class ChartRenderTest(unittest.TestCase):
             self.assertIn("readinessProbe", container)
             self.assertIn("livenessProbe", container)
         self.assertEqual(len(_by_kind(docs, "PodDisruptionBudget")), 2)
+
+    def test_api_and_ui_replace_on_adoption(self) -> None:
+        # The previous chart's Deployments used a different immutable selector,
+        # so Argo CD must replace rather than patch them when adopting.
+        docs = _render()
+        for name in ("redop-api", "redop-ui"):
+            annotations = _named(docs, "Deployment", name)["metadata"]["annotations"]
+            self.assertEqual(
+                annotations["argocd.argoproj.io/sync-options"], "Replace=true"
+            )
 
     def test_worker_is_disabled_by_default_and_enableable(self) -> None:
         default_names = {d["metadata"]["name"] for d in _by_kind(_render(), "Deployment")}
