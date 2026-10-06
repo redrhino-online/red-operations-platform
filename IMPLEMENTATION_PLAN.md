@@ -4,6 +4,39 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-06T163236Z: W1 deploy slice blocked on the connector-inventory owner decision
+
+- **Selected item:** W1's deploy slice (configure a connector transport and
+  `REDOP_WORKER_TENANTS`, set `worker.enabled: true`, verify the chart's worker
+  Deployment is healthy), the only remaining item. It is **not ready**: the
+  worker refuses to start with `DATABASE_URL` set and no connector transport
+  (`WorkerConfigurationError`, `backend/redops/worker.py`), and choosing a
+  transport is the open connector-inventory decision (SPEC.md section 11).
+  Enabling the Deployment now would crashloop and break the Argo CD health that
+  condition 9 requires. No other item is ready: Q16 is complete (connector
+  idempotency, optimistic-version conflict and store-level CAS all done), G8/G9
+  are closed (owner 2026-10-06), C4 is done, and R1/R2 are deferred and must not
+  be picked up unattended.
+- **Outcome:** no code change. The deploy slice is blocked on a named-owner
+  decision, so the loop records the blocker rather than invent work or make the
+  connector-inventory decision unattended.
+- **Evidence:** `make done` -> `DONE-GATE PASS` (all six checks green, including
+  the deployed RED health check at `https://redop.atlas.lan/`);
+  `backend/redops/worker.py` `connector_transport_from_env` raises
+  `WorkerConfigurationError` when `DATABASE_URL` is set and no transport is
+  configured; `deploy/charts/redop/values.yaml` keeps `worker.enabled: false` and
+  `templates/deployment-worker.yaml` is gated on it.
+- **Not done (deliberately):** enabling the chart's worker Deployment and wiring
+  `REDOP_WORKER_TENANTS`; both wait on the connector-inventory owner decision. No
+  send, spend, publish or client commitment is authorized (SPEC.md sections 4 and
+  9).
+- **Next ready item:** none unblocked. The deploy slice waits on the
+  connector-inventory owner decision (SPEC.md section 11): the owner names the
+  connector(s)/transport, or directs a fail-on-send transport that keeps the
+  worker honest without a connector.
+- **Blockers:** connector-inventory owner decision (SPEC.md section 11).
+  `.ralph/DONE` touched: `make done` passes and no ready work remains.
+
 ### Cycle 2026-10-06T162634Z: W1 worker entrypoint (`python -m redops.worker`)
 
 - **Selected item:** W1's worker entrypoint, the next ready item after the
@@ -47,40 +80,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   transport / connector-inventory owner decision. `.ralph/DONE` not touched: the
   prototype DoD still passes but the owner reopened the loop for post-prototype
   work (plan history, 2026-10-06) and ready work remains.
-
-### Cycle 2026-10-06T162338Z: W1 concrete connector-backed workflow step executor
-
-- **Selected item:** W1's unblocking prerequisite, the concrete
-  `WorkflowStepExecutor` adapter, the highest-value ready item. The owner
-  decision 2026-10-06 unblocked W1 by directing a concrete `WorkflowStepExecutor`
-  port and adapter (the connector seam is a `ConnectorPort`, not a step executor),
-  and W1 is the next ready item; G8's required-kind half and G9 are closed, and
-  R1/R2 stay deferred. The adapter is the smallest passing change that lets the
-  worker entrypoint be built next.
-- **Outcome:** new `ConnectorStepExecutor`
-  (`backend/redops/workflows/infrastructure/executors.py`) implements the existing
-  `WorkflowStepExecutor` port over the replay-safe `ConnectorPort`. It derives a
-  deterministic `ConnectorEffect` from the run and step: idempotency key
-  `{run_id}:{step_name}`, connector from configuration, target the step name, and
-  a `sha256` digest of the pinned definition `id@version:step`, scoped to the
-  run's tenant. A re-run of an interrupted step therefore resolves to the one
-  recorded external operation instead of sending a second effect (SPEC.md section
-  11; ADR 0005). An approval step is refused with the new named
-  `WorkflowStepExecutionError` rather than executed (SPEC.md section 4). No stage
-  0-10 template, required asset kind, migration, route or gate changed; the chart
-  worker stays disabled until the entrypoint lands.
-- **Evidence:** `tests/unit/workflows/test_connector_step_executor.py` (7 tests)
-  passes, including a restarting-worker resume and a `ResumeDueRunsHandler` pass
-  that re-runs an interrupted step without a second effect; `uv run pyflakes`
-  clean; `make check` 2700 passed, 3 skipped, 794 subtests. Independent `verify`
-  subagent: PASS.
-- **Not done (deliberately):** the worker entrypoint (`python -m redops.worker`)
-  and enabling the chart's worker Deployment are the next bounded slice of W1; no
-  send, spend, publish or client commitment is authorized (SPEC.md sections 4 and
-  9).
-- **Next ready item:** W1's worker entrypoint, now unblocked by this adapter:
-  compose `ResumeDueRunsHandler` with the durable `WorkflowRunStore` and the
-  `ConnectorStepExecutor`, then enable the chart worker.
 
 
 

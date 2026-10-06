@@ -2,6 +2,43 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 2026-10-06T162338Z: W1 concrete connector-backed workflow step executor
+
+- **Selected item:** W1's unblocking prerequisite, the concrete
+  `WorkflowStepExecutor` adapter, the highest-value ready item. The owner
+  decision 2026-10-06 unblocked W1 by directing a concrete `WorkflowStepExecutor`
+  port and adapter (the connector seam is a `ConnectorPort`, not a step executor),
+  and W1 is the next ready item; G8's required-kind half and G9 are closed, and
+  R1/R2 stay deferred. The adapter is the smallest passing change that lets the
+  worker entrypoint be built next.
+- **Outcome:** new `ConnectorStepExecutor`
+  (`backend/redops/workflows/infrastructure/executors.py`) implements the existing
+  `WorkflowStepExecutor` port over the replay-safe `ConnectorPort`. It derives a
+  deterministic `ConnectorEffect` from the run and step: idempotency key
+  `{run_id}:{step_name}`, connector from configuration, target the step name, and
+  a `sha256` digest of the pinned definition `id@version:step`, scoped to the
+  run's tenant. A re-run of an interrupted step therefore resolves to the one
+  recorded external operation instead of sending a second effect (SPEC.md section
+  11; ADR 0005). An approval step is refused with the new named
+  `WorkflowStepExecutionError` rather than executed (SPEC.md section 4). No stage
+  0-10 template, required asset kind, migration, route or gate changed; the chart
+  worker stays disabled until the entrypoint lands.
+- **Evidence:** `tests/unit/workflows/test_connector_step_executor.py` (7 tests)
+  passes, including a restarting-worker resume and a `ResumeDueRunsHandler` pass
+  that re-runs an interrupted step without a second effect; `uv run pyflakes`
+  clean; `make check` 2700 passed, 3 skipped, 794 subtests. Independent `verify`
+  subagent: PASS.
+- **Not done (deliberately):** the worker entrypoint (`python -m redops.worker`)
+  and enabling the chart's worker Deployment are the next bounded slice of W1; no
+  send, spend, publish or client commitment is authorized (SPEC.md sections 4 and
+  9).
+- **Next ready item:** W1's worker entrypoint, now unblocked by this adapter:
+  compose `ResumeDueRunsHandler` with the durable `WorkflowRunStore` and the
+  `ConnectorStepExecutor`, then enable the chart worker.
+
+
+
+Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ### Cycle 2026-10-06T155319Z: Q16 store-level compare-and-swap on the build store
 
 - **Selected item:** Q16 (store-level compare-and-swap hardening), the
