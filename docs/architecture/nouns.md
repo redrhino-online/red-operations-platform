@@ -157,6 +157,7 @@ explicit.
 | **WorkflowDefinition** | A versioned, typed workflow (steps, gates, retry/timeout policy, output schema, rollback). | In-flight runs keep their original definition. |
 | **WorkflowRun** | The durable run state machine. | Persisted before side effects so runs resume from committed steps. |
 | **WorkflowStepExecutor / WorkflowRunStore** | Ports for executing a step and storing run state. | Restarting a worker preserves a waiting workflow. |
+| **ConnectorStepExecutor** | The concrete `WorkflowStepExecutor` that performs a task step through the replay-safe `ConnectorPort`. | A resumed step resolves to one recorded external operation; an approval step is refused. |
 | **Outbox / durable queue** | Transactional outbox for async work. | Worker idempotency; no lost effects. |
 | **Optimistic version checking** | Conflict-on-stale-update. | Prevents silent lost updates on concurrent edits. |
 | **Idempotency key** | Request identity for retried mutations. | Duplicate delivery creates exactly one operation. |

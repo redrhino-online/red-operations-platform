@@ -49,6 +49,16 @@ class IllegalWorkflowTransitionError(WorkflowError):
     """
 
 
+class WorkflowStepExecutionError(WorkflowError):
+    """A step cannot be executed as an external effect.
+
+    A task step is performed through the connector seam; an approval step is a
+    human gate and must wait for a named human (SPEC.md section 4: an agent
+    cannot confer human approval upon itself). The executor refuses to send an
+    effect for a step that is not a task rather than silently bypassing the gate.
+    """
+
+
 class WorkflowRunNotFoundError(WorkflowError):
     """A tenant-scoped run lookup found no run (SPEC.md section 9).
 

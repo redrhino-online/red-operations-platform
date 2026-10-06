@@ -4,6 +4,40 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-06T162338Z: W1 concrete connector-backed workflow step executor
+
+- **Selected item:** W1's unblocking prerequisite, the concrete
+  `WorkflowStepExecutor` adapter, the highest-value ready item. The owner
+  decision 2026-10-06 unblocked W1 by directing a concrete `WorkflowStepExecutor`
+  port and adapter (the connector seam is a `ConnectorPort`, not a step executor),
+  and W1 is the next ready item; G8's required-kind half and G9 are closed, and
+  R1/R2 stay deferred. The adapter is the smallest passing change that lets the
+  worker entrypoint be built next.
+- **Outcome:** new `ConnectorStepExecutor`
+  (`backend/redops/workflows/infrastructure/executors.py`) implements the existing
+  `WorkflowStepExecutor` port over the replay-safe `ConnectorPort`. It derives a
+  deterministic `ConnectorEffect` from the run and step: idempotency key
+  `{run_id}:{step_name}`, connector from configuration, target the step name, and
+  a `sha256` digest of the pinned definition `id@version:step`, scoped to the
+  run's tenant. A re-run of an interrupted step therefore resolves to the one
+  recorded external operation instead of sending a second effect (SPEC.md section
+  11; ADR 0005). An approval step is refused with the new named
+  `WorkflowStepExecutionError` rather than executed (SPEC.md section 4). No stage
+  0-10 template, required asset kind, migration, route or gate changed; the chart
+  worker stays disabled until the entrypoint lands.
+- **Evidence:** `tests/unit/workflows/test_connector_step_executor.py` (7 tests)
+  passes, including a restarting-worker resume and a `ResumeDueRunsHandler` pass
+  that re-runs an interrupted step without a second effect; `uv run pyflakes`
+  clean; `make check` 2700 passed, 3 skipped, 794 subtests. Independent `verify`
+  subagent: PASS.
+- **Not done (deliberately):** the worker entrypoint (`python -m redops.worker`)
+  and enabling the chart's worker Deployment are the next bounded slice of W1; no
+  send, spend, publish or client commitment is authorized (SPEC.md sections 4 and
+  9).
+- **Next ready item:** W1's worker entrypoint, now unblocked by this adapter:
+  compose `ResumeDueRunsHandler` with the durable `WorkflowRunStore` and the
+  `ConnectorStepExecutor`, then enable the chart worker.
+
 ### Cycle 2026-10-06T155319Z: Q16 store-level compare-and-swap on the build store
 
 - **Selected item:** Q16 (store-level compare-and-swap hardening), the
@@ -33,46 +67,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 - **Next ready item:** none unblocked. W1 stays blocked on a concrete
   `WorkflowStepExecutor`; G8's required-kind half and G9 stay blocked on owner
   input. The loop stops and records the blocker.
-
-### Cycle 2026-10-06T154707Z: G8 production-view route supplies the umbrella plan
-
-- **Selected item:** G8 (wiring follow-ups), the production-view route projection
-  slice, the highest-value ready item. It outranks W1 (worker entrypoint), which
-  is blocked on a concrete `WorkflowStepExecutor` (the connector seam is a
-  `ConnectorPort`, not a step executor), and G8's required-kind half and G9,
-  which are blocked on owner input. The previous cycle left this as the bounded,
-  unblocked follow-up: the production view already carried the
-  `UmbrellaPlanReportingView` as a caller-supplied projection, but no route
-  supplied it.
-- **Outcome:** the production-view route now supplies the canon umbrella plan
-  (SPEC.md sections 4 and 12.5; canon files 00, 01) from a durable Portfolio
-  store. New `UmbrellaPlanRepository` port (`get`/`list`/`save`/`close`) with
-  in-memory and PostgreSQL adapters, `umbrella_plan_repository_from_env`, the
-  `umbrella_plan_to_payload`/`umbrella_plan_from_payload` mapper (workspace
-  inline, template by version, sections/targets/reviews round-trip) and migration
-  `0019_umbrella_plans`; `UmbrellaPlan.as_reporting_view()` projects the aggregate
-  into the governance `UmbrellaPlanReportingView`. The route loads the tenant's
-  plan whose workspace id equals the engagement (the most recently reviewed plan
-  wins, deterministically), projects it and passes it into the query; the
-  response gains an optional `umbrella_plan` row, and an absent or foreign plan is
-  omitted rather than invented. No stage 0-10 template, required asset kind or
-  gate changed, so the wiring is reversible and authorizes no production, spend
-  or traffic.
-- **Evidence:** `tests/unit/portfolio/test_umbrella_plan_repository.py` (9 tests)
-  and `tests/unit/portfolio/test_umbrella_plan_postgres.py` (4 tests, run with
-  `DATABASE_URL`) pass; the new route tests in
-  `tests/unit/test_production_view_route.py` (3 tests) pass; `tests/unit/shared/test_migrate.py`
-  asserts head `0019_umbrella_plans`; `uv run pyflakes` clean; `make check` 2687
-  passed, 3 skipped, 794 subtests; `make done` PASS.
-- **Not done (deliberately):** the required-kind half of G8 (retargeting family,
-  banner library) stays blocked on the RED principal's per-stage required-kind
-  decision; G9 stays blocked on owner input; W1 stays blocked on a concrete
-  `WorkflowStepExecutor`. No send, spend, publish or client commitment is
-  authorized (SPEC.md sections 4 and 9).
-- **Next ready item:** the Q16 store-level compare-and-swap hardening (a version
-  predicate in the PostgreSQL `save`, so two concurrent writers cannot both pass)
-  is bounded and unblocked; W1, G8's required-kind half and G9 stay blocked on
-  owner input.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ## Prototype definition of done
@@ -299,7 +293,7 @@ These are existing non-canon gaps which remain actionable alongside G1-G9.
 
 | # | Item | Area | Depends | Evidence / gate |
 | --- | --- | --- | --- | --- |
-| W1 | Add the RED worker entrypoint and deploy it as part of the owner's api + ui + worker first-release scope | workflows/deploy | — | worker starts, resumes a due durable workflow after restart, and the chart's worker Deployment is healthy. **Unblocked 2026-10-06 (owner):** build a concrete `WorkflowStepExecutor` port and adapter (the connector seam is a `ConnectorPort`, not a step executor) so the worker can start and resume a due durable workflow; W1 is the next ready item |
+| W1 | Add the RED worker entrypoint and deploy it as part of the owner's api + ui + worker first-release scope | workflows/deploy | — | worker starts, resumes a due durable workflow after restart, and the chart's worker Deployment is healthy. **Unblocked 2026-10-06 (owner):** build a concrete `WorkflowStepExecutor` port and adapter (the connector seam is a `ConnectorPort`, not a step executor) so the worker can start and resume a due durable workflow; W1 is the next ready item. **Adapter done 2026-10-06:** `ConnectorStepExecutor` (`backend/redops/workflows/infrastructure/executors.py`) implements the `WorkflowStepExecutor` port over the replay-safe `ConnectorPort`, deriving a deterministic tenant-scoped effect per run and step so a resumed step resolves to one recorded external operation and an approval step is refused (`WorkflowStepExecutionError`); verified by `tests/unit/workflows/test_connector_step_executor.py` (7 tests). Remaining: the `python -m redops.worker` entrypoint composing `ResumeDueRunsHandler` with the durable store and this executor, then enabling the chart worker |
 | Q16 | Optimistic-version conflict half: a stale mutation returns 409 | api/governance | a mutation route that accepts an expected version | test two writes against the same version; first succeeds, stale second returns 409 without changing state. **Done 2026-10-06:** the live Production `BuildObject` carries a monotonic `version` (starts at 1, advances on every mutation and transition) and `require_version(expected)` raises `BuildObjectVersionConflictError` before any mutation; `POST /red/builds/{build_id}/transition` accepts `expected_version`, returns 409 on a stale write (404 unknown/foreign, 422 illegal target), and the version round-trips through the mapper; verified by `tests/unit/production/test_build_object_version.py` (8 tests) and the new route tests in `tests/unit/production/test_builds_route.py` (5 tests). **Store-level CAS done 2026-10-06:** `BuildObjectRepository.save` accepts an optional `expected_version`; the PostgreSQL adapter issues `UPDATE ... WHERE (build_objects.build->>'version')::int = %s` and raises `BuildObjectVersionConflictError` (rolling back) when no row matches, and the in-memory adapter stores independent snapshots and enforces the same predicate, so two writers that read the same version cannot both pass; the transition route passes `expected_version` to `save`; verified by `tests/unit/production/test_build_object_store.py` (3 tests) and `test_build_object_postgres.py` (3 tests, run with `DATABASE_URL`) |
 
 ## Product priority: the gated production engagement
