@@ -147,6 +147,16 @@ class OpportunityConflictError(PortfolioError):
     """
 
 
+class UmbrellaPlanConflictError(PortfolioError):
+    """A stored umbrella plan was re-stated with different content under its id.
+
+    The umbrella plan register is append-only (SPEC.md section 3, Decision
+    invariant: decision history is append only). A same-id re-statement with
+    different content is refused rather than silently rewritten; a materially
+    different plan is a new identity.
+    """
+
+
 class InvalidDeliveryLadderError(PortfolioError, ValueError):
     """A delivery ladder was built without required content.
 

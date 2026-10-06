@@ -4,6 +4,46 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-06T154707Z: G8 production-view route supplies the umbrella plan
+
+- **Selected item:** G8 (wiring follow-ups), the production-view route projection
+  slice, the highest-value ready item. It outranks W1 (worker entrypoint), which
+  is blocked on a concrete `WorkflowStepExecutor` (the connector seam is a
+  `ConnectorPort`, not a step executor), and G8's required-kind half and G9,
+  which are blocked on owner input. The previous cycle left this as the bounded,
+  unblocked follow-up: the production view already carried the
+  `UmbrellaPlanReportingView` as a caller-supplied projection, but no route
+  supplied it.
+- **Outcome:** the production-view route now supplies the canon umbrella plan
+  (SPEC.md sections 4 and 12.5; canon files 00, 01) from a durable Portfolio
+  store. New `UmbrellaPlanRepository` port (`get`/`list`/`save`/`close`) with
+  in-memory and PostgreSQL adapters, `umbrella_plan_repository_from_env`, the
+  `umbrella_plan_to_payload`/`umbrella_plan_from_payload` mapper (workspace
+  inline, template by version, sections/targets/reviews round-trip) and migration
+  `0019_umbrella_plans`; `UmbrellaPlan.as_reporting_view()` projects the aggregate
+  into the governance `UmbrellaPlanReportingView`. The route loads the tenant's
+  plan whose workspace id equals the engagement (the most recently reviewed plan
+  wins, deterministically), projects it and passes it into the query; the
+  response gains an optional `umbrella_plan` row, and an absent or foreign plan is
+  omitted rather than invented. No stage 0-10 template, required asset kind or
+  gate changed, so the wiring is reversible and authorizes no production, spend
+  or traffic.
+- **Evidence:** `tests/unit/portfolio/test_umbrella_plan_repository.py` (9 tests)
+  and `tests/unit/portfolio/test_umbrella_plan_postgres.py` (4 tests, run with
+  `DATABASE_URL`) pass; the new route tests in
+  `tests/unit/test_production_view_route.py` (3 tests) pass; `tests/unit/shared/test_migrate.py`
+  asserts head `0019_umbrella_plans`; `uv run pyflakes` clean; `make check` 2687
+  passed, 3 skipped, 794 subtests; `make done` PASS.
+- **Not done (deliberately):** the required-kind half of G8 (retargeting family,
+  banner library) stays blocked on the RED principal's per-stage required-kind
+  decision; G9 stays blocked on owner input; W1 stays blocked on a concrete
+  `WorkflowStepExecutor`. No send, spend, publish or client commitment is
+  authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** the Q16 store-level compare-and-swap hardening (a version
+  predicate in the PostgreSQL `save`, so two concurrent writers cannot both pass)
+  is bounded and unblocked; W1, G8's required-kind half and G9 stay blocked on
+  owner input.
+
 ### Cycle 2026-10-06T154157Z: Q16 optimistic-version conflict on the live build aggregate
 
 - **Selected item:** Q16 (optimistic-version conflict half), the highest-value
@@ -43,43 +83,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   persistence) is bounded and unblocked; W1 (worker entrypoint) stays blocked on
   a concrete `WorkflowStepExecutor`; G8's required-kind half and G9 stay blocked
   on owner input.
-
-### Cycle 2026-10-06T153729Z: G8 umbrella plan wired into the production view
-
-- **Selected item:** G8 (wiring follow-ups), the last open Canon gap backlog
-  item, bounded to its authorized "into the production view" slice. G8's
-  required-kind half (retargeting family, banner library) is blocked by the RED
-  principal's open per-stage required-kind decision (`Decisions still open`,
-  below), which the loop must not decide unattended; the `UmbrellaPlan` is
-  explicitly "not a new required gate kind" (its own docstring), so surfacing it
-  in the production view is the reversible, authorized slice. It outranks W1
-  (worker entrypoint), which is not bounded because no concrete
-  `WorkflowStepExecutor` exists, and Q16, which is partial.
-- **Outcome:** the Governance production view now carries the canon umbrella plan
-  (SPEC.md sections 4 and 12.5; canon files 00, 01) as a caller-supplied,
-  tenant-scoped read-model projection. New frozen `UmbrellaPlanReportingView`
-  (plan identity, owning client, accountable owner, covered stages, review and
-  next-review dates) with `is_current`/`is_overdue` for the 90-day revisit;
-  `EngagementProductionView` gains an optional `umbrella_plan` and refuses a
-  cross-tenant row (`UmbrellaPlanReportingTenantBoundaryError`), a row that does
-  not cover exactly the view's stages (`UmbrellaPlanCoverageError`) and a
-  malformed row (`UmbrellaPlanReportingError`); `EngagementProductionViewQuery`
-  and the handler pass it through. No stage 0-10 template, required asset kind,
-  route, persistence or migration changed, so the wiring is reversible and
-  authorizes no production, spend or traffic.
-- **Evidence:** `tests/unit/governance/test_production_view_umbrella.py` (8
-  tests, 9 subtests) passes; the full `tests/unit/governance` suite passes (311
-  passed, 1 skipped, 76 subtests); `uv run pyflakes` clean on the changed files;
-  `make check` 2658 passed, 3 skipped, 790 subtests.
-- **Not done (deliberately):** the required-kind half of G8 (retargeting family,
-  banner library) stays blocked on the RED principal's per-stage required-kind
-  decision; the production-view route does not yet supply the projection (it
-  needs a Portfolio port and persistence, a bounded follow-up). No send, spend,
-  publish or client commitment is authorized (SPEC.md sections 4 and 9).
-- **Next ready item:** none unblocked in the Canon gap backlog: G8's remaining
-  half and G9 are blocked on owner input. W1 (worker entrypoint) and Q16
-  (optimistic-version conflict) remain open non-canon items; W1 needs a concrete
-  `WorkflowStepExecutor` and Q16 needs a version-carrying mutation route.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ## Prototype definition of done
@@ -281,7 +284,7 @@ noun rows to `docs/architecture/nouns.md`.
 | G5 | Delivery ladder and ascension: one-to-one beta, live cohort, evergreen; 90-day roadmap audit; one deliverable per step | portfolio/operations | — | 11, 12; Certification; Live Sessions 5, 12; `ops/playbooks/delivery.md` | typed artifact with tests; represents the client's own delivery (Serve) and the next-offer path; never an observation. **Done 2026-10-06:** Portfolio `DeliveryLadder` (`DeliveryRung`, `DeliveryStep`, `RoadmapAudit`, `DeliveryGoal`, `DeliveryResult`, `AscensionOffer`) grounds on a same-tenant stage 5 `ProductProgram`, types the canon rungs as an ordered subsequence beginning at one-to-one, requires one deliverable per program step in order, a 90-day roadmap audit cadence, kickoff goals and an ascension offer per step, and refuses to close until every goal is met; verified by `tests/unit/portfolio/test_delivery_ladder.py` (39 tests). Wiring into a required post-launch kind remains a methodology-owner decision |
 | G6 | Partnership line and certification: four-offer ladder, renewal and win-back, referral and partner plan, community rules, reputation track, certified consultant standards | portfolio | G5 | 11, 12; Certification; Live Sessions 5, 12; High Ticket Funnels 19; `ops/playbooks/partnership.md`, `certification.md` | typed artifacts with tests; every client has a next step; human decision for any commitment. **Done 2026-10-06:** Portfolio `PartnershipPlan` (`PartnershipOffer`, `PartnershipMove`, `PartnershipCheckIn`, `ReferralPlan`, `CommunityRules`, `ReputationTrack`, `CertificationStandard`, `CertifiedOperator`) grounds on a same-tenant stage 5 `ProductProgram`, requires the four-offer path and the four-move loop in order, a regular check-in, a referral plan that asks after a win and names the partner offer, simple unique community rules, a reputation track covering reviews/stories/press, and a short certification standard with a yearly recheck; `certify` refuses an operator with no real result or a failed exam; verified by `tests/unit/portfolio/test_partnership.py` (53 tests). Wiring into a required post-launch kind remains a methodology-owner decision |
 | G7 | Service-line artifacts: kickoff checklist, module production standard, session guide, client scorecard, case study template (case study as sourced proof, client-approved and version-scoped) | operations | — | internal/service-ops.md; `ops/checklists/kickoff.md`, `module-production.md`, `session-guide.md`, `client-scorecard.md`, `case-study.md` | typed artifact with tests; case study claim refuses an unapproved or unsourced testimonial (SPEC.md sections 1 and 4). **Done 2026-10-06:** Operations `ServiceLine` (`KickoffChecklist`, `SuccessGoal`, `ModuleProductionStandard`, `SessionGuide`, `ClientScorecard`, `ScorecardRisk`, `CaseStudy`, `CaseStudyClaim`) grounds on a same-tenant stage 5 `ProductProgram`, requires the welcome within one business day, goals as a number and a date, collected access, a shared plan, ordered unique module steps, the four scorecard dimensions in order with an action per risk, and a case study whose `claim` refuses an unsourced result, an unapproved testimonial and an unversioned claim; verified by `tests/unit/operations/test_service_line.py` (59 tests). Wiring into a required post-launch kind remains a methodology-owner decision |
-| G8 | Wiring follow-ups: pin the `UmbrellaPlan` and the remaining planning assets (retargeting family, banner library) into the production view or a required kind | governance/pipeline | — | 00, 01; 33, 34 | gate-integrity tests; asset remains reversible. **Partial 2026-10-06:** the `UmbrellaPlan` is wired into the production view as a caller-supplied, tenant-scoped `UmbrellaPlanReportingView` (coverage + next 90-day review), with cross-tenant, coverage and malformed-row refusals; verified by `tests/unit/governance/test_production_view_umbrella.py` (8 tests). The required-kind half (retargeting family, banner library) is **blocked on the RED principal's open per-stage required-kind decision** (`Decisions still open`); the production-view route does not yet supply the projection (needs a Portfolio port and persistence) |
+| G8 | Wiring follow-ups: pin the `UmbrellaPlan` and the remaining planning assets (retargeting family, banner library) into the production view or a required kind | governance/pipeline | — | 00, 01; 33, 34 | gate-integrity tests; asset remains reversible. **Partial 2026-10-06:** the `UmbrellaPlan` is wired into the production view as a caller-supplied, tenant-scoped `UmbrellaPlanReportingView` (coverage + next 90-day review), with cross-tenant, coverage and malformed-row refusals; verified by `tests/unit/governance/test_production_view_umbrella.py` (8 tests). The production-view route now supplies the projection from a durable Portfolio `UmbrellaPlanRepository` (in-memory + PostgreSQL, migration `0019_umbrella_plans`) via `UmbrellaPlan.as_reporting_view()`; verified by `tests/unit/portfolio/test_umbrella_plan_repository.py` (9 tests), `test_umbrella_plan_postgres.py` (4 tests) and the new route tests in `tests/unit/test_production_view_route.py` (3 tests). The required-kind half (retargeting family, banner library) is **blocked on the RED principal's open per-stage required-kind decision** (`Decisions still open`) |
 | G9 | Canon source acquisition: the dedicated emailed follow-up and nurture module | process | — | SPEC.md section 12.6 | unresolved; license-owner request, owned by the RED principal; do not treat nurture artifacts as canon-complete until it lands |
 
 G1-G7 implement the new canon assets as bounded artifacts; G8 is wiring; G9 is a

@@ -27,6 +27,7 @@ from redops.contexts.engagement.domain.entities import ClientWorkspace
 from redops.contexts.governance.domain.value_objects import (
     StageAssetVersion,
     StageTemplate,
+    UmbrellaPlanReportingView,
 )
 from redops.contexts.portfolio.domain.errors import (
     InvalidOpportunityError,
@@ -367,6 +368,29 @@ class UmbrellaPlan:
         raise UmbrellaPlanObservationError(
             f"umbrella plan {claim_id!r} is an intended strategy, not an observed "
             "result, and cannot be recorded as an observation"
+        )
+
+    def as_reporting_view(self) -> UmbrellaPlanReportingView:
+        """Project the plan into the production view's umbrella-plan row.
+
+        SPEC.md section 4 requires the production view to answer, per client,
+        what should exist and when it is due, and SPEC.md section 12.5 records the
+        canon umbrella plan as a planning decision over the whole stage 0-10
+        pipeline revisited every 90 days (canon files 00 and 01). The projection
+        carries only the plan identity, its owning client, the accountable owner,
+        the stages it covers and the latest review's dates; it never invents a
+        plan, owner or review date, and the governance view re-checks the tenant
+        boundary and stage coverage when it is composed (SPEC.md sections 4 and
+        9). The plan is a plan, not a required gate kind, so this projection
+        authorizes no production, spend or traffic.
+        """
+        return UmbrellaPlanReportingView(
+            plan_id=self.plan_id,
+            tenant_id=self.tenant_id,
+            owner=self.owner,
+            covered_stages=frozenset(self.covered_stages),
+            reviewed_on=self.latest_review.reviewed_on,
+            next_review_due=self.next_review_due,
         )
 
 

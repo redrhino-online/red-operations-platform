@@ -37,10 +37,14 @@ class ProductionViewRouteTests(unittest.TestCase):
             from redops.api.routes import (
                 get_gate_ledger_repository,
                 get_stage_run_repository,
+                get_umbrella_plan_repository,
             )
             from redops.contexts.governance.infrastructure.repositories import (
                 InMemoryGateLedgerRepository,
                 InMemoryStageRunRepository,
+            )
+            from redops.contexts.portfolio.infrastructure.repositories import (
+                InMemoryUmbrellaPlanRepository,
             )
         except Exception as exc:  # pragma: no cover - depends on environment
             raise unittest.SkipTest(
@@ -50,15 +54,21 @@ class ProductionViewRouteTests(unittest.TestCase):
         cls.create_app = staticmethod(create_app)
         cls.ledger_dependency = staticmethod(get_gate_ledger_repository)
         cls.run_dependency = staticmethod(get_stage_run_repository)
+        cls.umbrella_dependency = staticmethod(get_umbrella_plan_repository)
         cls.ledger_class = staticmethod(InMemoryGateLedgerRepository)
         cls.run_class = staticmethod(InMemoryStageRunRepository)
+        cls.umbrella_class = staticmethod(InMemoryUmbrellaPlanRepository)
 
     def setUp(self) -> None:
         self.app = self.create_app()
         self.ledger = self.ledger_class()
         self.runs = self.run_class()
+        self.umbrella_plans = self.umbrella_class()
         self.app.dependency_overrides[self.ledger_dependency] = lambda: self.ledger
         self.app.dependency_overrides[self.run_dependency] = lambda: self.runs
+        self.app.dependency_overrides[self.umbrella_dependency] = (
+            lambda: self.umbrella_plans
+        )
         self.client = self.test_client(self.app)
 
     def tearDown(self) -> None:
@@ -215,6 +225,97 @@ class ProductionViewRouteTests(unittest.TestCase):
         response = self.client.get(self.url())
 
         self.assertEqual(response.status_code, 422, response.text)
+
+    @staticmethod
+    def umbrella_plan(tenant_id: str = TENANT, workspace_id: str = ENGAGEMENT):
+        from datetime import timedelta
+
+        from redops.contexts.engagement.domain.entities import ClientWorkspace
+        from redops.contexts.engagement.domain.value_objects import ClientAuthority
+        from redops.contexts.governance.domain.templates import (
+            stage_zero_to_ten_template,
+        )
+        from redops.contexts.portfolio.domain.value_objects import (
+            LAUNCH_MAP_SECTIONS,
+            LAUNCH_MAP_SECTION_STAGES,
+            QUARTERLY_REVIEW_DAYS,
+            BusinessTarget,
+            QuarterlyReview,
+            UmbrellaPlan,
+            UmbrellaSection,
+        )
+
+        return UmbrellaPlan(
+            plan_id="umbrella-3f",
+            tenant_id=tenant_id,
+            owner="red-principal",
+            workspace=ClientWorkspace(
+                workspace_id=workspace_id,
+                tenant_id=tenant_id,
+                authorities=(
+                    ClientAuthority(
+                        actor="red-owner", authority="production-owner"
+                    ),
+                ),
+            ),
+            template=stage_zero_to_ten_template(VERSION),
+            sections=tuple(
+                UmbrellaSection(
+                    section=kind,
+                    stages=LAUNCH_MAP_SECTION_STAGES[kind],
+                    objective=f"{kind.value} objective",
+                )
+                for kind in LAUNCH_MAP_SECTIONS
+            ),
+            targets=(
+                BusinessTarget(
+                    target_id="target-leads",
+                    name="qualified strategy calls",
+                    metric="booked strategy calls per week",
+                    goal="20 per week",
+                    due_on=date(2026, 12, 31),
+                ),
+            ),
+            reviews=(
+                QuarterlyReview(
+                    reviewed_on=TODAY,
+                    next_review_on=TODAY
+                    + timedelta(days=QUARTERLY_REVIEW_DAYS),
+                    actor="red-principal",
+                ),
+            ),
+            created_on=TODAY,
+        )
+
+    def test_the_view_supplies_the_stored_umbrella_plan(self) -> None:
+        self.umbrella_plans.save(self.umbrella_plan())
+
+        response = self.client.get(self.url(), params={"on": ON.isoformat()})
+
+        self.assertEqual(response.status_code, 200, response.text)
+        umbrella = response.json()["umbrella_plan"]
+        self.assertIsNotNone(umbrella)
+        self.assertEqual("umbrella-3f", umbrella["plan_id"])
+        self.assertEqual(TENANT, umbrella["tenant_id"])
+        self.assertEqual("red-principal", umbrella["owner"])
+        self.assertEqual(list(range(11)), umbrella["covered_stages"])
+        self.assertEqual(TODAY.isoformat(), umbrella["reviewed_on"])
+
+    def test_the_view_omits_an_absent_umbrella_plan(self) -> None:
+        response = self.client.get(self.url(), params={"on": ON.isoformat()})
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIsNone(response.json()["umbrella_plan"])
+
+    def test_another_clients_umbrella_plan_is_not_shown(self) -> None:
+        self.umbrella_plans.save(
+            self.umbrella_plan(tenant_id=OTHER_TENANT, workspace_id=ENGAGEMENT)
+        )
+
+        response = self.client.get(self.url(), params={"on": ON.isoformat()})
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIsNone(response.json()["umbrella_plan"])
 
 
 if __name__ == "__main__":

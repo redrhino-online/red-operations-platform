@@ -2,6 +2,43 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 2026-10-06T153729Z: G8 umbrella plan wired into the production view
+
+- **Selected item:** G8 (wiring follow-ups), the last open Canon gap backlog
+  item, bounded to its authorized "into the production view" slice. G8's
+  required-kind half (retargeting family, banner library) is blocked by the RED
+  principal's open per-stage required-kind decision (`Decisions still open`,
+  below), which the loop must not decide unattended; the `UmbrellaPlan` is
+  explicitly "not a new required gate kind" (its own docstring), so surfacing it
+  in the production view is the reversible, authorized slice. It outranks W1
+  (worker entrypoint), which is not bounded because no concrete
+  `WorkflowStepExecutor` exists, and Q16, which is partial.
+- **Outcome:** the Governance production view now carries the canon umbrella plan
+  (SPEC.md sections 4 and 12.5; canon files 00, 01) as a caller-supplied,
+  tenant-scoped read-model projection. New frozen `UmbrellaPlanReportingView`
+  (plan identity, owning client, accountable owner, covered stages, review and
+  next-review dates) with `is_current`/`is_overdue` for the 90-day revisit;
+  `EngagementProductionView` gains an optional `umbrella_plan` and refuses a
+  cross-tenant row (`UmbrellaPlanReportingTenantBoundaryError`), a row that does
+  not cover exactly the view's stages (`UmbrellaPlanCoverageError`) and a
+  malformed row (`UmbrellaPlanReportingError`); `EngagementProductionViewQuery`
+  and the handler pass it through. No stage 0-10 template, required asset kind,
+  route, persistence or migration changed, so the wiring is reversible and
+  authorizes no production, spend or traffic.
+- **Evidence:** `tests/unit/governance/test_production_view_umbrella.py` (8
+  tests, 9 subtests) passes; the full `tests/unit/governance` suite passes (311
+  passed, 1 skipped, 76 subtests); `uv run pyflakes` clean on the changed files;
+  `make check` 2658 passed, 3 skipped, 790 subtests.
+- **Not done (deliberately):** the required-kind half of G8 (retargeting family,
+  banner library) stays blocked on the RED principal's per-stage required-kind
+  decision; the production-view route does not yet supply the projection (it
+  needs a Portfolio port and persistence, a bounded follow-up). No send, spend,
+  publish or client commitment is authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** none unblocked in the Canon gap backlog: G8's remaining
+  half and G9 are blocked on owner input. W1 (worker entrypoint) and Q16
+  (optimistic-version conflict) remain open non-canon items; W1 needs a concrete
+  `WorkflowStepExecutor` and Q16 needs a version-carrying mutation route.
+
 ### Cycle 2026-10-06T151009Z: G6 partnership line and certification implemented
 
 - **Selected item:** G6 (partnership line and certification), the highest Canon

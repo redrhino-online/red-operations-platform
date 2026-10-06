@@ -270,6 +270,7 @@ from redops.contexts.governance.domain.value_objects import (
     MetricReportingView,
     StageAssetVersion,
     StageProductionView,
+    UmbrellaPlanReportingView,
 )
 from redops.contexts.governance.infrastructure.repositories import (
     gate_ledger_repository_from_env,
@@ -347,14 +348,19 @@ from redops.contexts.operations.domain.value_objects import (
 from redops.contexts.operations.infrastructure.repositories import (
     intervention_dismissal_repository_from_env,
 )
-from redops.contexts.portfolio.application.ports import OpportunityRepository
+from redops.contexts.portfolio.application.ports import (
+    OpportunityRepository,
+    UmbrellaPlanRepository,
+)
 from redops.contexts.portfolio.domain.errors import PortfolioError
 from redops.contexts.portfolio.domain.value_objects import (
     Opportunity,
     OpportunityKind,
+    UmbrellaPlan,
 )
 from redops.contexts.portfolio.infrastructure.repositories import (
     opportunity_repository_from_env,
+    umbrella_plan_repository_from_env,
 )
 from redops.contexts.production.application.ports import (
     AuthorityAmplifierRepository,
@@ -734,6 +740,51 @@ def get_opportunity_repository() -> Iterator[OpportunityRepository]:
         yield repository
     finally:
         repository.close()
+
+
+def get_umbrella_plan_repository() -> Iterator[UmbrellaPlanRepository]:
+    """Provide the portfolio umbrella plan seam to the API (SPEC.md section 6).
+
+    SPEC.md section 12.5 records the canon umbrella plan as a planning decision
+    over the whole stage 0-10 pipeline and SPEC.md section 4 requires the
+    production view to carry it as a tenant-scoped projection, so the route needs
+    to load the stored plan without reading a store directly. The dependency owns
+    one adapter for the request and releases any connection it opened when the
+    request ends. The store is chosen once from ``DATABASE_URL``; a request cannot
+    silently downgrade to a process-local umbrella plan store, because a
+    set-but-unusable configuration raises before the route runs.
+    """
+
+    repository = umbrella_plan_repository_from_env(os.environ.get("DATABASE_URL"))
+    try:
+        yield repository
+    finally:
+        repository.close()
+
+
+def _umbrella_plan_for_engagement(
+    repository: UmbrellaPlanRepository, *, tenant_id: str, engagement: str
+) -> UmbrellaPlan | None:
+    """Select the tenant's umbrella plan for one engagement, if any.
+
+    The canon umbrella plan is drawn over a client workspace (SPEC.md section
+    12.5) and the production view is requested per engagement; the engagement
+    label is the workspace id the plan was drawn over. When a tenant holds more
+    than one plan for the workspace, the most recently reviewed plan is the
+    current one, so the selection is deterministic (latest ``next_review_due``,
+    then plan id). No plan is invented: an absent or foreign plan yields ``None``
+    and the production view simply omits the umbrella-plan row (SPEC.md sections
+    4 and 9).
+    """
+
+    candidates = [
+        plan
+        for plan in repository.list(tenant_id)
+        if plan.workspace.workspace_id == engagement
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda plan: (plan.next_review_due, plan.plan_id))
 
 
 def _approve_method_offer_message(
@@ -1677,6 +1728,19 @@ def _stage_production_view_payload(stage: StageProductionView) -> dict[str, Any]
     }
 
 
+def _umbrella_plan_reporting_payload(
+    row: UmbrellaPlanReportingView,
+) -> dict[str, Any]:
+    return {
+        "plan_id": row.plan_id,
+        "tenant_id": row.tenant_id,
+        "owner": row.owner,
+        "covered_stages": sorted(row.covered_stages),
+        "reviewed_on": row.reviewed_on.isoformat(),
+        "next_review_due": row.next_review_due.isoformat(),
+    }
+
+
 def _production_view_payload(view: EngagementProductionView) -> dict[str, Any]:
     current = view.current_stage
     next_approval = view.next_approval
@@ -1707,6 +1771,11 @@ def _production_view_payload(view: EngagementProductionView) -> dict[str, Any]:
         "metric_reporting": [
             _metric_reporting_payload(row) for row in view.metric_reporting
         ],
+        "umbrella_plan": (
+            _umbrella_plan_reporting_payload(view.umbrella_plan)
+            if view.umbrella_plan is not None
+            else None
+        ),
     }
 
 
@@ -3610,6 +3679,9 @@ def get_engagement_production_view(
         get_gate_ledger_repository
     ),
     run_repository: StageRunRepository = Depends(get_stage_run_repository),
+    umbrella_plan_repository: UmbrellaPlanRepository = Depends(
+        get_umbrella_plan_repository
+    ),
 ) -> EngagementProductionViewResponse:
     """Serve the production-manager view for one client engagement.
 
@@ -3625,8 +3697,21 @@ def get_engagement_production_view(
     pinned versions and the separation of activity from verified progress -- stays
     enforced by the pure domain view; the route computes none of it. The
     evaluation instant ``on`` is required because a prerequisite's expiry is only
-    meaningful against a fixed time (SPEC.md section 4).
+    meaningful against a fixed time (SPEC.md section 4). The canon umbrella plan
+    (SPEC.md section 12.5) is loaded through the Portfolio ``UmbrellaPlanRepository``
+    port and projected into the view's tenant-scoped umbrella-plan row; an absent
+    plan is omitted rather than invented.
     """
+
+    try:
+        umbrella_plan = _umbrella_plan_for_engagement(
+            umbrella_plan_repository, tenant_id=tenant_id, engagement=engagement
+        )
+    except PortfolioError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
 
     query = EngagementProductionViewQuery(
         template=stage_zero_to_ten_template(),
@@ -3635,6 +3720,9 @@ def get_engagement_production_view(
         on=on,
         verified_post_launch_milestones=verified_post_launch_milestones,
         activity_entries=activity_entries,
+        umbrella_plan=(
+            umbrella_plan.as_reporting_view() if umbrella_plan is not None else None
+        ),
     )
     try:
         view = GetEngagementProductionViewHandler(

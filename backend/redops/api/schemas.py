@@ -1531,6 +1531,25 @@ class PipelineProgressResponse(BaseModel):
     gates_remaining: int
 
 
+class UmbrellaPlanReportingResponse(BaseModel):
+    """The production view's tenant-scoped canon umbrella-plan row.
+
+    SPEC.md section 12.5 records the canon umbrella plan (the Online Business
+    Launch Map and the one-page Bulletproof Business Plan, canon files 00 and 01)
+    as a planning decision over the whole stage 0-10 pipeline, revisited every 90
+    days. This is its read-model projection: plan identity, owner, covered stages
+    and the latest review's dates. It is a plan, not a required gate kind, so it
+    authorizes no production, spend or traffic (SPEC.md sections 4 and 9).
+    """
+
+    plan_id: str
+    tenant_id: str
+    owner: str
+    covered_stages: list[int]
+    reviewed_on: date
+    next_review_due: date
+
+
 class EngagementProductionViewResponse(BaseModel):
     """The production-manager view for one client engagement (SPEC.md section 4).
 
@@ -1549,6 +1568,7 @@ class EngagementProductionViewResponse(BaseModel):
     progress: PipelineProgressResponse
     stages: list[StageProductionViewResponse]
     metric_reporting: list[MetricReportingResponse]
+    umbrella_plan: UmbrellaPlanReportingResponse | None = None
 
 
 class CreateClientWorkspaceRequest(BaseModel):
