@@ -229,10 +229,10 @@ else
   printf 'ralph: canon reference directory not found at %s; proceeding without it\n' "$CANON_DIR" >&2
 fi
 
-read -r -d '' PROMPT <<EOF || true
+read -r -d '' PROMPT <<'EOF' || true
 You are running exactly one Ralph cycle for RED Operations Platform.
 
-Work in the repository at $REPO_DIR. Be hyper-critical of token usage: this repository is large, so never read it in bulk.
+Work in the repository at @REPO_DIR@. Be hyper-critical of token usage: this repository is large, so never read it in bulk.
 
 Voice (default, built in; no external skill or command needed):
 - Write like a smart caveman. Terse. Answer first, then reason, then next step.
@@ -245,9 +245,9 @@ Voice (default, built in; no external skill or command needed):
 - The final response keeps the required shape below, just terse.
 
 Read for authority, not in bulk:
-- Spec (authoritative): $SPEC_PATH — read it.
-- Implementation plan: $PLAN_PATH — read only the 'Current cycle status' section and the specific backlog or register lines the selected item touches; do not read the whole plan.
-- $CANON_REFERENCE
+- Spec (authoritative): @SPEC_PATH@ — read it.
+- Implementation plan: @PLAN_PATH@ — read only the 'Current cycle status' section and the specific backlog or register lines the selected item touches; do not read the whole plan.
+- @CANON_REFERENCE@
 Read only the cited canon file(s) for the artifact in scope.
 
 Code-memory first pass (required where available):
@@ -271,7 +271,7 @@ Perform exactly one cycle:
 4. Reprioritize the implementation plan using verified findings, defects, changed dependencies, and results. Keep the long term phases intact unless evidence requires change. Maintain a short 'Current cycle status' section near the beginning with: cycle timestamp, selected item, outcome, evidence, new findings, blockers, and the highest priority ready next item with its prerequisites. For pipeline work, name the stage, required asset, checkpoint, approver, and blocked downstream dependency. Maintain the 'Canon gap register' from the spec: when the canon implies an asset or step RED does not yet have, record it with the canon file number, its stage, its intended use, and whether it is a candidate pipeline addition that needs a named-owner decision. Mark the completed item once. Preserve existing decisions and unresolved questions. Do not invent repository or cluster facts.
 4b. Definition of done (SPEC.md section 13). The prototype is done when 'make done' passes. If it passes, touch '.ralph/DONE' and stop. If no ready item remains, record the blocker and the best ready next action in the plan, touch '.ralph/DONE', and stop; do not invent work, add or rename a pipeline stage, or make a named-owner decision unattended.
 5. Stop. Do not self invoke, loop, start a second item, run git commit, or push; the harness commits and publishes after the cycle. You MAY alter external systems, but only inside the 211 home lab network 10.0.0.0/8: the Atlas k3s cluster (kubectl), the built-in image registry (registry.atlas.lan), the Gitea forge (git.atlas.lan, its API and the GitOps repo on it), and the host services they depend on. Verify an endpoint resolves inside 10.0.0.0/8 before you touch it. Never touch anything outside that network: no public internet service, no external SaaS, never upstream SenteLabsAI/OpenExecutive, and never push to `upstream`. Spend, external publication, and client commitments still require the designated human; human approval gates in the spec remain in force.
-6. Before stopping, write the commit message for this cycle to this exact file: $COMMIT_MSG_FILE
+6. Before stopping, write the commit message for this cycle to this exact file: @COMMIT_MSG_FILE@
 
 Commit message requirements (the harness uses this file verbatim):
 - Use Conventional Commits: a subject line shaped like 'type(scope): imperative summary' (types: feat, fix, refactor, perf, test, docs, build, ci, chore, style, revert). Keep it under 72 characters. The subject says WHAT changed.
@@ -281,6 +281,20 @@ Commit message requirements (the harness uses this file verbatim):
 
 If the plan cannot be updated, report failure explicitly. Final response: selected item, changed files, verification, plan update, next ready item or blocker. Be concise and honest.
 EOF
+
+# Keep the prompt literal: only these explicit placeholders may expand. An
+# unquoted heredoc executes backticks and command substitutions in prompt text.
+PROMPT="${PROMPT//@REPO_DIR@/$REPO_DIR}"
+PROMPT="${PROMPT//@SPEC_PATH@/$SPEC_PATH}"
+PROMPT="${PROMPT//@PLAN_PATH@/$PLAN_PATH}"
+PROMPT="${PROMPT//@CANON_REFERENCE@/$CANON_REFERENCE}"
+PROMPT="${PROMPT//@COMMIT_MSG_FILE@/$COMMIT_MSG_FILE}"
+
+# Expose prompt rendering for the regression test without starting OpenCode.
+if [[ "${RALPH_PROMPT_TEST:-0}" == "1" ]]; then
+  printf '%s' "$PROMPT"
+  exit 0
+fi
 
 printf 'ralph: starting one cycle; log: %s\n' "$LOG_FILE"
 cd "$RUN_CWD"
