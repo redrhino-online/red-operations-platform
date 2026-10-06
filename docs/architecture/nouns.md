@@ -88,6 +88,7 @@ explicit.
 | **CompliancePackage** | Stage 9 compliance artifacts (GDPR/FTC/income disclaimers, privacy, terms). | Protects ad accounts and satisfies legal duties before traffic. |
 | **JourneyRelease** | A launchable journey release with routing, config digest and rollback ref. | Launch needs signed readiness and an authorised release, not just activation. |
 | **ConnectorEffect / ExternalOperation / idempotency key** | A recorded outbound effect keyed to prevent duplicates. | Duplicate delivery must create exactly one external operation. |
+| **StrategySessionKit / StrategySessionRoadmap** | The canon paid strategy-session kit: a 60-90 minute session that builds a 90-day roadmap over the signature solution, gated by an application, with the fee credited to month one (canon file 47). | A stage 8/9 asset and the third enrollment model; refuses a price below the $500 floor. |
 
 ## 8. Measurement
 

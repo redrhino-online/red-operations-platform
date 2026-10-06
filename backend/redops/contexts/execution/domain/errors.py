@@ -453,6 +453,69 @@ class ClientProcessObservationError(ClientProcessError):
     """
 
 
+class StrategySessionError(ExecutionError):
+    """Base class for the canon paid strategy-session kit rule violations."""
+
+
+class InvalidStrategySessionError(StrategySessionError, ValueError):
+    """A strategy-session value object or the kit violates an invariant.
+
+    SPEC.md section 12.5 records the canon's paid strategy session -- a paid
+    roadmap session that qualifies the lead, earns revenue and bridges to the
+    program -- as a canon gap, and the implementation plan's canon gap backlog
+    item G4 names a typed artifact that is "a third enrollment model; refuses a
+    price below the floor". The canon (file 47) prices the session at $1,000 with
+    a $500 floor, gates it with a short application, builds a 90-day roadmap over
+    the signature solution, asks three calm questions in order and credits the fee
+    to the first month of the program. A blank identity or owner, a missing or
+    untyped field, a non-integer price or duration, a duplicate application
+    question or roadmap step, or a blank question, roadmap note or credit note
+    cannot be represented as a strategy-session kit.
+    """
+
+
+class StrategySessionDependencyError(StrategySessionError):
+    """A strategy-session kit is not grounded on a typed, same-tenant dependency.
+
+    SPEC.md section 12.5 places the strategy-session kit as a stage 8/9 asset that
+    bridges to the program, and the canon (file 47) walks the lead through each
+    step of the signature solution and credits the fee to the first month of the
+    program. A kit must therefore be grounded on a typed same-tenant stage 4
+    ``SignatureSolution`` and stage 5 ``ProductProgram``, and a roadmap step that
+    names a step the solution does not have cannot be represented as the
+    before-and-after map.
+    """
+
+
+class StrategySessionTenantBoundaryError(StrategySessionError):
+    """A strategy-session kit mixed in a solution or program from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. The kit
+    belongs to the tenant of the stage 4 solution and stage 5 program it is
+    grounded on, so it cannot cross a tenant boundary.
+    """
+
+
+class StrategySessionFormatError(StrategySessionError):
+    """A strategy-session kit breaks the canon's paid-session shape.
+
+    The canon (file 47) fixes a 60 to 90 minute session priced at $1,000 with a
+    $500 floor, a 90-day roadmap, three questions asked in order and a fee credit
+    to the first month of the program. A kit that breaks that shape cannot be
+    represented as the prescribed paid strategy session.
+    """
+
+
+class StrategySessionObservationError(StrategySessionError):
+    """A strategy-session kit was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The kit
+    describes the session that will run and the terms it will offer, while any
+    booked session, collected fee or measured conversion stays a separate observed
+    or authorized record, so a kit is never an observation.
+    """
+
+
 class JourneyReleaseError(ExecutionError):
     """Base class for the SPEC.md section 3 journey release rule violations."""
 

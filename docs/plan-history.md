@@ -2,6 +2,36 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 2026-10-06T132216Z: G1 lead-magnet kit implemented
+
+- **Selected item:** G1 (lead-magnet kit), the first Canon gap backlog item with
+  no unmet dependency. It outranks G2/G4/G5/G7 because the backlog is ordered and
+  G1 is the highest ready item; it is a bounded pure-domain artifact that closes a
+  canon gap the stage 6/8 funnel needs before traffic.
+- **Outcome:** implemented the Commercial Design `LeadMagnetKit` (canon files
+  High Ticket Funnels 03, 04; Live Sessions 15; 14D Step 7; synthesized
+  `ops/playbooks/lead-magnet.md`, `ops/checklists/lead-magnet-pdf.md`). It grounds
+  on a same-tenant stage 4 `SignatureSolution` and stage 2 `PrimaryCurrency`,
+  names and reports the one hot step it is built from, and refuses a hot step the
+  solution does not name. It types the canon's allowed formats (cheat sheet,
+  template, checklist, script, roadmap), requires the name to imply its format,
+  requires the seven-element PDF exactly once, the two-step opt in, email
+  delivery (not the thank-you page), and the ten-minute rule. It is a plan, never
+  an observation. New named errors: `InvalidLeadMagnetKitError`,
+  `LeadMagnetKitDependencyError`, `LeadMagnetKitTenantBoundaryError`,
+  `LeadMagnetKitFormatError`, `LeadMagnetKitObservationError`.
+- **Evidence:** `tests/unit/commercial/test_lead_magnet_kit.py` (14 tests, 9
+  subtests) passes; the full `tests/unit/commercial` suite passes (453 tests, 278
+  subtests); `pyflakes` clean on the changed files.
+- **Not done (deliberately):** wiring the kit into a required stage 8 gate kind is
+  a methodology-owner decision (SPEC.md section 12.5), so the kit stays a planning
+  asset. No publish or spend is authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** G2 (authority-video kit), no unmet dependency; it extends
+  the stage 7 `AuthorityAmplifier` and refuses a step video whose step the
+  solution does not name. G4 (strategy-session kit) and G7 (service-line
+  artifacts) are also ready.
+
+Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ### Cockpit adoption 2026-10-05: the OpenExecutive cockpit is deployed (ADR 0012)
 
 - The vendored OpenExecutive UI now serves the root (`/`) as the prototype

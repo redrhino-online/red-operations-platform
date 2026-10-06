@@ -4,6 +4,38 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-06T150042Z: G4 strategy-session kit implemented
+
+- **Selected item:** G4 (strategy-session kit), the next Canon gap backlog item
+  with no unmet dependency. It outranks G5/G7 because the backlog is ordered and
+  G4 is the highest ready item; it is a bounded pure-domain artifact that types
+  the third enrollment model and closes a canon gap the stage 8/9 enrollment path
+  needs before traffic. G3 depends on G4.
+- **Outcome:** implemented the Execution `StrategySessionKit` (canon files 47, 48;
+  Certification Day 4; Live Sessions 8; synthesized
+  `ops/playbooks/strategy-session.md`, `ops/checklists/strategy-session-call.md`,
+  `ops/sops/strategy-session-run.md`). It grounds on a same-tenant stage 4
+  `SignatureSolution` and stage 5 `ProductProgram`, types the paid session as
+  `StrategySessionModel.PAID_STRATEGY_SESSION`, and refuses a price below the
+  canon's $500 floor. It requires a 60 to 90 minute session, a typed
+  duplicate-free application gate, a before-and-after roadmap that covers every
+  signature-solution step exactly once, the three calm questions (confidence,
+  alone, help) once each in order, and a fee credit to the first month of the
+  program. It is a plan, never an observation. New named errors:
+  `InvalidStrategySessionError`, `StrategySessionDependencyError`,
+  `StrategySessionTenantBoundaryError`, `StrategySessionFormatError`,
+  `StrategySessionObservationError`.
+- **Evidence:** `tests/unit/execution/test_strategy_session.py` (23 tests, 2
+  subtests) passes; the full `tests/unit/execution` suite passes (332 tests, 121
+  subtests); `uv run pyflakes` clean on the changed files.
+- **Not done (deliberately):** wiring the kit into a required stage 8/9 gate kind
+  is a methodology-owner decision (SPEC.md section 12.5), so the kit stays an
+  enrollment planning asset. No send, spend, payment or client commitment is
+  authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** G5 (delivery ladder), no unmet dependency; represents the
+  client's own delivery (Serve) and the next-offer path. G7 (service-line
+  artifacts) is also ready; G3 depends on G4 (now met) and G6 depends on G5.
+
 ### Cycle 2026-10-06T144439Z: G2 authority-video kit implemented
 
 - **Selected item:** G2 (authority-video kit), the next Canon gap backlog item
@@ -39,34 +71,7 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   enrollment model that refuses a price below the floor. G5 (delivery ladder) and
   G7 (service-line artifacts) are also ready; G3 depends on G4.
 
-### Cycle 2026-10-06T132216Z: G1 lead-magnet kit implemented
 
-- **Selected item:** G1 (lead-magnet kit), the first Canon gap backlog item with
-  no unmet dependency. It outranks G2/G4/G5/G7 because the backlog is ordered and
-  G1 is the highest ready item; it is a bounded pure-domain artifact that closes a
-  canon gap the stage 6/8 funnel needs before traffic.
-- **Outcome:** implemented the Commercial Design `LeadMagnetKit` (canon files
-  High Ticket Funnels 03, 04; Live Sessions 15; 14D Step 7; synthesized
-  `ops/playbooks/lead-magnet.md`, `ops/checklists/lead-magnet-pdf.md`). It grounds
-  on a same-tenant stage 4 `SignatureSolution` and stage 2 `PrimaryCurrency`,
-  names and reports the one hot step it is built from, and refuses a hot step the
-  solution does not name. It types the canon's allowed formats (cheat sheet,
-  template, checklist, script, roadmap), requires the name to imply its format,
-  requires the seven-element PDF exactly once, the two-step opt in, email
-  delivery (not the thank-you page), and the ten-minute rule. It is a plan, never
-  an observation. New named errors: `InvalidLeadMagnetKitError`,
-  `LeadMagnetKitDependencyError`, `LeadMagnetKitTenantBoundaryError`,
-  `LeadMagnetKitFormatError`, `LeadMagnetKitObservationError`.
-- **Evidence:** `tests/unit/commercial/test_lead_magnet_kit.py` (14 tests, 9
-  subtests) passes; the full `tests/unit/commercial` suite passes (453 tests, 278
-  subtests); `pyflakes` clean on the changed files.
-- **Not done (deliberately):** wiring the kit into a required stage 8 gate kind is
-  a methodology-owner decision (SPEC.md section 12.5), so the kit stays a planning
-  asset. No publish or spend is authorized (SPEC.md sections 4 and 9).
-- **Next ready item:** G2 (authority-video kit), no unmet dependency; it extends
-  the stage 7 `AuthorityAmplifier` and refuses a step video whose step the
-  solution does not name. G4 (strategy-session kit) and G7 (service-line
-  artifacts) are also ready.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ## Prototype definition of done
@@ -241,7 +246,7 @@ The canon was re-read 2026-10-05 and is materially larger: 151 transcripts (48 n
 - Lead-magnet kit (one hot step becomes a one-page cheat sheet and a short PDF; the wheel of awesome) — canon High Ticket Funnels 03, 04; Live Sessions 15; 14D Step 7; synthesized `ops/playbooks/lead-magnet.md`, `ops/checklists/lead-magnet-pdf.md`, `ops/sops/lead-magnet-build.md` — stage 6/8 asset — status: **implemented 2026-10-06** as the Commercial Design `LeadMagnetKit` (`LeadMagnetFormat`, `LeadMagnetPdfSection`, `LeadMagnetDelivery`), which grounds on a same-tenant stage 4 `SignatureSolution` and stage 2 `PrimaryCurrency`, names and reports the one hot step it is built from, refuses a hot step the solution does not name, types the canon's allowed formats (cheat sheet, template, checklist, script, roadmap), requires the name to imply its format, the seven-element PDF exactly once, the two-step opt in, email delivery rather than the thank-you page, and the ten-minute rule, binds a named owner and is never an observation; verified by `tests/unit/commercial/test_lead_magnet_kit.py` (14 tests). The Measurement `LeadMagnetAsset` inside the `InvisibleOptInOffer` still covers the retargeting delivery. Wiring the kit into a required stage 8 gate kind remains a methodology-owner decision; any publish or spend stays a human decision.
 - Authority-video kit (one flagship video plus nine step videos from the six-block script) — canon 13-18; High Ticket Funnels 05, 06, 08; synthesized `ops/playbooks/authority-video.md`, `ops/sops/authority-video-build.md` — stage 7 production — status: **not implemented**; the Production `AuthorityAmplifier` holds the script and the visual/video package, but the reusable ten-pack (one flagship plus nine step videos) is a distinct deliverable. Tracked as backlog item **G2**; a candidate required kind inside stage 7.
 - Webinar kit (a six-phase run of show, slides, email and retargeting; the scaled enrollment path: lead to webinar to call) — canon 32; Winning Webinar 01-13; synthesized `ops/playbooks/webinar.md`, `ops/checklists/webinar-run-of-show.md`, `ops/sops/webinar-build.md` — stage 6/8/10 — status: **not implemented**; `ClientProcess` records the chosen enrollment path, but the webinar run of show and the ten-live-runs-at-10% automation rule have no typed artifact. Tracked as backlog item **G3**; a candidate required kind and the scaled path of SPEC.md section 12.7.
-- Strategy-session kit (a paid roadmap session that qualifies the lead, earns revenue and bridges to the program) — canon 47, 48; Certification Day 4; Live Sessions 8; synthesized `ops/playbooks/strategy-session.md`, `ops/checklists/strategy-session-call.md`, `ops/sops/strategy-session-run.md` — stage 8/9 asset; a third enrollment model — status: **not implemented**; only the `StrategySessionModel` enum exists inside `ClientProcess`. Tracked as backlog item **G4**; the canon's $1,000 (min $500) price floor and $1,000 paid-session bridge need a typed artifact inside stage 8/9.
+- Strategy-session kit (a paid roadmap session that qualifies the lead, earns revenue and bridges to the program) — canon 47, 48; Certification Day 4; Live Sessions 8; synthesized `ops/playbooks/strategy-session.md`, `ops/checklists/strategy-session-call.md`, `ops/sops/strategy-session-run.md` — stage 8/9 asset; a third enrollment model — status: **implemented 2026-10-06** as the Execution `StrategySessionKit` (`StrategySessionQuestion`, `StrategySessionApplication`, `StrategySessionRoadmap`, `StrategySessionFeeCredit`), which grounds on a same-tenant stage 4 `SignatureSolution` and stage 5 `ProductProgram`, types the paid session as `StrategySessionModel.PAID_STRATEGY_SESSION`, refuses a price below the canon's $500 floor, requires a 60 to 90 minute session, a typed duplicate-free application gate, a before-and-after roadmap covering every signature-solution step exactly once, the three calm questions (confidence, alone, help) once each in order, and a fee credit to the first month of the program, binds a named owner and is never an observation; verified by `tests/unit/execution/test_strategy_session.py` (23 tests). Wiring it into a required stage 8/9 gate kind remains a methodology-owner decision; any send, spend, payment or client commitment stays a human decision.
 - Delivery ladder and ascension (one-to-one beta, live cohort, evergreen; four-offer ladder; product-ladder slicing; low-ticket entry offers; certified consultant standards) — canon 11, 12; Certification; Live Sessions 5, 12; High Ticket Funnels 19; synthesized `ops/playbooks/delivery.md`, `partnership.md`, `certification.md`, `ops/playbooks/certification.md` — after stage 10; Portfolio and Operations contexts — status: **not implemented**; tracked as backlog item **G5** (delivery ladder) and **G6** (partnership, four-offer ladder and certification). Our layer, not reference-model substance; a candidate pipeline addition needing a named-owner decision.
 - Extract (pull key ideas from the signature solution: FAQs, problems, process, reviews and praise; group themes around the one currency; build an email and social content plan) — n/a, our layer (feeds 25-28) — service layer ahead of stage 10 content operations, a stage 6/10 asset — status: implemented 2026-10-03 (Ralph cycle 2026-10-03T174319Z) as the pure Commercial Design `ContentPlan` (`ContentIdeaSource`, `ContentPlanChannel`, `ContentTheme`, `ContentIdea`, `ContentPlan`, `CONTENT_PLAN_CANON_REFERENCE = "25, 27, 28"`), which grounds on a same-tenant stage 4 `SignatureSolution` and stage 2 `PrimaryCurrency`, extracts ideas with a typed source (faq, problem, process, review_and_praise), maps every idea to a step the solution names and to a declared theme, requires each theme to advance either the current or the desired measure of the one locked currency, refuses a duplicate or cross-tenant theme or idea, requires the plan to build both an email and a social delivery, binds a named owner, reports the solution steps it covers and misses, is a plan and is never an observation. It is an asset inside stage 6, not a new stage; any publish or spend stays a human decision. It is distinct from the `ContentRoadmap` (canon 26, 27); reconciling the two into one flow is a bounded follow-up. Owner decision 2026-10-03 applied (Ralph cycle 2026-10-03T183643Z): the typed `ContentPlan` is now a required stage 6 gate kind (`content-plan`), declared by the stage 6 `StageTemplate` and pinned at its exact version through the `CampaignMessagePackage` bridge against the approved method's own Signature Solution and the locked Primary Currency the request carries, so a "Campaign Message Approved" gate cannot pass without the Extract content plan the message's content is pulled from; stage 6 is now fifteen required kinds.
 - Serve and Grow (Serve is the client's own delivery of the offer; Grow splits the foundation offer into smaller offers that are new entry points and raise customer lifetime value, expanding the RED Portfolio) — canon 11, 12 — after stage 10, Portfolio context — status: identified gap 2026-10-03 (canon stations and method map updated). SPEC.md section 1 puts portfolio expansion in the product contract and section 3 names the Portfolio context, but no stage 0-10 asset represents the smaller offers as entry points or the lifetime value they raise. The SPEC.md section 7 `/opportunities` REST resource and the Portfolio `Opportunity` register now exist (Ralph cycle 2026-10-03T195052Z): it records a proposed entry point or lifetime value offer grounded on an exact same-tenant `StageAssetVersion`, staying `proposed` until a human investment authority acts, but it is not yet a stage 0-10 required gate kind. A candidate pipeline addition needing a named-owner decision; any client commitment stays a human decision.
@@ -264,7 +269,7 @@ noun rows to `docs/architecture/nouns.md`.
 | G1 | Lead-magnet kit: one hot signature-solution step becomes a one-page cheat sheet and a short PDF (wheel of awesome), built from the offer, never from scratch, turned around in ten minutes | commercial | — | High Ticket Funnels 03, 04; Live Sessions 15; 14D Step 7; `ops/playbooks/lead-magnet.md` | typed artifact with tests; reports the solution step it is built from; refuses a lead magnet not grounded on a same-tenant hot step. **Done 2026-10-06:** Commercial `LeadMagnetKit` (`LeadMagnetFormat`, `LeadMagnetPdfSection`, `LeadMagnetDelivery`) grounds on a same-tenant stage 4 `SignatureSolution` and stage 2 `PrimaryCurrency`, names and reports the one hot step, refuses a hot step the solution does not name, types the canon formats, requires the name to imply its format, the seven-element PDF, the two-step opt in, email delivery and the ten-minute rule, and is never an observation; verified by `tests/unit/commercial/test_lead_magnet_kit.py` (14 tests). Wiring into a required stage 8 kind remains a methodology-owner decision |
 | G2 | Authority-video kit: one flagship video plus nine step videos from the six-block script | production | — | 13-18; High Ticket Funnels 05, 06, 08; `ops/playbooks/authority-video.md` | typed artifact with tests; extends the stage 7 `AuthorityAmplifier`; refuses a step video whose step the solution does not name. **Done 2026-10-06:** Production `AuthorityVideoKit` (`AuthorityVideoKind`, `AuthorityStepVideo`) extends a same-tenant stage 7 `AuthorityAmplifier` that has produced its video, reuses its six-block script, and names the nine steps of a same-tenant stage 4 `SignatureSolution`; requires one flagship video of 8 to 20 minutes with one clear action and exactly nine step videos, one per solution step, each no longer than the flagship; refuses a step video whose step the solution does not name, a repeated step, a cross-tenant amplifier/solution/step video, and a kit with no produced video; never an observation. Verified by `tests/unit/production/test_authority_video_kit.py` (16 tests). Wiring into a required stage 7 kind remains a methodology-owner decision |
 | G3 | Webinar kit (scaled enrollment path): six-phase run of show, slides, email, retargeting; automate a webinar only after ten live runs at 10%+ | commercial/execution | G4 | 32; Winning Webinar 01-13; `ops/playbooks/webinar.md` | typed artifact with tests; records the chosen path and the automation gate; refuses automation below the live-run bar |
-| G4 | Strategy-session kit: paid roadmap session that qualifies, earns revenue and bridges to the program ($1,000, min $500) | execution | — | 47, 48; Certification Day 4; Live Sessions 8; `ops/playbooks/strategy-session.md` | typed artifact with tests; a third enrollment model; refuses a price below the floor |
+| G4 | Strategy-session kit: paid roadmap session that qualifies, earns revenue and bridges to the program ($1,000, min $500) | execution | — | 47, 48; Certification Day 4; Live Sessions 8; `ops/playbooks/strategy-session.md` | typed artifact with tests; a third enrollment model; refuses a price below the floor. **Done 2026-10-06:** Execution `StrategySessionKit` (`StrategySessionQuestion`, `StrategySessionApplication`, `StrategySessionRoadmap`, `StrategySessionFeeCredit`) grounds on a same-tenant stage 4 `SignatureSolution` and stage 5 `ProductProgram`, types the paid model, refuses a price below the $500 floor, requires a 60 to 90 minute session, a duplicate-free application gate, a roadmap covering every solution step exactly once, the three questions in order and a fee credit to month one, and is never an observation; verified by `tests/unit/execution/test_strategy_session.py` (23 tests). Wiring into a required stage 8/9 kind remains a methodology-owner decision |
 | G5 | Delivery ladder and ascension: one-to-one beta, live cohort, evergreen; 90-day roadmap audit; one deliverable per step | portfolio/operations | — | 11, 12; Certification; Live Sessions 5, 12; `ops/playbooks/delivery.md` | typed artifact with tests; represents the client's own delivery (Serve) and the next-offer path; never an observation |
 | G6 | Partnership line and certification: four-offer ladder, renewal and win-back, referral and partner plan, community rules, reputation track, certified consultant standards | portfolio | G5 | 11, 12; Certification; Live Sessions 5, 12; High Ticket Funnels 19; `ops/playbooks/partnership.md`, `certification.md` | typed artifacts with tests; every client has a next step; human decision for any commitment |
 | G7 | Service-line artifacts: kickoff checklist, module production standard, session guide, client scorecard, case study template (case study as sourced proof, client-approved and version-scoped) | operations | — | internal/service-ops.md; `ops/checklists/kickoff.md`, `module-production.md`, `session-guide.md`, `client-scorecard.md`, `case-study.md` | typed artifact with tests; case study claim refuses an unapproved or unsourced testimonial (SPEC.md sections 1 and 4) |
