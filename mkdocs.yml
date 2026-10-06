@@ -75,6 +75,7 @@ nav:
       - Developer guide: DEVELOPER_GUIDE.md
       - Bounded context map: context_map.md
       - Fork inventory: fork_inventory.md
+      - Implementation plan history: plan-history.md
   - ADRs:
       - adr/0001-record-architecture-decisions.md
       - adr/0002-place-red-code-in-the-fork.md

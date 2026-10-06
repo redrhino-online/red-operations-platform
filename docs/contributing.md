@@ -15,12 +15,15 @@
 
 ## Workflow
 
-1. Pick the highest-value ready item (the plan's "Current cycle status" names it).
+1. Read `.ralph/STATE.md` for bounded cycle handoff; confirm the highest-value
+   ready item against `IMPLEMENTATION_PLAN.md` and `SPEC.md`.
 2. Write a failing behavioural test for a new rule, then the smallest passing
    change.
 3. `make check` must pass. For a new method artifact, encode the canon-informed
    shape as value objects, invariants, named errors and tests.
-4. Update `IMPLEMENTATION_PLAN.md` (cycle record, completed item, next ready item).
+4. Update `IMPLEMENTATION_PLAN.md` with the newest cycle record and next ready
+   item. Keep two records in the plan; the harness archives older records to
+   [`plan-history.md`](plan-history.md). The harness generates `.ralph/STATE.md`.
 5. Commit with a Conventional Commit; the harness/you push to `origin`.
 
 ## Conventional Commits

@@ -46,6 +46,16 @@ stops. It:
 
 - holds a single-cycle lock (reclaimed if the recorded pid is gone) and logs to
   `.ralph/<timestamp>.log`;
+- loads stable cycle rules from `.opencode/instructions/ralph.md` through the
+  harness-only `.ralph/opencode.json`; the project config raises tool output to
+  128 KiB so `SPEC.md` fits in one read, and preserves 80,000 recent tokens;
+- orders context stable-to-volatile: full spec, pinned memories, generated
+  `.ralph/STATE.md`, selected plan rows and canon source, then git status/history
+  and the latest run log;
+- runs `scripts/ralph_state.sh` before and after the agent. It generates a
+  bounded state digest, keeps the latest two cycle entries in
+  `IMPLEMENTATION_PLAN.md`, and archives older entries to
+  `docs/plan-history.md`;
 - commits the cycle's changes with the message the cycle writes (Conventional
   Commits, blank line, why-body), then publishes to the configured remotes;
 - stops on `.ralph/DONE` (done reached) or `.ralph/STOP` (operator stop), and

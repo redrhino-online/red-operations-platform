@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,30 +13,53 @@ RALPH_CYCLE = REPO_ROOT / "ralph_cycle.sh"
 
 
 class RalphCyclePromptTests(unittest.TestCase):
-    def test_prompt_preserves_inline_shell_syntax_and_expands_only_paths(self) -> None:
-        env = os.environ.copy()
-        env.update(
-            {
-                "RALPH_PROMPT_TEST": "1",
-                "RALPH_DB_PREFLIGHT": "0",
-                "RALPH_OPENCODE": "true",
-            }
-        )
-        result = subprocess.run(
-            [str(RALPH_CYCLE), str(REPO_ROOT)],
-            check=False,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=15,
-        )
+    def test_prompt_uses_stable_first_order_and_harness_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "ralph-opencode.json"
+            env = os.environ.copy()
+            env.update(
+                {
+                    "RALPH_PROMPT_TEST": "1",
+                    "RALPH_DB_PREFLIGHT": "0",
+                    "RALPH_OPENCODE": "true",
+                    "RALPH_OPENCODE_CONFIG": str(config_path),
+                }
+            )
+            result = subprocess.run(
+                [str(RALPH_CYCLE), str(REPO_ROOT)],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=15,
+            )
 
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(f"Work in the repository at {REPO_ROOT}.", result.stdout)
-        self.assertIn(f"Spec (authoritative): {REPO_ROOT}/SPEC.md", result.stdout)
-        self.assertIn("never push to `upstream`", result.stdout)
-        self.assertNotRegex(result.stdout, r"@[A-Z_]+@")
-        self.assertNotIn("command not found", result.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(f"Repo: {REPO_ROOT}.", result.stdout)
+            self.assertIn(f"Read {REPO_ROOT}/SPEC.md once, fully.", result.stdout)
+            self.assertIn(f"{REPO_ROOT}/.ralph/STATE.md", result.stdout)
+            self.assertIn("`git status`, `git log -5`", result.stdout)
+            self.assertNotRegex(result.stdout, r"@[A-Z_]+@")
+            self.assertNotIn("command not found", result.stderr)
+            stable_spec = result.stdout.index("Read ")
+            memories = result.stdout.index("Read Serena memories")
+            state = result.stdout.index("Read generated")
+            plan = result.stdout.index("Read only selected plan rows")
+            volatile = result.stdout.index("Last, inspect")
+            self.assertLess(stable_spec, memories)
+            self.assertLess(memories, state)
+            self.assertLess(state, plan)
+            self.assertLess(plan, volatile)
+
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertFalse(config["snapshot"])
+            self.assertEqual(
+                config["instructions"],
+                [str(REPO_ROOT / ".opencode/instructions/ralph.md")],
+            )
+            self.assertEqual(config["compaction"]["preserve_recent_tokens"], 80000)
+            instructions = Path(config["instructions"][0]).read_text(encoding="utf-8")
+            self.assertIn("Never push to `upstream`.", instructions)
 
 
 if __name__ == "__main__":
