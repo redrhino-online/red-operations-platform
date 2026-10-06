@@ -64,8 +64,18 @@ class BuildObjectRepository(abc.ABC):
         """Return the client's builds, ordered by build id."""
 
     @abc.abstractmethod
-    def save(self, build: BuildObject) -> None:
-        """Store the client's current build snapshot under its build id."""
+    def save(
+        self, build: BuildObject, *, expected_version: int | None = None
+    ) -> None:
+        """Store the client's current build snapshot under its build id.
+
+        SPEC.md section 7: "optimistic version checking returns conflict on stale
+        updates." With ``expected_version`` the write is a compare-and-swap: it
+        applies only when the stored snapshot is still at that version, so two
+        writers that read the same version cannot both pass and the later one is
+        refused with ``BuildObjectVersionConflictError`` without changing state.
+        Without it the write is an unconditional upsert for a new build.
+        """
 
     def close(self) -> None:
         """A default no-op so a process-local adapter need not implement it."""

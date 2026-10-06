@@ -26,7 +26,10 @@ from datetime import date
 from pathlib import Path
 
 from redops.contexts.production.domain.entities import BuildObject
-from redops.contexts.production.domain.errors import BuildTenantBoundaryError
+from redops.contexts.production.domain.errors import (
+    BuildObjectVersionConflictError,
+    BuildTenantBoundaryError,
+)
 from redops.contexts.production.domain.value_objects import BuildState
 
 TENANT = "client-3f"
@@ -138,6 +141,55 @@ class PostgresBuildObjectRepositoryTests(unittest.TestCase):
         self.assertIs(
             BuildState.READY, self.repository.get(TENANT, "build-1").state
         )
+
+    def test_a_versioned_save_replaces_the_snapshot_at_that_version(self) -> None:
+        self.repository.save(build_object())
+        build = self.repository.get(TENANT, "build-1")
+        build.mark_ready(
+            actor="production-manager",
+            reason="sources delivered",
+            on=TODAY,
+            correlation_id="corr-1",
+        )
+
+        self.repository.save(build, expected_version=1)
+
+        stored = self.repository.get(TENANT, "build-1")
+        self.assertIs(BuildState.READY, stored.state)
+        self.assertEqual(2, stored.version)
+
+    def test_a_stale_versioned_save_is_refused_without_changing_state(
+        self,
+    ) -> None:
+        self.repository.save(build_object())
+        first = self.repository.get(TENANT, "build-1")
+        second = self.repository.get(TENANT, "build-1")
+        first.mark_ready(
+            actor="production-manager",
+            reason="sources delivered",
+            on=TODAY,
+            correlation_id="corr-1",
+        )
+        self.repository.save(first, expected_version=1)
+        second.mark_ready(
+            actor="production-manager",
+            reason="sources delivered",
+            on=TODAY,
+            correlation_id="corr-2",
+        )
+
+        with self.assertRaises(BuildObjectVersionConflictError):
+            self.repository.save(second, expected_version=1)
+
+        stored = self.repository.get(TENANT, "build-1")
+        self.assertEqual(2, stored.version)
+        self.assertEqual("corr-1", stored.transitions[0].correlation_id)
+
+    def test_a_versioned_save_of_an_unknown_build_is_refused(self) -> None:
+        with self.assertRaises(BuildObjectVersionConflictError):
+            self.repository.save(build_object(), expected_version=1)
+
+        self.assertIsNone(self.repository.get(TENANT, "build-1"))
 
     def test_list_returns_only_the_tenant_builds_ordered_by_id(self) -> None:
         self.repository.save(build_object(build_id="build-b"))

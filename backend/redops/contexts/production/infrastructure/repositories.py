@@ -28,6 +28,7 @@ from redops.contexts.production.domain.errors import (
     AuthorityAmplifierVersionConflictError,
     AuthorityAmplifierVersionTenantBoundaryError,
     BuildConfigurationError,
+    BuildObjectVersionConflictError,
     BuildTenantBoundaryError,
 )
 from redops.contexts.production.infrastructure.mappers import (
@@ -235,12 +236,26 @@ def _require_build_tenant(value: str, operation: str) -> None:
         )
 
 
+def _copy_build(build: BuildObject) -> BuildObject:
+    """Return an independent snapshot of a build through the payload mapper.
+
+    The process-local store keeps snapshots rather than live references so a
+    caller that mutates a build it read cannot mutate the stored row behind the
+    store's back; that aliasing would make the version compare-and-swap in
+    ``save`` compare a value the caller had already advanced (SPEC.md section 7).
+    """
+
+    return build_from_payload(build_to_payload(build))
+
+
 class InMemoryBuildObjectRepository(BuildObjectRepository):
     """Process-local build store keyed by client and build id.
 
     A build is a live aggregate (SPEC.md section 4), so ``save`` stores the
     current snapshot for ``(tenant_id, build_id)``; a later transition on the same
-    id replaces it rather than conflicting.
+    id replaces it rather than conflicting. ``save`` with ``expected_version`` is
+    a compare-and-swap against the stored snapshot's version, so two writers that
+    read the same version cannot both pass (SPEC.md section 7).
     """
 
     def __init__(self) -> None:
@@ -248,21 +263,32 @@ class InMemoryBuildObjectRepository(BuildObjectRepository):
 
     def get(self, tenant_id: str, build_id: str) -> BuildObject | None:
         _require_build_tenant(tenant_id, "read")
-        return self._builds.get((tenant_id, build_id))
+        stored = self._builds.get((tenant_id, build_id))
+        return None if stored is None else _copy_build(stored)
 
     def list(self, tenant_id: str) -> tuple[BuildObject, ...]:
         _require_build_tenant(tenant_id, "read")
         return tuple(
-            self._builds[key]
+            _copy_build(self._builds[key])
             for key in sorted(
                 (key for key in self._builds if key[0] == tenant_id),
                 key=lambda key: key[1],
             )
         )
 
-    def save(self, build: BuildObject) -> None:
+    def save(
+        self, build: BuildObject, *, expected_version: int | None = None
+    ) -> None:
         _require_build_tenant(build.tenant_id, "write")
-        self._builds[(build.tenant_id, build.build_id)] = build
+        key = (build.tenant_id, build.build_id)
+        if expected_version is not None:
+            current = self._builds.get(key)
+            if current is None or current.version != expected_version:
+                raise BuildObjectVersionConflictError(
+                    f"build {build.build_id!r} is not at the expected version "
+                    f"{expected_version}; the update is stale"
+                )
+        self._builds[key] = _copy_build(build)
 
     def close(self) -> None:
         """A process-local store owns no external resource to release."""
@@ -325,22 +351,47 @@ class PostgresBuildObjectRepository(BuildObjectRepository):
             rows = cursor.fetchall()
         return tuple(build_from_payload(row[0]) for row in rows)
 
-    def save(self, build: BuildObject) -> None:
+    def save(
+        self, build: BuildObject, *, expected_version: int | None = None
+    ) -> None:
         _require_build_tenant(build.tenant_id, "write")
         payload = build_to_payload(build)
         with self._connection.cursor() as cursor:
-            cursor.execute(
-                """
-                INSERT INTO build_objects (
-                    tenant_id,
-                    build_id,
-                    build
-                ) VALUES (%s, %s, %s)
-                ON CONFLICT (tenant_id, build_id)
-                DO UPDATE SET build = EXCLUDED.build
-                """,
-                (build.tenant_id, build.build_id, Jsonb(payload)),
-            )
+            if expected_version is None:
+                cursor.execute(
+                    """
+                    INSERT INTO build_objects (
+                        tenant_id,
+                        build_id,
+                        build
+                    ) VALUES (%s, %s, %s)
+                    ON CONFLICT (tenant_id, build_id)
+                    DO UPDATE SET build = EXCLUDED.build
+                    """,
+                    (build.tenant_id, build.build_id, Jsonb(payload)),
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE build_objects
+                    SET build = %s
+                    WHERE tenant_id = %s
+                      AND build_id = %s
+                      AND (build_objects.build->>'version')::int = %s
+                    """,
+                    (
+                        Jsonb(payload),
+                        build.tenant_id,
+                        build.build_id,
+                        expected_version,
+                    ),
+                )
+                if cursor.rowcount == 0:
+                    self._connection.rollback()
+                    raise BuildObjectVersionConflictError(
+                        f"build {build.build_id!r} is not at the expected "
+                        f"version {expected_version}; the update is stale"
+                    )
         self._connection.commit()
 
     def close(self) -> None:

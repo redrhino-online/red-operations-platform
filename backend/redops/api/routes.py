@@ -4357,7 +4357,7 @@ def transition_build(
             on=body.on,
             correlation_id=body.correlation_id,
         )
-        repository.save(build)
+        repository.save(build, expected_version=body.expected_version)
     except BuildObjectVersionConflictError as exc:
         raise HTTPException(
             status_code=409,

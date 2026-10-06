@@ -2,6 +2,46 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 2026-10-06T154157Z: Q16 optimistic-version conflict on the live build aggregate
+
+- **Selected item:** Q16 (optimistic-version conflict half), the highest-value
+  ready non-canon item. It outranks W1 (worker entrypoint), which is blocked on a
+  concrete `WorkflowStepExecutor` (the connector seam is a `ConnectorPort`, not a
+  step executor, so a worker would have no honest effect to run), and G8's
+  remaining required-kind half, which is blocked on the RED principal's open
+  per-stage required-kind decision. Q16 is a SPEC.md section 7 requirement
+  ("optimistic version checking returns conflict on stale updates") and the last
+  open half of a listed remaining implementation gap.
+- **Outcome:** the live Production `BuildObject` now carries a monotonic
+  `version` (starts at 1, advances on every mutation and lifecycle transition)
+  and a `require_version(expected)` guard that raises the new
+  `BuildObjectVersionConflictError` on a stale write before any mutation. A new
+  version-carrying mutation route `POST /red/builds/{build_id}/transition` loads
+  the tenant-scoped build, refuses a stale `expected_version` with a named 409,
+  then drives the existing `BuildTransitionPolicy` through a new public
+  `transition_to`; an unknown or foreign build is a 404 and an illegal target
+  state is a 422. The version round-trips through `build_to_payload` /
+  `build_from_payload` (defaulting to 1 for older rows), and
+  `BuildObjectResponse` exposes it. No stage 0-10 template, required asset kind,
+  migration or gate changed.
+- **Evidence:** `tests/unit/production/test_build_object_version.py` (8 tests)
+  and the new route tests in `tests/unit/production/test_builds_route.py` (5
+  tests) pass; the full `tests/unit/production` suite passes (109 passed, 13
+  subtests); `uv run pyflakes` clean on the changed files; `make check` 2671
+  passed, 3 skipped, 793 subtests. Independent `verify` subagent: PASS on all 6
+  acceptance criteria.
+- **Not done (deliberately):** the optimistic check is application-level
+  read-check-write; the PostgreSQL `save` remains a blind upsert, so two truly
+  concurrent writers can both pass. A store-level compare-and-swap (a version
+  predicate in the `ON CONFLICT` update) is a concurrency-hardening follow-up,
+  not part of the sequential stale-write acceptance criterion. No send, spend,
+  publish or client commitment is authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** G8's production-view route projection (supply the
+  `UmbrellaPlanReportingView` from a Portfolio `UmbrellaPlan` port and
+  persistence) is bounded and unblocked; W1 (worker entrypoint) stays blocked on
+  a concrete `WorkflowStepExecutor`; G8's required-kind half and G9 stay blocked
+  on owner input.
+
 ### Cycle 2026-10-06T153729Z: G8 umbrella plan wired into the production view
 
 - **Selected item:** G8 (wiring follow-ups), the last open Canon gap backlog

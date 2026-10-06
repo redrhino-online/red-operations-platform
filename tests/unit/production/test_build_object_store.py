@@ -15,6 +15,7 @@ from datetime import date
 
 from redops.contexts.production.domain.entities import BuildObject
 from redops.contexts.production.domain.errors import (
+    BuildObjectVersionConflictError,
     BuildTenantBoundaryError,
     InvalidBuildError,
 )
@@ -116,6 +117,57 @@ class BuildObjectStoreTests(unittest.TestCase):
         store.save(build)
 
         self.assertIs(BuildState.READY, store.get(TENANT, "build-1").state)
+
+    def test_a_versioned_save_replaces_the_snapshot_at_that_version(self) -> None:
+        store = InMemoryBuildObjectRepository()
+        store.save(build_object())
+        build = store.get(TENANT, "build-1")
+        build.mark_ready(
+            actor="production-manager",
+            reason="sources delivered",
+            on=TODAY,
+            correlation_id="corr-1",
+        )
+
+        store.save(build, expected_version=1)
+
+        stored = store.get(TENANT, "build-1")
+        self.assertIs(BuildState.READY, stored.state)
+        self.assertEqual(2, stored.version)
+
+    def test_a_stale_versioned_save_is_refused_without_changing_state(self) -> None:
+        store = InMemoryBuildObjectRepository()
+        store.save(build_object())
+        first = store.get(TENANT, "build-1")
+        second = store.get(TENANT, "build-1")
+        first.mark_ready(
+            actor="production-manager",
+            reason="sources delivered",
+            on=TODAY,
+            correlation_id="corr-1",
+        )
+        store.save(first, expected_version=1)
+        second.mark_ready(
+            actor="production-manager",
+            reason="sources delivered",
+            on=TODAY,
+            correlation_id="corr-2",
+        )
+
+        with self.assertRaises(BuildObjectVersionConflictError):
+            store.save(second, expected_version=1)
+
+        stored = store.get(TENANT, "build-1")
+        self.assertEqual(2, stored.version)
+        self.assertEqual("corr-1", stored.transitions[0].correlation_id)
+
+    def test_a_versioned_save_of_an_unknown_build_is_refused(self) -> None:
+        store = InMemoryBuildObjectRepository()
+
+        with self.assertRaises(BuildObjectVersionConflictError):
+            store.save(build_object(), expected_version=1)
+
+        self.assertIsNone(store.get(TENANT, "build-1"))
 
 
 if __name__ == "__main__":  # pragma: no cover
