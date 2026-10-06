@@ -4,6 +4,39 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-06T150726Z: G5 delivery ladder implemented
+
+- **Selected item:** G5 (delivery ladder and ascension), the highest Canon gap
+  backlog item whose dependency is met. G3 completed last cycle, so G5 is the
+  highest ready item; it outranks G7 because the backlog is ordered and G5 is
+  higher, and G6 depends on G5. It is a bounded pure-domain artifact that types
+  the client's own delivery (Serve) and the next-offer path.
+- **Outcome:** implemented the Portfolio `DeliveryLadder` (canon files 11, 12;
+  Certification; Live Sessions 5, 12; synthesized `ops/playbooks/delivery.md`). It
+  grounds on a same-tenant stage 5 `ProductProgram` and types the canon rungs
+  (one-to-one, live cohort, evergreen) as an ordered, duplicate-free subsequence
+  beginning at one-to-one. It requires exactly one deliverable per program step in
+  program order, at least one 90-day roadmap audit whose next audit is exactly one
+  quarter later, at least one kickoff success goal, and at least one ascension
+  offer tied to a program step. Its `close` gate refuses to close until a
+  caller-supplied result meets every goal. It is a post-launch plan, never an
+  observation. New named errors: `InvalidDeliveryLadderError`,
+  `DeliveryLadderDependencyError`, `DeliveryLadderTenantBoundaryError`,
+  `DeliveryLadderFormatError`, `DeliveryAuditCadenceError`,
+  `DeliveryAuditOrderError`, `DeliveryGateError`,
+  `DeliveryLadderObservationError`.
+- **Evidence:** `tests/unit/portfolio/test_delivery_ladder.py` (39 tests, 3
+  subtests) passes; the full `tests/unit/portfolio` suite passes (95 tests, 21
+  subtests); `uv run pyflakes` clean on the changed files; `make check` 2538
+  passed, 3 skipped, 761 subtests.
+- **Not done (deliberately):** wiring the ladder into a required post-launch gate
+  kind is a methodology-owner decision (SPEC.md section 12.5), so it stays a
+  planning asset. No send, spend, publish or client commitment is authorized
+  (SPEC.md sections 4 and 9).
+- **Next ready item:** G6 (partnership line and certification), whose dependency
+  G5 is now met; G7 (service-line artifacts) is also ready. G6 outranks G7 because
+  the backlog is ordered and G6 is higher.
+
 ### Cycle 2026-10-06T150309Z: G3 webinar kit implemented
 
 - **Selected item:** G3 (webinar kit), the highest Canon gap backlog item whose
@@ -37,38 +70,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 - **Next ready item:** G5 (delivery ladder), no unmet dependency; represents the
   client's own delivery (Serve) and the next-offer path. G7 (service-line
   artifacts) is also ready; G6 depends on G5.
-
-### Cycle 2026-10-06T150042Z: G4 strategy-session kit implemented
-
-- **Selected item:** G4 (strategy-session kit), the next Canon gap backlog item
-  with no unmet dependency. It outranks G5/G7 because the backlog is ordered and
-  G4 is the highest ready item; it is a bounded pure-domain artifact that types
-  the third enrollment model and closes a canon gap the stage 8/9 enrollment path
-  needs before traffic. G3 depends on G4.
-- **Outcome:** implemented the Execution `StrategySessionKit` (canon files 47, 48;
-  Certification Day 4; Live Sessions 8; synthesized
-  `ops/playbooks/strategy-session.md`, `ops/checklists/strategy-session-call.md`,
-  `ops/sops/strategy-session-run.md`). It grounds on a same-tenant stage 4
-  `SignatureSolution` and stage 5 `ProductProgram`, types the paid session as
-  `StrategySessionModel.PAID_STRATEGY_SESSION`, and refuses a price below the
-  canon's $500 floor. It requires a 60 to 90 minute session, a typed
-  duplicate-free application gate, a before-and-after roadmap that covers every
-  signature-solution step exactly once, the three calm questions (confidence,
-  alone, help) once each in order, and a fee credit to the first month of the
-  program. It is a plan, never an observation. New named errors:
-  `InvalidStrategySessionError`, `StrategySessionDependencyError`,
-  `StrategySessionTenantBoundaryError`, `StrategySessionFormatError`,
-  `StrategySessionObservationError`.
-- **Evidence:** `tests/unit/execution/test_strategy_session.py` (23 tests, 2
-  subtests) passes; the full `tests/unit/execution` suite passes (332 tests, 121
-  subtests); `uv run pyflakes` clean on the changed files.
-- **Not done (deliberately):** wiring the kit into a required stage 8/9 gate kind
-  is a methodology-owner decision (SPEC.md section 12.5), so the kit stays an
-  enrollment planning asset. No send, spend, payment or client commitment is
-  authorized (SPEC.md sections 4 and 9).
-- **Next ready item:** G5 (delivery ladder), no unmet dependency; represents the
-  client's own delivery (Serve) and the next-offer path. G7 (service-line
-  artifacts) is also ready; G3 depends on G4 (now met) and G6 depends on G5.
 
 
 
