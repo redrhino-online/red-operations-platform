@@ -2,6 +2,50 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 2026-10-06T162634Z: W1 worker entrypoint (`python -m redops.worker`)
+
+- **Selected item:** W1's worker entrypoint, the next ready item after the
+  connector-backed executor (owner decision 2026-10-06; SPEC.md sections 6, 7 and
+  9; ADR 0005). It outranks every alternative: G8's required-kind half and G9 are
+  closed, C4 is done, R1/R2 are deferred and must not be picked up unattended, and
+  no other non-canon item is ready. The entrypoint is the composition consumer the
+  resume use case has lacked since the worker isolation layer landed.
+- **Outcome:** new `backend/redops/worker.py`, runnable as
+  `python -m redops.worker`. `build_worker` is the single composition point that
+  wires the `WorkflowRunStore` to `ResumeDueRunsHandler` and the connector-backed
+  `ConnectorStepExecutor`. `worker_from_env` selects the run store and the
+  external-operation store from one `DATABASE_URL` (so a resume and an API status
+  read share one database), builds the replay-safe `IdempotentConnector` over an
+  injected transport, and reads the client roster from `REDOP_WORKER_TENANTS`
+  (default pilot client `3fmindset`). `WorkflowWorker` scans each configured
+  client's due runs one client at a time; a failure for one client is logged and
+  swallowed so the rest advance and the process survives, and the failed run stays
+  persisted (SPEC.md sections 7 and 11). A durable configuration without a real
+  connector transport refuses to start with the new named `WorkerConfigurationError`
+  rather than record an external operation it cannot send (SPEC.md section 6). No
+  stage 0-10 template, required asset kind, migration, route or gate changed; the
+  chart worker stays `enabled: false`.
+- **Evidence:** `tests/unit/workflows/test_worker_entrypoint.py` (12 tests, 5
+  subtests) proves a due run resumes to completion through the connector executor,
+  a waiting approval is left for its human with no effect, only configured clients
+  are scanned, a failing client does not stop the pass or lose its run, the loop
+  stops on the signal event, the roster/transport configuration refusals, and the
+  composition-root wiring; `make check` 2712 passed, 3 skipped, 799 subtests; `uv
+  run pyflakes backend tests` clean; `make done` still PASS. Independent `verify`
+  subagent: PASS on all six criteria (test-strength caveats only).
+- **Not done (deliberately):** enabling the chart's worker Deployment. Enabling it
+  needs a configured connector transport (the connector inventory is an open
+  SPEC.md section 11 decision) and the client roster as env; enabling it now would
+  fail fast and break the Argo CD health condition 9 requires. No send, spend,
+  publish or client commitment is authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** W1's deploy slice: configure a connector transport and
+  `REDOP_WORKER_TENANTS`, set `worker.enabled: true`, and verify the chart's worker
+  Deployment is healthy.
+- **Blockers:** none for this slice. The deploy slice waits on the connector
+  transport / connector-inventory owner decision. `.ralph/DONE` not touched: the
+  prototype DoD still passes but the owner reopened the loop for post-prototype
+  work (plan history, 2026-10-06) and ready work remains.
+
 ### Cycle 2026-10-06T162338Z: W1 concrete connector-backed workflow step executor
 
 - **Selected item:** W1's unblocking prerequisite, the concrete

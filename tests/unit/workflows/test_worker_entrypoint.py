@@ -25,6 +25,7 @@ from datetime import date
 from unittest import mock
 
 from redops.contexts.execution.infrastructure.connectors import (
+    FailOnSendConnectorTransport,
     IdempotentConnector,
     InMemoryExternalOperationStore,
     RecordingConnectorTransport,
@@ -216,11 +217,45 @@ class WorkerTenantRosterTests(unittest.TestCase):
 
 
 class WorkerCompositionTests(unittest.TestCase):
-    def test_a_durable_configuration_without_a_transport_is_refused(self) -> None:
-        with self.assertRaises(worker_module.WorkerConfigurationError):
-            worker_module.worker_from_env(
-                {"DATABASE_URL": "postgresql://redops:redops@db:5432/redops"}
+    def test_a_durable_configuration_selects_the_fail_on_send_transport(self) -> None:
+        transport = worker_module.connector_transport_from_env(
+            {"DATABASE_URL": "postgresql://redops:redops@db:5432/redops"}
+        )
+
+        self.assertIsInstance(transport, FailOnSendConnectorTransport)
+
+    def test_a_reference_configuration_selects_the_recording_transport(self) -> None:
+        transport = worker_module.connector_transport_from_env({})
+
+        self.assertIsInstance(transport, RecordingConnectorTransport)
+
+    def test_a_durable_configuration_builds_a_worker_that_refuses_to_send(self) -> None:
+        # Owner decision 2026-10-06: the interim fail-on-send transport lets the
+        # worker start and resume durable workflows while nothing leaves the box.
+        # A resume that would send raises loudly, is caught per client, and the
+        # run stays persisted for a later retry with a real connector.
+        store = InMemoryWorkflowRunStore()
+        store.save(interrupted_run("run-1", TENANT))
+        with mock.patch.object(
+            worker_module, "workflow_run_store_from_env", return_value=store
+        ), mock.patch.object(
+            worker_module,
+            "external_operation_store_from_env",
+            return_value=InMemoryExternalOperationStore(),
+        ):
+            worker = worker_module.worker_from_env(
+                {
+                    "DATABASE_URL": "postgresql://redops:redops@db:5432/redops",
+                    "REDOP_WORKER_TENANTS": TENANT,
+                }
             )
+
+        advanced = worker.run_once(on=TODAY)
+
+        self.assertEqual((), advanced)
+        left = store.get("run-1", tenant_id=TENANT)
+        self.assertEqual(WorkflowRunStatus.RUNNING, left.status)
+        self.assertEqual("extract-claims", left.in_progress_step)
 
     def test_a_reference_configuration_builds_a_worker_for_the_pilot(self) -> None:
         worker = worker_module.worker_from_env({})

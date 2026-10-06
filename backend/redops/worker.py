@@ -26,12 +26,15 @@ Configuration is read from the environment (SPEC.md section 10):
 ``REDOP_CONNECTOR_NAME``
     The connector the step executor delivers through. Defaults to ``redop``.
 
-A durable worker additionally needs a real connector transport so a recorded
+A durable worker additionally needs a connector transport so a recorded
 external operation is actually sent. The connector inventory is an open
-decision (SPEC.md section 11), so with ``DATABASE_URL`` set and no transport
-configured the worker refuses to start with ``WorkerConfigurationError`` rather
-than record a durable operation it cannot send. The chart's worker Deployment
-therefore stays disabled until that transport is configured.
+decision (SPEC.md section 11), so with ``DATABASE_URL`` set and no real
+transport configured the worker uses the interim fail-on-send transport (owner
+decision 2026-10-06): it starts and resumes durable workflows while refusing to
+send, so nothing leaves the box and a step that would send raises loudly rather
+than recording an operation it cannot deliver. The chart's worker Deployment is
+enabled on that basis; a real connector replaces the transport without any
+caller change.
 """
 
 from __future__ import annotations
@@ -49,6 +52,7 @@ from redops.contexts.execution.application.ports import (
     ConnectorTransport,
 )
 from redops.contexts.execution.infrastructure.connectors import (
+    FailOnSendConnectorTransport,
     IdempotentConnector,
     RecordingConnectorTransport,
     external_operation_store_from_env,
@@ -115,18 +119,16 @@ def connector_transport_from_env(
     effects with the process-local ``RecordingConnectorTransport``, matching the
     in-memory stores used in local development. With a ``DATABASE_URL`` the
     output would be durable, so a transport that does not actually send would
-    record a false success; there is no configured vendor transport yet (the
-    connector inventory is an open decision, SPEC.md section 11), so the worker
-    refuses to start instead of pretending.
+    record a false success; no real connector is configured yet (the connector
+    inventory is an open decision, SPEC.md section 11), so the worker uses the
+    interim ``FailOnSendConnectorTransport`` (owner decision 2026-10-06). It lets
+    the worker start and resume durable workflows while refusing to send, so
+    nothing leaves the box and a step that would send raises loudly rather than
+    recording an operation it cannot deliver.
     """
 
     if environ.get("DATABASE_URL"):
-        raise WorkerConfigurationError(
-            "a durable worker requires a configured connector transport; the "
-            "connector inventory is an open decision (SPEC.md section 11), so "
-            "the worker refuses to record a durable external operation it "
-            "cannot actually send"
-        )
+        return FailOnSendConnectorTransport()
     return RecordingConnectorTransport()
 
 

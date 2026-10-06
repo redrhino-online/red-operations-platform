@@ -189,11 +189,24 @@ class ChartRenderTest(unittest.TestCase):
                 annotations["argocd.argoproj.io/sync-options"], "Replace=true"
             )
 
-    def test_worker_is_disabled_by_default_and_enableable(self) -> None:
-        default_names = {d["metadata"]["name"] for d in _by_kind(_render(), "Deployment")}
-        self.assertNotIn("redop-worker", default_names)
-        docs = _render(["--set", "worker.enabled=true"])
-        _named(docs, "Deployment", "redop-worker")
+    def test_worker_renders_with_the_client_roster_and_can_be_disabled(self) -> None:
+        # Owner decision 2026-10-06: the interim fail-on-send transport lets the
+        # worker start without a real connector, so the chart enables it by
+        # default and passes the client roster it scans.
+        docs = _render()
+        worker = _named(docs, "Deployment", "redop-worker")
+        env = {
+            e["name"]: e
+            for e in worker["spec"]["template"]["spec"]["containers"][0]["env"]
+        }
+        self.assertEqual(env["REDOP_WORKER_TENANTS"]["value"], "3fmindset")
+        self.assertEqual(
+            worker["spec"]["template"]["spec"]["containers"][0]["command"],
+            ["python", "-m", "redops.worker"],
+        )
+
+        disabled = {d["metadata"]["name"] for d in _by_kind(_render(["--set", "worker.enabled=false"]), "Deployment")}
+        self.assertNotIn("redop-worker", disabled)
 
 
 if __name__ == "__main__":

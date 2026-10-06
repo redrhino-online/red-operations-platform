@@ -700,3 +700,15 @@ class ConnectorTenantBoundaryError(ConnectorError):
     one without a client would either leak across clients or create an orphaned
     operation.
     """
+
+
+class ConnectorSendRefusedError(ConnectorError):
+    """The interim fail-on-send transport refused to send an outbound effect.
+
+    Owner decision 2026-10-06 (SPEC.md section 11 connector inventory): until a
+    real connector is named, the worker runs with a transport that refuses to
+    send. It lets the worker start and resume durable workflows while nothing
+    leaves the box; a step that would send raises this named error loudly and its
+    run stays persisted for a later retry with a real connector. A silent no-op
+    would instead record a false success, so the refusal is explicit.
+    """

@@ -31,6 +31,7 @@ from redops.contexts.execution.domain.connector import (
 )
 from redops.contexts.execution.domain.errors import (
     ConnectorIdempotencyConflictError,
+    ConnectorSendRefusedError,
     ConnectorTenantBoundaryError,
 )
 from redops.contexts.execution.infrastructure.mappers import (
@@ -112,6 +113,26 @@ class RecordingConnectorTransport(ConnectorTransport):
         self._count += 1
         self.sent.append(effect)
         return f"{self._prefix}-{self._count}"
+
+
+class FailOnSendConnectorTransport(ConnectorTransport):
+    """Interim transport that refuses every send (owner decision 2026-10-06).
+
+    The connector inventory is an open SPEC.md section 11 decision. Until a real
+    connector is named, the worker runs with this transport so it can start and
+    resume durable workflows without any outbound effect leaving the box. A step
+    that would send raises ``ConnectorSendRefusedError`` loudly; the run was
+    persisted before the side effect, so it stays resumable once a real transport
+    is configured. This is reversible: swap the transport, no caller changes.
+    """
+
+    def send(self, effect: ConnectorEffect) -> str:
+        raise ConnectorSendRefusedError(
+            "the interim fail-on-send connector transport refused to send "
+            f"effect {effect.idempotency_key!r} for tenant {effect.tenant_id!r}; "
+            "no real connector is configured (SPEC.md section 11 connector "
+            "inventory), so nothing leaves the box"
+        )
 
 
 class IdempotentConnector(ConnectorPort):
