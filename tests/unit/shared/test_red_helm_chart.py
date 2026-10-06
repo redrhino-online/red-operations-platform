@@ -137,7 +137,7 @@ class ChartRenderTest(unittest.TestCase):
         self.assertIn('"succeeded"[[:space:]]*:[[:space:]]*[1-9]', script)
         self.assertNotIn('"succeeded":1', script)
 
-    def test_ingress_routes_red_to_api_and_root_to_ui(self) -> None:
+    def test_ingress_routes_red_screens_and_root_to_cockpit(self) -> None:
         docs = _render()
         ingress = _named(docs, "Ingress", "redop")
         paths = {
@@ -145,7 +145,9 @@ class ChartRenderTest(unittest.TestCase):
             for p in ingress["spec"]["rules"][0]["http"]["paths"]
         }
         self.assertEqual(paths["/red"], "redop-api")
-        self.assertEqual(paths["/"], "redop-ui")
+        self.assertEqual(paths["/screens"], "redop-ui")
+        self.assertEqual(paths["/api/backend"], "redop-cockpit")
+        self.assertEqual(paths["/"], "redop-cockpit")
 
     def test_reuses_existing_database_and_secrets(self) -> None:
         docs = _render()

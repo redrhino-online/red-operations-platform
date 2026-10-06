@@ -1,0 +1,7 @@
+{
+  "section_id": "nojargon_org",
+  "title": "Without the Jargon: Agents and Human Authority",
+  "markdown": "RED has nine specialists that help the Executive research, structure, produce, govern, execute, measure, and grow client work. Two more capability slots are proposed for future use, but they cannot be routed work or take actions.\n\nAgents prepare analysis and drafts. They do not approve their own work. A named human keeps authority over client decisions, launch, spend, and commitments.\n\nThe human roster records who owns each decision and what that person may approve. The agent roster and the human roster have different jobs.",
+  "mermaid": "flowchart LR\n  Agent[RED specialist] --> Draft[Proposal]\n  Draft --> Human[Named human approver]\n  Slot[Capability slot] -->|proposal only| Human",
+  "generated_at": "2026-10-06T00:00:00Z"
+}

@@ -58,13 +58,13 @@ const ROUTE_GUIDE_MAP: Array<{ prefix: string; guideId: string; title: string }>
   { prefix: "/jobs", guideId: "jobs", title: "Workflows" },
   { prefix: "/artifacts", guideId: "artifacts", title: "Documents" },
   { prefix: "/watchlist", guideId: "watchlist", title: "Watch list" },
-  { prefix: "/departments", guideId: "departments", title: "Departments" },
+  { prefix: "/departments", guideId: "departments", title: "Work areas" },
   // Goals grouped by area — documented with Departments (an area is one).
   { prefix: "/goals", guideId: "departments", title: "Goals" },
   { prefix: "/people", guideId: "people", title: "People" },
   { prefix: "/company-profile", guideId: "company_profile", title: "Company profile" },
   { prefix: "/knowledge", guideId: "knowledge", title: "Knowledge base" },
-  { prefix: "/council", guideId: "council", title: "Agent Council" },
+  { prefix: "/council", guideId: "council", title: "RED agent roster" },
   { prefix: "/demo", guideId: "simulator", title: "Company Simulator" },
   { prefix: "/settings", guideId: "settings", title: "Settings" },
 ];

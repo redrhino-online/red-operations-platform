@@ -20,6 +20,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY vendor/openexecutive/packages/ui/ ./
 COPY vendor/overlay/files/packages/ui/ ./
 ENV NEXT_TELEMETRY_DISABLED=1
+# Keep Next.js below the 4Gi DinD build-container limit while leaving headroom
+# for Docker and Alpine processes.
+ENV NODE_OPTIONS=--max-old-space-size=3072
 # next-auth needs an AUTH_SECRET at build; the real one is provided at runtime.
 ENV AUTH_SECRET=build-only-secret
 RUN npm run build

@@ -5,7 +5,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
-  // ADR 0012: when the OpenExecutive cockpit owns the root, the RED screens are
+  // ADR 0012: when the vendor cockpit owns the root, the RED screens are
   // served under a subpath (e.g. /screens). Empty in local dev and tests.
   basePath: process.env.NEXT_PUBLIC_RED_BASE_PATH || undefined,
 };
