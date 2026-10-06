@@ -11,7 +11,9 @@ depends on:
   API initContainer that waits for the Job's success);
 * the ingress routes ``/red`` to the API and ``/`` to the UI same-origin;
 * the chart reuses the existing database and secrets and provisions no database;
-* the worker is present but disabled until a RED worker entrypoint exists.
+* the worker renders only when explicitly enabled, and stays disabled until a
+  connector transport is configured (the entrypoint exists but fails fast
+  without one).
 
 The render tests skip when ``helm`` is not on PATH; the structural tests always
 run. They are guards, not a substitute for the real cluster release.

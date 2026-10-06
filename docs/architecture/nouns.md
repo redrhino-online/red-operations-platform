@@ -158,6 +158,7 @@ explicit.
 | **WorkflowRun** | The durable run state machine. | Persisted before side effects so runs resume from committed steps. |
 | **WorkflowStepExecutor / WorkflowRunStore** | Ports for executing a step and storing run state. | Restarting a worker preserves a waiting workflow. |
 | **ConnectorStepExecutor** | The concrete `WorkflowStepExecutor` that performs a task step through the replay-safe `ConnectorPort`. | A resumed step resolves to one recorded external operation; an approval step is refused. |
+| **WorkflowWorker** | The `python -m redops.worker` loop (`backend/redops/worker.py`): `ResumeDueRunsHandler` over the durable run store and the connector executor, per configured client. | Restart survives; a waiting approval is left for its human; a failing client does not stop the loop. |
 | **Outbox / durable queue** | Transactional outbox for async work. | Worker idempotency; no lost effects. |
 | **Optimistic version checking** | Conflict-on-stale-update. | Prevents silent lost updates on concurrent edits. |
 | **Idempotency key** | Request identity for retried mutations. | Duplicate delivery creates exactly one operation. |

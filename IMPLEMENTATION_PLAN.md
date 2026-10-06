@@ -4,6 +4,50 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-06T162634Z: W1 worker entrypoint (`python -m redops.worker`)
+
+- **Selected item:** W1's worker entrypoint, the next ready item after the
+  connector-backed executor (owner decision 2026-10-06; SPEC.md sections 6, 7 and
+  9; ADR 0005). It outranks every alternative: G8's required-kind half and G9 are
+  closed, C4 is done, R1/R2 are deferred and must not be picked up unattended, and
+  no other non-canon item is ready. The entrypoint is the composition consumer the
+  resume use case has lacked since the worker isolation layer landed.
+- **Outcome:** new `backend/redops/worker.py`, runnable as
+  `python -m redops.worker`. `build_worker` is the single composition point that
+  wires the `WorkflowRunStore` to `ResumeDueRunsHandler` and the connector-backed
+  `ConnectorStepExecutor`. `worker_from_env` selects the run store and the
+  external-operation store from one `DATABASE_URL` (so a resume and an API status
+  read share one database), builds the replay-safe `IdempotentConnector` over an
+  injected transport, and reads the client roster from `REDOP_WORKER_TENANTS`
+  (default pilot client `3fmindset`). `WorkflowWorker` scans each configured
+  client's due runs one client at a time; a failure for one client is logged and
+  swallowed so the rest advance and the process survives, and the failed run stays
+  persisted (SPEC.md sections 7 and 11). A durable configuration without a real
+  connector transport refuses to start with the new named `WorkerConfigurationError`
+  rather than record an external operation it cannot send (SPEC.md section 6). No
+  stage 0-10 template, required asset kind, migration, route or gate changed; the
+  chart worker stays `enabled: false`.
+- **Evidence:** `tests/unit/workflows/test_worker_entrypoint.py` (12 tests, 5
+  subtests) proves a due run resumes to completion through the connector executor,
+  a waiting approval is left for its human with no effect, only configured clients
+  are scanned, a failing client does not stop the pass or lose its run, the loop
+  stops on the signal event, the roster/transport configuration refusals, and the
+  composition-root wiring; `make check` 2712 passed, 3 skipped, 799 subtests; `uv
+  run pyflakes backend tests` clean; `make done` still PASS. Independent `verify`
+  subagent: PASS on all six criteria (test-strength caveats only).
+- **Not done (deliberately):** enabling the chart's worker Deployment. Enabling it
+  needs a configured connector transport (the connector inventory is an open
+  SPEC.md section 11 decision) and the client roster as env; enabling it now would
+  fail fast and break the Argo CD health condition 9 requires. No send, spend,
+  publish or client commitment is authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** W1's deploy slice: configure a connector transport and
+  `REDOP_WORKER_TENANTS`, set `worker.enabled: true`, and verify the chart's worker
+  Deployment is healthy.
+- **Blockers:** none for this slice. The deploy slice waits on the connector
+  transport / connector-inventory owner decision. `.ralph/DONE` not touched: the
+  prototype DoD still passes but the owner reopened the loop for post-prototype
+  work (plan history, 2026-10-06) and ready work remains.
+
 ### Cycle 2026-10-06T162338Z: W1 concrete connector-backed workflow step executor
 
 - **Selected item:** W1's unblocking prerequisite, the concrete
@@ -38,35 +82,7 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   compose `ResumeDueRunsHandler` with the durable `WorkflowRunStore` and the
   `ConnectorStepExecutor`, then enable the chart worker.
 
-### Cycle 2026-10-06T155319Z: Q16 store-level compare-and-swap on the build store
 
-- **Selected item:** Q16 (store-level compare-and-swap hardening), the
-  highest-value ready item. It outranks W1 (worker entrypoint), blocked on a
-  concrete `WorkflowStepExecutor` (the connector seam is a `ConnectorPort`, not a
-  step executor), and G8's required-kind half and G9, blocked on owner input. The
-  previous cycle left this as the bounded, unblocked follow-up: the optimistic
-  check was application-level read-check-write, so two truly concurrent writers
-  could both pass.
-- **Outcome:** `BuildObjectRepository.save` now accepts an optional keyword
-  `expected_version`. With it the write is a compare-and-swap: the PostgreSQL
-  adapter issues `UPDATE ... WHERE (build_objects.build->>'version')::int = %s`
-  and raises `BuildObjectVersionConflictError` (rolling back) when no row matches,
-  so two writers that read the same version cannot both pass; without it the write
-  stays an unconditional upsert for a new build. The in-memory adapter now stores
-  and returns independent snapshots (through the payload mapper) and enforces the
-  same predicate, so the CAS is testable without a database. The transition route
-  passes `expected_version=body.expected_version` to `save`, making the store the
-  authoritative backstop behind the domain `require_version`. No stage 0-10
-  template, required asset kind, migration or gate changed.
-- **Evidence:** new CAS tests in `tests/unit/production/test_build_object_store.py`
-  (3) and `tests/unit/production/test_build_object_postgres.py` (3, run with
-  `DATABASE_URL`) pass; `make check` 2693 passed, 3 skipped, 794 subtests.
-  Independent `verify` subagent: PASS.
-- **Not done (deliberately):** no send, spend, publish or client commitment is
-  authorized (SPEC.md sections 4 and 9).
-- **Next ready item:** none unblocked. W1 stays blocked on a concrete
-  `WorkflowStepExecutor`; G8's required-kind half and G9 stay blocked on owner
-  input. The loop stops and records the blocker.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ## Prototype definition of done
@@ -293,7 +309,7 @@ These are existing non-canon gaps which remain actionable alongside G1-G9.
 
 | # | Item | Area | Depends | Evidence / gate |
 | --- | --- | --- | --- | --- |
-| W1 | Add the RED worker entrypoint and deploy it as part of the owner's api + ui + worker first-release scope | workflows/deploy | — | worker starts, resumes a due durable workflow after restart, and the chart's worker Deployment is healthy. **Unblocked 2026-10-06 (owner):** build a concrete `WorkflowStepExecutor` port and adapter (the connector seam is a `ConnectorPort`, not a step executor) so the worker can start and resume a due durable workflow; W1 is the next ready item. **Adapter done 2026-10-06:** `ConnectorStepExecutor` (`backend/redops/workflows/infrastructure/executors.py`) implements the `WorkflowStepExecutor` port over the replay-safe `ConnectorPort`, deriving a deterministic tenant-scoped effect per run and step so a resumed step resolves to one recorded external operation and an approval step is refused (`WorkflowStepExecutionError`); verified by `tests/unit/workflows/test_connector_step_executor.py` (7 tests). Remaining: the `python -m redops.worker` entrypoint composing `ResumeDueRunsHandler` with the durable store and this executor, then enabling the chart worker |
+| W1 | Add the RED worker entrypoint and deploy it as part of the owner's api + ui + worker first-release scope | workflows/deploy | — | worker starts, resumes a due durable workflow after restart, and the chart's worker Deployment is healthy. **Unblocked 2026-10-06 (owner):** build a concrete `WorkflowStepExecutor` port and adapter (the connector seam is a `ConnectorPort`, not a step executor) so the worker can start and resume a due durable workflow; W1 is the next ready item. **Adapter done 2026-10-06:** `ConnectorStepExecutor` (`backend/redops/workflows/infrastructure/executors.py`) implements the `WorkflowStepExecutor` port over the replay-safe `ConnectorPort`, deriving a deterministic tenant-scoped effect per run and step so a resumed step resolves to one recorded external operation and an approval step is refused (`WorkflowStepExecutionError`); verified by `tests/unit/workflows/test_connector_step_executor.py` (7 tests). **Entrypoint done 2026-10-06:** `backend/redops/worker.py` runs `python -m redops.worker`: `build_worker` composes `ResumeDueRunsHandler` with the run store and the `ConnectorStepExecutor`; `worker_from_env` selects both stores from one `DATABASE_URL`, builds the `IdempotentConnector` over an injected transport, and takes the client roster from `REDOP_WORKER_TENANTS`; `WorkflowWorker.run_once` resumes each configured client's due runs, isolates a per-client failure, and leaves a waiting approval for its human, and a durable configuration without a connector transport refuses to start (`WorkerConfigurationError`); verified by `tests/unit/workflows/test_worker_entrypoint.py` (12 tests). Remaining: configure a connector transport and `REDOP_WORKER_TENANTS`, set `worker.enabled: true`, and verify the chart's worker Deployment is healthy (waits on the connector-inventory owner decision) |
 | Q16 | Optimistic-version conflict half: a stale mutation returns 409 | api/governance | a mutation route that accepts an expected version | test two writes against the same version; first succeeds, stale second returns 409 without changing state. **Done 2026-10-06:** the live Production `BuildObject` carries a monotonic `version` (starts at 1, advances on every mutation and transition) and `require_version(expected)` raises `BuildObjectVersionConflictError` before any mutation; `POST /red/builds/{build_id}/transition` accepts `expected_version`, returns 409 on a stale write (404 unknown/foreign, 422 illegal target), and the version round-trips through the mapper; verified by `tests/unit/production/test_build_object_version.py` (8 tests) and the new route tests in `tests/unit/production/test_builds_route.py` (5 tests). **Store-level CAS done 2026-10-06:** `BuildObjectRepository.save` accepts an optional `expected_version`; the PostgreSQL adapter issues `UPDATE ... WHERE (build_objects.build->>'version')::int = %s` and raises `BuildObjectVersionConflictError` (rolling back) when no row matches, and the in-memory adapter stores independent snapshots and enforces the same predicate, so two writers that read the same version cannot both pass; the transition route passes `expected_version` to `save`; verified by `tests/unit/production/test_build_object_store.py` (3 tests) and `test_build_object_postgres.py` (3 tests, run with `DATABASE_URL`) |
 
 ## Product priority: the gated production engagement

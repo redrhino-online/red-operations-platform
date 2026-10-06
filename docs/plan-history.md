@@ -2,6 +2,37 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 2026-10-06T155319Z: Q16 store-level compare-and-swap on the build store
+
+- **Selected item:** Q16 (store-level compare-and-swap hardening), the
+  highest-value ready item. It outranks W1 (worker entrypoint), blocked on a
+  concrete `WorkflowStepExecutor` (the connector seam is a `ConnectorPort`, not a
+  step executor), and G8's required-kind half and G9, blocked on owner input. The
+  previous cycle left this as the bounded, unblocked follow-up: the optimistic
+  check was application-level read-check-write, so two truly concurrent writers
+  could both pass.
+- **Outcome:** `BuildObjectRepository.save` now accepts an optional keyword
+  `expected_version`. With it the write is a compare-and-swap: the PostgreSQL
+  adapter issues `UPDATE ... WHERE (build_objects.build->>'version')::int = %s`
+  and raises `BuildObjectVersionConflictError` (rolling back) when no row matches,
+  so two writers that read the same version cannot both pass; without it the write
+  stays an unconditional upsert for a new build. The in-memory adapter now stores
+  and returns independent snapshots (through the payload mapper) and enforces the
+  same predicate, so the CAS is testable without a database. The transition route
+  passes `expected_version=body.expected_version` to `save`, making the store the
+  authoritative backstop behind the domain `require_version`. No stage 0-10
+  template, required asset kind, migration or gate changed.
+- **Evidence:** new CAS tests in `tests/unit/production/test_build_object_store.py`
+  (3) and `tests/unit/production/test_build_object_postgres.py` (3, run with
+  `DATABASE_URL`) pass; `make check` 2693 passed, 3 skipped, 794 subtests.
+  Independent `verify` subagent: PASS.
+- **Not done (deliberately):** no send, spend, publish or client commitment is
+  authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** none unblocked. W1 stays blocked on a concrete
+  `WorkflowStepExecutor`; G8's required-kind half and G9 stay blocked on owner
+  input. The loop stops and records the blocker.
+
+Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ### Cycle 2026-10-06T154157Z: Q16 optimistic-version conflict on the live build aggregate
 
 - **Selected item:** Q16 (optimistic-version conflict half), the highest-value

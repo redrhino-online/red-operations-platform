@@ -79,8 +79,10 @@ make reset-hosted      # or scripts/reset_redop_data.sh --yes
 The `redop` release is Synced/Healthy but runs the **un-customized OpenExecutive
 shell** (`v0.4.6-redop.2`), so `make done` fails only `[6/6]` condition 9. The
 RED Helm chart now exists at `deploy/charts/redop` (Q48: api/ui, migration Job
-ordered before the API serves, same-origin ingress, PDB, probes; worker present
-but disabled until a RED worker entrypoint exists). The remaining path to a real
+ordered before the API serves, same-origin ingress, PDB, probes; the worker
+entrypoint `python -m redops.worker` exists but the Deployment stays disabled
+until a durable connector transport is configured, because the worker fails fast
+without one). The remaining path to a real
 condition 9 is **Q49** (Argo CD Application reconciling the RED chart) and
 **Q50** (secrets, `REDOP_HEALTH_URL`, deployment smoke). This is the prototype's
 head blocker.
