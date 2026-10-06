@@ -4,7 +4,11 @@ try:
         RED_SPECIALIST_REGISTRY,
     )
 
+    # Replace the generic C-suite. SPEC.md section 5 requires the RED roster;
+    # chartered capability slots 10/11 remain proposal-only and unroutable.
+    SPECIALIST_REGISTRY.clear()
     SPECIALIST_REGISTRY.update(RED_SPECIALIST_REGISTRY)
+    SPECIALIST_DESCRIPTIONS.clear()
     SPECIALIST_DESCRIPTIONS.update(RED_SPECIALIST_DESCRIPTIONS)
     SPECIALIST_TOOLS[0]["input_schema"]["properties"]["specialist"]["enum"] = sorted(
         SPECIALIST_REGISTRY

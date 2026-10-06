@@ -177,13 +177,27 @@ class RedAgentProviderPathE2ETests(unittest.TestCase):
             from openexecutive.agents.redops_agents import (
                 RED_SPECIALIST_REGISTRY,
             )
-            from openexecutive.orchestrator.router import SPECIALIST_REGISTRY
+            from openexecutive.orchestrator.router import (
+                SPECIALIST_DESCRIPTIONS,
+                SPECIALIST_REGISTRY,
+                SPECIALIST_TOOLS,
+            )
         except ImportError as exc:  # pragma: no cover - domain-only interpreter
             self.skipTest(f"vendored openexecutive unavailable: {exc}")
 
         red_keys = set(RED_SPECIALIST_REGISTRY)
         self.assertEqual(9, len(red_keys))
-        self.assertTrue(red_keys.issubset(set(SPECIALIST_REGISTRY)))
+        self.assertEqual(red_keys, set(SPECIALIST_REGISTRY))
+        self.assertEqual(red_keys, set(SPECIALIST_DESCRIPTIONS))
+        tool_keys = set(
+            SPECIALIST_TOOLS[0]["input_schema"]["properties"]["specialist"]["enum"]
+        )
+        self.assertEqual(red_keys, tool_keys)
+        self.assertNotIn("cso", SPECIALIST_REGISTRY)
+        self.assertNotIn("cfo", SPECIALIST_REGISTRY)
+
+        from openexecutive.orchestrator.answer_sources import _AREAS
+        self.assertEqual(red_keys, set(_AREAS))
 
 
 

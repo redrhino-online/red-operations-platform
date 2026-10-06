@@ -8,11 +8,10 @@ reimplemented. The registries here are merged into
 ``orchestrator/router.py``'s ``SPECIALIST_REGISTRY``/``SPECIALIST_DESCRIPTIONS``
 and ``orchestrator/answer_sources.py``'s ``_AREAS`` by the overlay hook.
 
-Capability slots 10 and 11 are chartered but deliberately absent: SPEC.md
-section 5 reserves them as proposal-only with no execution permissions, and their
-charters live in ``docs/agents/``. The generic corporate personas stay in place;
-retiring them is a separate characterised change (ADR 0006), not part of this
-overlay.
+The overlay replaces the generic C-suite registry with RED's nine required
+agents. Capability slots 10 and 11 are chartered but deliberately absent from
+the router: SPEC.md section 5 reserves them as proposal-only with no execution
+permissions, and their charters live in ``docs/agents/``.
 """
 
 from __future__ import annotations

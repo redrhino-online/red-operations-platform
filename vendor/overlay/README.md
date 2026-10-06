@@ -27,10 +27,14 @@ Re-triggered on upstream change: bump the submodule, run the apply script, and i
 a hook anchor moved the check fails loudly so the overlay is fixed rather than
 silently losing the registration.
 
-## Known follow-ups
+## Registry boundary
 
-- The generic corporate personas remain registered; retiring them is a separate
-  characterised change (ADR 0006).
-- Capability slots 10 and 11 are chartered (`docs/agents/`) but not registered as
-  routable specialists, because SPEC.md section 5 reserves them as proposal-only
-  with no execution permissions.
+- The router and answer-source area registry contain RED's nine required
+  specialists only. The overlay removes the generic C-suite entries (SPEC.md
+  sections 2 and 5; ADR 0006).
+- Capability slots 10 and 11 are chartered (`docs/agents/`) but deliberately not
+  registered as routable specialists. SPEC.md section 5 reserves them as
+  proposal-only with no execution permissions.
+- The upstream workspace still stores work-area/goal groups and human people for
+  compatibility. These do not add generic agents to the specialist router or
+  give agents human approval authority.

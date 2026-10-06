@@ -1,6 +1,8 @@
 try:
     from openexecutive.agents.redops_agents import RED_SPECIALIST_AREAS
 
+    # Keep answer-source attribution aligned with the routable RED agents.
+    _AREAS.clear()
     _AREAS.update(RED_SPECIALIST_AREAS)
 except Exception:  # pragma: no cover - the overlay is optional at runtime
     import logging as _logging
