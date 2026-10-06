@@ -27,11 +27,10 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   `AuthorityVideoKitFormatError`, `AuthorityVideoKitObservationError`.
 - **Evidence:** `tests/unit/production/test_authority_video_kit.py` (16 tests, 4
   subtests) passes; the full `tests/unit/production` suite passes (96 tests, 13
-  subtests); `uv run pyflakes` clean on the changed files. `make check` -> 2441
-  passed, 3 skipped, 754 subtests, with the single pre-existing
-  `tests/unit/shared/test_ralph_cycle_prompt.py` failure caused by this cycle
-  holding `.ralph/cycle.lock` (the test invokes `ralph_cycle.sh`, which refuses
-  while a cycle is active); unrelated to this change.
+  subtests); `uv run pyflakes` clean on the changed files. `make check` during
+  this cycle first exposed the prompt test trying to acquire the active cycle
+  lock. Fixed in `834cae7` by testing against a temporary repo with a live
+  fixture lock; rerun after the cycle: 2442 passed, 3 skipped, 754 subtests.
 - **Not done (deliberately):** wiring the kit into a required stage 7 gate kind is
   a methodology-owner decision (SPEC.md section 12.5), so the kit stays a
   production planning asset. No publish or spend is authorized (SPEC.md sections
