@@ -2,6 +2,43 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 2026-10-06T150309Z: G3 webinar kit implemented
+
+- **Selected item:** G3 (webinar kit), the highest Canon gap backlog item whose
+  dependency is now met. G4 (its dependency) completed last cycle, so G3 is
+  unblocked and outranks G5/G7 because the backlog is ordered and G3 is the
+  highest ready item; it is a bounded pure-domain artifact that types the scaled
+  enrollment path and closes a canon gap the stage 6/8/10 funnel needs before
+  traffic.
+- **Outcome:** implemented the Execution `WebinarKit` (canon file 32; Winning
+  Webinar 01-13; synthesized `ops/playbooks/webinar.md`,
+  `ops/checklists/webinar-run-of-show.md`, `ops/sops/webinar-build.md`). It grounds
+  on a same-tenant stage 4 `SignatureSolution`, types the scaled path
+  (`EnrollmentPath.SCALED`) and requires the simple path proven first. It requires
+  the six-phase run of show (frame, teach, shift, sell, show, close) in order on an
+  about-60-minute clock, three teach blocks matching the three signature-solution
+  phases in order, one offer, the five-page set (sign up, train, webinar, replay,
+  order), the 5P email sequence (problem, promise, proof, ping, promotion), a 3 to
+  5 day closing sequence, the replay to everyone and at least one retargeting
+  group. It refuses automation below the ten-and-ten bar (ten live runs at 10% or
+  better) and never presents an automated webinar as live. It is a plan, never an
+  observation. New named errors: `InvalidWebinarError`, `WebinarDependencyError`,
+  `WebinarTenantBoundaryError`, `WebinarFormatError`, `WebinarAutomationError`,
+  `WebinarObservationError`.
+- **Evidence:** `tests/unit/execution/test_webinar.py` (34 tests, 2 subtests)
+  passes; the full `tests/unit/execution` suite passes (366 tests, 123 subtests);
+  `uv run pyflakes` clean on the changed files.
+- **Not done (deliberately):** wiring the kit into a required stage 6/8/10 gate
+  kind is a methodology-owner decision (SPEC.md section 12.5), so the kit stays an
+  enrollment planning asset. No send, spend, publish or client commitment is
+  authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** G5 (delivery ladder), no unmet dependency; represents the
+  client's own delivery (Serve) and the next-offer path. G7 (service-line
+  artifacts) is also ready; G6 depends on G5.
+
+
+
+Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ### Cycle 2026-10-06T144439Z: G2 authority-video kit implemented
 
 - **Selected item:** G2 (authority-video kit), the next Canon gap backlog item

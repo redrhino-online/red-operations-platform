@@ -235,3 +235,95 @@ class DeliveryLadderObservationError(PortfolioError):
     attendance, completion or result stays a separate observation, so a ladder is
     never an observation.
     """
+
+
+class InvalidPartnershipPlanError(PortfolioError, ValueError):
+    """A partnership plan or one of its parts was built without required content.
+
+    SPEC.md section 12.5 records the canon's partnership line and certification as
+    a canon gap (the four-offer path, the partnership loop, renewal and win-back,
+    the referral and partner plan, community rules, the reputation track and the
+    certified consultant standard), and the implementation plan's backlog item G6
+    names typed artifacts that keep every client with a next step. A plan names its
+    tenant, a named owner, the same-tenant stage 5 ``ProductProgram`` it extends,
+    the four-offer path, the partnership loop, a regular check-in, a referral plan,
+    community rules, a reputation track and a certification standard. A blank
+    identity, an empty offer, move, rule or skill set, or an untyped part cannot be
+    represented as a partnership plan.
+    """
+
+
+class PartnershipTenantBoundaryError(PortfolioError):
+    """A partnership plan mixed in a program from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. A
+    partnership plan belongs to the tenant of the client whose program it extends,
+    so it cannot be grounded on another tenant's program.
+    """
+
+
+class PartnershipDependencyError(PortfolioError):
+    """A partnership plan was not grounded on a program or named an unknown offer.
+
+    The canon's partnership playbook extends the productized program into a
+    four-offer path (synthesized ``ops/playbooks/partnership.md``), so a plan must
+    be grounded on a typed same-tenant stage 5 ``ProductProgram`` and its referral
+    plan must name the partner offer the plan actually carries.
+    """
+
+
+class PartnershipFormatError(PortfolioError):
+    """A partnership plan broke the canon's partnership shape.
+
+    The canon's four-offer path is a free entry, a small offer, a core offer and a
+    partner offer, each leading to the next, and the partnership loop is retain,
+    grow, refer and renew (canon files 11 and 12; synthesized
+    ``ops/playbooks/partnership.md``). The offers and moves must each be the canon
+    set in order without repeats, the community rules must be simple and unique,
+    and the reputation track must cover reviews, stories and press; otherwise the
+    plan is not the canon's partnership line.
+    """
+
+
+class PartnershipGateError(PortfolioError):
+    """A partnership plan asked for referrals before a win.
+
+    The canon's partnership playbook says to ask for referrals after a win, not
+    before, and lists asking too early as a common failure (synthesized
+    ``ops/playbooks/partnership.md``). A referral plan that does not ask after a
+    win is refused, so the plan cannot represent a premature referral ask.
+    """
+
+
+class PartnershipObservationError(PortfolioError):
+    """A partnership plan was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. A partnership
+    plan is the client's intended retention and expansion path, while any renewal,
+    referral or review stays a separate observation, so a plan is never an
+    observation.
+    """
+
+
+class CertificationStandardError(PortfolioError, ValueError):
+    """A certification standard was built without the canon's required content.
+
+    The canon's certification playbook keeps the standard short -- "a few clear
+    skills, not a long list" -- requires a clear exam pass mark and rechecks the
+    standard every year (synthesized ``ops/playbooks/certification.md`` and
+    ``ops/sops/certification-exam.md``). A standard must carry at least one and at
+    most a short list of unique, non-blank skills, a non-blank pass mark and a
+    yearly recheck; otherwise it cannot be represented as the certified consultant
+    standard.
+    """
+
+
+class CertificationProofError(PortfolioError):
+    """An operator was certified without a real result or a passed exam.
+
+    The canon's proof rule is "certify only after a real result. No result, no
+    badge", and each certified person must pass the exam (synthesized
+    ``ops/playbooks/certification.md``). Certifying an operator who has no real
+    result or who did not pass the exam is refused, so the register cannot claim a
+    certification the canon does not allow.
+    """

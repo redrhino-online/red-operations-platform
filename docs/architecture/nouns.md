@@ -105,6 +105,7 @@ explicit.
 | --- | --- | --- |
 | **Opportunity** | A derivative/expansion proposal grounded on an exact stage asset version. | Stays `proposed`; investment and launch require human authority. |
 | **DeliveryLadder / DeliveryRung / RoadmapAudit / AscensionOffer** | The canon delivery ladder and ascension plan: one-to-one, live cohort, evergreen; one deliverable per program step; a 90-day roadmap audit; kickoff goals and a close gate; each finished step turned into a small offer (canon files 11, 12; Certification; Live Sessions 5, 12). | The client's own delivery (Serve) and the next-offer path; a post-launch plan, never an observation. |
+| **PartnershipPlan / PartnershipOffer / PartnershipMove / ReferralPlan / CommunityRules / ReputationTrack / CertificationStandard / CertifiedOperator** | The canon partnership line and certification: the four-offer path (entry, mid, core, partner), the partnership loop (retain, grow, refer, renew), regular check-ins, a referral plan that asks after a win, simple community rules, a reputation track (reviews, stories, press) and a short certified-consultant standard with a yearly recheck (canon files 11, 12; Certification; Live Sessions 5, 12; High Ticket Funnels 19). | Keeps every client with a next step and a reason to stay; certification requires a real result and a passed exam; a post-launch plan, never an observation, and any commitment stays a human decision. |
 
 ## 10. Governance (gates)
 

@@ -4,6 +4,42 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-06T151009Z: G6 partnership line and certification implemented
+
+- **Selected item:** G6 (partnership line and certification), the highest Canon
+  gap backlog item whose dependency is met. G5 completed last cycle, so G6 is
+  unblocked and outranks G7 because the backlog is ordered and G6 is higher. It is
+  a bounded pure-domain artifact that types the client's retention and expansion
+  path (the four-offer path, the partnership loop, referral, community, reputation
+  and certification).
+- **Outcome:** implemented the Portfolio `PartnershipPlan` (canon files 11, 12;
+  Certification; Live Sessions 5, 12; High Ticket Funnels 19; synthesized
+  `ops/playbooks/partnership.md`, `certification.md`,
+  `ops/sops/certification-exam.md`). It grounds on a same-tenant stage 5
+  `ProductProgram` and types the canon four-offer path (entry, mid, core, partner)
+  as an ordered, duplicate-free set, the partnership loop (retain, grow, refer,
+  renew) in order, a regular check-in with a cadence and owner, a referral plan
+  that must ask after a win and name the plan's partner offer, simple unique
+  community rules, a reputation track covering reviews, stories and press, and a
+  short certification standard (at most six skills, a clear pass mark, a yearly
+  recheck). Its `certify` gate refuses an operator with no real result or a failed
+  exam. It is a post-launch plan, never an observation. New named errors:
+  `InvalidPartnershipPlanError`, `PartnershipTenantBoundaryError`,
+  `PartnershipDependencyError`, `PartnershipFormatError`, `PartnershipGateError`,
+  `PartnershipObservationError`, `CertificationStandardError`,
+  `CertificationProofError`.
+- **Evidence:** `tests/unit/portfolio/test_partnership.py` (53 tests, 3 subtests)
+  passes; the full `tests/unit/portfolio` suite passes (148 tests, 24 subtests);
+  `uv run pyflakes` clean on the changed files; `make check` 2591 passed, 3
+  skipped, 764 subtests.
+- **Not done (deliberately):** wiring the plan into a required post-launch gate
+  kind is a methodology-owner decision (SPEC.md section 12.5), so it stays a
+  planning asset. No send, spend, publish or client commitment is authorized
+  (SPEC.md sections 4 and 9).
+- **Next ready item:** G7 (service-line artifacts), no unmet dependency; the case
+  study claim refuses an unapproved or unsourced testimonial. G8 (wiring
+  follow-ups) is also ready; G9 is blocked on owner input.
+
 ### Cycle 2026-10-06T150726Z: G5 delivery ladder implemented
 
 - **Selected item:** G5 (delivery ladder and ascension), the highest Canon gap
@@ -36,40 +72,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 - **Next ready item:** G6 (partnership line and certification), whose dependency
   G5 is now met; G7 (service-line artifacts) is also ready. G6 outranks G7 because
   the backlog is ordered and G6 is higher.
-
-### Cycle 2026-10-06T150309Z: G3 webinar kit implemented
-
-- **Selected item:** G3 (webinar kit), the highest Canon gap backlog item whose
-  dependency is now met. G4 (its dependency) completed last cycle, so G3 is
-  unblocked and outranks G5/G7 because the backlog is ordered and G3 is the
-  highest ready item; it is a bounded pure-domain artifact that types the scaled
-  enrollment path and closes a canon gap the stage 6/8/10 funnel needs before
-  traffic.
-- **Outcome:** implemented the Execution `WebinarKit` (canon file 32; Winning
-  Webinar 01-13; synthesized `ops/playbooks/webinar.md`,
-  `ops/checklists/webinar-run-of-show.md`, `ops/sops/webinar-build.md`). It grounds
-  on a same-tenant stage 4 `SignatureSolution`, types the scaled path
-  (`EnrollmentPath.SCALED`) and requires the simple path proven first. It requires
-  the six-phase run of show (frame, teach, shift, sell, show, close) in order on an
-  about-60-minute clock, three teach blocks matching the three signature-solution
-  phases in order, one offer, the five-page set (sign up, train, webinar, replay,
-  order), the 5P email sequence (problem, promise, proof, ping, promotion), a 3 to
-  5 day closing sequence, the replay to everyone and at least one retargeting
-  group. It refuses automation below the ten-and-ten bar (ten live runs at 10% or
-  better) and never presents an automated webinar as live. It is a plan, never an
-  observation. New named errors: `InvalidWebinarError`, `WebinarDependencyError`,
-  `WebinarTenantBoundaryError`, `WebinarFormatError`, `WebinarAutomationError`,
-  `WebinarObservationError`.
-- **Evidence:** `tests/unit/execution/test_webinar.py` (34 tests, 2 subtests)
-  passes; the full `tests/unit/execution` suite passes (366 tests, 123 subtests);
-  `uv run pyflakes` clean on the changed files.
-- **Not done (deliberately):** wiring the kit into a required stage 6/8/10 gate
-  kind is a methodology-owner decision (SPEC.md section 12.5), so the kit stays an
-  enrollment planning asset. No send, spend, publish or client commitment is
-  authorized (SPEC.md sections 4 and 9).
-- **Next ready item:** G5 (delivery ladder), no unmet dependency; represents the
-  client's own delivery (Serve) and the next-offer path. G7 (service-line
-  artifacts) is also ready; G6 depends on G5.
 
 
 
@@ -270,8 +272,8 @@ noun rows to `docs/architecture/nouns.md`.
 | G2 | Authority-video kit: one flagship video plus nine step videos from the six-block script | production | — | 13-18; High Ticket Funnels 05, 06, 08; `ops/playbooks/authority-video.md` | typed artifact with tests; extends the stage 7 `AuthorityAmplifier`; refuses a step video whose step the solution does not name. **Done 2026-10-06:** Production `AuthorityVideoKit` (`AuthorityVideoKind`, `AuthorityStepVideo`) extends a same-tenant stage 7 `AuthorityAmplifier` that has produced its video, reuses its six-block script, and names the nine steps of a same-tenant stage 4 `SignatureSolution`; requires one flagship video of 8 to 20 minutes with one clear action and exactly nine step videos, one per solution step, each no longer than the flagship; refuses a step video whose step the solution does not name, a repeated step, a cross-tenant amplifier/solution/step video, and a kit with no produced video; never an observation. Verified by `tests/unit/production/test_authority_video_kit.py` (16 tests). Wiring into a required stage 7 kind remains a methodology-owner decision |
 | G3 | Webinar kit (scaled enrollment path): six-phase run of show, slides, email, retargeting; automate a webinar only after ten live runs at 10%+ | commercial/execution | G4 | 32; Winning Webinar 01-13; `ops/playbooks/webinar.md` | typed artifact with tests; records the chosen path and the automation gate; refuses automation below the live-run bar. **Done 2026-10-06:** Execution `WebinarKit` (`WebinarPhaseBlock`, `WebinarTeachBlock`, `WebinarPageSet`, `WebinarEmailSequence`, `WebinarClosingSequence`, `WebinarAutomation`) grounds on a same-tenant stage 4 `SignatureSolution`, types the scaled path and requires the simple path proven first, requires the six-phase run of show in order on an about-60-minute clock, three teach blocks matching the three solution phases, one offer, the five-page set, the 5P email sequence, a 3-5 day closing sequence, the replay to everyone and retargeting, refuses automation below the ten-and-ten bar and never presents an automated webinar as live; verified by `tests/unit/execution/test_webinar.py` (34 tests). Wiring into a required stage 6/8/10 kind remains a methodology-owner decision |
 | G4 | Strategy-session kit: paid roadmap session that qualifies, earns revenue and bridges to the program ($1,000, min $500) | execution | — | 47, 48; Certification Day 4; Live Sessions 8; `ops/playbooks/strategy-session.md` | typed artifact with tests; a third enrollment model; refuses a price below the floor. **Done 2026-10-06:** Execution `StrategySessionKit` (`StrategySessionQuestion`, `StrategySessionApplication`, `StrategySessionRoadmap`, `StrategySessionFeeCredit`) grounds on a same-tenant stage 4 `SignatureSolution` and stage 5 `ProductProgram`, types the paid model, refuses a price below the $500 floor, requires a 60 to 90 minute session, a duplicate-free application gate, a roadmap covering every solution step exactly once, the three questions in order and a fee credit to month one, and is never an observation; verified by `tests/unit/execution/test_strategy_session.py` (23 tests). Wiring into a required stage 8/9 kind remains a methodology-owner decision |
-| G5 | Delivery ladder and ascension: one-to-one beta, live cohort, evergreen; 90-day roadmap audit; one deliverable per step | portfolio/operations | — | 11, 12; Certification; Live Sessions 5, 12; `ops/playbooks/delivery.md` | typed artifact with tests; represents the client's own delivery (Serve) and the next-offer path; never an observation |
-| G6 | Partnership line and certification: four-offer ladder, renewal and win-back, referral and partner plan, community rules, reputation track, certified consultant standards | portfolio | G5 | 11, 12; Certification; Live Sessions 5, 12; High Ticket Funnels 19; `ops/playbooks/partnership.md`, `certification.md` | typed artifacts with tests; every client has a next step; human decision for any commitment |
+| G5 | Delivery ladder and ascension: one-to-one beta, live cohort, evergreen; 90-day roadmap audit; one deliverable per step | portfolio/operations | — | 11, 12; Certification; Live Sessions 5, 12; `ops/playbooks/delivery.md` | typed artifact with tests; represents the client's own delivery (Serve) and the next-offer path; never an observation. **Done 2026-10-06:** Portfolio `DeliveryLadder` (`DeliveryRung`, `DeliveryStep`, `RoadmapAudit`, `DeliveryGoal`, `DeliveryResult`, `AscensionOffer`) grounds on a same-tenant stage 5 `ProductProgram`, types the canon rungs as an ordered subsequence beginning at one-to-one, requires one deliverable per program step in order, a 90-day roadmap audit cadence, kickoff goals and an ascension offer per step, and refuses to close until every goal is met; verified by `tests/unit/portfolio/test_delivery_ladder.py` (39 tests). Wiring into a required post-launch kind remains a methodology-owner decision |
+| G6 | Partnership line and certification: four-offer ladder, renewal and win-back, referral and partner plan, community rules, reputation track, certified consultant standards | portfolio | G5 | 11, 12; Certification; Live Sessions 5, 12; High Ticket Funnels 19; `ops/playbooks/partnership.md`, `certification.md` | typed artifacts with tests; every client has a next step; human decision for any commitment. **Done 2026-10-06:** Portfolio `PartnershipPlan` (`PartnershipOffer`, `PartnershipMove`, `PartnershipCheckIn`, `ReferralPlan`, `CommunityRules`, `ReputationTrack`, `CertificationStandard`, `CertifiedOperator`) grounds on a same-tenant stage 5 `ProductProgram`, requires the four-offer path and the four-move loop in order, a regular check-in, a referral plan that asks after a win and names the partner offer, simple unique community rules, a reputation track covering reviews/stories/press, and a short certification standard with a yearly recheck; `certify` refuses an operator with no real result or a failed exam; verified by `tests/unit/portfolio/test_partnership.py` (53 tests). Wiring into a required post-launch kind remains a methodology-owner decision |
 | G7 | Service-line artifacts: kickoff checklist, module production standard, session guide, client scorecard, case study template (case study as sourced proof, client-approved and version-scoped) | operations | — | internal/service-ops.md; `ops/checklists/kickoff.md`, `module-production.md`, `session-guide.md`, `client-scorecard.md`, `case-study.md` | typed artifact with tests; case study claim refuses an unapproved or unsourced testimonial (SPEC.md sections 1 and 4) |
 | G8 | Wiring follow-ups: pin the `UmbrellaPlan` and the remaining planning assets (retargeting family, banner library) into the production view or a required kind | governance/pipeline | — | 00, 01; 33, 34 | gate-integrity tests; asset remains reversible |
 | G9 | Canon source acquisition: the dedicated emailed follow-up and nurture module | process | — | SPEC.md section 12.6 | unresolved; license-owner request, owned by the RED principal; do not treat nurture artifacts as canon-complete until it lands |
