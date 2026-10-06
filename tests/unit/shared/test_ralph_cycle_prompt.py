@@ -15,7 +15,28 @@ RALPH_CYCLE = REPO_ROOT / "ralph_cycle.sh"
 class RalphCyclePromptTests(unittest.TestCase):
     def test_prompt_uses_stable_first_order_and_harness_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            config_path = Path(tmp) / "ralph-opencode.json"
+            repo = Path(tmp)
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            (repo / "IMPLEMENTATION_PLAN.md").write_text(
+                "# Plan\n\n"
+                "## Current cycle status\n\n"
+                "### Cycle fixture\n"
+                "- **Selected item:** fixture.\n"
+                "- **Outcome:** fixture handoff.\n"
+                "- **Evidence:** fixture tests pass.\n"
+                "- **Next ready item:** fixture next, no dependency.\n\n"
+                "## Prototype definition of done\n\n"
+                "## Canon gap backlog\n\n"
+                "| # | Item | Area | Depends | Evidence / gate |\n"
+                "| --- | --- | --- | --- | --- |\n"
+                "| G2 | Fixture next | production | — | test |\n",
+                encoding="utf-8",
+            )
+            lock = repo / ".ralph/cycle.lock"
+            lock.mkdir(parents=True)
+            (lock / "pid").write_text(f"{os.getpid()}\n", encoding="utf-8")
+            (lock / "started").write_text("test\n", encoding="utf-8")
+            config_path = repo / ".ralph/opencode.json"
             env = os.environ.copy()
             env.update(
                 {
@@ -26,7 +47,7 @@ class RalphCyclePromptTests(unittest.TestCase):
                 }
             )
             result = subprocess.run(
-                [str(RALPH_CYCLE), str(REPO_ROOT)],
+                [str(RALPH_CYCLE), str(repo)],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -35,9 +56,9 @@ class RalphCyclePromptTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn(f"Repo: {REPO_ROOT}.", result.stdout)
+            self.assertIn(f"Repo: {repo}.", result.stdout)
             self.assertIn(f"Read {REPO_ROOT}/SPEC.md once, fully.", result.stdout)
-            self.assertIn(f"{REPO_ROOT}/.ralph/STATE.md", result.stdout)
+            self.assertIn(f"{repo}/.ralph/STATE.md", result.stdout)
             self.assertIn("`git status`, `git log -5`", result.stdout)
             self.assertNotRegex(result.stdout, r"@[A-Z_]+@")
             self.assertNotIn("command not found", result.stderr)

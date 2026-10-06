@@ -174,8 +174,10 @@ mkdir -p "$(dirname "$GIT_EXCLUDE_FILE")"
 for excluded in '.ralph/' '.serena/'; do
   grep -qxF "$excluded" "$GIT_EXCLUDE_FILE" 2>/dev/null || printf '%s\n' "$excluded" >> "$GIT_EXCLUDE_FILE"
 done
-acquire_lock
-trap release_lock EXIT
+if [[ "${RALPH_PROMPT_TEST:-0}" != "1" ]]; then
+  acquire_lock
+  trap release_lock EXIT
+fi
 
 readonly RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 readonly LOG_FILE="$RUN_DIR/$RUN_ID.log"
