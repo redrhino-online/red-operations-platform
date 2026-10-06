@@ -5807,3 +5807,50 @@ Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Ne
   home-LAN-only; capability agents 10/11 charters proposed in PRs #1 and #2,
   awaiting operator merge; canon files 19/20 remain a known blocker the owner
   will close.
+
+### Canon expansion and C4 2026-10-06: re-read, gaps registered, loop reopened
+
+- The reference canon (`canon/`) was re-read after the owner reported it may have
+  been updated. It has grown to **151 transcripts**: the 48 numbered sessions
+  (00-49) plus **103 transcripts in nine new series** (High Ticket Funnels, 14D
+  HTCLF, Winning Webinar, Youtube Content, Live Sessions, High Ticket Course
+  Launch, Perfect Offer, Certification, High Ticket Launch Accelerator), and it
+  now ships RED-authored synthesis: `docs/` (the RED Method, the operations
+  manual: playbooks, checklists, SOPs) and `internal/` (`corpus-map.md`,
+  `canon-to-docs-map.md`, `stations.md`, `cadence.md`, `service-ops.md`,
+  `ops-spec.md`). SPEC.md section 12 was already reconciled to this in commit
+  `15ec87d`; this cycle reconciles the implementation plan.
+- **Files 19 and 20 are no longer missing**: they arrived in the High Ticket
+  Launch Accelerator series. The dedicated sales/enrollment training is supplied
+  (35-49) and deepened. The **one genuine source gap left is the emailed
+  follow-up and nurture source module**; only a synthesized playbook exists
+  (`ops/playbooks/email-nurture.md`, from the 5P and 27-part nurture material).
+  Requested from the license owner and recorded as an open decision.
+- **New gaps registered** (see the Canon gap register and the new Canon gap
+  backlog below): the Lead-magnet kit, the Authority-video kit, the Webinar kit
+  (the scaled enrollment path), the Strategy-session kit, the Delivery ladder,
+  the Partnership line and certification, and the Service-line artifacts
+  (kickoff, module production, session guide, client scorecard, case study). All
+  are to be implemented as bounded, tenant-scoped, versioned artifacts under the
+  existing required-kind pattern.
+- **Deploy follow-ups resolved or made actionable.** Both cockpit follow-ups the
+  2026-10-05 deploy note left open were advanced:
+  - `gitops/sealed/redop-postgres.yaml` was re-sealed with a URL-safe password
+    (`8b55c47`) and is live: the cluster Secret `redop-postgres` now holds a hex
+    password with no `/`. A sealing runbook was added (`214375d`).
+  - The Gitea Actions DinD init container is live with a 4Gi memory limit
+    (`98fc205`, `helm/values/gitea-actions.yaml`); `kubectl` confirms
+    `initContainers[name=dind].resources.limits.memory=4Gi`. The Argo CD
+    `gitea-actions` Application still reports `OutOfSync` from API-defaulted
+    StatefulSet fields, but its actual DinD limit matches Git. Added
+    `NODE_OPTIONS=--max-old-space-size=3072` to the cockpit build stage for
+    additional headroom. `docker build -f Dockerfile.cockpit` passed locally;
+    the next hosted CI run is the remaining confirmation. The `gitea-actions`
+    Application reports `OutOfSync` despite its live DinD limit matching Git.
+- **R1 and R2 deferred** (owner): the backup/restore drill and the GitOps
+  rollback drill move behind the canon-gap backlog and C4. They are not
+  prototype conditions and remain in the production-readiness phase.
+- **Loop reopened:** `.ralph/DONE` is removed so the build loop resumes against
+  the Canon gap backlog, the remaining implementation items, and C4. The
+  prototype definition of done still passes (`make done`); this is post-prototype
+  work and is explicitly not a prototype condition.

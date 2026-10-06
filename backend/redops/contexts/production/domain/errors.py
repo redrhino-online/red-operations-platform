@@ -85,6 +85,60 @@ class AuthorityAmplifierVersionTenantBoundaryError(ProductionError):
     """
 
 
+class InvalidAuthorityVideoKitError(ProductionError, ValueError):
+    """An AuthorityVideoKit was constructed or changed against its invariant.
+
+    SPEC.md section 12.5 records the authority-video kit as a canon gap and the
+    implementation plan's canon gap backlog item G2 names a typed artifact. A kit
+    that leaves its identity, flagship title or flagship action blank, or that
+    carries a non-typed step video or a non-integer duration, cannot be
+    represented as the prescribed 10-pack.
+    """
+
+
+class AuthorityVideoKitDependencyError(ProductionError):
+    """An AuthorityVideoKit is not grounded on a typed, produced dependency.
+
+    SPEC.md section 4, stage 7: the script and its supported claims pass review
+    before any visual or video production, and the canon gate checks the script
+    before the slides are made. The 10-pack is cut from the produced stage 7
+    ``AuthorityAmplifier`` and names the nine steps of the stage 4
+    ``SignatureSolution``, so a kit without a typed amplifier that has produced
+    its video, or without a typed solution, or with a step video whose step the
+    solution does not name, cannot be built.
+    """
+
+
+class AuthorityVideoKitTenantBoundaryError(ProductionError):
+    """An AuthorityVideoKit mixed in an amplifier, solution or video from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client, so the
+    stage 7 amplifier, the stage 4 solution and every step video a kit is built
+    from must belong to the kit's tenant. A cross-tenant dependency cannot be
+    represented as this client's 10-pack.
+    """
+
+
+class AuthorityVideoKitFormatError(ProductionError):
+    """An AuthorityVideoKit breaks the canon's 10-pack shape.
+
+    The canon (files 13-18; High Ticket Funnels 05, 06, 08) fixes one flagship
+    video of 8 to 20 minutes plus exactly nine step videos, one per signature
+    solution step, each no longer than the flagship. A kit that breaks that shape
+    cannot be represented as the prescribed pack.
+    """
+
+
+class AuthorityVideoKitObservationError(ProductionError):
+    """An AuthorityVideoKit was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The kit
+    describes the videos that will be produced, while any measured watch time,
+    opt-in rate or booked calls are separate observations, so a kit is never an
+    observation.
+    """
+
+
 class BuildTenantBoundaryError(ProductionError):
     """A client's BuildObject was read or written without a tenant.
 

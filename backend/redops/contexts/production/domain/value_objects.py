@@ -8,10 +8,16 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from redops.contexts.governance.domain.value_objects import StageAssetVersion
+from redops.contexts.method.domain.entities import SignatureSolution
 from redops.contexts.production.domain.errors import (
     AuthorityAmplifierTenantBoundaryError,
+    AuthorityVideoKitDependencyError,
+    AuthorityVideoKitFormatError,
+    AuthorityVideoKitObservationError,
+    AuthorityVideoKitTenantBoundaryError,
     InvalidAuthorityAmplifierError,
     InvalidAuthorityAmplifierPackageError,
+    InvalidAuthorityVideoKitError,
 )
 
 if TYPE_CHECKING:
@@ -311,4 +317,229 @@ class AuthorityAmplifierPackage:
                 version=self.amplifier_version,
             )
             for kind in CANONICAL_AMPLIFIER_KINDS
+        )
+
+
+AUTHORITY_VIDEO_CANON_REFERENCE = "13-18; High Ticket Funnels 05, 06, 08"
+
+FLAGSHIP_VIDEO_MIN_MINUTES = 8
+FLAGSHIP_VIDEO_MAX_MINUTES = 20
+AUTHORITY_STEP_VIDEO_COUNT = 9
+
+
+class AuthorityVideoKind(Enum):
+    """The two video kinds of the canon's 10-pack (canon files 13-18).
+
+    The canon builds one flagship authority video and nine short step videos, one
+    per signature-solution step. RED types both so a kit cannot represent a step
+    video as the flagship or vice versa.
+    """
+
+    FLAGSHIP = "flagship"
+    STEP = "step"
+
+
+@dataclass(frozen=True)
+class AuthorityStepVideo:
+    """One short step video cut from the flagship script (canon files 13-18).
+
+    The canon cuts the same six-block script into nine short step videos, one per
+    signature-solution step. A step video is frozen and reject-only, so a blank
+    identity, a blank step name, a blank action or a non-positive duration cannot
+    be represented as part of the pack.
+    """
+
+    video_id: str
+    tenant_id: str
+    step_name: str
+    title: str
+    duration_minutes: int
+    action: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("authority step video id", self.video_id),
+            ("authority step video tenant id", self.tenant_id),
+            ("authority step video step name", self.step_name),
+            ("authority step video title", self.title),
+            ("authority step video action", self.action),
+        ):
+            if not value or not value.strip():
+                raise InvalidAuthorityVideoKitError(f"{label} is required")
+        if not isinstance(self.duration_minutes, int) or isinstance(
+            self.duration_minutes, bool
+        ):
+            raise InvalidAuthorityVideoKitError(
+                "an authority step video duration must be a whole number of minutes"
+            )
+        if self.duration_minutes < 1:
+            raise InvalidAuthorityVideoKitError(
+                f"authority step video {self.video_id!r} must run at least one minute"
+            )
+
+
+@dataclass(frozen=True)
+class AuthorityVideoKit:
+    """The canon's authority-video 10-pack, built from the stage 7 amplifier.
+
+    SPEC.md section 12.5 records the authority-video kit as a canon gap and the
+    implementation plan's canon gap backlog item G2 names this pure-domain
+    ``AuthorityVideoKit`` as its bounded slice, an asset inside stage 7, not a new
+    stage or required gate kind. The canon (files 13-18; High Ticket Funnels 05,
+    06, 08) builds one flagship authority video of 8 to 20 minutes from the
+    six-block script (Promise, Proof, Problems, Steps, Context, Action) and cuts
+    the same script into nine short step videos, one per signature-solution step.
+    The kit extends the stage 7 ``AuthorityAmplifier``: it is grounded on a
+    same-tenant amplifier that has produced its video (the canon gate checks the
+    script before the slides are made), reuses that amplifier's six-block script,
+    and names the nine steps of a same-tenant stage 4 ``SignatureSolution``. It is
+    frozen and reject-only, so a blank identity, an untyped or foreign amplifier
+    or solution, an amplifier with no produced video, a flagship outside 8 to 20
+    minutes, a pack that is not exactly nine step videos, a step video whose step
+    the solution does not name, a repeated step, a cross-tenant step video or a
+    step video longer than the flagship cannot be represented as the prescribed
+    pack.
+
+    The kit is a plan, not a gate kind and not an authorization to publish or
+    spend (SPEC.md sections 4 and 9). It is never an observed result; the watch
+    time, opt-in rate or booked calls it later produces are separate observations
+    (SPEC.md section 3).
+    """
+
+    kit_id: str
+    tenant_id: str
+    owner: str
+    amplifier: "AuthorityAmplifier"
+    solution: SignatureSolution
+    flagship_title: str
+    flagship_duration_minutes: int
+    flagship_action: str
+    step_videos: tuple[AuthorityStepVideo, ...]
+
+    def __post_init__(self) -> None:
+        from redops.contexts.production.domain.entities import AuthorityAmplifier
+
+        for label, value in (
+            ("authority video kit id", self.kit_id),
+            ("authority video kit tenant id", self.tenant_id),
+            ("authority video kit owner", self.owner),
+            ("authority video flagship title", self.flagship_title),
+            ("authority video flagship action", self.flagship_action),
+        ):
+            if not value or not value.strip():
+                raise InvalidAuthorityVideoKitError(f"{label} is required")
+        if not isinstance(self.amplifier, AuthorityAmplifier):
+            raise AuthorityVideoKitDependencyError(
+                "an authority video kit must extend a typed stage 7 Authority "
+                "Amplifier, never be built from scratch"
+            )
+        if self.amplifier.tenant_id != self.tenant_id:
+            raise AuthorityVideoKitTenantBoundaryError(
+                f"authority video kit {self.kit_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Authority Amplifier "
+                f"{self.amplifier.amplifier_id!r} belongs to tenant "
+                f"{self.amplifier.tenant_id!r}"
+            )
+        if not isinstance(self.solution, SignatureSolution):
+            raise AuthorityVideoKitDependencyError(
+                "an authority video kit must name the typed stage 4 Signature "
+                "Solution its nine step videos follow"
+            )
+        if self.solution.tenant_id != self.tenant_id:
+            raise AuthorityVideoKitTenantBoundaryError(
+                f"authority video kit {self.kit_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Signature Solution "
+                f"{self.solution.solution_id!r} belongs to tenant "
+                f"{self.solution.tenant_id!r}"
+            )
+        if self.amplifier.visuals is None:
+            raise AuthorityVideoKitDependencyError(
+                f"authority video kit {self.kit_id!r} extends amplifier "
+                f"{self.amplifier.amplifier_id!r}, which has not produced its "
+                "video; the canon checks the script before the slides and cuts "
+                "the nine step videos from the produced video (canon file 13)"
+            )
+        if not isinstance(self.flagship_duration_minutes, int) or isinstance(
+            self.flagship_duration_minutes, bool
+        ):
+            raise InvalidAuthorityVideoKitError(
+                "an authority video flagship duration must be a whole number of "
+                "minutes"
+            )
+        if not (
+            FLAGSHIP_VIDEO_MIN_MINUTES
+            <= self.flagship_duration_minutes
+            <= FLAGSHIP_VIDEO_MAX_MINUTES
+        ):
+            raise AuthorityVideoKitFormatError(
+                f"authority video kit {self.kit_id!r} runs "
+                f"{self.flagship_duration_minutes} minutes; the canon keeps the "
+                "flagship video to 8 to 20 minutes (canon file 13)"
+            )
+        videos = tuple(self.step_videos)
+        for video in videos:
+            if not isinstance(video, AuthorityStepVideo):
+                raise InvalidAuthorityVideoKitError(
+                    "an authority video kit step video must be a typed step video"
+                )
+            if video.tenant_id != self.tenant_id:
+                raise AuthorityVideoKitTenantBoundaryError(
+                    f"authority video kit {self.kit_id!r} belongs to tenant "
+                    f"{self.tenant_id!r}, but step video {video.video_id!r} "
+                    f"belongs to tenant {video.tenant_id!r}"
+                )
+        if len(videos) != AUTHORITY_STEP_VIDEO_COUNT:
+            raise AuthorityVideoKitFormatError(
+                f"authority video kit {self.kit_id!r} carries {len(videos)} step "
+                f"videos; the canon cuts the script into exactly "
+                f"{AUTHORITY_STEP_VIDEO_COUNT} step videos, one per signature "
+                "solution step (canon file 13)"
+            )
+        step_names = {step.name for step in self.solution.steps}
+        for video in videos:
+            if video.step_name not in step_names:
+                raise AuthorityVideoKitDependencyError(
+                    f"authority video kit {self.kit_id!r} carries step video "
+                    f"{video.video_id!r} for step {video.step_name!r}, which the "
+                    f"Signature Solution {self.solution.solution_id!r} does not "
+                    "name; a step video is one step of the signature solution, "
+                    "never a new one (canon file 13)"
+                )
+        named = [video.step_name for video in videos]
+        if len(set(named)) != len(named):
+            raise AuthorityVideoKitFormatError(
+                f"authority video kit {self.kit_id!r} repeats a signature "
+                "solution step; the canon gives each step exactly one video "
+                "(canon file 13)"
+            )
+        for video in videos:
+            if video.duration_minutes > self.flagship_duration_minutes:
+                raise AuthorityVideoKitFormatError(
+                    f"authority video kit {self.kit_id!r} step video "
+                    f"{video.video_id!r} runs {video.duration_minutes} minutes, "
+                    "longer than its flagship video; a step video is a short cut "
+                    "of the flagship (canon file 13)"
+                )
+
+    @property
+    def script(self) -> tuple[ScriptSection, ...]:
+        """The six-block script the pack is cut from, reused from the amplifier."""
+        return self.amplifier.script
+
+    @property
+    def is_plan(self) -> bool:
+        """An authority video kit is a plan, not activity or an observed result."""
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent an authority video kit as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The kit
+        describes the videos that will be produced, while any measured watch time,
+        opt-in rate or booked calls are separate observations, so a kit is never
+        an observation.
+        """
+        raise AuthorityVideoKitObservationError(
+            f"authority video kit {claim_id!r} is a pack to produce, not an "
+            "observed result, and cannot be recorded as an observation"
         )

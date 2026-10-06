@@ -76,6 +76,7 @@ explicit.
 | **BuildObject** | A unit of production work: type, purpose, audience, state, owner, next action, blockers. | Active builds always have an owner and next action (SPEC §3). |
 | **Build state machine** | Identified → Source Required → Ready → In Development → … → Deployed → Measuring → Optimizing → … | Illegal transitions are rejected, not coerced. |
 | **AuthorityAmplifier / AuthorityAmplifierPackage** | The stage 7 video asset and its package. | Two approvals: script/claims before visual production, then final creative. |
+| **AuthorityVideoKit / AuthorityStepVideo** | The canon authority-video 10-pack: one flagship video plus nine step videos cut from the six-block script (canon files 13-18). | A stage 7 asset that extends the produced `AuthorityAmplifier`; refuses a step video whose step the solution does not name. |
 | **Promise, Proof, Problems, Steps, Context, Action** | The Authority Amplifier script order. | Canon-shaped sequence; keeps the message grounded and the next action clear. |
 
 ## 7. Execution

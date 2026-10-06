@@ -4,6 +4,42 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-06T144439Z: G2 authority-video kit implemented
+
+- **Selected item:** G2 (authority-video kit), the next Canon gap backlog item
+  with no unmet dependency. It outranks G4/G5/G7 because the backlog is ordered
+  and G2 is the highest ready item; it is a bounded pure-domain artifact that
+  extends the stage 7 `AuthorityAmplifier` and closes a canon gap the stage 7
+  production pack needs before traffic.
+- **Outcome:** implemented the Production `AuthorityVideoKit` (canon files 13-18;
+  High Ticket Funnels 05, 06, 08; synthesized `ops/playbooks/authority-video.md`,
+  `ops/sops/authority-video-build.md`). It extends a same-tenant stage 7
+  `AuthorityAmplifier` that has produced its video (the canon gate checks the
+  script before the slides), reuses that amplifier's six-block script, and names
+  the nine steps of a same-tenant stage 4 `SignatureSolution`. It types the
+  flagship and step video kinds, requires one flagship video of 8 to 20 minutes
+  with one clear action, exactly nine step videos, one per signature-solution
+  step, each no longer than the flagship, and refuses a step video whose step the
+  solution does not name, a repeated step, a cross-tenant amplifier, solution or
+  step video, and a kit with no produced video. It is a plan, never an
+  observation. New named errors: `InvalidAuthorityVideoKitError`,
+  `AuthorityVideoKitDependencyError`, `AuthorityVideoKitTenantBoundaryError`,
+  `AuthorityVideoKitFormatError`, `AuthorityVideoKitObservationError`.
+- **Evidence:** `tests/unit/production/test_authority_video_kit.py` (16 tests, 4
+  subtests) passes; the full `tests/unit/production` suite passes (96 tests, 13
+  subtests); `uv run pyflakes` clean on the changed files. `make check` -> 2441
+  passed, 3 skipped, 754 subtests, with the single pre-existing
+  `tests/unit/shared/test_ralph_cycle_prompt.py` failure caused by this cycle
+  holding `.ralph/cycle.lock` (the test invokes `ralph_cycle.sh`, which refuses
+  while a cycle is active); unrelated to this change.
+- **Not done (deliberately):** wiring the kit into a required stage 7 gate kind is
+  a methodology-owner decision (SPEC.md section 12.5), so the kit stays a
+  production planning asset. No publish or spend is authorized (SPEC.md sections
+  4 and 9).
+- **Next ready item:** G4 (strategy-session kit), no unmet dependency; a third
+  enrollment model that refuses a price below the floor. G5 (delivery ladder) and
+  G7 (service-line artifacts) are also ready; G3 depends on G4.
+
 ### Cycle 2026-10-06T132216Z: G1 lead-magnet kit implemented
 
 - **Selected item:** G1 (lead-magnet kit), the first Canon gap backlog item with
@@ -32,55 +68,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   the stage 7 `AuthorityAmplifier` and refuses a step video whose step the
   solution does not name. G4 (strategy-session kit) and G7 (service-line
   artifacts) are also ready.
-
-### Canon expansion and C4 2026-10-06: re-read, gaps registered, loop reopened
-
-- The reference canon (`canon/`) was re-read after the owner reported it may have
-  been updated. It has grown to **151 transcripts**: the 48 numbered sessions
-  (00-49) plus **103 transcripts in nine new series** (High Ticket Funnels, 14D
-  HTCLF, Winning Webinar, Youtube Content, Live Sessions, High Ticket Course
-  Launch, Perfect Offer, Certification, High Ticket Launch Accelerator), and it
-  now ships RED-authored synthesis: `docs/` (the RED Method, the operations
-  manual: playbooks, checklists, SOPs) and `internal/` (`corpus-map.md`,
-  `canon-to-docs-map.md`, `stations.md`, `cadence.md`, `service-ops.md`,
-  `ops-spec.md`). SPEC.md section 12 was already reconciled to this in commit
-  `15ec87d`; this cycle reconciles the implementation plan.
-- **Files 19 and 20 are no longer missing**: they arrived in the High Ticket
-  Launch Accelerator series. The dedicated sales/enrollment training is supplied
-  (35-49) and deepened. The **one genuine source gap left is the emailed
-  follow-up and nurture source module**; only a synthesized playbook exists
-  (`ops/playbooks/email-nurture.md`, from the 5P and 27-part nurture material).
-  Requested from the license owner and recorded as an open decision.
-- **New gaps registered** (see the Canon gap register and the new Canon gap
-  backlog below): the Lead-magnet kit, the Authority-video kit, the Webinar kit
-  (the scaled enrollment path), the Strategy-session kit, the Delivery ladder,
-  the Partnership line and certification, and the Service-line artifacts
-  (kickoff, module production, session guide, client scorecard, case study). All
-  are to be implemented as bounded, tenant-scoped, versioned artifacts under the
-  existing required-kind pattern.
-- **Deploy follow-ups resolved or made actionable.** Both cockpit follow-ups the
-  2026-10-05 deploy note left open were advanced:
-  - `gitops/sealed/redop-postgres.yaml` was re-sealed with a URL-safe password
-    (`8b55c47`) and is live: the cluster Secret `redop-postgres` now holds a hex
-    password with no `/`. A sealing runbook was added (`214375d`).
-  - The Gitea Actions DinD init container is live with a 4Gi memory limit
-    (`98fc205`, `helm/values/gitea-actions.yaml`); `kubectl` confirms
-    `initContainers[name=dind].resources.limits.memory=4Gi`. The Argo CD
-    `gitea-actions` Application still reports `OutOfSync` from API-defaulted
-    StatefulSet fields, but its actual DinD limit matches Git. Added
-    `NODE_OPTIONS=--max-old-space-size=3072` to the cockpit build stage for
-    additional headroom. `docker build -f Dockerfile.cockpit` passed locally;
-    the next hosted CI run is the remaining confirmation. The `gitea-actions`
-    Application reports `OutOfSync` despite its live DinD limit matching Git.
-- **R1 and R2 deferred** (owner): the backup/restore drill and the GitOps
-  rollback drill move behind the canon-gap backlog and C4. They are not
-  prototype conditions and remain in the production-readiness phase.
-- **Loop reopened:** `.ralph/DONE` is removed so the build loop resumes against
-  the Canon gap backlog, the remaining implementation items, and C4. The
-  prototype definition of done still passes (`make done`); this is post-prototype
-  work and is explicitly not a prototype condition.
-
-
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ## Prototype definition of done
@@ -276,7 +263,7 @@ noun rows to `docs/architecture/nouns.md`.
 | # | Item | Area | Depends | Canon source | Evidence / gate |
 | --- | --- | --- | --- | --- | --- |
 | G1 | Lead-magnet kit: one hot signature-solution step becomes a one-page cheat sheet and a short PDF (wheel of awesome), built from the offer, never from scratch, turned around in ten minutes | commercial | — | High Ticket Funnels 03, 04; Live Sessions 15; 14D Step 7; `ops/playbooks/lead-magnet.md` | typed artifact with tests; reports the solution step it is built from; refuses a lead magnet not grounded on a same-tenant hot step. **Done 2026-10-06:** Commercial `LeadMagnetKit` (`LeadMagnetFormat`, `LeadMagnetPdfSection`, `LeadMagnetDelivery`) grounds on a same-tenant stage 4 `SignatureSolution` and stage 2 `PrimaryCurrency`, names and reports the one hot step, refuses a hot step the solution does not name, types the canon formats, requires the name to imply its format, the seven-element PDF, the two-step opt in, email delivery and the ten-minute rule, and is never an observation; verified by `tests/unit/commercial/test_lead_magnet_kit.py` (14 tests). Wiring into a required stage 8 kind remains a methodology-owner decision |
-| G2 | Authority-video kit: one flagship video plus nine step videos from the six-block script | production | — | 13-18; High Ticket Funnels 05, 06, 08; `ops/playbooks/authority-video.md` | typed artifact with tests; extends the stage 7 `AuthorityAmplifier`; refuses a step video whose step the solution does not name |
+| G2 | Authority-video kit: one flagship video plus nine step videos from the six-block script | production | — | 13-18; High Ticket Funnels 05, 06, 08; `ops/playbooks/authority-video.md` | typed artifact with tests; extends the stage 7 `AuthorityAmplifier`; refuses a step video whose step the solution does not name. **Done 2026-10-06:** Production `AuthorityVideoKit` (`AuthorityVideoKind`, `AuthorityStepVideo`) extends a same-tenant stage 7 `AuthorityAmplifier` that has produced its video, reuses its six-block script, and names the nine steps of a same-tenant stage 4 `SignatureSolution`; requires one flagship video of 8 to 20 minutes with one clear action and exactly nine step videos, one per solution step, each no longer than the flagship; refuses a step video whose step the solution does not name, a repeated step, a cross-tenant amplifier/solution/step video, and a kit with no produced video; never an observation. Verified by `tests/unit/production/test_authority_video_kit.py` (16 tests). Wiring into a required stage 7 kind remains a methodology-owner decision |
 | G3 | Webinar kit (scaled enrollment path): six-phase run of show, slides, email, retargeting; automate a webinar only after ten live runs at 10%+ | commercial/execution | G4 | 32; Winning Webinar 01-13; `ops/playbooks/webinar.md` | typed artifact with tests; records the chosen path and the automation gate; refuses automation below the live-run bar |
 | G4 | Strategy-session kit: paid roadmap session that qualifies, earns revenue and bridges to the program ($1,000, min $500) | execution | — | 47, 48; Certification Day 4; Live Sessions 8; `ops/playbooks/strategy-session.md` | typed artifact with tests; a third enrollment model; refuses a price below the floor |
 | G5 | Delivery ladder and ascension: one-to-one beta, live cohort, evergreen; 90-day roadmap audit; one deliverable per step | portfolio/operations | — | 11, 12; Certification; Live Sessions 5, 12; `ops/playbooks/delivery.md` | typed artifact with tests; represents the client's own delivery (Serve) and the next-offer path; never an observation |
