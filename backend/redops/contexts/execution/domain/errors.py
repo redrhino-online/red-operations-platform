@@ -516,6 +516,80 @@ class StrategySessionObservationError(StrategySessionError):
     """
 
 
+class WebinarError(ExecutionError):
+    """Base class for the canon webinar kit rule violations."""
+
+
+class InvalidWebinarError(WebinarError, ValueError):
+    """A webinar value object or the kit violates an invariant.
+
+    SPEC.md section 12.5 records the canon webinar kit -- a six-phase run of show,
+    slides, email and retargeting, the scaled path of enrollment -- as a canon gap,
+    and the implementation plan's canon gap backlog item G3 names a typed artifact
+    that "records the chosen path and the automation gate; refuses automation below
+    the live-run bar". The canon (file 32 and the Winning Webinar series) fixes the
+    six phases, three teach blocks that match the three signature-solution phases,
+    one offer, the five-page set, the 5P email sequence, the 3 to 5 day closing
+    sequence, the replay to everyone and retargeting by where each group stopped. A
+    blank identity or owner, a missing or untyped field, a duplicate phase, page,
+    email, teach block, closing step or retargeting group, or a non-positive phase
+    duration cannot be represented as a webinar kit.
+    """
+
+
+class WebinarDependencyError(WebinarError):
+    """A webinar kit is not grounded on a typed, same-tenant dependency.
+
+    SPEC.md section 12.5 places the webinar kit as the scaled enrollment path over
+    the same-tenant stage 4 ``SignatureSolution``, and the canon (file 32) makes
+    the three teach blocks match the three phases of the signature solution. A kit
+    must therefore be grounded on a typed same-tenant ``SignatureSolution``, and a
+    teach block that names a phase the solution does not have cannot be represented
+    as one of the three teach blocks.
+    """
+
+
+class WebinarTenantBoundaryError(WebinarError):
+    """A webinar kit mixed in a solution from another client.
+
+    SPEC.md section 3: every child resource belongs to exactly one client. The kit
+    belongs to the tenant of the stage 4 solution it teaches, so it cannot cross a
+    tenant boundary.
+    """
+
+
+class WebinarFormatError(WebinarError):
+    """A webinar kit breaks the canon's winning-webinar shape.
+
+    The canon (file 32 and the Winning Webinar series) fixes a six-phase run of
+    show of about 60 minutes, three teach blocks, one offer, the five-page set, the
+    5P email sequence, a 3 to 5 day closing sequence, the replay to everyone and
+    retargeting by where each group stopped, and it builds the scaled path only
+    after the simple path works. A kit that breaks that shape cannot be represented
+    as the prescribed winning webinar.
+    """
+
+
+class WebinarAutomationError(WebinarError):
+    """A webinar kit automated below the canon's ten-and-ten bar, or faked as live.
+
+    The canon (Winning Webinar 13) fixes the ten-and-ten rule: automate a webinar
+    only after ten live runs at 10% or better, and never present an automated
+    webinar as live. A kit that automates below the bar, or that claims an
+    automated webinar is live, cannot be represented as the canon's scaled path.
+    """
+
+
+class WebinarObservationError(WebinarError):
+    """A webinar kit was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The kit
+    describes the webinar that will run and the terms it will offer, while any
+    registration, show, conversion or revenue stays a separate observed or
+    authorized record, so a kit is never an observation.
+    """
+
+
 class JourneyReleaseError(ExecutionError):
     """Base class for the SPEC.md section 3 journey release rule violations."""
 

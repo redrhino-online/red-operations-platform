@@ -89,6 +89,7 @@ explicit.
 | **JourneyRelease** | A launchable journey release with routing, config digest and rollback ref. | Launch needs signed readiness and an authorised release, not just activation. |
 | **ConnectorEffect / ExternalOperation / idempotency key** | A recorded outbound effect keyed to prevent duplicates. | Duplicate delivery must create exactly one external operation. |
 | **StrategySessionKit / StrategySessionRoadmap** | The canon paid strategy-session kit: a 60-90 minute session that builds a 90-day roadmap over the signature solution, gated by an application, with the fee credited to month one (canon file 47). | A stage 8/9 asset and the third enrollment model; refuses a price below the $500 floor. |
+| **WebinarKit / WebinarAutomation** | The canon winning-webinar kit: a six-phase run of show, three teach blocks, one offer, the five-page set, the 5P email sequence, the 3-5 day closing sequence, the replay to everyone and retargeting (canon file 32; Winning Webinar 01-13). | The scaled enrollment path (stage 6/8/10); refuses automation below the ten-and-ten bar and never presents an automated webinar as live. |
 
 ## 8. Measurement
 
