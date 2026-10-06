@@ -837,3 +837,54 @@ class ContentPlanObservationError(CommercialError):
     measured reach is a separate observation, so a content plan is never an
     observation.
     """
+
+
+class InvalidLeadMagnetKitError(CommercialError, ValueError):
+    """A lead-magnet kit left a required canon field unstated.
+
+    The canon's lead-magnet clinic (High Ticket Funnels 03) requires a named
+    owner, the one hot step, a name, a promise, a timeline, the seven-element PDF
+    package, the picture of the thing itself, a clear next action and the paired
+    authority video. A blank identity or a missing PDF section cannot be
+    represented as the kit the canon prescribes.
+    """
+
+
+class LeadMagnetKitDependencyError(CommercialError):
+    """A lead-magnet kit depended on a method or step it cannot map from.
+
+    The canon's first rule is that a lead magnet is never built from scratch: it
+    is one hot step of the product roadmap (High Ticket Funnels 03, "the wheel of
+    awesome"). An untyped Signature Solution or Primary Currency, or a hot step
+    the solution does not name, cannot be represented as a grounded kit.
+    """
+
+
+class LeadMagnetKitTenantBoundaryError(CommercialError):
+    """A lead-magnet kit mixed assets that do not belong to one client.
+
+    SPEC.md sections 3 and 9 make ``tenant_id`` on every tenant resource and
+    query a hard invariant. A kit whose method or currency spans more than one
+    client cannot be represented as one kit.
+    """
+
+
+class LeadMagnetKitFormatError(CommercialError):
+    """A lead-magnet kit broke the canon's format, delivery or time rules.
+
+    The canon refuses an ebook, webinar, mini course, strategy session, quiz,
+    guide or white paper; requires the name to imply the format; requires the
+    two-step opt in; requires delivery by email rather than the thank-you page;
+    and requires the magnet to fit in about ten minutes (High Ticket Funnels 03).
+    A kit that breaks any of these cannot be represented as the prescribed kit.
+    """
+
+
+class LeadMagnetKitObservationError(CommercialError):
+    """A lead-magnet kit was asked to be recorded as an observed result.
+
+    SPEC.md section 3 keeps observations distinct from conclusions. The kit
+    describes the magnet that will be built and delivered, while any measured
+    opt-in rate or cost per lead is a separate observation, so a kit is never an
+    observation.
+    """

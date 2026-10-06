@@ -66,6 +66,7 @@ explicit.
 | **EnrollmentPlan** | The client's designed enrollment/sales process (SPEC §12.7). | A stage 9 required kind: the client runs it, RED measures it. |
 | **ClientProcess** | The versioned client-authored sales process. | Client-approved, version-scoped artifact RED produces as a service. |
 | **NurturePlan** | The follow-up/nurture lifecycle plan. | A stage 10 required kind for keeping non-converting prospects warm. |
+| **LeadMagnetKit** | The canon lead-magnet kit built from one hot step of the method (canon files 03, 04). | A stage 6/8 asset: one step, one currency, paired with the authority video, one clear action, never an ebook or quiz. |
 | **SwimlanesPlan** | The multi-channel recovery strategy (messages, ads, outreach, offline, content). | Required at stage 8 and 9 so recovery is not single-channel. |
 
 ## 6. Production

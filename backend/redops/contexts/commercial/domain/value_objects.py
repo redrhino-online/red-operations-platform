@@ -45,6 +45,7 @@ from redops.contexts.commercial.domain.errors import (
     InvalidDiagnosisPackageError,
     InvalidDiagnosticPackageError,
     InvalidFunnelFinderError,
+    InvalidLeadMagnetKitError,
     InvalidMarketAwarenessMapError,
     InvalidMillionDollarMessageError,
     InvalidNurtureError,
@@ -55,6 +56,10 @@ from redops.contexts.commercial.domain.errors import (
     InvalidProductProgramError,
     InvalidSignaturePackageError,
     InvalidTargetMarketMatchmakerError,
+    LeadMagnetKitDependencyError,
+    LeadMagnetKitFormatError,
+    LeadMagnetKitObservationError,
+    LeadMagnetKitTenantBoundaryError,
     ProductProgramDependencyError,
     ProductProgramObservationError,
     ProductProgramPricingError,
@@ -3809,4 +3814,218 @@ class ContentPlan:
             tenant_id=self.tenant_id,
             kind=CONTENT_PLAN_KIND,
             version=version,
+        )
+
+
+LEAD_MAGNET_CANON_REFERENCE = (
+    "High Ticket Funnels 03, 04; Live Sessions 15; 14D Step 7"
+)
+
+
+class LeadMagnetFormat(Enum):
+    """The formats the canon allows for a lead magnet (High Ticket Funnels 03).
+
+    The canon is explicit that a lead magnet is a cheat sheet, template,
+    checklist, script or roadmap, and refuses an ebook, webinar, mini course,
+    strategy session, quiz, guide or white paper. RED types the allowed set so a
+    kit cannot represent a refused format as the prescribed magnet.
+    """
+
+    CHEAT_SHEET = "cheat_sheet"
+    TEMPLATE = "template"
+    CHECKLIST = "checklist"
+    SCRIPT = "script"
+    ROADMAP = "roadmap"
+
+    @property
+    def keyword(self) -> str:
+        """The words the magnet name must carry to imply its format."""
+        return self.value.replace("_", " ")
+
+
+class LeadMagnetPdfSection(Enum):
+    """The seven elements of the canon's lead-magnet PDF (High Ticket Funnels 03).
+
+    The canon wraps the one-page cheat sheet in a short PDF that establishes
+    proof and a clear call to action: the title, a short line of proof, a short
+    bio, the problem, the one-page cheat sheet, the steps in plain words, and one
+    clear next action. RED types the seven so a kit cannot ship an incomplete
+    package.
+    """
+
+    TITLE = "title"
+    PROOF = "proof"
+    BIO = "bio"
+    PROBLEM = "problem"
+    CHEAT_SHEET = "cheat_sheet"
+    STEPS = "steps"
+    ACTION = "action"
+
+
+class LeadMagnetDelivery(Enum):
+    """How the canon delivers the magnet (High Ticket Funnels 03).
+
+    The canon sends the magnet by email, not on the thank-you page, so the
+    prospect still watches the authority video. RED types both so a kit cannot
+    silently deliver on the page the canon refuses.
+    """
+
+    EMAIL = "email"
+    THANK_YOU_PAGE = "thank_you_page"
+
+
+@dataclass(frozen=True)
+class LeadMagnetKit:
+    """The canon's lead-magnet kit, built from one hot step (canon files 03, 04).
+
+    SPEC.md section 12.5 records the lead-magnet kit as a canon gap and the
+    implementation plan's canon gap backlog item G1 names this pure-domain
+    ``LeadMagnetKit`` as its bounded slice, an asset inside stage 6/8, not a new
+    stage or required gate kind. The canon's "Opt in method" (High Ticket Funnels
+    03) builds the magnet from one hot step of the product roadmap, never from
+    scratch, pairs it with the authority video, keeps it to one page and about
+    ten minutes, leaves it incomplete on purpose with one clear next step, and
+    wraps it in a seven-element PDF. The kit grounds on a same-tenant stage 4
+    ``SignatureSolution`` and stage 2 ``PrimaryCurrency``, names the one hot step
+    it is built from, and reports that step. It is frozen and reject-only, so a
+    blank identity, an untyped or foreign method or currency, a hot step the
+    solution does not name, a refused format, a name that does not imply its
+    format, an incomplete PDF package, a missing two-step opt in, a thank-you-page
+    delivery or a magnet over ten minutes cannot be represented as the prescribed
+    kit.
+
+    The kit is a plan, not a gate kind and not an authorization to publish or
+    spend (SPEC.md sections 4 and 9). It is never an observed result; the opt-in
+    rate or cost per lead it later produces is a separate observation (SPEC.md
+    section 3).
+    """
+
+    kit_id: str
+    tenant_id: str
+    owner: str
+    method: SignatureSolution
+    currency: PrimaryCurrency
+    hot_step: str
+    name: str
+    format: LeadMagnetFormat
+    promise: str
+    timeline: str
+    pdf_sections: tuple[LeadMagnetPdfSection, ...]
+    image_note: str
+    two_step_opt_in: bool
+    delivery: LeadMagnetDelivery
+    minutes_to_use: int
+    next_action: str
+    authority_video_ref: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("lead magnet kit id", self.kit_id),
+            ("lead magnet kit tenant id", self.tenant_id),
+            ("lead magnet kit owner", self.owner),
+            ("lead magnet hot step", self.hot_step),
+            ("lead magnet name", self.name),
+            ("lead magnet promise", self.promise),
+            ("lead magnet timeline", self.timeline),
+            ("lead magnet image note", self.image_note),
+            ("lead magnet next action", self.next_action),
+            ("lead magnet authority video reference", self.authority_video_ref),
+        ):
+            if not value or not value.strip():
+                raise InvalidLeadMagnetKitError(f"{label} is required")
+        if not isinstance(self.method, SignatureSolution):
+            raise LeadMagnetKitDependencyError(
+                "a lead magnet kit must be built from a typed stage 4 Signature "
+                "Solution, never from scratch"
+            )
+        if self.method.tenant_id != self.tenant_id:
+            raise LeadMagnetKitTenantBoundaryError(
+                f"lead magnet kit {self.kit_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Signature Solution "
+                f"{self.method.solution_id!r} belongs to tenant "
+                f"{self.method.tenant_id!r}"
+            )
+        if not isinstance(self.currency, PrimaryCurrency):
+            raise LeadMagnetKitDependencyError(
+                "a lead magnet kit must use the typed stage 2 Primary Currency"
+            )
+        if self.currency.tenant_id != self.tenant_id:
+            raise LeadMagnetKitTenantBoundaryError(
+                f"lead magnet kit {self.kit_id!r} belongs to tenant "
+                f"{self.tenant_id!r}, but its Primary Currency belongs to tenant "
+                f"{self.currency.tenant_id!r}"
+            )
+        step_names = {step.name for step in self.method.steps}
+        if self.hot_step not in step_names:
+            raise LeadMagnetKitDependencyError(
+                f"lead magnet kit {self.kit_id!r} is built from hot step "
+                f"{self.hot_step!r}, which the Signature Solution "
+                f"{self.method.solution_id!r} does not name; a magnet is one hot "
+                "step of the product roadmap, never a new one (canon file 03)"
+            )
+        if not isinstance(self.format, LeadMagnetFormat):
+            raise InvalidLeadMagnetKitError(
+                "a lead magnet format must be a typed canon format"
+            )
+        if self.format.keyword not in self.name.lower():
+            raise LeadMagnetKitFormatError(
+                f"lead magnet kit {self.kit_id!r} is named {self.name!r}, which "
+                f"does not imply its {self.format.value!r} format; the canon "
+                "requires the name to say what the magnet is (canon file 03)"
+            )
+        sections = tuple(self.pdf_sections)
+        expected = tuple(LeadMagnetPdfSection)
+        if len(sections) != len(expected) or set(sections) != set(expected):
+            raise InvalidLeadMagnetKitError(
+                f"lead magnet kit {self.kit_id!r} must carry each of the canon's "
+                "seven PDF sections exactly once"
+            )
+        if not isinstance(self.two_step_opt_in, bool):
+            raise InvalidLeadMagnetKitError(
+                "a lead magnet two_step_opt_in flag must be a boolean"
+            )
+        if not self.two_step_opt_in:
+            raise LeadMagnetKitFormatError(
+                f"lead magnet kit {self.kit_id!r} omits the two-step opt in; the "
+                "canon adds a second click before the page (canon file 03)"
+            )
+        if not isinstance(self.delivery, LeadMagnetDelivery):
+            raise InvalidLeadMagnetKitError(
+                "a lead magnet delivery must be a typed delivery channel"
+            )
+        if self.delivery is not LeadMagnetDelivery.EMAIL:
+            raise LeadMagnetKitFormatError(
+                f"lead magnet kit {self.kit_id!r} delivers on the thank-you page; "
+                "the canon sends the magnet by email so the prospect still "
+                "watches the authority video (canon file 03)"
+            )
+        if not isinstance(self.minutes_to_use, int) or isinstance(
+            self.minutes_to_use, bool
+        ):
+            raise InvalidLeadMagnetKitError(
+                "a lead magnet minutes_to_use must be a whole number of minutes"
+            )
+        if self.minutes_to_use < 1 or self.minutes_to_use > 10:
+            raise LeadMagnetKitFormatError(
+                f"lead magnet kit {self.kit_id!r} takes {self.minutes_to_use} "
+                "minutes; the canon keeps the magnet to about ten minutes or "
+                "less (canon file 03)"
+            )
+
+    @property
+    def is_plan(self) -> bool:
+        """A lead magnet kit is a plan, not activity or an observed result."""
+        return True
+
+    def as_observation(self, *, claim_id: str) -> None:
+        """Refuse to represent a lead magnet kit as an observed result.
+
+        SPEC.md section 3 keeps observations distinct from conclusions. The kit
+        describes the magnet that will be built and delivered, while any measured
+        opt-in rate or cost per lead is a separate observation, so a kit is never
+        an observation.
+        """
+        raise LeadMagnetKitObservationError(
+            f"lead magnet kit {claim_id!r} is a magnet to build and deliver, not "
+            "an observed result, and cannot be recorded as an observation"
         )
