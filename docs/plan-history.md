@@ -2,6 +2,42 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 2026-10-06T150726Z: G5 delivery ladder implemented
+
+- **Selected item:** G5 (delivery ladder and ascension), the highest Canon gap
+  backlog item whose dependency is met. G3 completed last cycle, so G5 is the
+  highest ready item; it outranks G7 because the backlog is ordered and G5 is
+  higher, and G6 depends on G5. It is a bounded pure-domain artifact that types
+  the client's own delivery (Serve) and the next-offer path.
+- **Outcome:** implemented the Portfolio `DeliveryLadder` (canon files 11, 12;
+  Certification; Live Sessions 5, 12; synthesized `ops/playbooks/delivery.md`). It
+  grounds on a same-tenant stage 5 `ProductProgram` and types the canon rungs
+  (one-to-one, live cohort, evergreen) as an ordered, duplicate-free subsequence
+  beginning at one-to-one. It requires exactly one deliverable per program step in
+  program order, at least one 90-day roadmap audit whose next audit is exactly one
+  quarter later, at least one kickoff success goal, and at least one ascension
+  offer tied to a program step. Its `close` gate refuses to close until a
+  caller-supplied result meets every goal. It is a post-launch plan, never an
+  observation. New named errors: `InvalidDeliveryLadderError`,
+  `DeliveryLadderDependencyError`, `DeliveryLadderTenantBoundaryError`,
+  `DeliveryLadderFormatError`, `DeliveryAuditCadenceError`,
+  `DeliveryAuditOrderError`, `DeliveryGateError`,
+  `DeliveryLadderObservationError`.
+- **Evidence:** `tests/unit/portfolio/test_delivery_ladder.py` (39 tests, 3
+  subtests) passes; the full `tests/unit/portfolio` suite passes (95 tests, 21
+  subtests); `uv run pyflakes` clean on the changed files; `make check` 2538
+  passed, 3 skipped, 761 subtests.
+- **Not done (deliberately):** wiring the ladder into a required post-launch gate
+  kind is a methodology-owner decision (SPEC.md section 12.5), so it stays a
+  planning asset. No send, spend, publish or client commitment is authorized
+  (SPEC.md sections 4 and 9).
+- **Next ready item:** G6 (partnership line and certification), whose dependency
+  G5 is now met; G7 (service-line artifacts) is also ready. G6 outranks G7 because
+  the backlog is ordered and G6 is higher.
+
+
+
+Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ### Cycle 2026-10-06T150309Z: G3 webinar kit implemented
 
 - **Selected item:** G3 (webinar kit), the highest Canon gap backlog item whose

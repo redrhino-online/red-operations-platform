@@ -4,6 +4,47 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-06T151233Z: G7 service-line artifacts implemented
+
+- **Selected item:** G7 (service-line artifacts), the highest Canon gap backlog
+  item whose dependency is met. G6 completed last cycle, so G7 is the highest
+  ready item; it outranks G8 because the backlog is ordered and G7 is higher. It
+  is a bounded pure-domain artifact that types the white-glove service line
+  (onboard, deliver, track, prove) and closes the case-study proof gap.
+- **Outcome:** implemented the Operations `ServiceLine` (canon
+  `internal/service-ops.md`; synthesized `ops/checklists/kickoff.md`,
+  `module-production.md`, `session-guide.md`, `client-scorecard.md`,
+  `case-study.md`, `ops/sops/case-study-capture.md`). It grounds on a same-tenant
+  stage 5 `ProductProgram` and carries the five canon artifacts: the
+  `KickoffChecklist` (named delivery lead, welcome within one business day,
+  success goals written as a number and a date, start date, collected access,
+  shared one-page plan, first module on or after the start), the
+  `ModuleProductionStandard` (module goal, one currency, ordered unique steps,
+  and a `confirm` gate for the script/slides, on-brand and published done
+  criteria), the `SessionGuide` (goal, one idea, one example, task, next step and
+  date), the `ClientScorecard` (the four canon dimensions in order and risks that
+  each carry an action, shared with the lead), and the `CaseStudy` template. The
+  case study `claim` refuses an unsourced result (`CaseStudyProofError`), an
+  unapproved testimonial (`CaseStudyAuthorityError`) and an unversioned claim
+  (`CaseStudyVersionError`), and `ServiceLine.prove` delegates to it so the
+  service-ops gate ("results are measured against the goals set at kickoff") can
+  never present an unapproved or unsourced testimonial (SPEC.md sections 1 and
+  4). It is a post-launch plan, never an observation. New named errors:
+  `InvalidServiceLineError`, `ServiceLineTenantBoundaryError`,
+  `ServiceLineDependencyError`, `ServiceLineFormatError`, `ServiceLineGateError`,
+  `ServiceLineObservationError`, `CaseStudyProofError`, `CaseStudyAuthorityError`,
+  `CaseStudyVersionError`.
+- **Evidence:** `tests/unit/operations/test_service_line.py` (59 tests, 20
+  subtests) passes; the full `tests/unit/operations` suite passes (120 tests, 32
+  subtests); `uv run pyflakes` clean on the changed files; `make check` 2650
+  passed, 3 skipped, 784 subtests.
+- **Not done (deliberately):** wiring the service line into a required
+  post-launch gate kind is a methodology-owner decision (SPEC.md section 12.5),
+  so it stays a planning asset. No send, spend, publish or client commitment is
+  authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** G8 (wiring follow-ups), no unmet dependency; G9 is blocked
+  on owner input. G8 is the last open Canon gap backlog item.
+
 ### Cycle 2026-10-06T151009Z: G6 partnership line and certification implemented
 
 - **Selected item:** G6 (partnership line and certification), the highest Canon
@@ -39,39 +80,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 - **Next ready item:** G7 (service-line artifacts), no unmet dependency; the case
   study claim refuses an unapproved or unsourced testimonial. G8 (wiring
   follow-ups) is also ready; G9 is blocked on owner input.
-
-### Cycle 2026-10-06T150726Z: G5 delivery ladder implemented
-
-- **Selected item:** G5 (delivery ladder and ascension), the highest Canon gap
-  backlog item whose dependency is met. G3 completed last cycle, so G5 is the
-  highest ready item; it outranks G7 because the backlog is ordered and G5 is
-  higher, and G6 depends on G5. It is a bounded pure-domain artifact that types
-  the client's own delivery (Serve) and the next-offer path.
-- **Outcome:** implemented the Portfolio `DeliveryLadder` (canon files 11, 12;
-  Certification; Live Sessions 5, 12; synthesized `ops/playbooks/delivery.md`). It
-  grounds on a same-tenant stage 5 `ProductProgram` and types the canon rungs
-  (one-to-one, live cohort, evergreen) as an ordered, duplicate-free subsequence
-  beginning at one-to-one. It requires exactly one deliverable per program step in
-  program order, at least one 90-day roadmap audit whose next audit is exactly one
-  quarter later, at least one kickoff success goal, and at least one ascension
-  offer tied to a program step. Its `close` gate refuses to close until a
-  caller-supplied result meets every goal. It is a post-launch plan, never an
-  observation. New named errors: `InvalidDeliveryLadderError`,
-  `DeliveryLadderDependencyError`, `DeliveryLadderTenantBoundaryError`,
-  `DeliveryLadderFormatError`, `DeliveryAuditCadenceError`,
-  `DeliveryAuditOrderError`, `DeliveryGateError`,
-  `DeliveryLadderObservationError`.
-- **Evidence:** `tests/unit/portfolio/test_delivery_ladder.py` (39 tests, 3
-  subtests) passes; the full `tests/unit/portfolio` suite passes (95 tests, 21
-  subtests); `uv run pyflakes` clean on the changed files; `make check` 2538
-  passed, 3 skipped, 761 subtests.
-- **Not done (deliberately):** wiring the ladder into a required post-launch gate
-  kind is a methodology-owner decision (SPEC.md section 12.5), so it stays a
-  planning asset. No send, spend, publish or client commitment is authorized
-  (SPEC.md sections 4 and 9).
-- **Next ready item:** G6 (partnership line and certification), whose dependency
-  G5 is now met; G7 (service-line artifacts) is also ready. G6 outranks G7 because
-  the backlog is ordered and G6 is higher.
 
 
 
@@ -274,7 +282,7 @@ noun rows to `docs/architecture/nouns.md`.
 | G4 | Strategy-session kit: paid roadmap session that qualifies, earns revenue and bridges to the program ($1,000, min $500) | execution | — | 47, 48; Certification Day 4; Live Sessions 8; `ops/playbooks/strategy-session.md` | typed artifact with tests; a third enrollment model; refuses a price below the floor. **Done 2026-10-06:** Execution `StrategySessionKit` (`StrategySessionQuestion`, `StrategySessionApplication`, `StrategySessionRoadmap`, `StrategySessionFeeCredit`) grounds on a same-tenant stage 4 `SignatureSolution` and stage 5 `ProductProgram`, types the paid model, refuses a price below the $500 floor, requires a 60 to 90 minute session, a duplicate-free application gate, a roadmap covering every solution step exactly once, the three questions in order and a fee credit to month one, and is never an observation; verified by `tests/unit/execution/test_strategy_session.py` (23 tests). Wiring into a required stage 8/9 kind remains a methodology-owner decision |
 | G5 | Delivery ladder and ascension: one-to-one beta, live cohort, evergreen; 90-day roadmap audit; one deliverable per step | portfolio/operations | — | 11, 12; Certification; Live Sessions 5, 12; `ops/playbooks/delivery.md` | typed artifact with tests; represents the client's own delivery (Serve) and the next-offer path; never an observation. **Done 2026-10-06:** Portfolio `DeliveryLadder` (`DeliveryRung`, `DeliveryStep`, `RoadmapAudit`, `DeliveryGoal`, `DeliveryResult`, `AscensionOffer`) grounds on a same-tenant stage 5 `ProductProgram`, types the canon rungs as an ordered subsequence beginning at one-to-one, requires one deliverable per program step in order, a 90-day roadmap audit cadence, kickoff goals and an ascension offer per step, and refuses to close until every goal is met; verified by `tests/unit/portfolio/test_delivery_ladder.py` (39 tests). Wiring into a required post-launch kind remains a methodology-owner decision |
 | G6 | Partnership line and certification: four-offer ladder, renewal and win-back, referral and partner plan, community rules, reputation track, certified consultant standards | portfolio | G5 | 11, 12; Certification; Live Sessions 5, 12; High Ticket Funnels 19; `ops/playbooks/partnership.md`, `certification.md` | typed artifacts with tests; every client has a next step; human decision for any commitment. **Done 2026-10-06:** Portfolio `PartnershipPlan` (`PartnershipOffer`, `PartnershipMove`, `PartnershipCheckIn`, `ReferralPlan`, `CommunityRules`, `ReputationTrack`, `CertificationStandard`, `CertifiedOperator`) grounds on a same-tenant stage 5 `ProductProgram`, requires the four-offer path and the four-move loop in order, a regular check-in, a referral plan that asks after a win and names the partner offer, simple unique community rules, a reputation track covering reviews/stories/press, and a short certification standard with a yearly recheck; `certify` refuses an operator with no real result or a failed exam; verified by `tests/unit/portfolio/test_partnership.py` (53 tests). Wiring into a required post-launch kind remains a methodology-owner decision |
-| G7 | Service-line artifacts: kickoff checklist, module production standard, session guide, client scorecard, case study template (case study as sourced proof, client-approved and version-scoped) | operations | — | internal/service-ops.md; `ops/checklists/kickoff.md`, `module-production.md`, `session-guide.md`, `client-scorecard.md`, `case-study.md` | typed artifact with tests; case study claim refuses an unapproved or unsourced testimonial (SPEC.md sections 1 and 4) |
+| G7 | Service-line artifacts: kickoff checklist, module production standard, session guide, client scorecard, case study template (case study as sourced proof, client-approved and version-scoped) | operations | — | internal/service-ops.md; `ops/checklists/kickoff.md`, `module-production.md`, `session-guide.md`, `client-scorecard.md`, `case-study.md` | typed artifact with tests; case study claim refuses an unapproved or unsourced testimonial (SPEC.md sections 1 and 4). **Done 2026-10-06:** Operations `ServiceLine` (`KickoffChecklist`, `SuccessGoal`, `ModuleProductionStandard`, `SessionGuide`, `ClientScorecard`, `ScorecardRisk`, `CaseStudy`, `CaseStudyClaim`) grounds on a same-tenant stage 5 `ProductProgram`, requires the welcome within one business day, goals as a number and a date, collected access, a shared plan, ordered unique module steps, the four scorecard dimensions in order with an action per risk, and a case study whose `claim` refuses an unsourced result, an unapproved testimonial and an unversioned claim; verified by `tests/unit/operations/test_service_line.py` (59 tests). Wiring into a required post-launch kind remains a methodology-owner decision |
 | G8 | Wiring follow-ups: pin the `UmbrellaPlan` and the remaining planning assets (retargeting family, banner library) into the production view or a required kind | governance/pipeline | — | 00, 01; 33, 34 | gate-integrity tests; asset remains reversible |
 | G9 | Canon source acquisition: the dedicated emailed follow-up and nurture module | process | — | SPEC.md section 12.6 | unresolved; license-owner request, owned by the RED principal; do not treat nurture artifacts as canon-complete until it lands |
 

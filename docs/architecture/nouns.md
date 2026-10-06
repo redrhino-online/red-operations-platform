@@ -129,6 +129,7 @@ explicit.
 | --- | --- | --- |
 | **Intervention** | A ranked command-center card (blocked path, overdue approval, failed journey, near commitment). | Shows *why* it surfaced; the operator's work queue. |
 | **InterventionDismissal** | A durable operator dismissal with rationale. | Cards are derived on read; only the dismissal is stored. |
+| **ServiceLine / KickoffChecklist / ModuleProductionStandard / SessionGuide / ClientScorecard / CaseStudy** | The canon service line: onboard, deliver, track and prove, with the kickoff checklist, module production standard, session guide, client scorecard and case study template (`internal/service-ops.md`; synthesized `ops/checklists/kickoff.md`, `module-production.md`, `session-guide.md`, `client-scorecard.md`, `case-study.md`). | Runs the productized program as a white-glove service; the case study `claim` refuses an unsourced result, an unapproved testimonial and an unversioned claim (SPEC §1, §4); a post-launch plan, never an observation. |
 
 ## 12. Agents and the model seam
 
