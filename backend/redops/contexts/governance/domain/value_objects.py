@@ -14,6 +14,9 @@ from redops.contexts.governance.domain.errors import (
     MetricReportingTenantBoundaryError,
     ProductionViewError,
     StageRunProjectionError,
+    UmbrellaPlanCoverageError,
+    UmbrellaPlanReportingError,
+    UmbrellaPlanReportingTenantBoundaryError,
     VersionlessAssetError,
 )
 
@@ -541,6 +544,66 @@ class MetricReportingView:
             )
 
 
+@dataclass(frozen=True)
+class UmbrellaPlanReportingView:
+    """One umbrella-plan row of the production view (SPEC.md sections 4, 12.5).
+
+    The canon's umbrella plan is the engagement's single-page plan over the whole
+    stage 0-10 pipeline, revisited every 90 days (canon files 00 and 01). It is a
+    planning decision, not a new required gate kind, so the production view
+    carries it as a caller-supplied, tenant-scoped read-model projection: the
+    plan identity, its owning client, the accountable owner, the stages it covers
+    and the review and next-review dates. The view never invents a plan, owner or
+    review date, and a row outside the required shape is refused rather than
+    rendered as this engagement's plan.
+    """
+
+    plan_id: str
+    tenant_id: str
+    owner: str
+    covered_stages: frozenset[int]
+    reviewed_on: date
+    next_review_due: date
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("umbrella plan id", self.plan_id),
+            ("umbrella plan tenant id", self.tenant_id),
+            ("umbrella plan owner", self.owner),
+        ):
+            if not value or not value.strip():
+                raise UmbrellaPlanReportingError(
+                    f"an umbrella plan reporting row requires its {label}"
+                )
+        if not self.covered_stages:
+            raise UmbrellaPlanReportingError(
+                "an umbrella plan reporting row requires at least one covered stage"
+            )
+        for stage in self.covered_stages:
+            if not isinstance(stage, int) or isinstance(stage, bool) or stage < 0:
+                raise UmbrellaPlanReportingError(
+                    "an umbrella plan reporting row stage must be a non-negative number"
+                )
+        if not isinstance(self.reviewed_on, date) or not isinstance(
+            self.next_review_due, date
+        ):
+            raise UmbrellaPlanReportingError(
+                "an umbrella plan reporting row requires its review and next-review dates"
+            )
+        if self.next_review_due <= self.reviewed_on:
+            raise UmbrellaPlanReportingError(
+                "an umbrella plan reporting row next review must be after its review"
+            )
+
+    def is_current(self, on: date) -> bool:
+        """Whether the plan's 90-day revisit is not yet due at ``on``."""
+        return on < self.next_review_due
+
+    def is_overdue(self, on: date) -> bool:
+        """Whether the plan's 90-day revisit is due or past at ``on``."""
+        return not self.is_current(on)
+
+
 class ReportingDimension(Enum):
     """The eight reporting dimensions of the production-manager view.
 
@@ -702,6 +765,7 @@ class EngagementProductionView:
     stages: tuple[StageProductionView, ...]
     progress: PipelineProgress
     metric_reporting: tuple[MetricReportingView, ...] = ()
+    umbrella_plan: UmbrellaPlanReportingView | None = None
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -749,6 +813,25 @@ class EngagementProductionView:
                     "metric"
                 )
             seen_metrics.add(row.metric_id)
+        if self.umbrella_plan is not None:
+            if not isinstance(self.umbrella_plan, UmbrellaPlanReportingView):
+                raise UmbrellaPlanReportingError(
+                    "production view umbrella plan must be a typed umbrella plan "
+                    "reporting row"
+                )
+            if self.umbrella_plan.tenant_id != self.tenant_id:
+                raise UmbrellaPlanReportingTenantBoundaryError(
+                    f"production view umbrella plan {self.umbrella_plan.plan_id!r} "
+                    f"belongs to tenant {self.umbrella_plan.tenant_id!r}, not "
+                    f"workspace tenant {self.tenant_id!r}"
+                )
+            view_stages = frozenset(stage.stage_number for stage in self.stages)
+            if self.umbrella_plan.covered_stages != view_stages:
+                raise UmbrellaPlanCoverageError(
+                    "production view umbrella plan must cover exactly the view's "
+                    f"stages {sorted(view_stages)}, not "
+                    f"{sorted(self.umbrella_plan.covered_stages)}"
+                )
 
     @classmethod
     def from_ledger(
@@ -761,6 +844,7 @@ class EngagementProductionView:
         verified_post_launch_milestones: int = 0,
         activity_entries: int = 0,
         metric_reporting: tuple[MetricReportingView, ...] = (),
+        umbrella_plan: UmbrellaPlanReportingView | None = None,
         stage_runs: tuple["StageRun", ...] = (),
     ) -> "EngagementProductionView":
         """Derive the whole production view from a template and gate ledger.
@@ -842,6 +926,7 @@ class EngagementProductionView:
             stages=stages,
             progress=progress,
             metric_reporting=metric_reporting,
+            umbrella_plan=umbrella_plan,
         )
 
     def stage_by_number(self, stage_number: int) -> StageProductionView | None:

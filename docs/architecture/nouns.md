@@ -122,6 +122,7 @@ explicit.
 | **Waiver** | A scoped human decision to let a gate pass without an asset. | Never makes an absent asset appear present; carries reason, risk owner, expiry. |
 | **Exact asset version** | The pinned version of an asset in a gate decision. | "Approved" is meaningless without the exact version it refers to. |
 | **Disposition** | The gate outcome (approved / changes required / …). | The recorded verdict that gates or blocks dependents. |
+| **UmbrellaPlanReportingView** | The production view's tenant-scoped projection of the canon umbrella plan: plan identity, owner, covered stages and the next 90-day review. | The engagement's single-page plan over the whole stage 0-10 pipeline, revisited quarterly (canon files 00, 01; SPEC §4, §12.5); a planning decision, not a required gate kind. |
 
 ## 11. Operations
 

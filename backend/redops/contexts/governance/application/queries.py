@@ -33,6 +33,7 @@ from redops.contexts.governance.domain.value_objects import (
     EngagementProductionView,
     MetricReportingView,
     StageTemplate,
+    UmbrellaPlanReportingView,
 )
 
 
@@ -57,6 +58,7 @@ class EngagementProductionViewQuery:
     verified_post_launch_milestones: int = 0
     activity_entries: int = 0
     metric_reporting: tuple[MetricReportingView, ...] = ()
+    umbrella_plan: UmbrellaPlanReportingView | None = None
 
 
 class GetEngagementProductionViewHandler:
@@ -102,5 +104,6 @@ class GetEngagementProductionViewHandler:
             verified_post_launch_milestones=query.verified_post_launch_milestones,
             activity_entries=query.activity_entries,
             metric_reporting=query.metric_reporting,
+            umbrella_plan=query.umbrella_plan,
             stage_runs=tuple(runs),
         )

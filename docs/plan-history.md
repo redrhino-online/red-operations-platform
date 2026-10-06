@@ -2,6 +2,45 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 2026-10-06T151009Z: G6 partnership line and certification implemented
+
+- **Selected item:** G6 (partnership line and certification), the highest Canon
+  gap backlog item whose dependency is met. G5 completed last cycle, so G6 is
+  unblocked and outranks G7 because the backlog is ordered and G6 is higher. It is
+  a bounded pure-domain artifact that types the client's retention and expansion
+  path (the four-offer path, the partnership loop, referral, community, reputation
+  and certification).
+- **Outcome:** implemented the Portfolio `PartnershipPlan` (canon files 11, 12;
+  Certification; Live Sessions 5, 12; High Ticket Funnels 19; synthesized
+  `ops/playbooks/partnership.md`, `certification.md`,
+  `ops/sops/certification-exam.md`). It grounds on a same-tenant stage 5
+  `ProductProgram` and types the canon four-offer path (entry, mid, core, partner)
+  as an ordered, duplicate-free set, the partnership loop (retain, grow, refer,
+  renew) in order, a regular check-in with a cadence and owner, a referral plan
+  that must ask after a win and name the plan's partner offer, simple unique
+  community rules, a reputation track covering reviews, stories and press, and a
+  short certification standard (at most six skills, a clear pass mark, a yearly
+  recheck). Its `certify` gate refuses an operator with no real result or a failed
+  exam. It is a post-launch plan, never an observation. New named errors:
+  `InvalidPartnershipPlanError`, `PartnershipTenantBoundaryError`,
+  `PartnershipDependencyError`, `PartnershipFormatError`, `PartnershipGateError`,
+  `PartnershipObservationError`, `CertificationStandardError`,
+  `CertificationProofError`.
+- **Evidence:** `tests/unit/portfolio/test_partnership.py` (53 tests, 3 subtests)
+  passes; the full `tests/unit/portfolio` suite passes (148 tests, 24 subtests);
+  `uv run pyflakes` clean on the changed files; `make check` 2591 passed, 3
+  skipped, 764 subtests.
+- **Not done (deliberately):** wiring the plan into a required post-launch gate
+  kind is a methodology-owner decision (SPEC.md section 12.5), so it stays a
+  planning asset. No send, spend, publish or client commitment is authorized
+  (SPEC.md sections 4 and 9).
+- **Next ready item:** G7 (service-line artifacts), no unmet dependency; the case
+  study claim refuses an unapproved or unsourced testimonial. G8 (wiring
+  follow-ups) is also ready; G9 is blocked on owner input.
+
+
+
+Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ### Cycle 2026-10-06T150726Z: G5 delivery ladder implemented
 
 - **Selected item:** G5 (delivery ladder and ascension), the highest Canon gap

@@ -176,3 +176,37 @@ class MetricReportingTenantBoundaryError(ProductionViewError):
     client's metrics, so a row from another tenant is refused rather than
     rendered alongside this engagement's verified progress.
     """
+
+
+class UmbrellaPlanReportingError(ProductionViewError):
+    """An umbrella-plan reporting row violates the production-view invariant.
+
+    SPEC.md section 4 requires the production view to answer, for each client,
+    what should exist, what is present and approved, what is missing, who is
+    accountable, which dependency blocks work, what approval is next and when it
+    is due. The umbrella plan is the engagement's single-page plan over the whole
+    stage 0-10 pipeline, revisited every 90 days (SPEC.md section 12.5; canon
+    files 00 and 01). A row missing its identity, owner, covered stages or review
+    dates, or one whose next review is not after its review, cannot be rendered
+    as this engagement's plan, so it is refused rather than shown.
+    """
+
+
+class UmbrellaPlanReportingTenantBoundaryError(ProductionViewError):
+    """An umbrella-plan reporting row belongs to another client.
+
+    SPEC.md sections 3 and 4: every tenant resource carries a tenant id and a
+    query is tenant scoped. The production view for one client may report only
+    that client's umbrella plan, so a row from another tenant is refused rather
+    than rendered alongside this engagement's plan.
+    """
+
+
+class UmbrellaPlanCoverageError(ProductionViewError):
+    """An umbrella-plan reporting row does not cover exactly the view's stages.
+
+    SPEC.md sections 4 and 12.5: the umbrella plan is the single-page plan over
+    the whole stage 0-10 pipeline. A plan that omits a stage the view reports or
+    claims a stage the view does not define cannot answer what should exist for
+    this engagement, so it is refused rather than rendered as full coverage.
+    """
