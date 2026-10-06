@@ -16,6 +16,7 @@ from redops.contexts.knowledge.domain.entities import Claim
 from redops.contexts.production.domain.errors import (
     AuthorityAmplifierApprovalOrderError,
     AuthorityAmplifierDependencyError,
+    BuildObjectVersionConflictError,
     InvalidAuthorityAmplifierError,
     InvalidBuildError,
 )
@@ -65,6 +66,7 @@ class BuildObject:
     state: BuildState = BuildState.IDENTIFIED
     blockers: frozenset[str] = field(default_factory=frozenset)
     refs: frozenset[str] = field(default_factory=frozenset)
+    version: int = 1
     _transitions: list[BuildTransition] = field(
         default_factory=list, repr=False, compare=False
     )
@@ -76,6 +78,12 @@ class BuildObject:
         _require_text(self.purpose, "build purpose")
         _require_text(self.audience, "build audience")
         _require_text(self.owner, "build owner")
+        if (
+            not isinstance(self.version, int)
+            or isinstance(self.version, bool)
+            or self.version < 1
+        ):
+            raise InvalidBuildError("build version must be a positive integer")
         if self.is_active:
             _require_text(self.next_action, "build next action")
 
@@ -94,18 +102,67 @@ class BuildObject:
     def add_blocker(self, blocker: str) -> None:
         _require_text(blocker, "blocker")
         self.blockers = self.blockers | {blocker}
+        self.version += 1
 
     def remove_blocker(self, blocker: str) -> None:
         self.blockers = self.blockers - {blocker}
+        self.version += 1
 
     def reassign_owner(self, owner: str) -> None:
         self.owner = _require_text(owner, "build owner")
+        self.version += 1
 
     def set_next_action(self, next_action: str) -> None:
         if self.is_active:
             self.next_action = _require_text(next_action, "build next action")
         else:
             self.next_action = next_action
+        self.version += 1
+
+    def require_version(self, expected: int) -> None:
+        """Refuse a mutation that read a stale build version (SPEC.md section 7).
+
+        SPEC.md section 7: "optimistic version checking returns conflict on stale
+        updates." The caller supplies the version it read; if another writer has
+        advanced the build since, the write is refused with a named conflict
+        rather than silently overwriting the newer state.
+        """
+        if (
+            not isinstance(expected, int)
+            or isinstance(expected, bool)
+            or expected < 1
+        ):
+            raise InvalidBuildError(
+                "expected build version must be a positive integer"
+            )
+        if expected != self.version:
+            raise BuildObjectVersionConflictError(
+                f"build {self.build_id!r} is at version {self.version}, not the "
+                f"expected {expected}; the update is stale"
+            )
+
+    def transition_to(
+        self,
+        target: BuildState,
+        *,
+        actor: str,
+        reason: str,
+        on: date,
+        correlation_id: str,
+    ) -> BuildTransition:
+        """Move the build to ``target`` through the lifecycle policy.
+
+        The named transition methods (``mark_ready`` and friends) are the domain
+        vocabulary; this generic entry point lets a version-carrying mutation
+        route drive the same policy without duplicating it.
+        """
+        return self._transition(
+            target,
+            actor=actor,
+            reason=reason,
+            on=on,
+            correlation_id=correlation_id,
+        )
 
     def require_source(
         self, *, actor: str, reason: str, on: date, correlation_id: str
@@ -275,6 +332,7 @@ class BuildObject:
             correlation_id=correlation_id,
         )
         self._transitions.append(transition)
+        self.version += 1
         return transition
 
 

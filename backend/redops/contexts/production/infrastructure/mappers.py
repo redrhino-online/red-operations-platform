@@ -222,6 +222,7 @@ def build_to_payload(build: BuildObject) -> dict[str, Any]:
         "state": build.state.value,
         "blockers": sorted(build.blockers),
         "refs": sorted(build.refs),
+        "version": build.version,
         "transitions": [
             _build_transition_to_payload(transition)
             for transition in build.transitions
@@ -248,6 +249,7 @@ def build_from_payload(payload: Mapping[str, Any]) -> BuildObject:
         state=BuildState(str(payload["state"])),
         blockers=frozenset(str(entry) for entry in payload.get("blockers", [])),
         refs=frozenset(str(entry) for entry in payload.get("refs", [])),
+        version=int(payload.get("version", 1)),
         _transitions=[
             _build_transition_from_payload(entry)
             for entry in payload.get("transitions", [])

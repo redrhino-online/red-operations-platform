@@ -4,6 +4,46 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 2026-10-06T154157Z: Q16 optimistic-version conflict on the live build aggregate
+
+- **Selected item:** Q16 (optimistic-version conflict half), the highest-value
+  ready non-canon item. It outranks W1 (worker entrypoint), which is blocked on a
+  concrete `WorkflowStepExecutor` (the connector seam is a `ConnectorPort`, not a
+  step executor, so a worker would have no honest effect to run), and G8's
+  remaining required-kind half, which is blocked on the RED principal's open
+  per-stage required-kind decision. Q16 is a SPEC.md section 7 requirement
+  ("optimistic version checking returns conflict on stale updates") and the last
+  open half of a listed remaining implementation gap.
+- **Outcome:** the live Production `BuildObject` now carries a monotonic
+  `version` (starts at 1, advances on every mutation and lifecycle transition)
+  and a `require_version(expected)` guard that raises the new
+  `BuildObjectVersionConflictError` on a stale write before any mutation. A new
+  version-carrying mutation route `POST /red/builds/{build_id}/transition` loads
+  the tenant-scoped build, refuses a stale `expected_version` with a named 409,
+  then drives the existing `BuildTransitionPolicy` through a new public
+  `transition_to`; an unknown or foreign build is a 404 and an illegal target
+  state is a 422. The version round-trips through `build_to_payload` /
+  `build_from_payload` (defaulting to 1 for older rows), and
+  `BuildObjectResponse` exposes it. No stage 0-10 template, required asset kind,
+  migration or gate changed.
+- **Evidence:** `tests/unit/production/test_build_object_version.py` (8 tests)
+  and the new route tests in `tests/unit/production/test_builds_route.py` (5
+  tests) pass; the full `tests/unit/production` suite passes (109 passed, 13
+  subtests); `uv run pyflakes` clean on the changed files; `make check` 2671
+  passed, 3 skipped, 793 subtests. Independent `verify` subagent: PASS on all 6
+  acceptance criteria.
+- **Not done (deliberately):** the optimistic check is application-level
+  read-check-write; the PostgreSQL `save` remains a blind upsert, so two truly
+  concurrent writers can both pass. A store-level compare-and-swap (a version
+  predicate in the `ON CONFLICT` update) is a concurrency-hardening follow-up,
+  not part of the sequential stale-write acceptance criterion. No send, spend,
+  publish or client commitment is authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** G8's production-view route projection (supply the
+  `UmbrellaPlanReportingView` from a Portfolio `UmbrellaPlan` port and
+  persistence) is bounded and unblocked; W1 (worker entrypoint) stays blocked on
+  a concrete `WorkflowStepExecutor`; G8's required-kind half and G9 stay blocked
+  on owner input.
+
 ### Cycle 2026-10-06T153729Z: G8 umbrella plan wired into the production view
 
 - **Selected item:** G8 (wiring follow-ups), the last open Canon gap backlog
@@ -40,49 +80,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   half and G9 are blocked on owner input. W1 (worker entrypoint) and Q16
   (optimistic-version conflict) remain open non-canon items; W1 needs a concrete
   `WorkflowStepExecutor` and Q16 needs a version-carrying mutation route.
-
-### Cycle 2026-10-06T151233Z: G7 service-line artifacts implemented
-
-- **Selected item:** G7 (service-line artifacts), the highest Canon gap backlog
-  item whose dependency is met. G6 completed last cycle, so G7 is the highest
-  ready item; it outranks G8 because the backlog is ordered and G7 is higher. It
-  is a bounded pure-domain artifact that types the white-glove service line
-  (onboard, deliver, track, prove) and closes the case-study proof gap.
-- **Outcome:** implemented the Operations `ServiceLine` (canon
-  `internal/service-ops.md`; synthesized `ops/checklists/kickoff.md`,
-  `module-production.md`, `session-guide.md`, `client-scorecard.md`,
-  `case-study.md`, `ops/sops/case-study-capture.md`). It grounds on a same-tenant
-  stage 5 `ProductProgram` and carries the five canon artifacts: the
-  `KickoffChecklist` (named delivery lead, welcome within one business day,
-  success goals written as a number and a date, start date, collected access,
-  shared one-page plan, first module on or after the start), the
-  `ModuleProductionStandard` (module goal, one currency, ordered unique steps,
-  and a `confirm` gate for the script/slides, on-brand and published done
-  criteria), the `SessionGuide` (goal, one idea, one example, task, next step and
-  date), the `ClientScorecard` (the four canon dimensions in order and risks that
-  each carry an action, shared with the lead), and the `CaseStudy` template. The
-  case study `claim` refuses an unsourced result (`CaseStudyProofError`), an
-  unapproved testimonial (`CaseStudyAuthorityError`) and an unversioned claim
-  (`CaseStudyVersionError`), and `ServiceLine.prove` delegates to it so the
-  service-ops gate ("results are measured against the goals set at kickoff") can
-  never present an unapproved or unsourced testimonial (SPEC.md sections 1 and
-  4). It is a post-launch plan, never an observation. New named errors:
-  `InvalidServiceLineError`, `ServiceLineTenantBoundaryError`,
-  `ServiceLineDependencyError`, `ServiceLineFormatError`, `ServiceLineGateError`,
-  `ServiceLineObservationError`, `CaseStudyProofError`, `CaseStudyAuthorityError`,
-  `CaseStudyVersionError`.
-- **Evidence:** `tests/unit/operations/test_service_line.py` (59 tests, 20
-  subtests) passes; the full `tests/unit/operations` suite passes (120 tests, 32
-  subtests); `uv run pyflakes` clean on the changed files; `make check` 2650
-  passed, 3 skipped, 784 subtests.
-- **Not done (deliberately):** wiring the service line into a required
-  post-launch gate kind is a methodology-owner decision (SPEC.md section 12.5),
-  so it stays a planning asset. No send, spend, publish or client commitment is
-  authorized (SPEC.md sections 4 and 9).
-- **Next ready item:** G8 (wiring follow-ups), no unmet dependency; G9 is blocked
-  on owner input. G8 is the last open Canon gap backlog item.
-
-
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ## Prototype definition of done
@@ -299,7 +296,7 @@ These are existing non-canon gaps which remain actionable alongside G1-G9.
 | # | Item | Area | Depends | Evidence / gate |
 | --- | --- | --- | --- | --- |
 | W1 | Add the RED worker entrypoint and deploy it as part of the owner's api + ui + worker first-release scope | workflows/deploy | — | worker starts, resumes a due durable workflow after restart, and the chart's worker Deployment is healthy |
-| Q16 | Optimistic-version conflict half: a stale mutation returns 409 | api/governance | a mutation route that accepts an expected version | test two writes against the same version; first succeeds, stale second returns 409 without changing state |
+| Q16 | Optimistic-version conflict half: a stale mutation returns 409 | api/governance | a mutation route that accepts an expected version | test two writes against the same version; first succeeds, stale second returns 409 without changing state. **Done 2026-10-06:** the live Production `BuildObject` carries a monotonic `version` (starts at 1, advances on every mutation and transition) and `require_version(expected)` raises `BuildObjectVersionConflictError` before any mutation; `POST /red/builds/{build_id}/transition` accepts `expected_version`, returns 409 on a stale write (404 unknown/foreign, 422 illegal target), and the version round-trips through the mapper; verified by `tests/unit/production/test_build_object_version.py` (8 tests) and the new route tests in `tests/unit/production/test_builds_route.py` (5 tests). The PostgreSQL `save` remains a blind upsert, so a store-level compare-and-swap is a concurrency-hardening follow-up |
 
 ## Product priority: the gated production engagement
 

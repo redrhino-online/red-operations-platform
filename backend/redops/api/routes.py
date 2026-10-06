@@ -47,6 +47,7 @@ from redops.api.schemas import (
     InterventionResponse,
     LaunchQACheckResponse,
     LaunchQAInput,
+    TransitionBuildRequest,
     LaunchQAListResponse,
     LaunchQAResponse,
     MethodReferenceResponse,
@@ -365,12 +366,15 @@ from redops.contexts.production.domain.entities import (
 )
 from redops.contexts.production.domain.errors import (
     AuthorityAmplifierVersionConflictError,
+    BuildObjectVersionConflictError,
     BuildTenantBoundaryError,
+    IllegalBuildTransitionError,
     InvalidBuildError,
     ProductionError,
 )
 from redops.contexts.production.domain.value_objects import (
     AuthorityAmplifierPackage,
+    BuildState,
     ScriptSection,
     ScriptSectionKind,
     VisualProductionPackage,
@@ -4154,6 +4158,7 @@ def _build_payload(build: BuildObject) -> BuildObjectResponse:
         is_blocked=build.is_blocked,
         blockers=sorted(build.blockers),
         refs=sorted(build.refs),
+        version=build.version,
     )
 
 
@@ -4215,6 +4220,62 @@ def create_build(
         )
         repository.save(build)
     except (InvalidBuildError, BuildTenantBoundaryError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return _build_payload(build)
+
+
+@router.post(
+    "/builds/{build_id}/transition", response_model=BuildObjectResponse
+)
+def transition_build(
+    build_id: str,
+    body: TransitionBuildRequest,
+    repository: BuildObjectRepository = Depends(get_build_object_repository),
+) -> BuildObjectResponse:
+    """Advance a build through its lifecycle with optimistic version checking.
+
+    SPEC.md section 7: "optimistic version checking returns conflict on stale
+    updates." The caller supplies the version it read (``expected_version``); the
+    route loads the tenant-scoped build, refuses a stale write with a named 409
+    before mutating anything, then drives the same ``BuildTransitionPolicy`` the
+    named domain methods use, so an illegal transition is a named 422 and a
+    missing or foreign build is a named 404. The transition records actor,
+    reason, timestamp, old and new state and correlation id (SPEC.md section 4).
+    """
+
+    build = repository.get(body.tenant_id, build_id)
+    if build is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "BuildObjectNotFoundError",
+                "message": (
+                    f"build {build_id!r} is not visible to tenant "
+                    f"{body.tenant_id!r}"
+                ),
+            },
+        )
+
+    try:
+        build.require_version(body.expected_version)
+        build.transition_to(
+            BuildState(body.target_state),
+            actor=body.actor,
+            reason=body.reason,
+            on=body.on,
+            correlation_id=body.correlation_id,
+        )
+        repository.save(build)
+    except BuildObjectVersionConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+    except (InvalidBuildError, IllegalBuildTransitionError, ValueError) as exc:
         raise HTTPException(
             status_code=422,
             detail={"error": type(exc).__name__, "message": str(exc)},

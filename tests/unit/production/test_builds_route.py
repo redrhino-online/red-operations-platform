@@ -126,6 +126,84 @@ class BuildsRouteTests(unittest.TestCase):
         self.assertEqual(1, page.json()["offset"])
         self.assertEqual(2, len(page.json()["builds"]))
 
+    @staticmethod
+    def transition_body(**overrides):
+        body = {
+            "tenant_id": TENANT,
+            "expected_version": 1,
+            "target_state": "ready",
+            "actor": "specialist-1",
+            "reason": "footage arrived",
+            "correlation_id": "corr-build-transition-1",
+            "on": "2026-10-06",
+        }
+        body.update(overrides)
+        return body
+
+    def test_a_transition_with_the_current_version_advances_the_build(self) -> None:
+        self.client.post("/red/builds", json=self.build_body())
+
+        response = self.client.post(
+            "/red/builds/build-1/transition", json=self.transition_body()
+        )
+
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertEqual("ready", response.json()["state"])
+        self.assertEqual(2, response.json()["version"])
+
+    def test_a_stale_transition_is_refused_without_changing_state(self) -> None:
+        self.client.post("/red/builds", json=self.build_body())
+        first = self.client.post(
+            "/red/builds/build-1/transition", json=self.transition_body()
+        )
+        self.assertEqual(200, first.status_code, first.text)
+
+        stale = self.client.post(
+            "/red/builds/build-1/transition", json=self.transition_body()
+        )
+
+        self.assertEqual(409, stale.status_code, stale.text)
+        self.assertEqual(
+            "BuildObjectVersionConflictError", stale.json()["detail"]["error"]
+        )
+        stored = self.builds.get(TENANT, "build-1")
+        self.assertEqual(2, stored.version)
+        self.assertEqual("ready", stored.state.value)
+
+    def test_a_transition_for_an_unknown_build_is_a_404(self) -> None:
+        response = self.client.post(
+            "/red/builds/missing/transition", json=self.transition_body()
+        )
+
+        self.assertEqual(404, response.status_code, response.text)
+        self.assertEqual(
+            "BuildObjectNotFoundError", response.json()["detail"]["error"]
+        )
+
+    def test_a_transition_for_another_client_is_a_404(self) -> None:
+        self.client.post("/red/builds", json=self.build_body())
+
+        response = self.client.post(
+            "/red/builds/build-1/transition",
+            json=self.transition_body(tenant_id=OTHER_TENANT),
+        )
+
+        self.assertEqual(404, response.status_code, response.text)
+
+    def test_an_illegal_transition_is_a_422(self) -> None:
+        self.client.post("/red/builds", json=self.build_body())
+
+        response = self.client.post(
+            "/red/builds/build-1/transition",
+            json=self.transition_body(target_state="approved"),
+        )
+
+        self.assertEqual(422, response.status_code, response.text)
+        self.assertEqual(
+            "IllegalBuildTransitionError", response.json()["detail"]["error"]
+        )
+        self.assertEqual(1, self.builds.get(TENANT, "build-1").version)
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

@@ -148,6 +148,17 @@ class BuildTenantBoundaryError(ProductionError):
     """
 
 
+class BuildObjectVersionConflictError(ProductionError):
+    """A build mutation carried a stale expected version (SPEC.md section 7).
+
+    SPEC.md section 7: "optimistic version checking returns conflict on stale
+    updates." A BuildObject is a live aggregate (SPEC.md section 4), so a caller
+    that read version N and writes after another writer advanced the build is
+    refused rather than silently overwriting the newer state. The conflict is a
+    named error, never a partial write.
+    """
+
+
 class BuildConfigurationError(RuntimeError):
     """The BuildObject store was configured without a usable driver.
 

@@ -1837,6 +1837,26 @@ class BuildObjectResponse(BaseModel):
     is_blocked: bool
     blockers: list[str]
     refs: list[str]
+    version: int
+
+
+class TransitionBuildRequest(BaseModel):
+    """A version-carrying build mutation (SPEC.md section 7).
+
+    SPEC.md section 7: "optimistic version checking returns conflict on stale
+    updates." The caller supplies the version it read (``expected_version``) and
+    the target lifecycle state; the route refuses a stale write with a named 409
+    rather than silently overwriting a newer build. The actor, reason and
+    correlation id are recorded on the transition (SPEC.md section 4).
+    """
+
+    tenant_id: str
+    expected_version: int
+    target_state: str
+    actor: str
+    reason: str
+    correlation_id: str
+    on: date
 
 
 class BuildListResponse(BaseModel):
