@@ -4,6 +4,39 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 20261007T000114Z: W1 deploy slice verified — `redop-worker` Deployment healthy
+
+- **Selected item:** verify the deployed `redop-worker` Deployment is
+  Running/healthy after the atlas publish and build (the next ready item recorded
+  by cycle 2026-10-06T175247Z). It is the only ready item: G8/G9 are closed, C4
+  is done, Q16 is complete, and R1/R2 stay deferred and must not be picked up
+  unattended.
+- **Outcome:** no code change. The atlas publish and Gitea build completed and
+  promoted the worker-enabled chart, so the live verification the previous cycle
+  deferred now passes. The `redop-worker` Deployment exists and is 1/1 Ready on
+  image `registry.atlas.lan/atlas-admin/redop-api:sha-de44d86`; the pod is
+  Running with 0 restarts and logs `RED workflow worker started for clients
+  3fmindset`. W1 is complete.
+- **Evidence:** `git ls-remote atlas refs/heads/main` = `de44d86` (matches local
+  HEAD); the Gitea build workflow built and pushed `sha-de44d86` and promoted it
+  to the GitOps repo as commit `d9104eb` (`ci: promote redop sha-de44d86`);
+  Argo CD Application `redop` is Synced/Healthy at revision `d9104eb`; the
+  migration Job `redop-migrate-b2v4d` Completed before the API served;
+  `kubectl -n redop get deploy redop-worker` -> 1/1 Ready, image
+  `...redop-api:sha-de44d86`; `kubectl -n redop logs deploy/redop-worker` ->
+  `RED workflow worker started for clients 3fmindset`; the worker env carries
+  `REDOP_WORKER_TENANTS=3fmindset` and command `python -m redops.worker`;
+  `make done` -> DONE-GATE PASS (all six checks, including the deployed RED
+  health check at `https://redop.atlas.lan/`).
+- **Not done (deliberately):** no send, spend, publish or client commitment is
+  authorized (SPEC.md sections 4 and 9). The worker runs the interim fail-on-send
+  transport, so it resumes durable workflows but refuses every send.
+- **Next ready item:** none. The post-prototype queue is exhausted: G1-G7 done,
+  G8/G9 closed, C4 done, Q16 done, W1 complete. R1/R2 remain deferred and are not
+  picked up unattended.
+- **Blockers:** none. `.ralph/DONE` touched: `make done` passes and no ready work
+  remains.
+
 ### Cycle 2026-10-06T175247Z: W1 deploy slice — fail-on-send connector transport, worker enabled
 
 - **Selected item:** W1's deploy slice (configure the interim fail-on-send
@@ -40,39 +73,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   Running/healthy after the atlas publish and build.
 - **Blockers:** none for the code+chart slice; the live verification waits on the
   atlas publish/build. `.ralph/DONE` touched: `make done` passes.
-
-### Cycle 2026-10-06T163236Z: W1 deploy slice blocked on the connector-inventory owner decision
-
-- **Selected item:** W1's deploy slice (configure a connector transport and
-  `REDOP_WORKER_TENANTS`, set `worker.enabled: true`, verify the chart's worker
-  Deployment is healthy), the only remaining item. It is **not ready**: the
-  worker refuses to start with `DATABASE_URL` set and no connector transport
-  (`WorkerConfigurationError`, `backend/redops/worker.py`), and choosing a
-  transport is the open connector-inventory decision (SPEC.md section 11).
-  Enabling the Deployment now would crashloop and break the Argo CD health that
-  condition 9 requires. No other item is ready: Q16 is complete (connector
-  idempotency, optimistic-version conflict and store-level CAS all done), G8/G9
-  are closed (owner 2026-10-06), C4 is done, and R1/R2 are deferred and must not
-  be picked up unattended.
-- **Outcome:** no code change. The deploy slice is blocked on a named-owner
-  decision, so the loop records the blocker rather than invent work or make the
-  connector-inventory decision unattended.
-- **Evidence:** `make done` -> `DONE-GATE PASS` (all six checks green, including
-  the deployed RED health check at `https://redop.atlas.lan/`);
-  `backend/redops/worker.py` `connector_transport_from_env` raises
-  `WorkerConfigurationError` when `DATABASE_URL` is set and no transport is
-  configured; `deploy/charts/redop/values.yaml` keeps `worker.enabled: false` and
-  `templates/deployment-worker.yaml` is gated on it.
-- **Not done (deliberately):** enabling the chart's worker Deployment and wiring
-  `REDOP_WORKER_TENANTS`; both wait on the connector-inventory owner decision. No
-  send, spend, publish or client commitment is authorized (SPEC.md sections 4 and
-  9).
-- **Next ready item:** none unblocked. The deploy slice waits on the
-  connector-inventory owner decision (SPEC.md section 11): the owner names the
-  connector(s)/transport, or directs a fail-on-send transport that keeps the
-  worker honest without a connector.
-- **Blockers:** connector-inventory owner decision (SPEC.md section 11).
-  `.ralph/DONE` touched: `make done` passes and no ready work remains.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ## Prototype definition of done
@@ -304,7 +304,7 @@ These are existing non-canon gaps which remain actionable alongside G1-G9.
 
 | # | Item | Area | Depends | Evidence / gate |
 | --- | --- | --- | --- | --- |
-| W1 | Add the RED worker entrypoint and deploy it as part of the owner's api + ui + worker first-release scope | workflows/deploy | — | worker starts, resumes a due durable workflow after restart, and the chart's worker Deployment is healthy. **Unblocked 2026-10-06 (owner):** build a concrete `WorkflowStepExecutor` port and adapter (the connector seam is a `ConnectorPort`, not a step executor) so the worker can start and resume a due durable workflow; W1 is the next ready item. **Adapter done 2026-10-06:** `ConnectorStepExecutor` (`backend/redops/workflows/infrastructure/executors.py`) implements the `WorkflowStepExecutor` port over the replay-safe `ConnectorPort`, deriving a deterministic tenant-scoped effect per run and step so a resumed step resolves to one recorded external operation and an approval step is refused (`WorkflowStepExecutionError`); verified by `tests/unit/workflows/test_connector_step_executor.py` (7 tests). **Entrypoint done 2026-10-06:** `backend/redops/worker.py` runs `python -m redops.worker`: `build_worker` composes `ResumeDueRunsHandler` with the run store and the `ConnectorStepExecutor`; `worker_from_env` selects both stores from one `DATABASE_URL`, builds the `IdempotentConnector` over an injected transport, and takes the client roster from `REDOP_WORKER_TENANTS`; `WorkflowWorker.run_once` resumes each configured client's due runs, isolates a per-client failure, and leaves a waiting approval for its human, and a durable configuration without a connector transport refuses to start (`WorkerConfigurationError`); verified by `tests/unit/workflows/test_worker_entrypoint.py` (12 tests). Remaining: verify the deployed `redop-worker` Deployment is Running/healthy after the atlas publish and build. **Fail-on-send transport done 2026-10-06:** `FailOnSendConnectorTransport` (`backend/redops/contexts/execution/infrastructure/connectors.py`) and `ConnectorSendRefusedError` (`.../domain/errors.py`) refuse every send loudly and record no external operation; `connector_transport_from_env` selects it when `DATABASE_URL` is set, so the worker starts and resumes durable workflows while nothing leaves the box; verified by `tests/unit/execution/test_fail_on_send_transport.py` (2 tests) and `tests/unit/workflows/test_worker_entrypoint.py` (14 tests). **Chart done 2026-10-06:** `worker.enabled: true` and `REDOP_WORKER_TENANTS: "3fmindset"` render the worker Deployment; verified by `tests/unit/shared/test_red_helm_chart.py` |
+| W1 | Add the RED worker entrypoint and deploy it as part of the owner's api + ui + worker first-release scope | workflows/deploy | — | worker starts, resumes a due durable workflow after restart, and the chart's worker Deployment is healthy. **Unblocked 2026-10-06 (owner):** build a concrete `WorkflowStepExecutor` port and adapter (the connector seam is a `ConnectorPort`, not a step executor) so the worker can start and resume a due durable workflow; W1 is the next ready item. **Adapter done 2026-10-06:** `ConnectorStepExecutor` (`backend/redops/workflows/infrastructure/executors.py`) implements the `WorkflowStepExecutor` port over the replay-safe `ConnectorPort`, deriving a deterministic tenant-scoped effect per run and step so a resumed step resolves to one recorded external operation and an approval step is refused (`WorkflowStepExecutionError`); verified by `tests/unit/workflows/test_connector_step_executor.py` (7 tests). **Entrypoint done 2026-10-06:** `backend/redops/worker.py` runs `python -m redops.worker`: `build_worker` composes `ResumeDueRunsHandler` with the run store and the `ConnectorStepExecutor`; `worker_from_env` selects both stores from one `DATABASE_URL`, builds the `IdempotentConnector` over an injected transport, and takes the client roster from `REDOP_WORKER_TENANTS`; `WorkflowWorker.run_once` resumes each configured client's due runs, isolates a per-client failure, and leaves a waiting approval for its human, and a durable configuration without a connector transport refuses to start (`WorkerConfigurationError`); verified by `tests/unit/workflows/test_worker_entrypoint.py` (12 tests). **Deployed 2026-10-07:** the atlas publish and Gitea build promoted `sha-de44d86` (GitOps commit `d9104eb`); Argo CD `redop` is Synced/Healthy and the `redop-worker` Deployment is 1/1 Ready on `...redop-api:sha-de44d86`, logging `RED workflow worker started for clients 3fmindset`; W1 complete. **Fail-on-send transport done 2026-10-06:** `FailOnSendConnectorTransport` (`backend/redops/contexts/execution/infrastructure/connectors.py`) and `ConnectorSendRefusedError` (`.../domain/errors.py`) refuse every send loudly and record no external operation; `connector_transport_from_env` selects it when `DATABASE_URL` is set, so the worker starts and resumes durable workflows while nothing leaves the box; verified by `tests/unit/execution/test_fail_on_send_transport.py` (2 tests) and `tests/unit/workflows/test_worker_entrypoint.py` (14 tests). **Chart done 2026-10-06:** `worker.enabled: true` and `REDOP_WORKER_TENANTS: "3fmindset"` render the worker Deployment; verified by `tests/unit/shared/test_red_helm_chart.py` |
 | Q16 | Optimistic-version conflict half: a stale mutation returns 409 | api/governance | a mutation route that accepts an expected version | test two writes against the same version; first succeeds, stale second returns 409 without changing state. **Done 2026-10-06:** the live Production `BuildObject` carries a monotonic `version` (starts at 1, advances on every mutation and transition) and `require_version(expected)` raises `BuildObjectVersionConflictError` before any mutation; `POST /red/builds/{build_id}/transition` accepts `expected_version`, returns 409 on a stale write (404 unknown/foreign, 422 illegal target), and the version round-trips through the mapper; verified by `tests/unit/production/test_build_object_version.py` (8 tests) and the new route tests in `tests/unit/production/test_builds_route.py` (5 tests). **Store-level CAS done 2026-10-06:** `BuildObjectRepository.save` accepts an optional `expected_version`; the PostgreSQL adapter issues `UPDATE ... WHERE (build_objects.build->>'version')::int = %s` and raises `BuildObjectVersionConflictError` (rolling back) when no row matches, and the in-memory adapter stores independent snapshots and enforces the same predicate, so two writers that read the same version cannot both pass; the transition route passes `expected_version` to `save`; verified by `tests/unit/production/test_build_object_store.py` (3 tests) and `test_build_object_postgres.py` (3 tests, run with `DATABASE_URL`) |
 
 ## Product priority: the gated production engagement

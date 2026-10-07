@@ -2,6 +2,39 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 2026-10-06T163236Z: W1 deploy slice blocked on the connector-inventory owner decision
+
+- **Selected item:** W1's deploy slice (configure a connector transport and
+  `REDOP_WORKER_TENANTS`, set `worker.enabled: true`, verify the chart's worker
+  Deployment is healthy), the only remaining item. It is **not ready**: the
+  worker refuses to start with `DATABASE_URL` set and no connector transport
+  (`WorkerConfigurationError`, `backend/redops/worker.py`), and choosing a
+  transport is the open connector-inventory decision (SPEC.md section 11).
+  Enabling the Deployment now would crashloop and break the Argo CD health that
+  condition 9 requires. No other item is ready: Q16 is complete (connector
+  idempotency, optimistic-version conflict and store-level CAS all done), G8/G9
+  are closed (owner 2026-10-06), C4 is done, and R1/R2 are deferred and must not
+  be picked up unattended.
+- **Outcome:** no code change. The deploy slice is blocked on a named-owner
+  decision, so the loop records the blocker rather than invent work or make the
+  connector-inventory decision unattended.
+- **Evidence:** `make done` -> `DONE-GATE PASS` (all six checks green, including
+  the deployed RED health check at `https://redop.atlas.lan/`);
+  `backend/redops/worker.py` `connector_transport_from_env` raises
+  `WorkerConfigurationError` when `DATABASE_URL` is set and no transport is
+  configured; `deploy/charts/redop/values.yaml` keeps `worker.enabled: false` and
+  `templates/deployment-worker.yaml` is gated on it.
+- **Not done (deliberately):** enabling the chart's worker Deployment and wiring
+  `REDOP_WORKER_TENANTS`; both wait on the connector-inventory owner decision. No
+  send, spend, publish or client commitment is authorized (SPEC.md sections 4 and
+  9).
+- **Next ready item:** none unblocked. The deploy slice waits on the
+  connector-inventory owner decision (SPEC.md section 11): the owner names the
+  connector(s)/transport, or directs a fail-on-send transport that keeps the
+  worker honest without a connector.
+- **Blockers:** connector-inventory owner decision (SPEC.md section 11).
+  `.ralph/DONE` touched: `make done` passes and no ready work remains.
+
 ### Cycle 2026-10-06T162634Z: W1 worker entrypoint (`python -m redops.worker`)
 
 - **Selected item:** W1's worker entrypoint, the next ready item after the
