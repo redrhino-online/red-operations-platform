@@ -4,6 +4,32 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### OpenExecutive initialization 2026-10-07: RED agency profile, team workspace, full canon
+
+- The deployed OpenExecutive (cockpit backend) was initialized as RED's own
+  agency via the AI interview (`/onboard/interview/*` through the cockpit
+  proxy). The draft was committed with owner `dave@redrhino.online`, producing
+  the company profile: name RED; a growth agency for coaches and consultants
+  (high-ticket funnels and client acquisition); target customer coaches and
+  consultants who want a predictable flow of new customers; departments Client
+  Delivery, Growth Operations, Client Pipeline; leadership Dave, Founder &
+  Principal Operator.
+- Workspace set to `team`, `America/New_York`, owner role (company domain
+  `redrhino.online`).
+- Knowledge: the full canon ingested as company documents (domain `general`) —
+  the 151 `framework-canon` transcripts plus the RED Method/ops docs and
+  `internal/`, 252 documents / ~3,100 chunks indexed. Most went through the
+  proxy; 28 that the proxy timed out on were re-uploaded directly to the
+  backend.
+- Verified: `GET /company-profile` returns RED; `GET /documents` = 252;
+  `GET /workspace` = team; a chat turn answers grounded on the RED profile
+  ("RED is a done-with-you growth agency that runs coaches and consultants
+  through a proven client-getting system — the RED Method"); the deployed
+  health gate passes.
+- Note: the interview and embeddings make model calls; the profile is stored at
+  `/data/company/profile.yaml` and the docs under `/data/company/docs/` on the
+  `redop-data` PVC.
+
 ### Cycle 20261007T000114Z: W1 deploy slice verified — `redop-worker` Deployment healthy
 
 - **Selected item:** verify the deployed `redop-worker` Deployment is
