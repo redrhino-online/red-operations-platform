@@ -2,6 +2,106 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### OpenExecutive initialization 2026-10-07: RED agency profile, team workspace, full canon
+
+- The deployed OpenExecutive (cockpit backend) was initialized as RED's own
+  agency via the AI interview (`/onboard/interview/*` through the cockpit
+  proxy). The draft was committed with owner `dave@redrhino.online`, producing
+  the company profile: name RED; a growth agency for coaches and consultants
+  (high-ticket funnels and client acquisition); target customer coaches and
+  consultants who want a predictable flow of new customers; departments Client
+  Delivery, Growth Operations, Client Pipeline; leadership Dave, Founder &
+  Principal Operator.
+- Workspace set to `team`, `America/New_York`, owner role (company domain
+  `redrhino.online`).
+- Knowledge: the full canon ingested as company documents (domain `general`) —
+  the 151 `framework-canon` transcripts plus the RED Method/ops docs and
+  `internal/`, 252 documents / ~3,100 chunks indexed. Most went through the
+  proxy; 28 that the proxy timed out on were re-uploaded directly to the
+  backend.
+- Verified: `GET /company-profile` returns RED; `GET /documents` = 252;
+  `GET /workspace` = team; a chat turn answers grounded on the RED profile
+  ("RED is a done-with-you growth agency that runs coaches and consultants
+  through a proven client-getting system — the RED Method"); the deployed
+  health gate passes.
+- Note: the interview and embeddings make model calls; the profile is stored at
+  `/data/company/profile.yaml` and the docs under `/data/company/docs/` on the
+  `redop-data` PVC.
+
+
+
+Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
+### Cycle 20261007T000114Z: W1 deploy slice verified — `redop-worker` Deployment healthy
+
+- **Selected item:** verify the deployed `redop-worker` Deployment is
+  Running/healthy after the atlas publish and build (the next ready item recorded
+  by cycle 2026-10-06T175247Z). It is the only ready item: G8/G9 are closed, C4
+  is done, Q16 is complete, and R1/R2 stay deferred and must not be picked up
+  unattended.
+- **Outcome:** no code change. The atlas publish and Gitea build completed and
+  promoted the worker-enabled chart, so the live verification the previous cycle
+  deferred now passes. The `redop-worker` Deployment exists and is 1/1 Ready on
+  image `registry.atlas.lan/atlas-admin/redop-api:sha-de44d86`; the pod is
+  Running with 0 restarts and logs `RED workflow worker started for clients
+  3fmindset`. W1 is complete.
+- **Evidence:** `git ls-remote atlas refs/heads/main` = `de44d86` (matches local
+  HEAD); the Gitea build workflow built and pushed `sha-de44d86` and promoted it
+  to the GitOps repo as commit `d9104eb` (`ci: promote redop sha-de44d86`);
+  Argo CD Application `redop` is Synced/Healthy at revision `d9104eb`; the
+  migration Job `redop-migrate-b2v4d` Completed before the API served;
+  `kubectl -n redop get deploy redop-worker` -> 1/1 Ready, image
+  `...redop-api:sha-de44d86`; `kubectl -n redop logs deploy/redop-worker` ->
+  `RED workflow worker started for clients 3fmindset`; the worker env carries
+  `REDOP_WORKER_TENANTS=3fmindset` and command `python -m redops.worker`;
+  `make done` -> DONE-GATE PASS (all six checks, including the deployed RED
+  health check at `https://redop.atlas.lan/`).
+- **Not done (deliberately):** no send, spend, publish or client commitment is
+  authorized (SPEC.md sections 4 and 9). The worker runs the interim fail-on-send
+  transport, so it resumes durable workflows but refuses every send.
+- **Next ready item:** none. The post-prototype queue is exhausted: G1-G7 done,
+  G8/G9 closed, C4 done, Q16 done, W1 complete. R1/R2 remain deferred and are not
+  picked up unattended.
+- **Blockers:** none. `.ralph/DONE` touched: `make done` passes and no ready work
+  remains.
+
+### Cycle 2026-10-06T175247Z: W1 deploy slice — fail-on-send connector transport, worker enabled
+
+- **Selected item:** W1's deploy slice (configure the interim fail-on-send
+  connector transport and `REDOP_WORKER_TENANTS`, set `worker.enabled: true`,
+  verify the chart's worker Deployment is healthy), the only remaining item and
+  now ready after the owner's 2026-10-06 connector-inventory decision. It
+  outranks every alternative: G8/G9 are closed, C4 is done, Q16 is complete, and
+  R1/R2 stay deferred and must not be picked up unattended.
+- **Outcome:** new `FailOnSendConnectorTransport`
+  (`backend/redops/contexts/execution/infrastructure/connectors.py`) and named
+  `ConnectorSendRefusedError` (`.../domain/errors.py`): the interim connector
+  refuses every send loudly and records no external operation, so nothing leaves
+  the box. `connector_transport_from_env` now selects it when `DATABASE_URL` is
+  set (instead of raising `WorkerConfigurationError`), so `worker_from_env` builds
+  and the worker starts and resumes durable workflows; a step that would send
+  raises, is caught per client, and the run stays persisted for a later retry with
+  a real connector. The chart enables the worker by default (`worker.enabled:
+  true`) and passes `REDOP_WORKER_TENANTS: "3fmindset"`; the worker Deployment
+  renders with the roster env. Reversible: a real connector replaces the transport
+  with no caller change.
+- **Evidence:** `tests/unit/execution/test_fail_on_send_transport.py` (2 tests)
+  proves the refusal is a named error and records no operation;
+  `tests/unit/workflows/test_worker_entrypoint.py` (14 tests) proves the durable
+  configuration selects the fail-on-send transport, builds a worker, and leaves a
+  refused run persisted; `tests/unit/shared/test_red_helm_chart.py` proves the
+  worker renders with the roster and can be disabled. `make check` 2716 passed, 3
+  skipped, 799 subtests; `make done` -> DONE-GATE PASS.
+- **Not done (deliberately):** the live worker Deployment health. The live image
+  (`sha-3c2c482`) predates the worker entrypoint, so the worker deploys only after
+  the harness publishes this commit to `atlas`, the Gitea build promotes the chart
+  (now `worker.enabled: true`) and a new image, and Argo CD syncs. No send, spend,
+  publish or client commitment is authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** verify the deployed `redop-worker` Deployment is
+  Running/healthy after the atlas publish and build.
+- **Blockers:** none for the code+chart slice; the live verification waits on the
+  atlas publish/build. `.ralph/DONE` touched: `make done` passes.
+
+Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ### Cycle 2026-10-06T163236Z: W1 deploy slice blocked on the connector-inventory owner decision
 
 - **Selected item:** W1's deploy slice (configure a connector transport and

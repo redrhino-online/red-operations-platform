@@ -43,7 +43,7 @@ HELP_ALIASES := $(shell bash -c 's=help; for ((m=0;m<16;m++)); do out=; for ((i=
 
 COMMAND_ALIASES := $(RUN_ALIASES) $(LOOP_ALIASES) $(HELP_ALIASES)
 
-.PHONY: run loop help check done docs docs-serve canon-lock canon-pin vendor-pin reset-hosted $(COMMAND_ALIASES)
+.PHONY: run loop help check done docs docs-serve canon-lock canon-pin vendor-pin seed reset-hosted $(COMMAND_ALIASES)
 .DEFAULT_GOAL := help
 
 $(filter-out run,$(RUN_ALIASES)): run
@@ -64,6 +64,7 @@ help:
 	  'make canon-lock          Lock the current canon content at the start of a run (idempotent)' \
 	  'make canon-pin           Force re-pin the canon content hash in canon.lock' \
 	  'make vendor-pin          Owner action: re-baseline the absorbed fork manifest (ADR 0014)' \
+	  'make seed                Seed the 3F pilot workspace into DATABASE_URL (idempotent)' \
 	  'make reset-hosted        Wipe the hosted instance data (onboarding/people)'
 
 run: canon-lock
@@ -106,6 +107,13 @@ canon-pin:
 # upstream merge. Unattended build cycles never pin (ADR 0014).
 vendor-pin:
 	@python3 scripts/vendor_pin.py pin
+
+# Seed the 3F pilot workspace (K1; SPEC.md section 14 condition 4) into the
+# database named by DATABASE_URL, through the real domain use cases. Idempotent:
+# a rerun changes nothing. The seeded values are demo data, never client
+# approvals.
+seed:
+	@PYTHONPATH=backend uv run python -m redops.seed
 
 reset-hosted:
 	@./scripts/reset_redop_data.sh

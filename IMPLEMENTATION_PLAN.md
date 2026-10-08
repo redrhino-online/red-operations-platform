@@ -4,6 +4,45 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 20261008T130457Z: K1 — the 3F pilot workspace seed (interrupted agent run completed by the operator)
+
+- **Selected item:** K1 (seed the 3F pilot workspace end to end), the only
+  ready item: its dependency Q30 is done, it unblocks K2-K8 and K11/K12 (the
+  whole single-shell context line), and `[7/7]`'s live check fails without it.
+- **Outcome:** `backend/redops/seed.py` seeds the `ws-3f` workspace under tenant
+  `3fmindset` through the real routes the e2e proves: the workspace with
+  demo-marked authorities, immutable source records, grounded claims, three
+  production builds, and all eleven stage-gate decisions (stages 0-10). Every
+  seeded identifier, actor and prose value carries the `demo`/`Demo` marker
+  except the owner-fixed pilot ids (`3fmindset`, `ws-3f`). The module is
+  self-contained production code (no `tests.*` imports) with a `seed_from_env`
+  entrypoint requiring `DATABASE_URL`; `make seed` runs it. A rerun changes
+  nothing (idempotent by natural keys and already-approved skip).
+- **Interruption and resolution:** the agent run implemented the seed and
+  archived the older cycle entries but was interrupted before verification
+  finished and before writing its commit message, so the harness correctly
+  refused to commit. The operator completed the slice: fixed the one remaining
+  test assertion (the builds demo-marker check is case-insensitive, matching the
+  claims fix the agent had already made), added the `make seed` target, and ran
+  the verification below.
+- **Evidence:** `tests/unit/test_seed.py` 4 passed (workspace e2e, idempotent
+  rerun, demo marking, and the PostgreSQL store path); `make check` 2730
+  passed / 3 skipped / 799 subtests; dev-database verification:
+  `GET /red/clients?tenant_id=3fmindset` -> `ws-3f` with demo authorities,
+  `GET /red/decisions` -> 11 decisions covering stages 0-10, `/red/methods` 1,
+  `/red/offers` 1, `/red/approvals` 140, `make seed` rerun reports
+  `workspace_created: false` and empty created lists.
+- **Not done (deliberately):** measurement, opportunity and journey records are
+  outside K1's seed scope (the stage 10 baseline's metric observations stay
+  pending, never fabricated); no send, spend, publication or client commitment
+  is authorized (SPEC.md sections 4 and 9); the interventions ranking derives
+  from the production view, so a fully gated demo engagement currently yields
+  no intervention cards (K8 will word the command-center expectation against
+  this reality).
+- **Next ready item:** K2 (shared workspace/engagement context in the cockpit),
+  unblocked by K1; K9 and K10 are independent and may interleave.
+- **Blockers:** none.
+
 ### Owner decision 2026-10-08: single-shell cockpit overhaul phase opened (K queue)
 
 - **Selected item:** none (planning entry, no cycle). The owner reviewed the
@@ -42,101 +81,7 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   the context work and makes every later screen verification meaningful.
 - **Blockers:** none.
 
-### OpenExecutive initialization 2026-10-07: RED agency profile, team workspace, full canon
 
-- The deployed OpenExecutive (cockpit backend) was initialized as RED's own
-  agency via the AI interview (`/onboard/interview/*` through the cockpit
-  proxy). The draft was committed with owner `dave@redrhino.online`, producing
-  the company profile: name RED; a growth agency for coaches and consultants
-  (high-ticket funnels and client acquisition); target customer coaches and
-  consultants who want a predictable flow of new customers; departments Client
-  Delivery, Growth Operations, Client Pipeline; leadership Dave, Founder &
-  Principal Operator.
-- Workspace set to `team`, `America/New_York`, owner role (company domain
-  `redrhino.online`).
-- Knowledge: the full canon ingested as company documents (domain `general`) —
-  the 151 `framework-canon` transcripts plus the RED Method/ops docs and
-  `internal/`, 252 documents / ~3,100 chunks indexed. Most went through the
-  proxy; 28 that the proxy timed out on were re-uploaded directly to the
-  backend.
-- Verified: `GET /company-profile` returns RED; `GET /documents` = 252;
-  `GET /workspace` = team; a chat turn answers grounded on the RED profile
-  ("RED is a done-with-you growth agency that runs coaches and consultants
-  through a proven client-getting system — the RED Method"); the deployed
-  health gate passes.
-- Note: the interview and embeddings make model calls; the profile is stored at
-  `/data/company/profile.yaml` and the docs under `/data/company/docs/` on the
-  `redop-data` PVC.
-
-### Cycle 20261007T000114Z: W1 deploy slice verified — `redop-worker` Deployment healthy
-
-- **Selected item:** verify the deployed `redop-worker` Deployment is
-  Running/healthy after the atlas publish and build (the next ready item recorded
-  by cycle 2026-10-06T175247Z). It is the only ready item: G8/G9 are closed, C4
-  is done, Q16 is complete, and R1/R2 stay deferred and must not be picked up
-  unattended.
-- **Outcome:** no code change. The atlas publish and Gitea build completed and
-  promoted the worker-enabled chart, so the live verification the previous cycle
-  deferred now passes. The `redop-worker` Deployment exists and is 1/1 Ready on
-  image `registry.atlas.lan/atlas-admin/redop-api:sha-de44d86`; the pod is
-  Running with 0 restarts and logs `RED workflow worker started for clients
-  3fmindset`. W1 is complete.
-- **Evidence:** `git ls-remote atlas refs/heads/main` = `de44d86` (matches local
-  HEAD); the Gitea build workflow built and pushed `sha-de44d86` and promoted it
-  to the GitOps repo as commit `d9104eb` (`ci: promote redop sha-de44d86`);
-  Argo CD Application `redop` is Synced/Healthy at revision `d9104eb`; the
-  migration Job `redop-migrate-b2v4d` Completed before the API served;
-  `kubectl -n redop get deploy redop-worker` -> 1/1 Ready, image
-  `...redop-api:sha-de44d86`; `kubectl -n redop logs deploy/redop-worker` ->
-  `RED workflow worker started for clients 3fmindset`; the worker env carries
-  `REDOP_WORKER_TENANTS=3fmindset` and command `python -m redops.worker`;
-  `make done` -> DONE-GATE PASS (all six checks, including the deployed RED
-  health check at `https://redop.atlas.lan/`).
-- **Not done (deliberately):** no send, spend, publish or client commitment is
-  authorized (SPEC.md sections 4 and 9). The worker runs the interim fail-on-send
-  transport, so it resumes durable workflows but refuses every send.
-- **Next ready item:** none. The post-prototype queue is exhausted: G1-G7 done,
-  G8/G9 closed, C4 done, Q16 done, W1 complete. R1/R2 remain deferred and are not
-  picked up unattended.
-- **Blockers:** none. `.ralph/DONE` touched: `make done` passes and no ready work
-  remains.
-
-### Cycle 2026-10-06T175247Z: W1 deploy slice — fail-on-send connector transport, worker enabled
-
-- **Selected item:** W1's deploy slice (configure the interim fail-on-send
-  connector transport and `REDOP_WORKER_TENANTS`, set `worker.enabled: true`,
-  verify the chart's worker Deployment is healthy), the only remaining item and
-  now ready after the owner's 2026-10-06 connector-inventory decision. It
-  outranks every alternative: G8/G9 are closed, C4 is done, Q16 is complete, and
-  R1/R2 stay deferred and must not be picked up unattended.
-- **Outcome:** new `FailOnSendConnectorTransport`
-  (`backend/redops/contexts/execution/infrastructure/connectors.py`) and named
-  `ConnectorSendRefusedError` (`.../domain/errors.py`): the interim connector
-  refuses every send loudly and records no external operation, so nothing leaves
-  the box. `connector_transport_from_env` now selects it when `DATABASE_URL` is
-  set (instead of raising `WorkerConfigurationError`), so `worker_from_env` builds
-  and the worker starts and resumes durable workflows; a step that would send
-  raises, is caught per client, and the run stays persisted for a later retry with
-  a real connector. The chart enables the worker by default (`worker.enabled:
-  true`) and passes `REDOP_WORKER_TENANTS: "3fmindset"`; the worker Deployment
-  renders with the roster env. Reversible: a real connector replaces the transport
-  with no caller change.
-- **Evidence:** `tests/unit/execution/test_fail_on_send_transport.py` (2 tests)
-  proves the refusal is a named error and records no operation;
-  `tests/unit/workflows/test_worker_entrypoint.py` (14 tests) proves the durable
-  configuration selects the fail-on-send transport, builds a worker, and leaves a
-  refused run persisted; `tests/unit/shared/test_red_helm_chart.py` proves the
-  worker renders with the roster and can be disabled. `make check` 2716 passed, 3
-  skipped, 799 subtests; `make done` -> DONE-GATE PASS.
-- **Not done (deliberately):** the live worker Deployment health. The live image
-  (`sha-3c2c482`) predates the worker entrypoint, so the worker deploys only after
-  the harness publishes this commit to `atlas`, the Gitea build promotes the chart
-  (now `worker.enabled: true`) and a new image, and Argo CD syncs. No send, spend,
-  publish or client commitment is authorized (SPEC.md sections 4 and 9).
-- **Next ready item:** verify the deployed `redop-worker` Deployment is
-  Running/healthy after the atlas publish and build.
-- **Blockers:** none for the code+chart slice; the live verification waits on the
-  atlas publish/build. `.ralph/DONE` touched: `make done` passes.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ## Prototype definition of done
@@ -289,7 +234,7 @@ deferred and are not picked up unattended.
 
 | # | Item | Area | Depends | Evidence / gate |
 | --- | --- | --- | --- | --- |
-| K1 | Seed the 3F pilot workspace end to end: an idempotent seed that creates the `3fmindset` workspace, engagement, sources, claims, method, offer, builds, approvals and stage-gate decisions through the real domain use cases (reuse the e2e fixtures; mark every seeded value as demo data; a rerun changes nothing) | ops/api | Q30 | seed rerun test passes; `GET /red/clients?tenant_id=3fmindset` shows the workspace |
+| K1 | Seed the 3F pilot workspace end to end: an idempotent seed that creates the `3fmindset` workspace, engagement, sources, claims, method, offer, builds, approvals and stage-gate decisions through the real domain use cases (reuse the e2e fixtures; mark every seeded value as demo data; a rerun changes nothing) | ops/api | Q30 | Done 2026-10-08 (cycle 20261008T130457Z, completed by the operator after the agent run was interrupted pre-commit): `backend/redops/seed.py` + `make seed` seed `ws-3f`/`3fmindset` through the real routes — workspace with demo authorities, sources, claims, builds and all eleven stage-gate decisions, demo-marked; idempotent rerun changes nothing; verified by `tests/unit/test_seed.py` (4 tests incl. PostgreSQL), `make check` 2730 passed, and the dev-DB reads (`/red/clients` ws-3f; `/red/decisions` stages 0-10; methods 1, offers 1, approvals 140) |
 | K2 | Shared client context in the cockpit: a persisted workspace/engagement picker in the shell backed by a tenant-scoped RED workspaces listing (add the listing route only if none exists), exposed to client components as additive files in the cockpit tree (ADR 0014) | ui, api | K1 | picker persists the selection; component test; screens receive the context instead of free-text defaults |
 | K3 | Port command center, client workspace and approval inbox as native cockpit pages at `/operations/*` (additive files styled with the cockpit tokens and components, data via same-origin `/red`, real error and empty states); give the ported screens a component test suite in the repo-side `tests/cockpit-ui/` (vitest + testing-library; the vendor `package.json` stays untouched) | ui | K2 | cockpit component tests pass; `check_vendor_additive.sh` passes; the three routes render the seeded workspace |
 | K4 | Port build board, workflow run detail and launch readiness to `/operations/*` under the same rules | ui | K3 | same gates as K3 for the three routes |
