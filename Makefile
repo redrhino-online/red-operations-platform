@@ -43,7 +43,7 @@ HELP_ALIASES := $(shell bash -c 's=help; for ((m=0;m<16;m++)); do out=; for ((i=
 
 COMMAND_ALIASES := $(RUN_ALIASES) $(LOOP_ALIASES) $(HELP_ALIASES)
 
-.PHONY: run loop help check done docs docs-serve canon-lock canon-pin reset-hosted $(COMMAND_ALIASES)
+.PHONY: run loop help check done docs docs-serve canon-lock canon-pin vendor-pin reset-hosted $(COMMAND_ALIASES)
 .DEFAULT_GOAL := help
 
 $(filter-out run,$(RUN_ALIASES)): run
@@ -58,11 +58,12 @@ help:
 	  'make loop n=-1           Run continuously until done, STOP or a hard error' \
 	  'make run REPO=../fork    Run against a Git checkout in another folder' \
 	  'make check               Run the full test suite (with Postgres) and pyflakes' \
-	  'make done                Run the prototype definition-of-done gate (SPEC section 13)' \
+	  'make done                Run the definition-of-done gate (SPEC sections 13 and 14)' \
 	  'make docs                Build the developer docs site into site/ (strict)' \
 	  'make docs-serve          Serve the developer docs locally with live reload' \
 	  'make canon-lock          Lock the current canon content at the start of a run (idempotent)' \
 	  'make canon-pin           Force re-pin the canon content hash in canon.lock' \
+	  'make vendor-pin          Owner action: re-baseline the absorbed fork manifest (ADR 0014)' \
 	  'make reset-hosted        Wipe the hosted instance data (onboarding/people)'
 
 run: canon-lock
@@ -99,6 +100,12 @@ canon-lock:
 
 canon-pin:
 	@h="$$(./scripts/canon_hash.sh)"; printf '%s %s\n' "$$h" "$$(date -u +%FT%TZ)" > canon.lock; printf 'pinned canon: %s\n' "$$h"
+
+# Owner action only: re-baseline the absorbed fork's manifest after an
+# owner-approved exception recorded in docs/fork_inventory.md or after an
+# upstream merge. Unattended build cycles never pin (ADR 0014).
+vendor-pin:
+	@python3 scripts/vendor_pin.py pin
 
 reset-hosted:
 	@./scripts/reset_redop_data.sh

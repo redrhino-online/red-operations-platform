@@ -1,7 +1,0 @@
-# RED vendor overlay hook manifest (ADR 0011).
-# One line per hook: <target-relative-path> <snippet-file> <marker>
-# The snippet is spliced into the target between "# RED-OVERLAY:BEGIN <marker>"
-# and "# RED-OVERLAY:END <marker>". Re-applying replaces the block, so apply is
-# idempotent and re-triggerable after an upstream submodule bump.
-packages/core/openexecutive/orchestrator/router.py router.py.snippet router-registration
-packages/core/openexecutive/orchestrator/answer_sources.py answer_sources.py.snippet answer-sources-areas

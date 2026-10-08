@@ -1,16 +1,16 @@
 # syntax=docker/dockerfile:1.6
 # RED API image (Q47; SPEC.md sections 6, 10 and 13 condition 9).
 #
-# Builds the RED FastAPI app (`redops.api.app:app`), which composes the pinned
-# OpenExecutive shell through the composition seam (ADR 0008) and serves RED's
-# own REST surface under `/red`, including the `/red/health` liveness probe the
-# Atlas deployment smoke checks. The image is built from this repository's
-# `uv.lock`, so the pinned OpenExecutive submodule and every transitive
-# dependency (torch CPU, chromadb, sentence-transformers, ...) resolve exactly
-# as they do in CI. `redops` is imported from `backend/` via PYTHONPATH, the
-# same way `make check` runs it, so the project itself is not installed.
+# Builds the RED FastAPI app (`redops.api.app:app`), which composes the absorbed
+# OpenExecutive shell through the composition seam (ADR 0008, ADR 0014) and
+# serves RED's own REST surface under `/red`, including the `/red/health`
+# liveness probe the Atlas deployment smoke checks. The image is built from this
+# repository's `uv.lock`, so the absorbed OpenExecutive fork and every
+# transitive dependency (torch CPU, chromadb, sentence-transformers, ...) resolve
+# exactly as they do in CI. `redops` is imported from `backend/` via PYTHONPATH,
+# the same way `make check` runs it, so the project itself is not installed.
 #
-# The build context is the repository root; `.dockerignore` keeps the submodule
+# The build context is the repository root; `.dockerignore` keeps the fork's
 # `.venv` and tool caches out of it.
 FROM python:3.12-slim AS api
 
@@ -32,13 +32,9 @@ RUN pip install --no-cache-dir uv
 # the pip-installed `uv` in place. UV_PROJECT_ENVIRONMENT targets the system
 # interpreter so the runtime CMD finds the packages.
 COPY pyproject.toml uv.lock ./
+# The fork is absorbed (ADR 0014): its tracked source already carries the RED
+# adoption, so the image matches the repository with no apply step.
 COPY vendor/openexecutive/packages/core/ ./vendor/openexecutive/packages/core/
-# Apply the committed RED overlay (ADR 0011) so the image matches the repository:
-# the overlay registers RED's specialists in the fork's own registry. The script
-# is stdlib-only and needs no git.
-COPY scripts/vendor_overlay.py ./scripts/vendor_overlay.py
-COPY vendor/overlay/ ./vendor/overlay/
-RUN python scripts/vendor_overlay.py apply
 COPY backend/ ./backend/
 RUN UV_PROJECT_ENVIRONMENT=/usr/local \
     uv sync --locked --no-dev --no-install-project --inexact

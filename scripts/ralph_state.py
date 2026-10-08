@@ -15,7 +15,9 @@ HISTORY_HEADER = (
 )
 STATUS_HEADING = "## Current cycle status"
 ENTRY_PATTERN = re.compile(r"^### .+$", re.MULTILINE)
-QUEUE_PATTERN = re.compile(r"^\|\s*(G[1-9]|C4|W1|Q16)\s*\|.*$", re.MULTILINE)
+QUEUE_PATTERN = re.compile(
+    r"^\|\s*(G[1-9]|C4|W1|Q16|K[1-9]|K1[0-3])\s*\|.*$", re.MULTILINE
+)
 
 
 def current_status_bounds(lines: list[str]) -> tuple[int, int]:

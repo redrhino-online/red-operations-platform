@@ -1,7 +1,0 @@
-{
-  "section_id": "people",
-  "title": "People",
-  "markdown": "**What it is:** The human roster. Team members can hold named approval scopes; contacts are people outside the team.\n\n**What it does:**\n\n- Stores human names, roles, response times, and preferred channels.\n- Records which human approvers hold each authority scope.\n- Keeps contacts separate from team members and approvers.\n\n**Human authority:** RED specialists do not replace people or grant approvals. A gate, release, spend, or client commitment still needs the designated human decision.\n\nUse the roster to identify the accountable owner and approver for each client decision.",
-  "mermaid": null,
-  "generated_at": "2026-10-06T00:00:00Z"
-}

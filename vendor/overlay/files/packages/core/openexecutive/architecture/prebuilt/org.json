@@ -1,7 +1,0 @@
-{
-  "section_id": "org",
-  "title": "People and Human Authority",
-  "markdown": "The workspace keeps human people, approval scopes, goals, and channel details. This is separate from the RED specialist registry. A person may be accountable for a client or hold a specific approval scope; a RED agent does not become an approver by appearing in a work area.\n\nThe upstream workspace also retains work-area and goal grouping for compatibility. The generic C-suite specialist registry is retired by the RED overlay; old generic specialist keys are not available for new specialist routing. Human authority is still recorded against named people and enforced by the RED gate model.\n\nContacts are distinct from team members. Contacts cannot sign in, approve gates, or receive autonomous actions. RED agent outputs remain proposals until the designated human acts.",
-  "mermaid": "flowchart TD\n  Work[Client work] --> Agent[RED specialist drafts]\n  Agent --> Proposal[Proposal]\n  Proposal --> Human[Named human approver]\n  Human --> Decision[Recorded decision]",
-  "generated_at": "2026-10-06T00:00:00Z"
-}

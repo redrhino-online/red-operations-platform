@@ -1,11 +1,10 @@
 # syntax=docker/dockerfile:1.6
-# RED cockpit image (ADR 0012; SPEC.md sections 8, 10 and 13 condition 9).
+# RED cockpit image (ADR 0012, ADR 0013; SPEC.md sections 8, 10 and 13 condition 9).
 #
-# Builds the vendored OpenExecutive UI (`vendor/openexecutive/packages/ui`) as
-# the prototype shell, rebranded RED through the ADR 0011 overlay. The overlay
-# files under `vendor/overlay/files/packages/ui/` are copied over the vendor
-# tree, so the image matches the repository's declared vendor state without
-# running the overlay script (which also targets the core package).
+# Builds the absorbed OpenExecutive UI (`vendor/openexecutive/packages/ui`) as
+# the single RED shell (ADR 0013). The fork is absorbed (ADR 0014): its tracked
+# source already carries the RED rebrand, so the image matches the repository
+# with no apply step.
 #
 # Runtime env: BACKEND_BASE_URL=http://redop-api:8000/openexecutive and
 # BACKEND_SHARED_SECRET (the proxy sends x-api-key), AUTH_SECRET.
@@ -18,7 +17,6 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY vendor/openexecutive/packages/ui/ ./
-COPY vendor/overlay/files/packages/ui/ ./
 ENV NEXT_TELEMETRY_DISABLED=1
 # Keep Next.js below the 4Gi DinD build-container limit while leaving headroom
 # for Docker and Alpine processes.

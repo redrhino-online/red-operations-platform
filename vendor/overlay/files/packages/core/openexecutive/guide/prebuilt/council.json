@@ -1,7 +1,0 @@
-{
-  "section_id": "council",
-  "title": "RED agent roster",
-  "markdown": "**What it is:** The fixed set of nine RED specialists used by the Executive for domain work.\n\n**What it does:**\n\n- Routes questions to the matching RED specialist.\n- Keeps each specialist inside its charter and domain.\n- Lets an operator review the available agent settings.\n\n**The roster:** Discovery and Diagnosis; IP Structuring; Offer and Journey Design; Knowledge Management; Governance and Approval; Business Asset Production; Campaign and Journey Execution; Insight and Performance; IP Portfolio Development.\n\n**Capability slots 10 and 11:** Client Success and Engagement Health, and Assurance, Risk and Compliance, are chartered for future proposals. They are deliberately absent from routing and have no execution permissions.\n\nAgent output is a proposal, not an approval. Human authority remains with the designated client or RED approver.",
-  "mermaid": "flowchart LR\n  Question[Question] --> Executive[Executive]\n  Executive --> Specialist[One of 9 RED specialists]\n  Specialist --> Proposal[Proposal]\n  Proposal --> Approver[Designated human]",
-  "generated_at": "2026-10-06T00:00:00Z"
-}
