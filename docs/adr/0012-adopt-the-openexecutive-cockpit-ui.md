@@ -4,6 +4,7 @@
 - Date: 2026-10-05
 - Owner: RED principal
 - Amends: ADR 0008 (reuse the fork's UI where possible)
+- Amended by: ADR 0013 (single shell), ADR 0014 (the overlay rebrand is absorbed into the committed baseline)
 
 ## Context
 

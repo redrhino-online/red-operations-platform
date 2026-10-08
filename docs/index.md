@@ -10,11 +10,12 @@ comprehensive developer reference for the **app repository**
 
 - **In scope:** every RED context, aggregate and seam under `backend/redops/`,
   the REST API, the Next.js UI, the workflow engine, the build/deploy tooling, the
-  Ralph harness, and the **vendor overlay** that patches the pinned OpenExecutive
-  submodule.
-- **Out of scope:** the internals of the vendored OpenExecutive package
-  (`vendor/openexecutive/`). It is a pinned dependency; this site documents only
-  how RED *uses* it (through ports and the overlay), never its internal modules.
+  Ralph harness, and the **absorbed OpenExecutive fork** with its
+  additive-change rule (ADR 0014).
+- **Out of scope:** upstream-origin OpenExecutive internals outside RED's
+  adopted surfaces. This site documents RED's additive surfaces
+  (`/operations/*` screens, `redops_*` modules) and how RED *uses* the rest
+  (through ports), never upstream internals.
 
 ## How to read this site
 
@@ -25,7 +26,7 @@ comprehensive developer reference for the **app repository**
 | work in a bounded context | [Bounded contexts](architecture/contexts.md) + [Seams](architecture/seams.md) |
 | touch the pipeline | [Stages and gates](pipeline/stages-and-gates.md), [Agent roster](pipeline/agents.md) |
 | build the API or UI | [REST API](platform/api.md), [Frontend](platform/frontend.md) |
-| patch the pinned OpenExecutive | [Vendor overlay](platform/vendor-overlay.md) |
+| extend the absorbed OpenExecutive cockpit | [Absorbed fork](platform/absorbed-fork.md) |
 | build, test or run the loop | [Build harness and tests](operations/harness-and-tests.md) |
 | deploy | [Deployment on Atlas](platform/deploy.md) |
 
@@ -45,9 +46,9 @@ backend/redops/
   api/               application factory and composition root
 frontend/src/        Next.js UI (thin client, no RED business logic)
 docs/                this documentation (source)
-scripts/             gates, checks and the vendor overlay
+scripts/             gates and checks
 deploy/              Helm chart and GitOps (see Deployment)
-vendor/openexecutive pinned submodule (out of scope) + vendor/overlay (in scope)
+vendor/openexecutive absorbed OpenExecutive fork (RED changes additive; ADR 0014)
 tests/               unit, contract, integration, workflow, e2e, security
 ```
 

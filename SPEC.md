@@ -1,6 +1,6 @@
 # RED Operations Platform: Product and Engineering Specification
 
-Version: 0.3, October 5, 2026. Status: implementation baseline, subject to fork inventory and client authority decisions. Section 12 (canon reference) updated for the expanded canon: 151 source transcripts in ten series, plus RED's synthesized public method docs and internal operator maps.
+Version: 0.5, October 8, 2026. Status: implementation baseline, subject to fork inventory and client authority decisions. Section 12 (canon reference) updated for the expanded canon: 151 source transcripts in ten series, plus RED's synthesized public method docs and internal operator maps. Section 14 (cockpit overhaul definition of done) added by the 2026-10-08 single-shell decision (ADR 0013); the vendor disposition revised the same day by the fork-absorption decision (ADR 0014).
 
 ## 1. Product contract
 
@@ -24,9 +24,9 @@ Fork OpenExecutive at a pinned upstream commit and record license, dependencies,
 | Workflow engine and persistence | Adapt to RED definitions | Verify resumability, version pinning, gate semantics, idempotence |
 | Approvals, audit, alerts, scheduling | Preserve behavior where sound | Verify actor identity, immutable records, delivery and retry behavior |
 | Executive persona, generic departments | Replace with RED's nine required agents | Ship all nine agents (section 5); retire the OpenExecutive generic C-suite registry; remove obsolete labels and incompatible permissions |
-| Cockpit | Adopt as the prototype shell, rebranded RED (ADR 0012) | The OpenExecutive cockpit is reworked into the RED portfolio command center: navigation keeps the OpenExecutive groups plus a RED Operations group linking the section 8 screens; queries stay tenant scoped and explain each intervention |
+| Cockpit | Adopt as the single RED shell, rebranded RED (ADR 0012, ADR 0013) | The OpenExecutive cockpit is the only user-facing UI: the section 8 screens are native cockpit pages at `/operations/*` through the ADR 0011 overlay, the separate `/screens` thin client is retired, a shared workspace/engagement context drives the screens, the landing surface is the portfolio command center, and the canon, departments and stage workflows are RED's (section 14) |
 
-Retain upstream notices and licensing obligations. Keep a fork diff register with upstream commit, local decision, owner, migration note, and regression evidence. Never delete a working upstream path until its replacement has passed characterization tests. Vendor edits are allowed only through the committed, re-triggerable overlay in `vendor/overlay/` applied by `scripts/apply_vendor_overlay.sh` (ADR 0011); every local change to the pinned submodule must be overlay-declared and reproducible from this repository.
+Retain upstream notices and licensing obligations. Keep a fork diff register with upstream commit, local decision, owner, migration note, and regression evidence. Never delete a working upstream path until its replacement has passed characterization tests. The fork is absorbed into this repository (ADR 0014): `vendor/openexecutive` is ordinary tracked source, absorbed at upstream commit `31e55338db7f7a0eb7ff30b4cb8942a1ece551bd` (v0.4.6) with the previously applied RED rebrand and agent registration as the committed baseline. Upstream updates arrive through owner-driven merges recorded in the fork diff register (`docs/fork_inventory.md`), followed by a deliberate `make vendor-pin` re-baseline. RED changes inside the vendor tree are additive: cycles add new files and never modify a locked upstream-origin file; the two exemptions are RED-adopted surfaces (`vendor/red-owned-files.txt`, the files the adoption already changed) and owner-approved exceptions recorded in the fork diff register. `scripts/check_vendor_additive.sh` (DoD `[4/7]`) enforces the rule.
 
 ## 3. Domain boundaries
 
@@ -307,10 +307,41 @@ The prototype is the RED branded version of the OpenExecutive system, running en
 | 4 | RED aggregates, gates and the ledger persist in PostgreSQL, and OpenExecutive keeps its SQLite and Chroma state behind ports | adapter and migration tests run with `DATABASE_URL` set, and no store leaks across the seam |
 | 5 | Agent paths run deterministically in e2e, and the real provider path is proven | a deterministic fake model gateway drives the e2e; a separate live OpenRouter smoke passes and the LLM adapter logs model, prompt version, usage and trace id |
 | 6 | All section 8 screens render | the frontend builds and browser tests cover the portfolio command center, client workspace, source and claim explorer, transformation map, offer and journey editor, build board with dependency view, approval inbox with exact version diff, workflow run detail, launch readiness, performance review, portfolio opportunities and authority settings |
-| 7 | The vendored OpenExecutive is modified only through the re-triggerable RED overlay | `scripts/apply_vendor_overlay.sh --check` proves the pinned submodule working tree equals the committed `vendor/overlay/` applied onto the pinned commit, with no vendor change outside the overlay; RED domain and app code otherwise lives in `backend/redops/` through ports, adapters and composition (ADR 0011) |
+| 7 | The absorbed OpenExecutive fork carries only RED's additive and adopted changes | `scripts/check_vendor_additive.sh` proves no locked upstream-origin file in `vendor/openexecutive/` differs from the baseline manifest (`vendor/upstream-manifest.sha256`), so RED's divergence is exactly the red-owned surfaces (ADR 0014); RED domain and app code otherwise lives in `backend/redops/` through ports, adapters and composition |
 | 8 | Product surfaces carry RED branding | the Director name, agent charters and UI copy are RED with no OpenExecutive branding in user facing surfaces, and LICENSE and NOTICE are retained |
 | 9 | The platform is deployed on the Atlas k3s cluster | Argo CD reports a healthy release, the migration Job ran before the API served, and the deployed health check passes |
 
 `make done` runs this gate. The build loop stops cleanly when `make done` passes, or when no ready work remains; in the second case it records a blocker and stops rather than inventing work or changing a pipeline stage. `make check` remains the per cycle gate.
 
-Beyond the prototype: before onboarding production clients, the production-readiness phase (begun once the first cluster release exists, possibly after several further iterations) must choose a database backup target and pass a witnessed restore drill, and must pass the GitOps rollback drill proving the previous compatible image restores and migrations are backward compatible and reversible (ADR 0009, ADR 0010). Neither drill is a prototype condition. The backup/restore and rollback drills (R1/R2) are **deferred 2026-10-05** behind C4 and the canon gap backlog, remain required before production client data, and are never picked up unattended. Post-prototype work is tracked as C4 (retire the generic C-suite, ship RED's nine agents), the Canon gap backlog (G1-G9), and the remaining worker/version-conflict items (W1/Q16); none of it is a prototype condition, and none of it changes the stage 0-10 template's stage count without a named-owner decision.
+Beyond the prototype: before onboarding production clients, the production-readiness phase (begun once the first cluster release exists, possibly after several further iterations) must choose a database backup target and pass a witnessed restore drill, and must pass the GitOps rollback drill proving the previous compatible image restores and migrations are backward compatible and reversible (ADR 0009, ADR 0010). Neither drill is a prototype condition. The backup/restore and rollback drills (R1/R2) are **deferred 2026-10-05** behind C4 and the canon gap backlog, remain required before production client data, and are never picked up unattended. Post-prototype work is tracked as C4 (retire the generic C-suite, ship RED's nine agents), the Canon gap backlog (G1-G9), the remaining worker/version-conflict items (W1/Q16), and the cockpit overhaul phase (section 14, K queue); none of it is a prototype condition, and none of it changes the stage 0-10 template's stage count without a named-owner decision.
+
+## 14. Cockpit overhaul definition of done
+
+The cockpit overhaul is the phase between the prototype definition of done
+(section 13, which keeps passing) and production readiness. Its owner directive
+is 2026-10-08 (ADR 0013): the rebranded OpenExecutive cockpit becomes the only
+RED user interface and takes on the context and fundamentals of the RED system
+and its reference canon. It is "done" when every condition below holds. The
+machine-checkable gate is the `[7/7]` step of `make done`
+(`scripts/check_cockpit_overhaul.sh`); it is a product constraint, not a new
+authority, and it never approves a client artifact, spends, publishes or deploys
+by itself.
+
+| # | Condition | Evidence |
+| --- | --- | --- |
+| 1 | One shell: the rebranded cockpit is the only user-facing web UI, and the separate `/screens` thin client is retired | no `frontend/` app, no `Dockerfile.ui`, no `redop-ui` Deployment and no `/screens` ingress route remain; the section 13 screen gate exercises the cockpit pages |
+| 2 | The RED Operations navigation group links the twelve section 8 screens at native cockpit routes, and every route renders | the overlay `navConfig` carries no `/screens` links and one `/operations/<route>` item per section 8 screen; each route has an overlay page and a component test; the live route check returns 200 |
+| 3 | A shared workspace/engagement context drives the screens | the shell offers a persisted workspace/engagement picker backed by a tenant-scoped RED listing; no per-screen free-text tenant or engagement inputs remain; screens render the selected workspace |
+| 4 | The 3F pilot workspace is seeded with demo data through the real domain use cases | an idempotent seed creates the `3fmindset` workspace, engagement, sources, claims, method, offer, builds, approvals and stage-gate decisions (marked as demo data); a rerun changes nothing; the live `/red/clients?tenant_id=3fmindset` read shows the workspace |
+| 5 | The landing surface is the RED portfolio command center | the deployed root renders the command center, ranked interventions included, with Briefing retargeted to RED's daily brief |
+| 6 | The canon corpus is ingested into the cockpit Knowledge domain repeatably | the ingestion is a verifiable, idempotent seed over the pinned canon (not a manual one-off), and an eval scenario asserts an answer grounds on canon files |
+| 7 | Departments, Council and People show RED's roster | the runtime department store is seeded with RED's nine agents plus chartered proposal-only slots 10 and 11 (ADR 0006); the generic C-suite registry stays retired and its labels are gone from surfaces |
+| 8 | The stage 0-10 pipeline drives cockpit workflows | the pipeline is registered as versioned cockpit workflow definitions; a run pauses at a RED approval gate (`wait_for_human`) and resumes only after the corresponding RED approval is recorded; Jobs lists the pipeline and the workflow run detail screen shows its transitions |
+| 9 | Integrity is unchanged | `scripts/check_vendor_additive.sh` passes with the ported screens and workflows in place, LICENSE and NOTICE are retained, no OpenExecutive branding appears in user-facing surfaces, and the section 13 gate still passes |
+
+`make done` runs the section 13 gate and then this gate. The build loop stops
+cleanly when `make done` passes, or when no ready work remains; in the second
+case it records a blocker and stops rather than inventing work or changing a
+pipeline stage. `make check` remains the per cycle gate. The phase never
+authorizes a send, spend, publication or client commitment (sections 4 and 9),
+and the seeded demo data is never represented as client-approved fact.

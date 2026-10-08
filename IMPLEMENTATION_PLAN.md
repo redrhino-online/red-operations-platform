@@ -4,6 +4,44 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Owner decision 2026-10-08: single-shell cockpit overhaul phase opened (K queue)
+
+- **Selected item:** none (planning entry, no cycle). The owner reviewed the
+  deployed two-app state and directed the next phase: the rebranded
+  OpenExecutive cockpit becomes the only RED UI, and the cockpit takes on the
+  context and fundamentals of the RED system and canon (ADR 0013, SPEC.md
+  section 14).
+- **Outcome:** planning foundation plus the vendor-absorption mechanics.
+  ADR 0013 records the single-shell decision; SPEC.md section 2 (cockpit row)
+  and the new section 14 record the phase definition of done; the K queue below
+  tracks the work; `make done` gained the `[7/7]` single-shell gate
+  (`scripts/check_cockpit_overhaul.sh`) so `.ralph/DONE` cannot be touched
+  while the phase is open; the stale prototype `.ralph/DONE` marker is removed
+  at handoff. Same-day owner decision on the vendor rule: the fork is absorbed
+  into this repository as ordinary tracked source (submodule and ADR 0011
+  overlay retired, ADR 0014), upstream stays reachable through the recorded
+  pin, RED changes inside the vendor tree are additive by default with
+  RED-adopted surfaces free and owner-approved exceptions recorded in
+  `docs/fork_inventory.md`, and the DoD `[4/7]` step now runs
+  `scripts/check_vendor_additive.sh` against the baseline manifest.
+- **Evidence:** the owner's 2026-10-08 review found the enforcement spec too
+  tight for the vision: substantial cockpit modification must be allowed, so
+  the minimal-vendor-change stance (ADR 0008/0011) is revised rather than
+  respected. The live findings that motivated the phase: the cockpit's RED
+  Operations group links out to a second app at `/screens/*` (ADR 0012 called
+  this a stepping stone, rejected as the end state); the twelve screens carry
+  per-screen free-text tenant/engagement forms defaulting to `3fmindset`, which
+  does not exist in the deployed database (`GET /red/clients?tenant_id=3fmindset`
+  returned zero workspaces), so screens render raw 404/422 errors or silent
+  empty states; and the thin client's bespoke palette shares nothing with the
+  cockpit's Tailwind v4 tokens.
+- **Not done (deliberately):** no code change in this entry; R1/R2 stay
+  deferred and are not picked up unattended; no send, spend, publication or
+  client commitment is authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** K1 (seed the 3F pilot workspace end to end) — it unblocks
+  the context work and makes every later screen verification meaningful.
+- **Blockers:** none.
+
 ### OpenExecutive initialization 2026-10-07: RED agency profile, team workspace, full canon
 
 - The deployed OpenExecutive (cockpit backend) was initialized as RED's own
@@ -105,7 +143,11 @@ Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest tw
 
 The prototype is the RED branded OpenExecutive system running end to end. Its
 definition of done is SPEC.md section 13 and the machine-checkable gate is
-`make done` (`scripts/check_definition_of_done.sh`). The build loop stops cleanly
+`make done` (`scripts/check_definition_of_done.sh`). Since 2026-10-08 the gate
+also carries the cockpit overhaul phase's `[7/7]` check (SPEC.md section 14,
+`scripts/check_cockpit_overhaul.sh`, ADR 0013): the section 13 checks stay as
+prerequisites and `.ralph/DONE` may be touched only when the whole gate passes.
+The build loop stops cleanly
 when `make done` passes, or when no ready item remains: in that case it records a
 blocker and stops, and never invents work, adds or renames a pipeline stage, or
 makes a named-owner decision unattended. `make check` (pytest with Postgres plus
@@ -113,8 +155,9 @@ pyflakes) is the per-cycle gate. DoD decisions confirmed 2026-10-03 (owner RED
 principal): stage 0-10 API e2e plus the section 11 acceptance and cross-tenant
 suites; RED domain on PostgreSQL with OpenExecutive's SQLite and Chroma behind
 ports; a deterministic fake model gateway for e2e plus a live OpenRouter smoke;
-all section 8 screens; vendor edits only through the committed re-triggerable
-overlay (`vendor/overlay/`, ADR 0011) with LICENSE and NOTICE retained; RED
+all section 8 screens; the absorbed fork modified additively under the
+ADR 0014 rule (`scripts/check_vendor_additive.sh` against the baseline
+manifest) with LICENSE and NOTICE retained; RED
 branding on product surfaces only; deployed on Atlas k3s.
 
 ## Prototype ready queue
@@ -213,7 +256,9 @@ stalls:
 Owner directive 2026-10-05; ADR 0012. Not part of the current prototype
 definition of done (which passes). Adopts the vendored OpenExecutive UI as the
 prototype shell, rebranded RED, with navigation following the OpenExecutive UI
-plus a RED Operations group.
+plus a RED Operations group. Superseded as the end state by the cockpit overhaul
+phase below (ADR 0013, 2026-10-08): the link-out RED Operations group was the
+stepping stone; the K queue ports the screens into the cockpit as native pages.
 
 | # | Item | Area | Depends | Evidence / gate |
 | --- | --- | --- | --- | --- |
@@ -224,6 +269,39 @@ plus a RED Operations group.
 | C5 | Disable the vendor Auth.js gate; internal-only behind the 10.0.0.0/8 allowlist | ui | C1 | Done 2026-10-05: middleware no-op and the `/api/backend` proxy treats requests as the principal |
 | C6 | Wire the cockpit to the mounted `/openexecutive` backend; keep its own OpenExecutive SQLite/Chroma state | deploy | C1 | Done 2026-10-05: `/api/backend/health` 200; cockpit uses the `redop-data` PVC |
 | C7 | Reconcile SPEC.md section 2 "Cockpit: Rework into portfolio command center" with the adoption | docs | C1 | Done 2026-10-05: SPEC.md section 2 row updated to "Adopt as the prototype shell, rebranded RED (ADR 0012)" |
+
+## Cockpit overhaul phase (single shell; the active build phase)
+
+Owner directive 2026-10-08; ADR 0013; SPEC.md section 14. The rebranded
+OpenExecutive cockpit becomes the only RED user interface and takes on the
+context and fundamentals of the RED system and canon: the twelve section 8
+screens become native cockpit pages at `/operations/*` as additive files
+(ADR 0014), a shared workspace/engagement context replaces the per-screen free-text
+tenant forms, the thin client is retired, the landing surface becomes the
+portfolio command center, the canon corpus is ingested into Knowledge
+repeatably, the runtime Departments/Council/People stores are seeded RED, and
+the stage 0-10 pipeline drives cockpit workflows with human approval gates.
+`make done` runs the section 13 checks and then the `[7/7]` single-shell gate
+(`scripts/check_cockpit_overhaul.sh`), so the phase is the loop's stop condition
+and `.ralph/DONE` cannot be touched while any K item is open. The absorbed
+fork's additive rule (ADR 0014) bounds every vendor-side change. R1/R2 stay
+deferred and are not picked up unattended.
+
+| # | Item | Area | Depends | Evidence / gate |
+| --- | --- | --- | --- | --- |
+| K1 | Seed the 3F pilot workspace end to end: an idempotent seed that creates the `3fmindset` workspace, engagement, sources, claims, method, offer, builds, approvals and stage-gate decisions through the real domain use cases (reuse the e2e fixtures; mark every seeded value as demo data; a rerun changes nothing) | ops/api | Q30 | seed rerun test passes; `GET /red/clients?tenant_id=3fmindset` shows the workspace |
+| K2 | Shared client context in the cockpit: a persisted workspace/engagement picker in the shell backed by a tenant-scoped RED workspaces listing (add the listing route only if none exists), exposed to client components as additive files in the cockpit tree (ADR 0014) | ui, api | K1 | picker persists the selection; component test; screens receive the context instead of free-text defaults |
+| K3 | Port command center, client workspace and approval inbox as native cockpit pages at `/operations/*` (additive files styled with the cockpit tokens and components, data via same-origin `/red`, real error and empty states); give the ported screens a component test suite in the repo-side `tests/cockpit-ui/` (vitest + testing-library; the vendor `package.json` stays untouched) | ui | K2 | cockpit component tests pass; `check_vendor_additive.sh` passes; the three routes render the seeded workspace |
+| K4 | Port build board, workflow run detail and launch readiness to `/operations/*` under the same rules | ui | K3 | same gates as K3 for the three routes |
+| K5 | Port source and claim explorer, transformation map and offer and journey editor to `/operations/*` under the same rules | ui | K3 | same gates as K3 for the three routes |
+| K6 | Port performance review, portfolio opportunities and authority settings to `/operations/*`; then point the RED Operations nav group at the native routes and remove the `/screens` link-outs (the nav is a RED-adopted surface; ADR 0014) | ui | K3, K4, K5 | the cockpit `navConfig` has no `/screens` hrefs and one `/operations/` item per section 8 screen; all twelve routes render |
+| K7 | Retire the thin client: remove `frontend/`, `Dockerfile.ui`, the `redop-ui` Deployment and Service, the ingress `/screens` route and the stale screen checks; rewrite the section 13 condition 6 gate (`check_frontend_screens.sh`, `check_frontend_build.sh`, branding args) to exercise the cockpit pages instead | deploy, ui | K4, K5, K6 | no `frontend/`, no `Dockerfile.ui`, no ui Deployment, no `/screens` route; `make done` `[5/6]` and `[7/7]` still run honestly |
+| K8 | Landing surface = portfolio command center: the deployed root renders the RED command center, RED-first navigation order, Briefing retargeted to RED's daily brief | ui | K3 | live `/` renders the command center with the seeded interventions |
+| K9 | Canon into Knowledge, repeatably: turn the 2026-10-07 manual ingestion into a verifiable, idempotent seed over the pinned canon (`RALPH_CANON` path, cockpit upload API, domain `redops-canon`), plus an eval scenario asserting an answer grounds on canon files | knowledge | — | re-seed changes nothing; grounding eval passes |
+| K10 | Seed the runtime Departments/Council/People stores RED: the nine agents' charters as departments plus chartered proposal-only slots 10/11 (ADR 0006), roster and council aligned; generic C-suite labels gone from surfaces | ui, agents | C4 | Departments/Council/People render RED only; store seed is idempotent |
+| K11 | Register the stage 0-10 pipeline as cockpit workflow definitions (versioned; the definitions land additively, and surfacing them in Jobs may use the RED-adopted registration splice or an owner-approved exception recorded in `docs/fork_inventory.md` per ADR 0014) so Jobs lists them and a run's transitions appear in the workflow run detail screen | workflows | K1 | Jobs lists the pipeline; a started run shows its transitions |
+| K12 | Bind the workflow human gates to RED approvals: a run pauses at a `wait_for_human` gate that corresponds to a RED approval request and resumes only after that approval is recorded; bridge the approval inbox and the cockpit Review queue so there is one approval experience with the exact version diff | workflows, ui | K11, K3 | workflow test proves pause and resume on a RED approval; Review surfaces the pending approval |
+| K13 | Phase definition of done: run `make done` end to end with the `[7/7]` gate, verify the deployed single shell on Atlas (every nav item lands on a working screen with seeded data), update `docs/fork_inventory.md` and the README for the retired thin client | deploy, docs | K4, K5, K6, K7, K8, K9, K10, K11, K12 | `make done` passes with `[7/7]`; live verification recorded; docs updated |
 
 ## Production-readiness phase (after the prototype; not a prototype condition)
 
@@ -300,8 +378,8 @@ noun rows to `docs/architecture/nouns.md`.
 | G5 | Delivery ladder and ascension: one-to-one beta, live cohort, evergreen; 90-day roadmap audit; one deliverable per step | portfolio/operations | — | 11, 12; Certification; Live Sessions 5, 12; `ops/playbooks/delivery.md` | typed artifact with tests; represents the client's own delivery (Serve) and the next-offer path; never an observation. **Done 2026-10-06:** Portfolio `DeliveryLadder` (`DeliveryRung`, `DeliveryStep`, `RoadmapAudit`, `DeliveryGoal`, `DeliveryResult`, `AscensionOffer`) grounds on a same-tenant stage 5 `ProductProgram`, types the canon rungs as an ordered subsequence beginning at one-to-one, requires one deliverable per program step in order, a 90-day roadmap audit cadence, kickoff goals and an ascension offer per step, and refuses to close until every goal is met; verified by `tests/unit/portfolio/test_delivery_ladder.py` (39 tests). Wiring into a required post-launch kind remains a methodology-owner decision |
 | G6 | Partnership line and certification: four-offer ladder, renewal and win-back, referral and partner plan, community rules, reputation track, certified consultant standards | portfolio | G5 | 11, 12; Certification; Live Sessions 5, 12; High Ticket Funnels 19; `ops/playbooks/partnership.md`, `certification.md` | typed artifacts with tests; every client has a next step; human decision for any commitment. **Done 2026-10-06:** Portfolio `PartnershipPlan` (`PartnershipOffer`, `PartnershipMove`, `PartnershipCheckIn`, `ReferralPlan`, `CommunityRules`, `ReputationTrack`, `CertificationStandard`, `CertifiedOperator`) grounds on a same-tenant stage 5 `ProductProgram`, requires the four-offer path and the four-move loop in order, a regular check-in, a referral plan that asks after a win and names the partner offer, simple unique community rules, a reputation track covering reviews/stories/press, and a short certification standard with a yearly recheck; `certify` refuses an operator with no real result or a failed exam; verified by `tests/unit/portfolio/test_partnership.py` (53 tests). Wiring into a required post-launch kind remains a methodology-owner decision |
 | G7 | Service-line artifacts: kickoff checklist, module production standard, session guide, client scorecard, case study template (case study as sourced proof, client-approved and version-scoped) | operations | — | internal/service-ops.md; `ops/checklists/kickoff.md`, `module-production.md`, `session-guide.md`, `client-scorecard.md`, `case-study.md` | typed artifact with tests; case study claim refuses an unapproved or unsourced testimonial (SPEC.md sections 1 and 4). **Done 2026-10-06:** Operations `ServiceLine` (`KickoffChecklist`, `SuccessGoal`, `ModuleProductionStandard`, `SessionGuide`, `ClientScorecard`, `ScorecardRisk`, `CaseStudy`, `CaseStudyClaim`) grounds on a same-tenant stage 5 `ProductProgram`, requires the welcome within one business day, goals as a number and a date, collected access, a shared plan, ordered unique module steps, the four scorecard dimensions in order with an action per risk, and a case study whose `claim` refuses an unsourced result, an unapproved testimonial and an unversioned claim; verified by `tests/unit/operations/test_service_line.py` (59 tests). Wiring into a required post-launch kind remains a methodology-owner decision |
-| G8 | Wiring follow-ups: pin the `UmbrellaPlan` and the remaining planning assets (retargeting family, banner library) into the production view or a required kind | governance/pipeline | — | 00, 01; 33, 34 | gate-integrity tests; asset remains reversible. **Partial 2026-10-06:** the `UmbrellaPlan` is wired into the production view as a caller-supplied, tenant-scoped `UmbrellaPlanReportingView` (coverage + next 90-day review), with cross-tenant, coverage and malformed-row refusals; verified by `tests/unit/governance/test_production_view_umbrella.py` (8 tests). The production-view route now supplies the projection from a durable Portfolio `UmbrellaPlanRepository` (in-memory + PostgreSQL, migration `0019_umbrella_plans`) via `UmbrellaPlan.as_reporting_view()`; verified by `tests/unit/portfolio/test_umbrella_plan_repository.py` (9 tests), `test_umbrella_plan_postgres.py` (4 tests) and the new route tests in `tests/unit/test_production_view_route.py` (3 tests). The required-kind half (retargeting family, banner library) is **closed 2026-10-06 (owner):** the reversible route wiring is accepted as the final G8 scope; no stage 0-10 template change is made |
-| G9 | Canon source acquisition: the dedicated emailed follow-up and nurture module | process | — | SPEC.md section 12.6 | **Closed 2026-10-06 (owner):** the synthesized `ops/playbooks/email-nurture.md` is accepted as sufficient; the license-owner source request is dropped and nurture artifacts are treated as canon-complete |
+| G8 | Wiring follow-ups: pin the `UmbrellaPlan` and the remaining planning assets (retargeting family, banner library) into the production view or a required kind | governance/pipeline | — | 00, 01; 33, 34 | gate-integrity tests; asset remains reversible. **Done 2026-10-06 (closed):** the `UmbrellaPlan` is wired into the production view as a caller-supplied, tenant-scoped `UmbrellaPlanReportingView` (coverage + next 90-day review), with cross-tenant, coverage and malformed-row refusals; verified by `tests/unit/governance/test_production_view_umbrella.py` (8 tests). The production-view route now supplies the projection from a durable Portfolio `UmbrellaPlanRepository` (in-memory + PostgreSQL, migration `0019_umbrella_plans`) via `UmbrellaPlan.as_reporting_view()`; verified by `tests/unit/portfolio/test_umbrella_plan_repository.py` (9 tests), `test_umbrella_plan_postgres.py` (4 tests) and the new route tests in `tests/unit/test_production_view_route.py` (3 tests). The required-kind half (retargeting family, banner library) is **closed 2026-10-06 (owner):** the reversible route wiring is accepted as the final G8 scope; no stage 0-10 template change is made |
+| G9 | Canon source acquisition: the dedicated emailed follow-up and nurture module | process | — | SPEC.md section 12.6 | **Done 2026-10-06 (owner, closed):** the synthesized `ops/playbooks/email-nurture.md` is accepted as sufficient; the license-owner source request is dropped and nurture artifacts are treated as canon-complete |
 
 G1-G7 implement the new canon assets as bounded artifacts; G8 is wiring; G9 is a
 named-owner source request, not buildable. C4 (retire the generic C-suite,

@@ -4,7 +4,7 @@
 - Date: 2026-10-03
 - Owner: RED principal
 - Supersedes: ADR 0002
-- Amended by: ADR 0011 (vendor edits go through a re-triggerable overlay)
+- Amended by: ADR 0011 (vendor edits go through a re-triggerable overlay), ADR 0014 (the fork is absorbed into this repository; RED changes inside it are additive)
 
 ## Context
 

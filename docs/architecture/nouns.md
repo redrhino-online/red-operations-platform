@@ -221,16 +221,17 @@ Stages are **production checkpoints**, not the client's nine-step transformation
 | **`redop.atlas.lan`** | The deployed host. | The health gate fetches it and requires the RED identity marker. |
 | **REDOP_RED_MARKER** | The identity marker the deployed health gate requires (default `RED Operations`). | Prevents a bare 200 from the OpenExecutive shell passing condition 9. |
 
-## 17. Vendor overlay (in scope)
+## 17. The absorbed fork and the additive rule (in scope)
 
 | Noun | What it is | RED significance |
 | --- | --- | --- |
-| **vendor/openexecutive** | Pinned git submodule (upstream OpenExecutive). | Reused dependency, **internals out of scope**; kept close to upstream (ADR 0008). |
-| **vendor overlay** | Committed RED-authored changes to the submodule under `vendor/overlay/`. | The only sanctioned way to edit the vendor (ADR 0011). |
-| **overlay file** | A file under `vendor/overlay/files/` copied verbatim onto the submodule. | New vendor-side files (agent classes, prompts, knowledge, evals). |
-| **hook snippet** | A snippet under `vendor/overlay/hooks/` spliced into an existing vendor file. | In-place edits (registry/area registration) without hand-editing the submodule. |
-| **RED-OVERLAY marker** | `# RED-OVERLAY:BEGIN <marker>` / `END` guard around a hook. | Makes apply idempotent and re-triggerable after an upstream bump. |
-| **apply_vendor_overlay.sh** | Applies or (`--check`) verifies the overlay. | `make done` `[4/6]` requires the tree to equal the overlay with no unaccounted change. |
+| **vendor/openexecutive** | The absorbed OpenExecutive fork: ordinary tracked source, baselined at upstream commit `31e5533` (v0.4.6) plus the applied RED adoption. | The shell and cockpit RED builds on; deep RED work is additive inside it (ADR 0014). |
+| **upstream pin** | The upstream URL and pinned commit recorded in `docs/fork_inventory.md`. | Upstream updates arrive as owner-driven merges, then `make vendor-pin`. |
+| **upstream-files.txt** | The list of upstream-origin paths at the baseline (`vendor/upstream-files.txt`). | Defines what the additive lock protects. |
+| **red-owned-files.txt** | The paths RED adopted at absorption (the former overlay edits and additions). | RED owns these surfaces; freely editable. |
+| **upstream-manifest.sha256** | sha256 per locked file at the baseline (`vendor/upstream-manifest.sha256`). | The additive gate's reference state. |
+| **check_vendor_additive.sh** | Re-hashes the locked files and fails on any difference. | DoD `[4/7]`; new files and red-owned files are unrestricted (ADR 0014). |
+| **vendor-pin** | `make vendor-pin` re-baselines the manifest after an owner-approved exception or an upstream merge. | The only sanctioned way a locked file's bytes change; unattended cycles never re-pin. |
 
 ## 18. Harness, process and the definition of done
 

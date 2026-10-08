@@ -46,7 +46,7 @@ declares a tool.
 - Prose charters: `docs/agents/charter-01..11.md`, enforced by
   `scripts/check_agent_charters.sh` (DoD condition 8).
 - The nine core specialists are also registered into OpenExecutive's own
-  `SPECIALIST_REGISTRY` by the [vendor overlay](../platform/vendor-overlay.md),
+  `SPECIALIST_REGISTRY` by the [absorbed fork's RED adoption](../platform/absorbed-fork.md),
   so the fork's routing, retrieval and eval machinery is inherited (ADR 0006).
   The generic corporate personas remain registered; retiring them is a separate
   characterised change.

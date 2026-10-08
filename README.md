@@ -65,7 +65,7 @@ Cycles are token-disciplined: they use the Serena code-memory MCP for an indexed
 | `canon.lock` | The pinned sha256 of the canon content. `make run` and `make loop` lock it at the start (`make canon-lock`); a mid-run canon change halts the loop until `make canon-pin` re-pins it (`RALPH_CANON_STRICT=0` overrides). |
 | `ralph_cycle.sh` | Starts one OpenCode run, points it at the files above, and commits each cycle. |
 | `Makefile` | Provides `make run` for one cycle and `make loop n=5` for a set number of cycles. Command names ignore letter case, and the count accepts `n` or `N`. |
-| `vendor/openexecutive/` | Git submodule: the OpenExecutive fork, which is the application build target. Pinned to a commit; RED code is ported into it. |
+| `vendor/openexecutive/` | The absorbed OpenExecutive fork: ordinary tracked source in this repository (ADR 0014), pinned upstream commit recorded in `docs/fork_inventory.md`. RED changes inside it are additive. |
 | `README.md` | Gives a quick map for people. The script does not need to read it. |
 
 OpenCode may also read the repo's own rules, code, tests, Git state, and past run notes to check what is true. The reference model canon and the RED training files are background sources for the product. They are not a license to claim that a client has approved a draft, and the canon is never an authority to spend, publish, or deploy.
@@ -73,13 +73,15 @@ OpenCode may also read the repo's own rules, code, tests, Git state, and past ru
 ## 6. The OpenExecutive dependency
 
 The application is this repository. RED code lives under `backend/redops/`
-together with the RED backend entry points (`docs/adr/0008`). OpenExecutive is a
-pinned dependency, vendored as a git submodule at `vendor/openexecutive/` and
-consumed through ports and composition. RED imports the fork's orchestrator,
-workflows, agents and infrastructure rather than editing them; the submodule
-stays close to upstream and is treated as read-only.
+together with the RED backend entry points (`docs/adr/0008`). OpenExecutive is
+absorbed into this repository at `vendor/openexecutive/` as ordinary tracked
+source (ADR 0014), pinned at upstream commit `31e55338db7f7a0eb7ff30b4cb8942a1ece551bd`
+(v0.4.6) and consumed through ports and composition. RED changes inside the
+vendor tree are additive by default; RED-adopted surfaces and owner-approved
+exceptions (recorded in `docs/fork_inventory.md`) are the only modifications,
+enforced by `scripts/check_vendor_additive.sh`.
 
-Run cycles against this repository, not the submodule:
+Run cycles against this repository:
 
 ```bash
 make run
@@ -88,9 +90,10 @@ make loop n=5
 ```
 
 RED changes and enhancements that OpenExecutive does not provide are built here,
-in `backend/redops/`, as SOLID, clean, onion-architecture code behind ports, so
-the vendor dependency is never modified. `docs/adr/0002` (port RED into the fork
-and target it) is superseded by `docs/adr/0008`.
+in `backend/redops/`, as SOLID, clean, onion-architecture code behind ports; the
+cockpit overhaul adds screens and surfaces inside the vendor tree additively
+(ADR 0013, ADR 0014). `docs/adr/0002` (port RED into the fork and target it) is
+superseded by `docs/adr/0008`.
 
 ## 7. Publishing
 

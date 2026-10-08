@@ -35,7 +35,7 @@
 - **Every output is sourced, versioned, owned and gated.** Nothing is represented
   as client-approved unless a human gate approved that exact version (SPEC §1).
 - **OpenExecutive is a pinned dependency, not a copy (ADR 0008).** RED extends it
-  through ports and a small, re-triggerable [vendor overlay](../platform/vendor-overlay.md).
+  through ports, with the fork absorbed and RED changes additive ([the absorbed fork](../platform/absorbed-fork.md)).
 
 ## The four moving parts
 

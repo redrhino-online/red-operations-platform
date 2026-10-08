@@ -89,3 +89,21 @@ Environment notes: first `uv sync` pulls heavy ML deps (torch, ChromaDB); checko
 2. Run `make check` end to end and one `make dev` boot to complete "reproducible local setup."
 3. Map RED governance domain (cycle 1 in the planning repo) onto `workflows/gate.py` + departments' AuthorityLevel.
 4. Decide where RED-specific code lives: a `redops/` context package inside this fork (SPEC §6 layout) vs. keeping the planning repo as spec-authority only.
+
+## Absorption record (ADR 0014, 2026-10-08)
+
+| Item | Value |
+| --- | --- |
+| Decision | ADR 0014: the fork is absorbed into this repository; the submodule and the ADR 0011 overlay machinery are retired |
+| Upstream repository | https://github.com/SenteLabsAI/OpenExecutive |
+| Absorbed upstream commit | `31e55338db7f7a0eb7ff30b4cb8942a1ece551bd` (v0.4.6) |
+| Absorbed baseline | the upstream tree plus the applied RED adoption (rebrand, nav group, RED agent registration splices, `redops_agents.py`, `redops_prompts.py`, `knowledge/redops/`, one eval scenario) |
+| RED-owned surfaces | listed in `vendor/red-owned-files.txt` (the files the adoption modified or added); freely editable |
+| Locked upstream-origin files | listed in `vendor/upstream-files.txt`; hashed in `vendor/upstream-manifest.sha256`; byte-stable unless an owner-approved exception is recorded here and `make vendor-pin` re-baselines |
+| Enforcement | `scripts/check_vendor_additive.sh`, DoD `[4/7]` |
+| Upstream updates | owner-driven merges only; record the merge here (commit, decision, owner), then `make vendor-pin` |
+| License | Apache-2.0; LICENSE and NOTICE retained under `vendor/openexecutive/` |
+| Owner | RED principal |
+
+Unattended cycles never re-pin and never approve exceptions. A cycle that needs
+a locked-file modification records the proposal in the plan and stops.

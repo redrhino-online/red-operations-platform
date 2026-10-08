@@ -1,6 +1,6 @@
 # 11. Vendor edits go through a re-triggerable overlay
 
-- Status: Accepted
+- Status: Superseded by ADR 0014 (the fork is absorbed; the overlay machinery is retired)
 - Date: 2026-10-04
 - Owner: RED principal
 - Amends: ADR 0008 (the "minimal (ideally none)" vendor-edit stance)
