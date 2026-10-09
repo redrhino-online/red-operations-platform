@@ -34,14 +34,14 @@ printf '\n[4/7] absorbed OpenExecutive fork: additive RED changes only (ADR 0014
 grep -q "31e55338db7f7a0eb7ff30b4cb8942a1ece551bd" docs/fork_inventory.md \
   || fail "the absorbed upstream pin is not recorded in docs/fork_inventory.md (ADR 0014)"
 
-printf '\n[5/7] RED UI: all section 8 screens render, browser tests, no OpenExecutive branding\n'
-./scripts/check_frontend_screens.sh frontend \
+printf '\n[5/7] RED UI: all section 8 screens render, component tests, no OpenExecutive branding\n'
+./scripts/check_frontend_screens.sh vendor/openexecutive/packages/ui tests/cockpit-ui/dod-screens.txt tests/cockpit-ui \
   || fail "the section 8 screens are not rendered; condition 6 is unmet"
-./scripts/check_frontend_build.sh frontend \
-  || fail "the frontend does not build or its browser suite does not run; condition 6 is unmet"
+./scripts/check_frontend_build.sh vendor/openexecutive/packages/ui tests/cockpit-ui \
+  || fail "the cockpit does not build or its screen suite does not run; condition 6 is unmet"
 ./scripts/check_agent_charters.sh docs/agents \
   || fail "the agent charters SPEC.md section 5 requires are incomplete; condition 8 is unmet"
-./scripts/check_branding_and_notice.sh frontend vendor/openexecutive \
+./scripts/check_branding_and_notice.sh vendor/openexecutive/packages/ui vendor/openexecutive \
   || fail "RED branding or retained LICENSE/NOTICE is incomplete; condition 8 is unmet"
 
 printf '\n[6/7] deployed RED app on Atlas k3s (Argo CD healthy; migration ran before the API served)\n'

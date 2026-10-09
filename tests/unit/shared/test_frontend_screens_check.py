@@ -1,12 +1,12 @@
 """Behavioral tests for the section 8 screen coverage gate.
 
-SPEC.md section 13 condition 6 is "All section 8 screens render". The DoD
-script's first cut passed on ``frontend/`` merely existing, so a screens-less
-shell could falsely turn ``make done`` green and stop the build loop. These
-tests pin the stricter contract in ``scripts/check_frontend_screens.sh``: the
-frontend declares each section 8 screen and its route in
-``frontend/dod-screens.txt``, every declared route resolves to a page, and a
-browser test suite exists.
+SPEC.md section 13 condition 6 is "All section 8 screens render". Since the
+single-shell overhaul (SPEC.md section 14, ADR 0013) the cockpit is the only
+user-facing UI, so the gate exercises the native ``/operations/*`` cockpit pages
+rather than the retired ``/screens`` thin client. These tests pin the contract in
+``scripts/check_frontend_screens.sh``: a repo-side manifest declares each section
+8 screen and its native route, every declared route resolves to a cockpit page,
+and a component test suite exists.
 """
 
 from __future__ import annotations
@@ -35,103 +35,122 @@ SCREENS = (
 )
 
 ROUTE = {
-    screen: f"/{screen}" for screen in SCREENS
+    "portfolio-command-center": "/operations/command-center",
+    "client-workspace-overview": "/operations/client-workspace",
+    "source-and-claim-explorer": "/operations/source-explorer",
+    "transformation-map": "/operations/transformation-map",
+    "offer-and-journey-editor": "/operations/offer-and-journey",
+    "build-board": "/operations/build-board",
+    "approval-inbox": "/operations/approval-inbox",
+    "workflow-run-detail": "/operations/workflow-run-detail",
+    "launch-readiness": "/operations/launch-readiness",
+    "performance-review": "/operations/performance-review",
+    "portfolio-opportunities": "/operations/portfolio-opportunities",
+    "authority-settings": "/operations/authority-settings",
 }
 
 
-def run_check(frontend: Path) -> subprocess.CompletedProcess[str]:
+def run_check(cockpit: Path, manifest: Path, test_dir: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", str(CHECK), str(frontend)],
+        ["bash", str(CHECK), str(cockpit), str(manifest), str(test_dir)],
         capture_output=True,
         text=True,
         check=False,
     )
 
 
-def build_frontend(
+def build_cockpit(
     root: Path,
     *,
     screens: tuple[str, ...] = SCREENS,
     page_for: tuple[str, ...] = SCREENS,
-    browser_spec: bool = True,
-) -> Path:
-    frontend = root / "frontend"
-    manifest = frontend / "dod-screens.txt"
-    manifest.parent.mkdir(parents=True, exist_ok=True)
+    component_suite: bool = True,
+) -> tuple[Path, Path, Path]:
+    cockpit = root / "cockpit"
+    manifest = root / "dod-screens.txt"
     manifest.write_text(
         "".join(f"{screen} {ROUTE[screen]}\n" for screen in screens),
         encoding="utf-8",
     )
     for screen in page_for:
-        page = frontend / "src" / "app" / screen / "page.tsx"
+        rel = ROUTE[screen].lstrip("/")
+        page = cockpit / "src" / "app" / rel / "page.tsx"
         page.parent.mkdir(parents=True, exist_ok=True)
         page.write_text("export default function Page() {}\n", encoding="utf-8")
-    if browser_spec:
-        spec = frontend / "tests" / "screens.spec.ts"
-        spec.parent.mkdir(parents=True, exist_ok=True)
-        spec.write_text("test('screens', () => {});\n", encoding="utf-8")
-    return frontend
+    test_dir = root / "tests" / "cockpit-ui"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    if component_suite:
+        (test_dir / "screens.test.tsx").write_text(
+            "test('screens', () => {});\n", encoding="utf-8"
+        )
+    return cockpit, manifest, test_dir
 
 
-class FrontendScreensCheckTests(unittest.TestCase):
-    def test_a_complete_frontend_passes(self) -> None:
+class CockpitScreensCheckTests(unittest.TestCase):
+    def test_a_complete_cockpit_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            frontend = build_frontend(Path(tmp))
-            result = run_check(frontend)
+            cockpit, manifest, test_dir = build_cockpit(Path(tmp))
+            result = run_check(cockpit, manifest, test_dir)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("12 section 8 screens", result.stdout)
 
-    def test_missing_frontend_fails(self) -> None:
+    def test_missing_cockpit_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            result = run_check(Path(tmp) / "frontend")
+            root = Path(tmp)
+            _, manifest, test_dir = build_cockpit(root)
+            result = run_check(root / "missing", manifest, test_dir)
             self.assertEqual(result.returncode, 1)
-            self.assertIn("frontend/ is missing", result.stderr)
+            self.assertIn("is missing", result.stderr)
 
     def test_missing_manifest_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            frontend = Path(tmp) / "frontend"
-            frontend.mkdir()
-            result = run_check(frontend)
+            root = Path(tmp)
+            cockpit, _, test_dir = build_cockpit(root)
+            result = run_check(cockpit, root / "missing.txt", test_dir)
             self.assertEqual(result.returncode, 1)
-            self.assertIn("dod-screens.txt", result.stderr)
+            self.assertIn("missing", result.stderr)
 
     def test_undeclared_screen_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            frontend = build_frontend(Path(tmp), screens=SCREENS[:-1])
-            result = run_check(frontend)
+            cockpit, manifest, test_dir = build_cockpit(
+                Path(tmp), screens=SCREENS[:-1]
+            )
+            result = run_check(cockpit, manifest, test_dir)
             self.assertEqual(result.returncode, 1)
             self.assertIn("authority-settings", result.stderr)
 
     def test_declared_screen_without_page_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            frontend = build_frontend(Path(tmp), page_for=SCREENS[:-1])
-            result = run_check(frontend)
+            cockpit, manifest, test_dir = build_cockpit(
+                Path(tmp), page_for=SCREENS[:-1]
+            )
+            result = run_check(cockpit, manifest, test_dir)
             self.assertEqual(result.returncode, 1)
-            self.assertIn("no page for screen 'authority-settings'", result.stderr)
+            self.assertIn("no cockpit page for screen 'authority-settings'", result.stderr)
 
-    def test_missing_browser_suite_fails(self) -> None:
+    def test_non_native_route_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            frontend = build_frontend(Path(tmp), browser_spec=False)
-            result = run_check(frontend)
-            self.assertEqual(result.returncode, 1)
-            self.assertIn("no browser test suite", result.stderr)
-
-    def test_root_route_page_is_accepted(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            frontend = build_frontend(Path(tmp))
-            manifest = frontend / "dod-screens.txt"
+            root = Path(tmp)
+            cockpit, manifest, test_dir = build_cockpit(root)
             manifest.write_text(
-                "\n".join(
-                    f"{screen} {'/' if screen == 'portfolio-command-center' else ROUTE[screen]}"
+                "".join(
+                    f"{screen} {'/screens/' + screen if screen == 'build-board' else ROUTE[screen]}\n"
                     for screen in SCREENS
-                )
-                + "\n",
+                ),
                 encoding="utf-8",
             )
-            root_page = frontend / "src" / "app" / "page.tsx"
-            root_page.write_text("export default function Page() {}\n", encoding="utf-8")
-            result = run_check(frontend)
-            self.assertEqual(result.returncode, 0, result.stderr)
+            result = run_check(cockpit, manifest, test_dir)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("/operations/", result.stderr)
+
+    def test_missing_component_suite_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cockpit, manifest, test_dir = build_cockpit(
+                Path(tmp), component_suite=False
+            )
+            result = run_check(cockpit, manifest, test_dir)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("no component test suite", result.stderr)
 
 
 if __name__ == "__main__":

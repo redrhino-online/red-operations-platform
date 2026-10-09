@@ -1,12 +1,10 @@
-"""Behavioral tests for the frontend build and suite gate.
+"""Behavioral tests for the cockpit build and screen-suite gate.
 
-SPEC.md section 13 condition 6 requires the frontend to build and browser tests
-to cover the section 8 screens. ``scripts/check_frontend_screens.sh`` only
-proves the screens, routes and a test file exist, so it could pass on
-placeholder pages and a no-op test and let ``make done`` stop without the UI
-ever compiling. These tests pin the stricter contract in
-``scripts/check_frontend_build.sh``: ``frontend/package.json`` must declare a
-``build`` and a ``test`` script, and both must run and succeed.
+SPEC.md section 13 condition 6 requires the UI to build and tests to cover the
+section 8 screens. Since the single-shell overhaul (SPEC.md section 14, ADR 0013)
+the cockpit is the only UI, so ``scripts/check_frontend_build.sh`` requires the
+cockpit package to declare a ``build`` script and the repo-side component suite
+to declare a ``test`` script, then runs both. These tests pin that contract.
 """
 
 from __future__ import annotations
@@ -32,18 +30,18 @@ esac
 """
 
 
-def write_package(frontend: Path, scripts: dict[str, str]) -> None:
-    frontend.mkdir(parents=True, exist_ok=True)
-    (frontend / "package.json").write_text(
+def write_package(directory: Path, scripts: dict[str, str]) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "package.json").write_text(
         json.dumps({"name": "test-ui", "scripts": scripts}), encoding="utf-8"
     )
 
 
 def run_check(
-    frontend: Path, *, env: dict[str, str] | None = None
+    cockpit: Path, test_dir: Path, *, env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", str(CHECK), str(frontend)],
+        ["bash", str(CHECK), str(cockpit), str(test_dir)],
         capture_output=True,
         text=True,
         check=False,
@@ -51,7 +49,7 @@ def run_check(
     )
 
 
-class FrontendBuildCheckTests(unittest.TestCase):
+class CockpitBuildCheckTests(unittest.TestCase):
     def _fake_npm(self, root: Path) -> tuple[Path, Path]:
         bindir = root / "bin"
         bindir.mkdir(parents=True, exist_ok=True)
@@ -64,14 +62,16 @@ class FrontendBuildCheckTests(unittest.TestCase):
     def _run_with_fake_npm(
         self,
         root: Path,
-        frontend: Path,
+        cockpit: Path,
+        test_dir: Path,
         *,
         build_rc: str = "0",
         test_rc: str = "0",
     ) -> tuple[subprocess.CompletedProcess[str], Path]:
         bindir, log = self._fake_npm(root)
         result = run_check(
-            frontend,
+            cockpit,
+            test_dir,
             env={
                 "PATH": f"{bindir}:{os.environ['PATH']}",
                 "FAKE_NPM_LOG": str(log),
@@ -81,37 +81,47 @@ class FrontendBuildCheckTests(unittest.TestCase):
         )
         return result, log
 
-    def test_complete_frontend_passes(self) -> None:
+    def test_complete_cockpit_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            frontend = root / "frontend"
-            write_package(frontend, {"build": "next build", "test": "playwright test"})
-            result, log = self._run_with_fake_npm(root, frontend)
+            cockpit = root / "cockpit"
+            test_dir = root / "tests" / "cockpit-ui"
+            write_package(cockpit, {"build": "next build"})
+            write_package(test_dir, {"test": "vitest run"})
+            result, log = self._run_with_fake_npm(root, cockpit, test_dir)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("frontend build ok", result.stdout)
+            self.assertIn("cockpit build ok", result.stdout)
             self.assertIn("npm run build", log.read_text(encoding="utf-8"))
             self.assertIn("npm test", log.read_text(encoding="utf-8"))
 
-    def test_missing_frontend_fails(self) -> None:
+    def test_missing_cockpit_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            result = run_check(Path(tmp) / "frontend")
+            root = Path(tmp)
+            test_dir = root / "tests" / "cockpit-ui"
+            write_package(test_dir, {"test": "vitest run"})
+            result = run_check(root / "missing", test_dir)
             self.assertEqual(result.returncode, 1)
-            self.assertIn("frontend/ is missing", result.stderr)
+            self.assertIn("is missing", result.stderr)
 
-    def test_missing_package_fails(self) -> None:
+    def test_missing_cockpit_package_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            frontend = Path(tmp) / "frontend"
-            frontend.mkdir()
-            result = run_check(frontend)
+            root = Path(tmp)
+            cockpit = root / "cockpit"
+            cockpit.mkdir()
+            test_dir = root / "tests" / "cockpit-ui"
+            write_package(test_dir, {"test": "vitest run"})
+            result = run_check(cockpit, test_dir)
             self.assertEqual(result.returncode, 1)
             self.assertIn("package.json", result.stderr)
 
     def test_missing_build_script_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            frontend = root / "frontend"
-            write_package(frontend, {"test": "playwright test"})
-            result, log = self._run_with_fake_npm(root, frontend)
+            cockpit = root / "cockpit"
+            test_dir = root / "tests" / "cockpit-ui"
+            write_package(cockpit, {"dev": "next dev"})
+            write_package(test_dir, {"test": "vitest run"})
+            result, log = self._run_with_fake_npm(root, cockpit, test_dir)
             self.assertEqual(result.returncode, 1)
             self.assertIn("no 'build' script", result.stderr)
             self.assertFalse(log.exists())
@@ -119,9 +129,11 @@ class FrontendBuildCheckTests(unittest.TestCase):
     def test_missing_test_script_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            frontend = root / "frontend"
-            write_package(frontend, {"build": "next build"})
-            result, log = self._run_with_fake_npm(root, frontend)
+            cockpit = root / "cockpit"
+            test_dir = root / "tests" / "cockpit-ui"
+            write_package(cockpit, {"build": "next build"})
+            write_package(test_dir, {"dev": "vitest"})
+            result, log = self._run_with_fake_npm(root, cockpit, test_dir)
             self.assertEqual(result.returncode, 1)
             self.assertIn("no 'test' script", result.stderr)
             self.assertFalse(log.exists())
@@ -129,9 +141,13 @@ class FrontendBuildCheckTests(unittest.TestCase):
     def test_failing_build_fails_and_skips_suite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            frontend = root / "frontend"
-            write_package(frontend, {"build": "next build", "test": "playwright test"})
-            result, log = self._run_with_fake_npm(root, frontend, build_rc="1")
+            cockpit = root / "cockpit"
+            test_dir = root / "tests" / "cockpit-ui"
+            write_package(cockpit, {"build": "next build"})
+            write_package(test_dir, {"test": "vitest run"})
+            result, log = self._run_with_fake_npm(
+                root, cockpit, test_dir, build_rc="1"
+            )
             self.assertEqual(result.returncode, 1)
             self.assertIn("does not build", result.stderr)
             self.assertNotIn("npm test", log.read_text(encoding="utf-8"))
@@ -139,11 +155,15 @@ class FrontendBuildCheckTests(unittest.TestCase):
     def test_failing_suite_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            frontend = root / "frontend"
-            write_package(frontend, {"build": "next build", "test": "playwright test"})
-            result, _ = self._run_with_fake_npm(root, frontend, test_rc="1")
+            cockpit = root / "cockpit"
+            test_dir = root / "tests" / "cockpit-ui"
+            write_package(cockpit, {"build": "next build"})
+            write_package(test_dir, {"test": "vitest run"})
+            result, _ = self._run_with_fake_npm(
+                root, cockpit, test_dir, test_rc="1"
+            )
             self.assertEqual(result.returncode, 1)
-            self.assertIn("browser suite failed", result.stderr)
+            self.assertIn("screen suite failed", result.stderr)
 
 
 if __name__ == "__main__":

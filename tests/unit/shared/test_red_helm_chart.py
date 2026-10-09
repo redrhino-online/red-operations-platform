@@ -2,14 +2,14 @@
 
 Condition 9 requires the prototype deployed on the Atlas k3s cluster. Q48 is the
 chart that replaces the OpenExecutive shell in namespace ``redop`` with the RED
-API and UI, reusing the existing ``redop-postgres`` database and
-``redop-secrets``. These tests pin the shape the rest of the deploy slice
-depends on:
+API and the single-shell cockpit (the retired ``/screens`` thin client is gone,
+K7), reusing the existing ``redop-postgres`` database and ``redop-secrets``.
+These tests pin the shape the rest of the deploy slice depends on:
 
 * the chart renders, and the migration Job is ordered before the API serves
   (Helm pre-install/pre-upgrade hook, Argo CD PreSync at sync-wave -1, and an
   API initContainer that waits for the Job's success);
-* the ingress routes ``/red`` to the API and ``/`` to the UI same-origin;
+* the ingress routes ``/red`` to the API and ``/`` to the cockpit same-origin;
 * the chart reuses the existing database and secrets and provisions no database;
 * the worker renders only when explicitly enabled, and stays disabled until a
   connector transport is configured (the entrypoint exists but fails fast
@@ -63,7 +63,7 @@ class ChartStructureTest(unittest.TestCase):
         for name in (
             "migration-job.yaml",
             "deployment-api.yaml",
-            "deployment-ui.yaml",
+            "deployment-cockpit.yaml",
             "deployment-worker.yaml",
             "ingress.yaml",
             "pdb.yaml",
@@ -71,18 +71,18 @@ class ChartStructureTest(unittest.TestCase):
             self.assertTrue((TEMPLATES / name).is_file(), name)
 
     def test_values_promote_tags_are_top_level(self) -> None:
-        # The Gitea build workflow rewrites the exact `apiTag:`/`uiTag:` lines.
+        # The Gitea build workflow rewrites the exact `apiTag:`/`cockpitTag:` lines.
         text = (CHART_DIR / "values.yaml").read_text(encoding="utf-8")
         self.assertIn("\napiTag:", "\n" + text)
-        self.assertIn("\nuiTag:", "\n" + text)
+        self.assertIn("\ncockpitTag:", "\n" + text)
 
 
 @unittest.skipUnless(HELM, "helm is not on PATH")
 class ChartRenderTest(unittest.TestCase):
-    def test_renders_api_ui_and_migration(self) -> None:
+    def test_renders_api_cockpit_and_migration(self) -> None:
         docs = _render()
         _named(docs, "Deployment", "redop-api")
-        _named(docs, "Deployment", "redop-ui")
+        _named(docs, "Deployment", "redop-cockpit")
         _named(docs, "Job", "redop-migrate")
 
     def test_migration_is_ordered_before_the_api_serves(self) -> None:
@@ -139,7 +139,7 @@ class ChartRenderTest(unittest.TestCase):
         self.assertIn('"succeeded"[[:space:]]*:[[:space:]]*[1-9]', script)
         self.assertNotIn('"succeeded":1', script)
 
-    def test_ingress_routes_red_screens_and_root_to_cockpit(self) -> None:
+    def test_ingress_routes_red_api_and_root_to_cockpit(self) -> None:
         docs = _render()
         ingress = _named(docs, "Ingress", "redop")
         paths = {
@@ -147,9 +147,10 @@ class ChartRenderTest(unittest.TestCase):
             for p in ingress["spec"]["rules"][0]["http"]["paths"]
         }
         self.assertEqual(paths["/red"], "redop-api")
-        self.assertEqual(paths["/screens"], "redop-ui")
         self.assertEqual(paths["/api/backend"], "redop-cockpit")
         self.assertEqual(paths["/"], "redop-cockpit")
+        # The retired /screens thin client is no longer routed (K7).
+        self.assertNotIn("/screens", paths)
 
     def test_reuses_existing_database_and_secrets(self) -> None:
         docs = _render()
@@ -171,23 +172,24 @@ class ChartRenderTest(unittest.TestCase):
             env["OPENROUTER_API_KEY"]["valueFrom"]["secretKeyRef"]["name"], "redop-secrets"
         )
 
-    def test_api_and_ui_have_probes_and_pdbs(self) -> None:
+    def test_api_and_cockpit_have_probes_and_pdbs(self) -> None:
         docs = _render()
-        for name in ("redop-api", "redop-ui"):
+        for name in ("redop-api", "redop-cockpit"):
             container = _named(docs, "Deployment", name)["spec"]["template"]["spec"]["containers"][0]
             self.assertIn("readinessProbe", container)
             self.assertIn("livenessProbe", container)
-        self.assertEqual(len(_by_kind(docs, "PodDisruptionBudget")), 2)
+        # The retired thin client's PDB is gone; the API keeps its own.
+        self.assertEqual(len(_by_kind(docs, "PodDisruptionBudget")), 1)
 
-    def test_api_and_ui_replace_on_adoption(self) -> None:
-        # The previous chart's Deployments used a different immutable selector,
-        # so Argo CD must replace rather than patch them when adopting.
+    def test_api_replaces_on_adoption(self) -> None:
+        # The previous chart's API Deployment used a different immutable
+        # selector, so Argo CD must replace rather than patch it when adopting.
+        # The cockpit is a new Deployment, so it needs no replace annotation.
         docs = _render()
-        for name in ("redop-api", "redop-ui"):
-            annotations = _named(docs, "Deployment", name)["metadata"]["annotations"]
-            self.assertEqual(
-                annotations["argocd.argoproj.io/sync-options"], "Replace=true"
-            )
+        annotations = _named(docs, "Deployment", "redop-api")["metadata"]["annotations"]
+        self.assertEqual(
+            annotations["argocd.argoproj.io/sync-options"], "Replace=true"
+        )
 
     def test_worker_renders_with_the_client_roster_and_can_be_disabled(self) -> None:
         # Owner decision 2026-10-06: the interim fail-on-send transport lets the

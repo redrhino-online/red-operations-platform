@@ -1,0 +1,17 @@
+# Section 8 screens implemented as native cockpit pages (SPEC.md section 8; DoD
+# condition 6). One line per screen: `<screen-id> <route>`. The condition 6 gate
+# `scripts/check_frontend_screens.sh` requires all twelve canonical screen ids
+# and a native `/operations/<route>` page for each, so this list is the RED
+# product's screen manifest, kept repo-side (not in the absorbed vendor tree).
+portfolio-command-center /operations/command-center
+client-workspace-overview /operations/client-workspace
+source-and-claim-explorer /operations/source-explorer
+transformation-map /operations/transformation-map
+offer-and-journey-editor /operations/offer-and-journey
+build-board /operations/build-board
+approval-inbox /operations/approval-inbox
+workflow-run-detail /operations/workflow-run-detail
+launch-readiness /operations/launch-readiness
+performance-review /operations/performance-review
+portfolio-opportunities /operations/portfolio-opportunities
+authority-settings /operations/authority-settings

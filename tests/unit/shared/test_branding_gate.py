@@ -113,7 +113,7 @@ class AgentCharterCheckTests(unittest.TestCase):
     def test_repository_branding_and_notice_are_honest(self) -> None:
         result = run(
             BRANDING,
-            str(REPO_ROOT / "frontend"),
+            str(REPO_ROOT / "vendor" / "openexecutive" / "packages" / "ui"),
             str(REPO_ROOT / "vendor" / "openexecutive"),
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -122,31 +122,31 @@ class AgentCharterCheckTests(unittest.TestCase):
     def test_missing_vendored_notice_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            frontend = root / "frontend"
-            (frontend / "src" / "app").mkdir(parents=True)
-            (frontend / "src" / "app" / "layout.tsx").write_text(
+            ui = root / "ui"
+            (ui / "src" / "app").mkdir(parents=True)
+            (ui / "src" / "app" / "layout.tsx").write_text(
                 "RED Operations Director\n", encoding="utf-8"
             )
             vendor = root / "vendor"
             vendor.mkdir()
             (vendor / "LICENSE").write_text("license\n", encoding="utf-8")
-            result = run(BRANDING, str(frontend), str(vendor))
+            result = run(BRANDING, str(ui), str(vendor))
             self.assertEqual(result.returncode, 1)
             self.assertIn("missing a non-empty NOTICE", result.stderr)
 
     def test_wrong_director_name_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            frontend = root / "frontend"
-            (frontend / "src" / "app").mkdir(parents=True)
-            (frontend / "src" / "app" / "layout.tsx").write_text(
+            ui = root / "ui"
+            (ui / "src" / "app").mkdir(parents=True)
+            (ui / "src" / "app" / "layout.tsx").write_text(
                 "Chief Executive\n", encoding="utf-8"
             )
             vendor = root / "vendor"
             vendor.mkdir()
             (vendor / "LICENSE").write_text("license\n", encoding="utf-8")
             (vendor / "NOTICE").write_text("notice\n", encoding="utf-8")
-            result = run(BRANDING, str(frontend), str(vendor))
+            result = run(BRANDING, str(ui), str(vendor))
             self.assertEqual(result.returncode, 1)
             self.assertIn("not named RED", result.stderr)
 

@@ -31,7 +31,7 @@ PVC_NAME="${REDOP_PVC:-redop-data}"
 ARGO_NS="${REDOP_ARGO_NAMESPACE:-argocd}"
 ARGO_APP="${REDOP_ARGO_APP:-redop}"
 API_DEPLOY="${REDOP_API_DEPLOY:-redop-api}"
-UI_DEPLOY="${REDOP_UI_DEPLOY:-redop-ui}"
+COCKPIT_DEPLOY="${REDOP_COCKPIT_DEPLOY:-redop-cockpit}"
 ASSUME_YES="${REDOP_ASSUME_YES:-no}"
 
 for arg in "$@"; do
@@ -87,9 +87,11 @@ leftover="$(kubectl -n "$NAMESPACE" exec deploy/"$API_DEPLOY" -- sh -c 'ls -A /d
 [[ -z "$leftover" ]] || die "durable state files still present after the wipe: $leftover"
 
 printf 'reset: restarting the pods to drop in-memory state\n'
-kubectl -n "$NAMESPACE" rollout restart deployment/"$API_DEPLOY" deployment/"$UI_DEPLOY" >/dev/null
-wait_for "pods ready" 72 \
-  bash -c "[[ \"\$(kubectl -n $NAMESPACE get pods 2>/dev/null | grep -c ' 1/1 ')\" == 2 ]]"
+kubectl -n "$NAMESPACE" rollout restart deployment/"$API_DEPLOY" deployment/"$COCKPIT_DEPLOY" >/dev/null
+wait_for "api rollout ready" 72 \
+  kubectl -n "$NAMESPACE" rollout status deployment/"$API_DEPLOY" --timeout=5s
+wait_for "cockpit rollout ready" 72 \
+  kubectl -n "$NAMESPACE" rollout status deployment/"$COCKPIT_DEPLOY" --timeout=5s
 wait_for "api health endpoint ok" 40 \
   kubectl -n "$NAMESPACE" exec deploy/"$API_DEPLOY" -- python -c "import urllib.request;urllib.request.urlopen('http://localhost:8000/health', timeout=5)"
 

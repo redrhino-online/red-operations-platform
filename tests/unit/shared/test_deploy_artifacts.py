@@ -3,10 +3,11 @@
 Condition 9 requires the prototype deployed on the Atlas k3s cluster. The deploy
 slice (Q47-Q50) starts with container images and the CI that builds and promotes
 them. These tests pin the shape the rest of the slice depends on: the API image
-runs the RED app and its ``/red/health`` probe, the UI image runs the Next.js
-standalone server that carries the RED identity marker, the build context keeps
-the pinned submodule's local ``.venv`` out, and the Gitea workflow builds and
-pushes both images and promotes the tag into the GitOps repo.
+runs the RED app and its ``/red/health`` probe, the cockpit image runs the
+Next.js standalone server that carries the RED identity marker (the retired
+``/screens`` thin client image is gone, K7), the build context keeps the pinned
+submodule's local ``.venv`` out, and the Gitea workflow builds and pushes both
+images and promotes the tag into the GitOps repo.
 
 They are structural guards, not a substitute for the real image build and the
 deployed health check; they fail loudly if a rename or a dropped step would
@@ -21,7 +22,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 API_DOCKERFILE = REPO_ROOT / "Dockerfile.api"
-UI_DOCKERFILE = REPO_ROOT / "Dockerfile.ui"
+COCKPIT_DOCKERFILE = REPO_ROOT / "Dockerfile.cockpit"
 DOCKERIGNORE = REPO_ROOT / ".dockerignore"
 BUILD_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "build.yaml"
 
@@ -45,9 +46,9 @@ class ApiImageTest(unittest.TestCase):
         self.assertIn("vendor/openexecutive/packages/core/", text)
 
 
-class UiImageTest(unittest.TestCase):
+class CockpitImageTest(unittest.TestCase):
     def test_runs_the_next_standalone_server(self) -> None:
-        text = UI_DOCKERFILE.read_text(encoding="utf-8")
+        text = COCKPIT_DOCKERFILE.read_text(encoding="utf-8")
 
         self.assertIn(".next/standalone", text)
         self.assertIn('CMD ["node", "server.js"]', text)
@@ -69,20 +70,20 @@ class BuildWorkflowTest(unittest.TestCase):
         text = BUILD_WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("Dockerfile.api", text)
-        self.assertIn("Dockerfile.ui", text)
+        self.assertIn("Dockerfile.cockpit", text)
         self.assertIn("registry.atlas.lan", text)
         self.assertIn("redop-api", text)
-        self.assertIn("redop-ui", text)
+        self.assertIn("redop-cockpit", text)
 
     def test_promotes_the_tag_into_the_gitops_repo(self) -> None:
         text = BUILD_WORKFLOW.read_text(encoding="utf-8")
 
         # Argo CD reconciles apps/redop/chart from the Gitea GitOps repo; the
-        # workflow commits the new apiTag/uiTag so the release is promoted.
+        # workflow commits the new apiTag/cockpitTag so the release is promoted.
         self.assertIn("atlas-admin/atlas.git", text)
         self.assertIn("apps/redop/chart/values.yaml", text)
         self.assertIn("apiTag", text)
-        self.assertIn("uiTag", text)
+        self.assertIn("cockpitTag", text)
 
 
 if __name__ == "__main__":

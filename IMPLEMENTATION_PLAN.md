@@ -4,6 +4,45 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 20261009T023128Z: K7 — retire the thin client and rewrite the section 13 screen gate for the cockpit
+
+- **Selected item:** K7 (retire the `/screens` thin client and rewrite the
+  section 13 condition 6 gate to exercise the cockpit pages), the highest-value
+  ready item: K4, K5 and K6 are done, so K7 satisfies `[7/7]` condition 1 (one
+  shell) and makes `[5/7]` honest for the cockpit; it unblocks K13. K8-K11 are
+  independent but lower value.
+- **Outcome:** the thin client is gone: `frontend/`, `Dockerfile.ui`, the chart's
+  `deployment-ui.yaml`, the `-ui` Service and PDB, the `redop.uiImage` helper,
+  the `ui:`/`uiTag` values, the ingress `/screens` route, the Gitea UI image
+  build/push and the `uiTag` promotion, and the `redop-ui` reference in
+  `scripts/reset_redop_data.sh` (now restarts the API and cockpit). The section
+  13 condition 6 gate now exercises the cockpit: `scripts/check_frontend_screens.sh`
+  reads a repo-side manifest (`tests/cockpit-ui/dod-screens.txt`) and requires a
+  native `/operations/<route>` cockpit page per section 8 screen plus the
+  component suite; `scripts/check_frontend_build.sh` builds the cockpit
+  (`next build`) and runs the repo-side component suite; `scripts/check_branding_and_notice.sh`
+  scans the RED-owned cockpit surfaces for OpenExecutive branding and the RED
+  Director name; `scripts/check_definition_of_done.sh` `[5/7]` calls all three
+  with the cockpit paths.
+- **Evidence:** `make check` 2730 passed / 3 skipped / 799 subtests (the
+  rewritten `test_frontend_screens_check.py`, `test_frontend_build_check.py`,
+  `test_branding_gate.py`, `test_red_helm_chart.py` and `test_deploy_artifacts.py`
+  pass); `scripts/check_frontend_screens.sh` ok (12 screens); `scripts/check_frontend_build.sh`
+  ok (cockpit compiled, 43 component tests); `scripts/check_branding_and_notice.sh`
+  ok; `scripts/check_vendor_additive.sh` ok (1225 locked files match); `tsc --noEmit`
+  clean; `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]` (the live `[14.6]`
+  still fails until the overhauled cockpit image is built and deployed, which is
+  K13's live verification).
+- **Not done (deliberately):** the live single-shell verification and the docs
+  update are K13; no send, spend, publication or client commitment is authorized
+  (SPEC.md sections 4 and 9); `.ralph/DONE` is not touched because `make done`
+  still fails `[7/7]` at the live `[14.6]` check.
+- **Next ready item:** K8 (landing surface = portfolio command center), K9 (canon
+  into Knowledge), K10 (seed the runtime Departments/Council/People stores) and
+  K11 (register the stage 0-10 pipeline as cockpit workflows) are all independent
+  and ready; K13 needs them all.
+- **Blockers:** none.
+
 ### Cycle 20261009T022805Z: K6 — port performance review, portfolio opportunities and authority settings; point the nav at the native routes
 
 - **Selected item:** K6 (port the last three section 8 screens and rewrite the
@@ -44,40 +83,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   `make done` still fails `[7/7]`.
 - **Next ready item:** K7 (retire the thin client and rewrite the section 13
   screen gate), unblocked by K4, K5 and K6; K8, K9, K10, K11 are independent.
-- **Blockers:** none.
-
-### Cycle 20261009T022224Z: K5 — port source and claim explorer, transformation map and offer and journey editor to `/operations/*`
-
-- **Selected item:** K5 (port the source and claim explorer, transformation map
-  and offer and journey editor as native cockpit pages at `/operations/*`), the
-  highest-value ready item: K3 is done, so K5 is the last port of the
-  explorer/editor group and it unblocks K6, K7 and K13; `[7/7]` conditions 2 and
-  3 need every native route driven by the shared context. K9/K10 are independent
-  but lower value.
-- **Outcome:** the three screens are additive files in the absorbed cockpit tree
-  (ADR 0014): `src/lib/redOperationsApi.ts` gained the typed same-origin `/red`
-  reads for sources, claims, methods, offers and journeys (with their response
-  types), `src/components/operations/{SourceClaimExplorer,TransformationMap,OfferJourneyEditor}.tsx`
-  are pure presentational views and their `*Screen.tsx` containers, plus native
-  routes `src/app/operations/{source-explorer,transformation-map,offer-and-journey}/page.tsx`.
-  The containers read the shared workspace selection from `useRedClient()` (K2)
-  instead of per-screen free-text tenant inputs, and surface real loading, error
-  and empty states. The repo-side
-  `tests/cockpit-ui/operationsScreensK5.test.tsx` suite (vitest +
-  testing-library; vendor `package.json` untouched) covers the presentational
-  views and the context-driven containers.
-- **Evidence:** `tests/cockpit-ui` 33 passed (6 K2 + 9 K3 + 9 K4 + 9 K5); `make
-  check` 2730 passed / 3 skipped / 799 subtests;
-  `scripts/check_vendor_additive.sh` ok (1225 locked files match); `tsc --noEmit`
-  in the vendor UI clean; `[7/7]` still fails at `[14.1]` (the thin client is
-  retired in K7), as expected.
-- **Not done (deliberately):** the remaining three `/operations/*` routes, the
-  nav rewrite and the thin-client retirement are K6-K7; no send, spend,
-  publication or client commitment is authorized (SPEC.md sections 4 and 9);
-  `.ralph/DONE` is not touched because `make done` still fails `[7/7]`.
-- **Next ready item:** K6 (port performance review, portfolio opportunities and
-  authority settings, then point the nav at the native routes), unblocked by K4
-  and K5; K9 and K10 are independent.
 - **Blockers:** none.
 
 

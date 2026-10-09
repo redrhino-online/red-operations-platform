@@ -4,10 +4,10 @@
 # Modeled on the platform's reference workflow
 # (`examples/demo-app/.gitea/workflows/build.yaml` in the GitOps repo). On a
 # push to `main` (the `atlas` remote) or a `v*` tag it builds the RED API and
-# UI images, pushes them to the in-cluster registry, and promotes the resulting
-# tag into the GitOps repo so Argo CD reconciles the new release. The harness
-# publishes the `atlas` remote only on the final cycle of a `make loop`, so this
-# workflow runs then; a manual `git push atlas main` triggers it too.
+# cockpit images, pushes them to the in-cluster registry, and promotes the
+# resulting tag into the GitOps repo so Argo CD reconciles the new release. The
+# harness publishes the `atlas` remote only on the final cycle of a `make loop`,
+# so this workflow runs then; a manual `git push atlas main` triggers it too.
 #
 # Required repository secrets (same names as the reference workflow):
 #   REGISTRY_USER   - registry.atlas.lan user
@@ -56,11 +56,8 @@ jobs:
           echo "Building RED images at ${TAG}"
           docker build -f Dockerfile.api -t "${REGISTRY}/atlas-admin/redop-api:${TAG}" .
           docker push "${REGISTRY}/atlas-admin/redop-api:${TAG}"
-          # ADR 0012: the cockpit owns the root, so the RED screens build under
-          # /screens.
-          docker build -f Dockerfile.ui --build-arg NEXT_PUBLIC_RED_BASE_PATH=/screens \
-            -t "${REGISTRY}/atlas-admin/redop-ui:${TAG}" .
-          docker push "${REGISTRY}/atlas-admin/redop-ui:${TAG}"
+          # ADR 0013: the cockpit is the only user-facing UI and serves the
+          # native /operations/* RED screens at the root.
           docker build -f Dockerfile.cockpit -t "${REGISTRY}/atlas-admin/redop-cockpit:${TAG}" .
           docker push "${REGISTRY}/atlas-admin/redop-cockpit:${TAG}"
 
@@ -81,7 +78,7 @@ jobs:
           rm -rf apps/redop/chart/templates
           mkdir -p apps/redop/chart
           cp -r "${GITHUB_WORKSPACE}/deploy/charts/redop/." apps/redop/chart/
-          sed -i -E "s|^apiTag: .*|apiTag: ${TAG}|; s|^uiTag: .*|uiTag: ${TAG}|; s|^cockpitTag: .*|cockpitTag: ${TAG}|" apps/redop/chart/values.yaml
+          sed -i -E "s|^apiTag: .*|apiTag: ${TAG}|; s|^cockpitTag: .*|cockpitTag: ${TAG}|" apps/redop/chart/values.yaml
           if git diff --quiet; then echo "already at ${TAG}"; exit 0; fi
           git -c user.email=ci@atlas.lan -c user.name=atlas-ci commit -am "ci: promote redop ${TAG}"
           git push origin main
