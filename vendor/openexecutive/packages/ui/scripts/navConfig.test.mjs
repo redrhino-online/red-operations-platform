@@ -30,10 +30,10 @@ const RED_LINKS = [
 ];
 
 const TEAM = [
+  { key: "red", label: "RED Operations", items: RED_LINKS },
   { key: "workspace", label: "Workspace", items: ["Workflows → /jobs", "Documents → /artifacts", "Watch list → /watchlist"] },
   { key: "company", label: "Company", items: ["Goals → /goals", "Company profile → /company-profile"] },
   { key: "knowledge", label: "Knowledge", items: ["Knowledge base → /knowledge"] },
-  { key: "red", label: "RED Operations", items: RED_LINKS },
 ];
 
 const ROLE_KINDS = ["owner", "in_house", "independent", "other", null, undefined];
@@ -42,8 +42,8 @@ test("team nav includes the RED Operations screens", () => {
   assert.deepEqual(shape(buildPrimaryNav()), TEAM);
   assert.deepEqual(buildPrimaryNav({ mode: "team" }), buildPrimaryNav());
   const notOnboarded = shape(buildPrimaryNav({ isOnboarded: false }));
-  assert.deepEqual(notOnboarded[1].items, ["Goals → /goals", "Set up company → /onboard"]);
-  const profile = buildPrimaryNav()[1].items[1];
+  assert.deepEqual(notOnboarded[2].items, ["Goals → /goals", "Set up company → /onboard"]);
+  const profile = buildPrimaryNav()[2].items[1];
   assert.equal(profile.description, "Your company's identity and strategy — set up once, edited any time.");
 });
 
@@ -56,26 +56,26 @@ test("team nav ignores the role", () => {
 
 test("solo swaps the Company group for You while keeping RED Operations", () => {
   const solo = shape(buildPrimaryNav({ mode: "solo", roleKind: "owner" }));
-  assert.deepEqual(solo[1], { key: "you", label: "You", items: ["Goals → /goals", "Business profile → /company-profile"] });
-  assert.deepEqual([solo[0], solo[2], solo[3]], [TEAM[0], TEAM[2], TEAM[3]]);
+  assert.deepEqual(solo[2], { key: "you", label: "You", items: ["Goals → /goals", "Business profile → /company-profile"] });
+  assert.deepEqual([solo[0], solo[1], solo[3]], [TEAM[0], TEAM[1], TEAM[3]]);
   assert.ok(!JSON.stringify(solo).includes("/departments"));
 });
 
 test("solo: an owner's profile is their business", () => {
-  const item = buildPrimaryNav({ mode: "solo", roleKind: "owner" })[1].items[1];
+  const item = buildPrimaryNav({ mode: "solo", roleKind: "owner" })[2].items[1];
   assert.equal(item.label, "Business profile");
   assert.equal(item.description, "Your business — what you offer, who you serve, your priorities.");
-  const notOnboarded = buildPrimaryNav({ mode: "solo", roleKind: "owner", isOnboarded: false })[1].items[1];
+  const notOnboarded = buildPrimaryNav({ mode: "solo", roleKind: "owner", isOnboarded: false })[2].items[1];
   assert.deepEqual([notOnboarded.label, notOnboarded.href], ["Set up your business", "/onboard"]);
 });
 
 test("solo: any other role, or none, is 'Your work'", () => {
   for (const roleKind of ["in_house", "independent", "other", null, undefined]) {
-    const item = buildPrimaryNav({ mode: "solo", roleKind })[1].items[1];
+    const item = buildPrimaryNav({ mode: "solo", roleKind })[2].items[1];
     assert.deepEqual([item.label, item.href], ["Your work", "/company-profile"], String(roleKind));
     assert.equal(item.description, "Your work — the organisation you work in, who it serves, your priorities.");
     assert.ok(!/business|company/i.test(item.label + item.description), String(roleKind));
-    const notOnboarded = buildPrimaryNav({ mode: "solo", roleKind, isOnboarded: false })[1].items[1];
+    const notOnboarded = buildPrimaryNav({ mode: "solo", roleKind, isOnboarded: false })[2].items[1];
     assert.deepEqual([notOnboarded.label, notOnboarded.href], ["Set up your work", "/onboard"]);
   }
   assert.deepEqual(buildPrimaryNav({ mode: "solo" }), buildPrimaryNav({ mode: "solo", roleKind: null }));

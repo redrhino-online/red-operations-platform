@@ -149,6 +149,24 @@ export function buildPrimaryNav({
 }: BuildOpts = {}): NavGroup[] {
   return [
     {
+      key: "red",
+      label: "RED Operations",
+      items: [
+        { href: "/operations/command-center", label: "Portfolio command center", icon: "grid", description: "Ranked interventions across the portfolio." },
+        { href: "/operations/client-workspace", label: "Client workspace", icon: "users", description: "A client engagement at a glance." },
+        { href: "/operations/source-explorer", label: "Source and claim explorer", icon: "doc-search", description: "Sources and the claims grounded on them." },
+        { href: "/operations/transformation-map", label: "Transformation map", icon: "grid", description: "The signature solution's transformation steps." },
+        { href: "/operations/offer-and-journey", label: "Offer and journey editor", icon: "doc", description: "Offers and the journey that delivers them." },
+        { href: "/operations/build-board", label: "Build board", icon: "grid", description: "Builds, their states and dependencies." },
+        { href: "/operations/approval-inbox", label: "Approval inbox", icon: "check-circle", description: "Approvals with the exact version diff." },
+        { href: "/operations/workflow-run-detail", label: "Workflow run detail", icon: "doc", description: "A workflow run's transition log." },
+        { href: "/operations/launch-readiness", label: "Launch readiness", icon: "flag", description: "Stage 9 QA checks and traffic authorization." },
+        { href: "/operations/performance-review", label: "Performance review", icon: "activity", description: "The stage 10 baseline and post-launch milestones." },
+        { href: "/operations/portfolio-opportunities", label: "Portfolio opportunities", icon: "flag", description: "Grow proposals grounded on approved assets." },
+        { href: "/operations/authority-settings", label: "Authority settings", icon: "cog", description: "Who holds authority and approves each stage." },
+      ],
+    },
+    {
       key: "workspace",
       label: "Workspace",
       items: [
@@ -188,24 +206,6 @@ export function buildPrimaryNav({
         },
       ],
     },
-      {
-      key: "red",
-      label: "RED Operations",
-      items: [
-        { href: "/operations/command-center", label: "Portfolio command center", icon: "grid", description: "Ranked interventions across the portfolio." },
-        { href: "/operations/client-workspace", label: "Client workspace", icon: "users", description: "A client engagement at a glance." },
-        { href: "/operations/source-explorer", label: "Source and claim explorer", icon: "doc-search", description: "Sources and the claims grounded on them." },
-        { href: "/operations/transformation-map", label: "Transformation map", icon: "grid", description: "The signature solution's transformation steps." },
-        { href: "/operations/offer-and-journey", label: "Offer and journey editor", icon: "doc", description: "Offers and the journey that delivers them." },
-        { href: "/operations/build-board", label: "Build board", icon: "grid", description: "Builds, their states and dependencies." },
-        { href: "/operations/approval-inbox", label: "Approval inbox", icon: "check-circle", description: "Approvals with the exact version diff." },
-        { href: "/operations/workflow-run-detail", label: "Workflow run detail", icon: "doc", description: "A workflow run's transition log." },
-        { href: "/operations/launch-readiness", label: "Launch readiness", icon: "flag", description: "Stage 9 QA checks and traffic authorization." },
-        { href: "/operations/performance-review", label: "Performance review", icon: "activity", description: "The stage 10 baseline and post-launch milestones." },
-        { href: "/operations/portfolio-opportunities", label: "Portfolio opportunities", icon: "flag", description: "Grow proposals grounded on approved assets." },
-        { href: "/operations/authority-settings", label: "Authority settings", icon: "cog", description: "Who holds authority and approves each stage." },
-      ],
-    },
 ];
 }
 
@@ -242,7 +242,7 @@ export const GUIDE_NAV_ITEM: NavItem = {
 // (AppShell), and the chat-home sidebar so the copy lives once.
 export const NEW_CHAT_DESCRIPTION = "Start a fresh conversation with the Executive.";
 export const BRIEFING_DESCRIPTION =
-  "Land on a daily brief of what's happened and what needs you.";
+  "RED's daily brief — the ranked interventions that need you.";
 
 // Where a Settings tool sits on that page: what you open to check on the
 // install, to change how it runs, or to learn how it works.

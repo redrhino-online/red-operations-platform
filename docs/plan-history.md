@@ -2,6 +2,48 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 20261009T022805Z: K6 — port performance review, portfolio opportunities and authority settings; point the nav at the native routes
+
+- **Selected item:** K6 (port the last three section 8 screens and rewrite the
+  RED Operations nav group), the highest-value ready item: K4 and K5 are done, so
+  K6 completes all twelve native `/operations/*` routes and satisfies `[7/7]`
+  condition 2 (the nav carries no `/screens` links and one `/operations/<route>`
+  item per screen); it unblocks K7 and K13. K9/K10 are independent but lower
+  value.
+- **Outcome:** the three screens are additive files in the absorbed cockpit tree
+  (ADR 0014): `src/lib/redOperationsApi.ts` gained the typed same-origin `/red`
+  reads for measurements and opportunities plus the workspace/measurement types,
+  `src/components/operations/{PerformanceReview,PortfolioOpportunities,AuthoritySettings}.tsx`
+  are pure presentational views and their `*Screen.tsx` containers, plus native
+  routes `src/app/operations/{performance-review,portfolio-opportunities,authority-settings}/page.tsx`.
+  The containers read the shared workspace selection from `useRedClient()` (K2)
+  instead of per-screen free-text tenant/engagement inputs (authority settings
+  reuses the context's workspace registry rather than re-reading it), and surface
+  real loading, error and empty states. The RED Operations `navConfig` group now
+  links the twelve `/operations/*` routes and no `/screens/*` link remains; the
+  vendor `navConfig.test.mjs` expectations were updated to match. The repo-side
+  `tests/cockpit-ui/operationsScreensK6.test.tsx` suite (vitest +
+  testing-library; vendor `package.json` untouched) covers the presentational
+  views, the context-driven containers and the nav hrefs.
+- **Prerequisite fix:** `make check` was red on entry from the operator's harness
+  change `3bc85b8` (omit done rows from the generated STATE queue): it updated
+  `scripts/ralph_state.py` but left `tests/unit/shared/test_ralph_state.py`
+  asserting the old done-row behavior. Updated that one assertion to the intended
+  behavior (done rows omitted); no harness behavior changed.
+- **Evidence:** `tests/cockpit-ui` 43 passed (6 K2 + 9 K3 + 9 K4 + 9 K5 + 10 K6);
+  vendor `navConfig.test.mjs` 12 passed; `make check` 2730 passed / 3 skipped /
+  799 subtests; `scripts/check_vendor_additive.sh` ok (1225 locked files match);
+  `tsc --noEmit` in the vendor UI clean; `[7/7]` still fails at `[14.1]` (the
+  thin client is retired in K7), as expected; `[14.2]`/`[14.3]` verified manually
+  (no `/screens` link, all twelve routes present).
+- **Not done (deliberately):** the thin-client retirement and the section 13
+  screen-gate rewrite are K7; no send, spend, publication or client commitment is
+  authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is not touched because
+  `make done` still fails `[7/7]`.
+- **Next ready item:** K7 (retire the thin client and rewrite the section 13
+  screen gate), unblocked by K4, K5 and K6; K8, K9, K10, K11 are independent.
+- **Blockers:** none.
+
 ### Cycle 20261009T022224Z: K5 — port source and claim explorer, transformation map and offer and journey editor to `/operations/*`
 
 - **Selected item:** K5 (port the source and claim explorer, transformation map
