@@ -369,6 +369,124 @@ export interface JourneyReleaseList {
   releases: JourneyRelease[];
 }
 
+// The client workspace authority registry (K6; SPEC.md sections 3, 7 and 8).
+// Mirrors `ClientWorkspaceResponse`/`ClientWorkspaceListResponse` in
+// `backend/redops/api/schemas.py`. The authority settings screen reads the
+// registry the shared context already loaded; the UI invents no authority role
+// and grants no authority.
+export interface ClientAuthority {
+  actor: string;
+  authority: string;
+}
+
+export interface ClientWorkspace {
+  workspace_id: string;
+  tenant_id: string;
+  lifecycle: string;
+  authorities: ClientAuthority[];
+  children: string[];
+}
+
+export interface ClientWorkspaceList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  workspaces: ClientWorkspace[];
+}
+
+// The stage 10 measurement read (K6; SPEC.md sections 3, 4 and 8). Mirrors
+// `MeasurementRecordResponse`/`MeasurementListResponse` in
+// `backend/redops/api/schemas.py`. An observation pins the exact metric version,
+// the closed window, the basis and the source; `is_observed` is false for a
+// placeholder, so a placeholder never reads as a measured result.
+export interface MetricDefinitionSummary {
+  metric_id: string;
+  tenant_id: string;
+  name: string;
+  funnel_step: string;
+  unit: string;
+  direction: string;
+  version: number;
+}
+
+export interface MetricMovement {
+  improvement_id: string;
+  before: number;
+  after: number;
+  measured_on: string;
+}
+
+export interface MetricReporting {
+  metric_id: string;
+  tenant_id: string;
+  name: string;
+  funnel_step: string;
+  unit: string;
+  direction: string;
+  value: number;
+  window_start: string;
+  window_end: string;
+  sample_size: number;
+  source: string;
+  recorded_on: string;
+  basis: string;
+  movement: MetricMovement | null;
+}
+
+export interface MeasurementRecord {
+  record_id: string;
+  tenant_id: string;
+  metric: MetricDefinitionSummary;
+  value: number;
+  window_start: string;
+  window_end: string;
+  basis: string;
+  source: string;
+  sample_size: number;
+  recorded_on: string;
+  is_observed: boolean;
+}
+
+export interface MeasurementList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  records: MeasurementRecord[];
+}
+
+// The portfolio opportunity register read (K6; SPEC.md sections 3, 7 and 8).
+// Mirrors `OpportunityResponse`/`OpportunityListResponse` in
+// `backend/redops/api/schemas.py`. An opportunity is a proposal grounded on the
+// exact same-tenant `(asset_id, kind, version)` of the approved stage asset it
+// expands, so the source is always shown pinned; `state` is `proposed` until a
+// human investment authority acts, and the register never stores an approved
+// investment.
+export interface PortfolioOpportunity {
+  tenant_id: string;
+  opportunity_id: string;
+  title: string;
+  kind: string;
+  source_asset_id: string;
+  source_kind: string;
+  source_version: number;
+  investment_case: string;
+  expected_outcome: string;
+  owner: string;
+  next_action: string;
+  captured_on: string;
+  state: string;
+}
+
+export interface OpportunityList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  opportunities: PortfolioOpportunity[];
+}
+
 function redApiBase(): string {
   return process.env.NEXT_PUBLIC_RED_API_BASE ?? "";
 }
@@ -486,4 +604,18 @@ export function listOffers(tenantId: string): Promise<OfferList> {
 
 export function listJourneys(tenantId: string): Promise<JourneyReleaseList> {
   return redGet<JourneyReleaseList>("/red/journeys", { tenant_id: tenantId });
+}
+
+// The performance review read (K6; SPEC.md sections 3, 4 and 8). The tenant is a
+// required query scope; the route is read-only and a recorded observation is not
+// a gate, so reading the registry changes no metric and starts no optimization.
+export function listMeasurements(tenantId: string): Promise<MeasurementList> {
+  return redGet<MeasurementList>("/red/measurements", { tenant_id: tenantId });
+}
+
+// The portfolio opportunity register read (K6; SPEC.md sections 3, 7 and 8). The
+// tenant is a required query scope and the route is read-only; the register
+// holds proposals only, so listing one approves no investment, spend or launch.
+export function listOpportunities(tenantId: string): Promise<OpportunityList> {
+  return redGet<OpportunityList>("/red/opportunities", { tenant_id: tenantId });
 }

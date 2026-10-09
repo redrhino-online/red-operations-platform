@@ -65,7 +65,9 @@ class RalphStateTests(unittest.TestCase):
             self.assertNotIn("Owner directive old", plan)
             self.assertIn("Owner directive old", history)
             self.assertIn("Next ready: G2 authority-video kit", state)
-            self.assertIn("G1 [done; commercial; depends —]", state)
+            # Done rows are omitted from the generated queue so the handoff stays
+            # focused on open work and under the 4 KB cap (scripts/ralph_state.py).
+            self.assertNotIn("G1 [done; commercial; depends —]", state)
             self.assertIn("G2 [open; production; depends —]", state)
             self.assertIn("G9 [blocked on owner input; process; depends —]", state)
             self.assertIn("W1 [open; deploy; depends —]", state)

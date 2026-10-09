@@ -15,18 +15,18 @@ const shape = (groups) =>
   groups.map((g) => ({ key: g.key, label: g.label, items: g.items.map((i) => `${i.label} → ${i.href}`) }));
 
 const RED_LINKS = [
-  "Portfolio command center → /screens/command-center",
-  "Client workspace → /screens/client-workspace",
-  "Source and claim explorer → /screens/source-explorer",
-  "Transformation map → /screens/transformation-map",
-  "Offer and journey editor → /screens/offer-and-journey",
-  "Build board → /screens/build-board",
-  "Approval inbox → /screens/approval-inbox",
-  "Workflow run detail → /screens/workflow-run-detail",
-  "Launch readiness → /screens/launch-readiness",
-  "Performance review → /screens/performance-review",
-  "Portfolio opportunities → /screens/portfolio-opportunities",
-  "Authority settings → /screens/authority-settings",
+  "Portfolio command center → /operations/command-center",
+  "Client workspace → /operations/client-workspace",
+  "Source and claim explorer → /operations/source-explorer",
+  "Transformation map → /operations/transformation-map",
+  "Offer and journey editor → /operations/offer-and-journey",
+  "Build board → /operations/build-board",
+  "Approval inbox → /operations/approval-inbox",
+  "Workflow run detail → /operations/workflow-run-detail",
+  "Launch readiness → /operations/launch-readiness",
+  "Performance review → /operations/performance-review",
+  "Portfolio opportunities → /operations/portfolio-opportunities",
+  "Authority settings → /operations/authority-settings",
 ];
 
 const TEAM = [

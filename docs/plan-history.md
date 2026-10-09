@@ -2,6 +2,41 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 20261009T021852Z: K4 — port build board, workflow run detail and launch readiness to `/operations/*`
+
+- **Selected item:** K4 (port the build board, workflow run detail and launch
+  readiness as native cockpit pages at `/operations/*`), the highest-value ready
+  item: K3 is done, so K4 is the next port of the single-shell line and it
+  unblocks K6, K7 and K13; `[7/7]` conditions 2 and 3 need every native route
+  driven by the shared context. K5 is also ready but K4 keeps the port order
+  (build/workflow/launch before the explorer/editor group); K9/K10 are
+  independent but lower value.
+- **Outcome:** the three screens are additive files in the absorbed cockpit tree
+  (ADR 0014): `src/lib/redOperationsApi.ts` gained the typed same-origin `/red`
+  reads for builds, one workflow run and launch QAs (with their response types),
+  `src/components/operations/{BuildBoard,WorkflowRunDetail,LaunchReadiness}.tsx`
+  are pure presentational views and their `*Screen.tsx` containers, plus native
+  routes `src/app/operations/{build-board,workflow-run-detail,launch-readiness}/page.tsx`.
+  The containers read the shared workspace selection from `useRedClient()` (K2)
+  instead of per-screen free-text tenant inputs (the workflow run id is the
+  specific resource inspected, not a tenant/engagement scope), and surface real
+  loading, error and empty states. The repo-side
+  `tests/cockpit-ui/operationsScreensK4.test.tsx` suite (vitest +
+  testing-library; vendor `package.json` untouched) covers the presentational
+  views and the context-driven containers.
+- **Evidence:** `tests/cockpit-ui` 24 passed (6 K2 + 9 K3 + 9 K4); `make check`
+  2730 passed / 3 skipped / 799 subtests; `scripts/check_vendor_additive.sh` ok
+  (1225 locked files match); `tsc --noEmit` in the vendor UI clean; `[7/7]` still
+  fails at `[14.1]` (the thin client is retired in K7), as expected.
+- **Not done (deliberately):** the remaining six `/operations/*` routes, the nav
+  rewrite and the thin-client retirement are K5-K7; no send, spend, publication
+  or client commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is
+  not touched because `make done` still fails `[7/7]`.
+- **Next ready item:** K5 (port source and claim explorer, transformation map and
+  offer and journey editor to `/operations/*`), unblocked by K3; K6 needs K4 and
+  K5; K9 and K10 are independent.
+- **Blockers:** none.
+
 ### Cycle 20261009T021605Z: K3 — port command center, client workspace and approval inbox to `/operations/*`
 
 - **Selected item:** K3 (port the command center, client workspace and approval
