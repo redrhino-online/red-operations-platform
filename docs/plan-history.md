@@ -2,6 +2,43 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 20261009T021022Z: K2 — shared client context in the cockpit (with the absorbed-fork tracking fix)
+
+- **Selected item:** K2 (shared workspace/engagement context in the cockpit), the
+  highest-value ready item: it unblocks K3-K8 and K11/K12 (the whole single-shell
+  context line) and `[7/7]` condition 3 needs it. K9/K10 are independent but
+  lower value.
+- **Blocker found and fixed:** K2's additive cockpit files could not be
+  committed. `vendor/openexecutive` was still an unresolvable gitlink (no
+  `.gitmodules`, no nested `.git`, target commit `31e5533` absent from the object
+  store), so git ignored the whole tree and `git add` refused every path inside
+  it. ADR 0014 decision 1 requires the tree to be ordinary tracked files.
+  Removed the gitlink and committed the baseline tree (1266 files) as tracked
+  source; the working tree is unchanged, so `scripts/check_vendor_additive.sh`
+  still reports 1225 locked files matching the baseline.
+- **Outcome:** the shared RED client context (SPEC.md section 14 condition 3) is
+  additive files in the cockpit tree: `src/lib/redClientApi.ts` (tenant-scoped
+  `GET /red/clients` listing), `src/components/workspace/redClientSelection.ts`
+  (pure persistence/resolution), `RedClientContext.tsx` (provider + `useRedClient`
+  hook, persisted to `localStorage`), and `RedClientPicker.tsx` (shell picker).
+  The RED-owned `src/app/layout.tsx` mounts the provider and `AppShell.tsx`
+  renders the picker in the TopBar. The ported `/operations/*` screens (K3-K6)
+  read the selection from `useRedClient()` instead of per-screen free-text
+  defaults. The repo-side `tests/cockpit-ui/` suite (vitest + testing-library;
+  vendor `package.json` untouched) covers the listing load, persistence, restore,
+  picker change and the pure selection rules.
+- **Evidence:** `tests/cockpit-ui` 6 passed; `make check` 2730 passed / 3 skipped
+  / 799 subtests; `scripts/check_vendor_additive.sh` ok (1225 locked files match);
+  `tsc --noEmit` in the vendor UI clean; `[7/7]` still fails at `[14.1]` (the
+  thin client is retired in K7), as expected.
+- **Not done (deliberately):** the `/operations/*` pages, the nav rewrite and the
+  thin-client retirement are K3-K7; no send, spend, publication or client
+  commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is not
+  touched because `make done` still fails `[7/7]`.
+- **Next ready item:** K3 (port command center, client workspace and approval
+  inbox to `/operations/*`), unblocked by K2; K9 and K10 are independent.
+- **Blockers:** none.
+
 ### Owner decision 2026-10-08: single-shell cockpit overhaul phase opened (K queue)
 
 - **Selected item:** none (planning entry, no cycle). The owner reviewed the

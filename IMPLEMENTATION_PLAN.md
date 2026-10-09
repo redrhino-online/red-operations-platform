@@ -4,80 +4,71 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
-### Cycle 20261009T021022Z: K2 — shared client context in the cockpit (with the absorbed-fork tracking fix)
+### Cycle 20261009T021852Z: K4 — port build board, workflow run detail and launch readiness to `/operations/*`
 
-- **Selected item:** K2 (shared workspace/engagement context in the cockpit), the
-  highest-value ready item: it unblocks K3-K8 and K11/K12 (the whole single-shell
-  context line) and `[7/7]` condition 3 needs it. K9/K10 are independent but
-  lower value.
-- **Blocker found and fixed:** K2's additive cockpit files could not be
-  committed. `vendor/openexecutive` was still an unresolvable gitlink (no
-  `.gitmodules`, no nested `.git`, target commit `31e5533` absent from the object
-  store), so git ignored the whole tree and `git add` refused every path inside
-  it. ADR 0014 decision 1 requires the tree to be ordinary tracked files.
-  Removed the gitlink and committed the baseline tree (1266 files) as tracked
-  source; the working tree is unchanged, so `scripts/check_vendor_additive.sh`
-  still reports 1225 locked files matching the baseline.
-- **Outcome:** the shared RED client context (SPEC.md section 14 condition 3) is
-  additive files in the cockpit tree: `src/lib/redClientApi.ts` (tenant-scoped
-  `GET /red/clients` listing), `src/components/workspace/redClientSelection.ts`
-  (pure persistence/resolution), `RedClientContext.tsx` (provider + `useRedClient`
-  hook, persisted to `localStorage`), and `RedClientPicker.tsx` (shell picker).
-  The RED-owned `src/app/layout.tsx` mounts the provider and `AppShell.tsx`
-  renders the picker in the TopBar. The ported `/operations/*` screens (K3-K6)
-  read the selection from `useRedClient()` instead of per-screen free-text
-  defaults. The repo-side `tests/cockpit-ui/` suite (vitest + testing-library;
-  vendor `package.json` untouched) covers the listing load, persistence, restore,
-  picker change and the pure selection rules.
-- **Evidence:** `tests/cockpit-ui` 6 passed; `make check` 2730 passed / 3 skipped
-  / 799 subtests; `scripts/check_vendor_additive.sh` ok (1225 locked files match);
-  `tsc --noEmit` in the vendor UI clean; `[7/7]` still fails at `[14.1]` (the
-  thin client is retired in K7), as expected.
-- **Not done (deliberately):** the `/operations/*` pages, the nav rewrite and the
-  thin-client retirement are K3-K7; no send, spend, publication or client
-  commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is not
-  touched because `make done` still fails `[7/7]`.
-- **Next ready item:** K3 (port command center, client workspace and approval
-  inbox to `/operations/*`), unblocked by K2; K9 and K10 are independent.
+- **Selected item:** K4 (port the build board, workflow run detail and launch
+  readiness as native cockpit pages at `/operations/*`), the highest-value ready
+  item: K3 is done, so K4 is the next port of the single-shell line and it
+  unblocks K6, K7 and K13; `[7/7]` conditions 2 and 3 need every native route
+  driven by the shared context. K5 is also ready but K4 keeps the port order
+  (build/workflow/launch before the explorer/editor group); K9/K10 are
+  independent but lower value.
+- **Outcome:** the three screens are additive files in the absorbed cockpit tree
+  (ADR 0014): `src/lib/redOperationsApi.ts` gained the typed same-origin `/red`
+  reads for builds, one workflow run and launch QAs (with their response types),
+  `src/components/operations/{BuildBoard,WorkflowRunDetail,LaunchReadiness}.tsx`
+  are pure presentational views and their `*Screen.tsx` containers, plus native
+  routes `src/app/operations/{build-board,workflow-run-detail,launch-readiness}/page.tsx`.
+  The containers read the shared workspace selection from `useRedClient()` (K2)
+  instead of per-screen free-text tenant inputs (the workflow run id is the
+  specific resource inspected, not a tenant/engagement scope), and surface real
+  loading, error and empty states. The repo-side
+  `tests/cockpit-ui/operationsScreensK4.test.tsx` suite (vitest +
+  testing-library; vendor `package.json` untouched) covers the presentational
+  views and the context-driven containers.
+- **Evidence:** `tests/cockpit-ui` 24 passed (6 K2 + 9 K3 + 9 K4); `make check`
+  2730 passed / 3 skipped / 799 subtests; `scripts/check_vendor_additive.sh` ok
+  (1225 locked files match); `tsc --noEmit` in the vendor UI clean; `[7/7]` still
+  fails at `[14.1]` (the thin client is retired in K7), as expected.
+- **Not done (deliberately):** the remaining six `/operations/*` routes, the nav
+  rewrite and the thin-client retirement are K5-K7; no send, spend, publication
+  or client commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is
+  not touched because `make done` still fails `[7/7]`.
+- **Next ready item:** K5 (port source and claim explorer, transformation map and
+  offer and journey editor to `/operations/*`), unblocked by K3; K6 needs K4 and
+  K5; K9 and K10 are independent.
 - **Blockers:** none.
 
-### Cycle 20261008T130457Z: K1 — the 3F pilot workspace seed (interrupted agent run completed by the operator)
+### Cycle 20261009T021605Z: K3 — port command center, client workspace and approval inbox to `/operations/*`
 
-- **Selected item:** K1 (seed the 3F pilot workspace end to end), the only
-  ready item: its dependency Q30 is done, it unblocks K2-K8 and K11/K12 (the
-  whole single-shell context line), and `[7/7]`'s live check fails without it.
-- **Outcome:** `backend/redops/seed.py` seeds the `ws-3f` workspace under tenant
-  `3fmindset` through the real routes the e2e proves: the workspace with
-  demo-marked authorities, immutable source records, grounded claims, three
-  production builds, and all eleven stage-gate decisions (stages 0-10). Every
-  seeded identifier, actor and prose value carries the `demo`/`Demo` marker
-  except the owner-fixed pilot ids (`3fmindset`, `ws-3f`). The module is
-  self-contained production code (no `tests.*` imports) with a `seed_from_env`
-  entrypoint requiring `DATABASE_URL`; `make seed` runs it. A rerun changes
-  nothing (idempotent by natural keys and already-approved skip).
-- **Interruption and resolution:** the agent run implemented the seed and
-  archived the older cycle entries but was interrupted before verification
-  finished and before writing its commit message, so the harness correctly
-  refused to commit. The operator completed the slice: fixed the one remaining
-  test assertion (the builds demo-marker check is case-insensitive, matching the
-  claims fix the agent had already made), added the `make seed` target, and ran
-  the verification below.
-- **Evidence:** `tests/unit/test_seed.py` 4 passed (workspace e2e, idempotent
-  rerun, demo marking, and the PostgreSQL store path); `make check` 2730
-  passed / 3 skipped / 799 subtests; dev-database verification:
-  `GET /red/clients?tenant_id=3fmindset` -> `ws-3f` with demo authorities,
-  `GET /red/decisions` -> 11 decisions covering stages 0-10, `/red/methods` 1,
-  `/red/offers` 1, `/red/approvals` 140, `make seed` rerun reports
-  `workspace_created: false` and empty created lists.
-- **Not done (deliberately):** measurement, opportunity and journey records are
-  outside K1's seed scope (the stage 10 baseline's metric observations stay
-  pending, never fabricated); no send, spend, publication or client commitment
-  is authorized (SPEC.md sections 4 and 9); the interventions ranking derives
-  from the production view, so a fully gated demo engagement currently yields
-  no intervention cards (K8 will word the command-center expectation against
-  this reality).
-- **Next ready item:** K2 (shared workspace/engagement context in the cockpit),
-  unblocked by K1; K9 and K10 are independent and may interleave.
+- **Selected item:** K3 (port the command center, client workspace and approval
+  inbox as native cockpit pages at `/operations/*`), the highest-value ready
+  item: K2 is done, so K3 is the first port of the single-shell line and it
+  unblocks K4-K8 and K12; `[7/7]` conditions 2 and 3 need the native routes and
+  the shared context driving them. K9/K10 are independent but lower value.
+- **Outcome:** the three screens are additive files in the absorbed cockpit tree
+  (ADR 0014): `src/lib/redOperationsApi.ts` (typed same-origin `/red` reads for
+  interventions, the engagement production view and approvals),
+  `src/components/operations/{CommandCenter,ClientWorkspaceOverview,ApprovalInbox}.tsx`
+  (pure presentational views) and their `*Screen.tsx` containers, plus native
+  routes `src/app/operations/{command-center,client-workspace,approval-inbox}/page.tsx`.
+  The containers read the shared workspace/engagement selection from
+  `useRedClient()` (K2) instead of per-screen free-text tenant/engagement inputs,
+  and surface real loading, error and empty states. The repo-side
+  `tests/cockpit-ui/operationsScreens.test.tsx` suite (vitest +
+  testing-library; vendor `package.json` untouched) covers the presentational
+  views and the context-driven containers.
+- **Evidence:** `tests/cockpit-ui` 15 passed (6 K2 + 9 K3); `make check` 2730
+  passed / 3 skipped / 799 subtests; `scripts/check_vendor_additive.sh` ok (1225
+  locked files match); `tsc --noEmit` in the vendor UI clean; `[7/7]` still fails
+  at `[14.1]` (the thin client is retired in K7), as expected.
+- **Not done (deliberately):** the remaining nine `/operations/*` routes, the nav
+  rewrite and the thin-client retirement are K4-K7; no send, spend, publication
+  or client commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is
+  not touched because `make done` still fails `[7/7]`.
+- **Next ready item:** K4 (port build board, workflow run detail and launch
+  readiness to `/operations/*`), unblocked by K3; K5 is also unblocked by K3;
+  K9 and K10 are independent.
 - **Blockers:** none.
 
 
