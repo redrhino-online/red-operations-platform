@@ -103,25 +103,28 @@ def field_value(entry: str, field: str) -> str | None:
                 values.append(continuation.strip())
             else:
                 break
-        return compact(" ".join(values))
+        return compact(" ".join(values), 170)
     return None
+
+
+def queue_status(line: str) -> str:
+    cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+    evidence = cells[-1] if cells else ""
+    if re.search(r"unresolved|license-owner request", evidence, re.IGNORECASE):
+        return "blocked on owner input"
+    if re.search(r"\bRemaining:", evidence, re.IGNORECASE):
+        return "partial"
+    if re.search(r"\bDone\s+20\d\d-\d\d-\d\d", evidence, re.IGNORECASE):
+        return "done"
+    return "open"
 
 
 def queue_state(line: str) -> str:
     cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-    evidence = cells[-1] if cells else ""
-    if re.search(r"unresolved|license-owner request", evidence, re.IGNORECASE):
-        status = "blocked on owner input"
-    elif re.search(r"\bRemaining:", evidence, re.IGNORECASE):
-        status = "partial"
-    elif re.search(r"\bDone\s+20\d\d-\d\d-\d\d", evidence, re.IGNORECASE):
-        status = "done"
-    else:
-        status = "open"
-    item = compact(cells[1], 72) if len(cells) > 1 else ""
+    item = compact(cells[1], 64) if len(cells) > 1 else ""
     area = cells[2] if len(cells) > 2 else "?"
     depends = cells[3] if len(cells) > 3 else "?"
-    return f"- {cells[0]} [{status}; {area}; depends {depends}]: {item}"
+    return f"- {cells[0]} [{queue_status(line)}; {area}; depends {depends}]: {item}"
 
 
 def generate_state(repo: Path) -> str:
@@ -142,8 +145,9 @@ def generate_state(repo: Path) -> str:
     for match in QUEUE_PATTERN.finditer(plan):
         identifier = match.group(1)
         if identifier not in seen:
-            queue_rows.append(queue_state(match.group(0)))
             seen.add(identifier)
+            if queue_status(match.group(0)) != "done":
+                queue_rows.append(queue_state(match.group(0)))
 
     done_path = repo / ".ralph" / "DONE"
     stop_path = repo / ".ralph" / "STOP"
@@ -168,7 +172,7 @@ def generate_state(repo: Path) -> str:
         if value:
             result.append(f"- {label}: {value}")
     if queue_rows:
-        result.extend(["", "## Tracked queue"])
+        result.extend(["", "## Tracked queue (open items; done rows omitted)"])
         result.extend(queue_rows)
     result.extend(
         [
