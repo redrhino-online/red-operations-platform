@@ -195,6 +195,180 @@ export interface LaunchQAList {
   launch_qas: LaunchQA[];
 }
 
+// One immutable source record and its grounded claims (K5; SPEC.md sections 3, 7
+// and 8). Mirrors `SourceRecordResponse`, `ClaimResponse` and their list
+// envelopes in `backend/redops/api/schemas.py`. The explorer reads them; it
+// recomputes no claim rule and can set no provenance.
+export interface SourceRecord {
+  source_id: string;
+  tenant_id: string;
+  locator: string;
+  checksum: string;
+  captured_on: string;
+  access_rule: string;
+}
+
+export interface SourceRecordList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  sources: SourceRecord[];
+}
+
+export interface ClaimCitation {
+  source_id: string;
+  checksum: string;
+  location: string;
+}
+
+export interface Claim {
+  claim_id: string;
+  tenant_id: string;
+  statement: string;
+  provenance: string;
+  confidence_note: string;
+  is_directly_sourced: boolean;
+  citations: ClaimCitation[];
+}
+
+export interface ClaimList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  claims: Claim[];
+}
+
+// One approved method version and its pinned stage 4 transformation structure
+// (K5; SPEC.md sections 3, 4, 7 and 8). Mirrors `MethodVersionResponse` and its
+// nested `SignatureSolutionResponse` in `backend/redops/api/schemas.py`. The
+// transformation map reads the exact approved structure; the UI recomputes no
+// stage rule and can approve nothing.
+export interface SignatureStep {
+  step_id: string;
+  tenant_id: string;
+  name: string;
+  starting_state: string;
+  final_state: string;
+  inputs: string[];
+  actions: string[];
+  outputs: string[];
+}
+
+export interface TransformationPhase {
+  phase_id: string;
+  tenant_id: string;
+  name: string;
+  steps: SignatureStep[];
+}
+
+export interface SignatureSolution {
+  solution_id: string;
+  tenant_id: string;
+  transformation_map: string;
+  process_inventory: string[];
+  phases: TransformationPhase[];
+  starting_state: string;
+  final_state: string;
+  narrative: string;
+  visual: string;
+}
+
+export interface MethodVersion {
+  method_id: string;
+  tenant_id: string;
+  parent_method: string;
+  semantic_version: string;
+  stages: string[];
+  currency: string;
+  claims: string[];
+  is_approved: boolean;
+  approved_by: string | null;
+  intended_use: string | null;
+  approved_on: string | null;
+  primary_currency: string | null;
+  diagnostic_model_id: string | null;
+  signature_solution_id: string | null;
+  signature_solution: SignatureSolution | null;
+}
+
+export interface MethodVersionList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  methods: MethodVersion[];
+}
+
+// One production ready offer version and its pinned method dependencies (K5;
+// SPEC.md sections 3, 5, 7 and 8). The stage 5 shape is informed by canon files
+// 11 and 12 (Perfect Product, Product Matrix, pricing by outcome). Mirrors
+// `OfferVersionResponse` in `backend/redops/api/schemas.py`. The editor reads the
+// exact approved offer and its pinned method references; the UI recomputes no
+// readiness rule and can approve nothing.
+export interface MethodReference {
+  method_id: string;
+  version: string;
+  intended_use: string;
+}
+
+export interface OfferVersion {
+  offer_id: string;
+  tenant_id: string;
+  audience: string;
+  promise: string;
+  eligibility: string;
+  price_hypothesis: string;
+  owner: string;
+  state: string;
+  is_production_ready: boolean;
+  method_refs: MethodReference[];
+  review_reason: string | null;
+}
+
+export interface OfferList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  offers: OfferVersion[];
+}
+
+// One authorized journey release and its routing (K5; SPEC.md sections 3, 7 and
+// 8). The stage 8 routing shape is informed by canon files 13, 14, 21 and 22
+// (CAC funnel, funnel template, page set, swimlanes). Mirrors
+// `JourneyReleaseResponse` in `backend/redops/api/schemas.py`. The release pins
+// exact asset versions and is only surfaced after a signed, authorized stage 9
+// launch QA, so the editor shows routing but can authorize no traffic.
+export interface JourneyReleaseAsset {
+  asset_id: string;
+  tenant_id: string;
+  kind: string;
+  version: number;
+}
+
+export interface JourneyRelease {
+  release_id: string;
+  tenant_id: string;
+  qa_id: string;
+  assets: JourneyReleaseAsset[];
+  routing: string;
+  configuration_digest: string;
+  rollback_ref: string;
+  released_kinds: string[];
+  is_signed_ready: boolean;
+  is_authorized: boolean;
+}
+
+export interface JourneyReleaseList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  releases: JourneyRelease[];
+}
+
 function redApiBase(): string {
   return process.env.NEXT_PUBLIC_RED_API_BASE ?? "";
 }
@@ -278,4 +452,38 @@ export function getWorkflowRun(
 // its stage 9 gate, so listing one never authorizes traffic.
 export function listLaunchQAs(tenantId: string): Promise<LaunchQAList> {
   return redGet<LaunchQAList>("/red/launch-qas", { tenant_id: tenantId });
+}
+
+// The source and claim explorer reads (K5; SPEC.md sections 3, 7 and 8). The
+// tenant is the source path authority and the required claim query scope; both
+// reads refuse an unscoped query, so a client never sees another's material.
+export function listSources(tenantId: string): Promise<SourceRecordList> {
+  return redGet<SourceRecordList>(
+    `/red/clients/${encodeURIComponent(tenantId)}/sources`,
+    {},
+  );
+}
+
+export function listClaims(tenantId: string): Promise<ClaimList> {
+  return redGet<ClaimList>("/red/claims", { tenant_id: tenantId });
+}
+
+// The transformation map read (K5; SPEC.md sections 3, 4, 7 and 8). The tenant
+// is a required query scope and the route is read-only; a method is born
+// approved through its stage gate, so the screen can read the pinned structure
+// but can write and approve nothing.
+export function listMethods(tenantId: string): Promise<MethodVersionList> {
+  return redGet<MethodVersionList>("/red/methods", { tenant_id: tenantId });
+}
+
+// The offer and journey editor reads (K5; SPEC.md sections 3, 5, 7, 8 and 9).
+// The tenant is the required query scope on both routes and both reads are
+// read-only, so a client never sees another's offers or releases and the screen
+// can approve no offer and authorize no traffic.
+export function listOffers(tenantId: string): Promise<OfferList> {
+  return redGet<OfferList>("/red/offers", { tenant_id: tenantId });
+}
+
+export function listJourneys(tenantId: string): Promise<JourneyReleaseList> {
+  return redGet<JourneyReleaseList>("/red/journeys", { tenant_id: tenantId });
 }
