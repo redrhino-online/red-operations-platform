@@ -2,6 +2,47 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Owner decision 2026-10-08: single-shell cockpit overhaul phase opened (K queue)
+
+- **Selected item:** none (planning entry, no cycle). The owner reviewed the
+  deployed two-app state and directed the next phase: the rebranded
+  OpenExecutive cockpit becomes the only RED UI, and the cockpit takes on the
+  context and fundamentals of the RED system and canon (ADR 0013, SPEC.md
+  section 14).
+- **Outcome:** planning foundation plus the vendor-absorption mechanics.
+  ADR 0013 records the single-shell decision; SPEC.md section 2 (cockpit row)
+  and the new section 14 record the phase definition of done; the K queue below
+  tracks the work; `make done` gained the `[7/7]` single-shell gate
+  (`scripts/check_cockpit_overhaul.sh`) so `.ralph/DONE` cannot be touched
+  while the phase is open; the stale prototype `.ralph/DONE` marker is removed
+  at handoff. Same-day owner decision on the vendor rule: the fork is absorbed
+  into this repository as ordinary tracked source (submodule and ADR 0011
+  overlay retired, ADR 0014), upstream stays reachable through the recorded
+  pin, RED changes inside the vendor tree are additive by default with
+  RED-adopted surfaces free and owner-approved exceptions recorded in
+  `docs/fork_inventory.md`, and the DoD `[4/7]` step now runs
+  `scripts/check_vendor_additive.sh` against the baseline manifest.
+- **Evidence:** the owner's 2026-10-08 review found the enforcement spec too
+  tight for the vision: substantial cockpit modification must be allowed, so
+  the minimal-vendor-change stance (ADR 0008/0011) is revised rather than
+  respected. The live findings that motivated the phase: the cockpit's RED
+  Operations group links out to a second app at `/screens/*` (ADR 0012 called
+  this a stepping stone, rejected as the end state); the twelve screens carry
+  per-screen free-text tenant/engagement forms defaulting to `3fmindset`, which
+  does not exist in the deployed database (`GET /red/clients?tenant_id=3fmindset`
+  returned zero workspaces), so screens render raw 404/422 errors or silent
+  empty states; and the thin client's bespoke palette shares nothing with the
+  cockpit's Tailwind v4 tokens.
+- **Not done (deliberately):** no code change in this entry; R1/R2 stay
+  deferred and are not picked up unattended; no send, spend, publication or
+  client commitment is authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** K1 (seed the 3F pilot workspace end to end) — it unblocks
+  the context work and makes every later screen verification meaningful.
+- **Blockers:** none.
+
+
+
+Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ### OpenExecutive initialization 2026-10-07: RED agency profile, team workspace, full canon
 
 - The deployed OpenExecutive (cockpit backend) was initialized as RED's own

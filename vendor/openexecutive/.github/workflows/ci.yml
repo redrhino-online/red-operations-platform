@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-lint:
+    name: Python lint & type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      # docker/Dockerfile installs from uv.lock with `uv sync --locked`, which
+      # fails the image build if the lock is stale. `uv sync` below would
+      # silently refresh a stale lock in this checkout, so check it first.
+      - name: Check uv.lock is current
+        run: cd packages/core && uv lock --check
+
+      - name: Install dependencies
+        run: cd packages/core && uv sync --extra dev
+
+      - name: Run ruff
+        run: cd packages/core && uv run ruff check openexecutive/
+
+      - name: Run mypy
+        run: cd packages/core && uv run mypy openexecutive/ --ignore-missing-imports
+
+  pr-checks:
+    name: PR rules (arch docs, stubs, evals)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      # Rules from CLAUDE.md ("Architecture Docs", "PR Requirements"). The PR
+      # body is read for an "Arch-Docs: n/a - <reason>" waiver; it goes in via
+      # env, never interpolated into the script.
+      - name: Check PR rules
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_REF: ${{ github.base_ref }}
+        run: python scripts/pr_checks.py --base "origin/$BASE_REF"
+
+  python-test:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: cd packages/core && uv sync --extra dev
+
+      # pytest-xdist: one worker per core (4 on ubuntu-latest). `loadfile` keeps
+      # each test module on a single worker, so module-level state behaves as in
+      # a serial run.
+      - name: Run unit tests
+        run: cd packages/core && uv run pytest tests/unit/ -n auto --dist loadfile --tb=short
+
+      # Route-level tests against a temp SQLite DB, with the model calls
+      # stubbed; no API key needed. Left out of CI, one rotted unnoticed.
+      - name: Run integration tests
+        run: cd packages/core && uv run pytest tests/integration/ -n auto --dist loadfile --tb=short
+
+  ui-typecheck:
+    name: UI type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: cd packages/ui && npm ci
+
+      - name: Type check
+        run: cd packages/ui && npx tsc --noEmit
+
+      # `next lint` no longer exists in Next 16; this is the package-wide
+      # eslint run (packages/ui/eslint.config.mjs) that replaced it.
+      - name: Lint
+        run: cd packages/ui && npm run lint
+
+      # node:test suites added in #100. Runs on the same Node 22 the job
+      # already uses (--experimental-strip-types needs 22.6+).
+      - name: Run UI unit tests
+        run: cd packages/ui && npm test
+
+      - name: Build
+        run: cd packages/ui && npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"

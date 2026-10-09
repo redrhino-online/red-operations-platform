@@ -1,0 +1,386 @@
+// Type-only imports, so `npm test` can load this file under
+// `node --experimental-strip-types` (see scripts/navConfig.test.mjs).
+import type { IconName } from "@/components/Icon";
+import type { RoleKind, WorkspaceMode } from "@/lib/api";
+
+// Single source of truth for the app's navigation. The one sidebar
+// (`components/shell/AppSidebar.tsx`, rendered by both the chat home and
+// the AppShell) and the mobile bottom bar build their menus from here.
+// When adding a destination, add it ONCE in this file.
+
+export interface NavItem {
+  href: string;
+  label: string;
+  icon: IconName;
+  /**
+   * One-line plain-language explanation of the destination, surfaced as a
+   * tooltip in the rail/sidebar and as card copy on the Settings hub.
+   * Required so every new destination ships with an explanation.
+   */
+  description: string;
+  /** Optional pending-count badge (e.g. items awaiting review). */
+  badge?: number;
+}
+
+export interface NavGroup {
+  key: string;
+  label: string;
+  items: NavItem[];
+}
+
+interface BuildOpts {
+  /**
+   * When false, the Company-profile entry points at the onboarding
+   * wizard and is relabelled "Set up company". The chat home knows the
+   * onboarding state from `/health`; the rail assumes onboarded (its
+   * routes are only reachable post-setup).
+   */
+  isOnboarded?: boolean;
+  /** Pending + needs-revision count shown on the Review entry. */
+  reviewBadge?: number;
+  /**
+   * "solo" (one person using RED Operations just for themselves) swaps the
+   * Company group — Departments, People, Company profile — for "You":
+   * Goals, People and the profile, named for `roleKind` (see
+   * `profileWording`). Defaults to "team".
+   */
+  mode?: WorkspaceMode;
+  /**
+   * The principal's role kind from the workspace settings. Only solo reads
+   * it; null when unset or hidden (GET /workspace returns no role to anyone
+   * but the principal).
+   */
+  roleKind?: RoleKind | null;
+}
+
+// What the profile at /company-profile is called. A team's is its company.
+// In solo it follows the principal's role: an owner's is their business;
+// anyone else's is their work — the organisation they work in, who it
+// serves and their priorities. An unset role, or one the caller can't see,
+// reads as "work", so nobody is told they run a business they don't.
+// The profile page, its breadcrumb and onboarding use the same rule.
+export type ProfileWording = "company" | "business" | "work";
+
+export function profileWording(
+  mode: WorkspaceMode = "team",
+  roleKind: RoleKind | null = null,
+): ProfileWording {
+  if (mode !== "solo") return "company";
+  return roleKind === "owner" ? "business" : "work";
+}
+
+// The profile's nav entry: its label once set up, before setup (it then
+// points at /onboard), and the tooltip / Settings-card description.
+export const PROFILE_NAV: Record<
+  ProfileWording,
+  { label: string; setupLabel: string; description: string }
+> = {
+  company: {
+    label: "Company profile",
+    setupLabel: "Set up company",
+    description: "Your company's identity and strategy — set up once, edited any time.",
+  },
+  business: {
+    label: "Business profile",
+    setupLabel: "Set up your business",
+    description: "Your business — what you offer, who you serve, your priorities.",
+  },
+  work: {
+    label: "Your work",
+    setupLabel: "Set up your work",
+    description: "Your work — the organisation you work in, who it serves, your priorities.",
+  },
+};
+
+function profileItem(wording: ProfileWording, isOnboarded: boolean): NavItem {
+  const copy = PROFILE_NAV[wording];
+  return {
+    href: isOnboarded ? "/company-profile" : "/onboard",
+    label: isOnboarded ? copy.label : copy.setupLabel,
+    icon: "building",
+    description: copy.description,
+  };
+}
+
+const PEOPLE_DESCRIPTION =
+  "Your roster — who the Executive coordinates with and their approval scopes.";
+
+const GOALS_ITEM: NavItem = {
+  href: "/goals",
+  label: "Goals",
+  icon: "flag",
+  description: "What you're working towards, grouped by area — add, update and close goals.",
+};
+
+function companyGroup(isOnboarded: boolean): NavGroup {
+  return {
+    key: "company",
+    label: "Company",
+    items: [
+      {
+        ...GOALS_ITEM,
+        description: "Every department's goals in one place — add, update and close them.",
+      },
+      profileItem("company", isOnboarded),
+    ],
+  };
+}
+
+// Solo: the same destinations minus Departments (their goals live on /goals,
+// grouped by area), with the copy speaking to one person.
+function youGroup(isOnboarded: boolean, roleKind: RoleKind | null): NavGroup {
+  return {
+    key: "you",
+    label: "You",
+    items: [
+      GOALS_ITEM,
+      profileItem(profileWording("solo", roleKind), isOnboarded),
+    ],
+  };
+}
+
+// Day-to-day navigation only. Power/admin tools live on the Settings
+// page (see ADVANCED_ITEMS) so this list stays focused.
+export function buildPrimaryNav({
+  isOnboarded = true,
+  reviewBadge = 0,
+  mode = "team",
+  roleKind = null,
+}: BuildOpts = {}): NavGroup[] {
+  return [
+    {
+      key: "workspace",
+      label: "Workspace",
+      items: [
+        {
+          href: "/jobs",
+          label: "Workflows",
+          icon: "doc",
+          description:
+            "Workflows that produce a deliverable, plus the playbooks the Executive follows.",
+        },
+        {
+          href: "/artifacts",
+          label: "Documents",
+          icon: "book",
+          description: "Your library of finished documents — drafts and workflow outputs.",
+        },
+        {
+          href: "/watchlist",
+          label: "Watch list",
+          icon: "eye",
+          description: "External monitors — tickers, feeds, status pages — that raise alerts.",
+        },
+      ],
+    },
+    mode === "solo" ? youGroup(isOnboarded, roleKind) : companyGroup(isOnboarded),
+    {
+      key: "knowledge",
+      label: "Knowledge",
+      items: [
+        {
+          href: "/knowledge",
+          label: "Knowledge base",
+          icon: "book",
+          badge: reviewBadge,
+          description:
+            "Upload company documents so the Executive can ground its answers in your context, and approve what it relies on.",
+        },
+      ],
+    },
+      {
+      key: "red",
+      label: "RED Operations",
+      items: [
+        { href: "/screens/command-center", label: "Portfolio command center", icon: "grid", description: "Ranked interventions across the portfolio." },
+        { href: "/screens/client-workspace", label: "Client workspace", icon: "users", description: "A client engagement at a glance." },
+        { href: "/screens/source-explorer", label: "Source and claim explorer", icon: "doc-search", description: "Sources and the claims grounded on them." },
+        { href: "/screens/transformation-map", label: "Transformation map", icon: "grid", description: "The signature solution's transformation steps." },
+        { href: "/screens/offer-and-journey", label: "Offer and journey editor", icon: "doc", description: "Offers and the journey that delivers them." },
+        { href: "/screens/build-board", label: "Build board", icon: "grid", description: "Builds, their states and dependencies." },
+        { href: "/screens/approval-inbox", label: "Approval inbox", icon: "check-circle", description: "Approvals with the exact version diff." },
+        { href: "/screens/workflow-run-detail", label: "Workflow run detail", icon: "doc", description: "A workflow run's transition log." },
+        { href: "/screens/launch-readiness", label: "Launch readiness", icon: "flag", description: "Stage 9 QA checks and traffic authorization." },
+        { href: "/screens/performance-review", label: "Performance review", icon: "activity", description: "The stage 10 baseline and post-launch milestones." },
+        { href: "/screens/portfolio-opportunities", label: "Portfolio opportunities", icon: "flag", description: "Grow proposals grounded on approved assets." },
+        { href: "/screens/authority-settings", label: "Authority settings", icon: "cog", description: "Who holds authority and approves each stage." },
+      ],
+    },
+];
+}
+
+// Pinned, always-visible top-level destination — rendered as a standalone link
+// directly beneath Briefing in BOTH navs (rail + chat-home sidebar), the same
+// way Briefing is. Kept here as the single source so the two navs stay in sync.
+export const PULSE_NAV_ITEM: NavItem = {
+  href: "/memories",
+  label: "Pulse",
+  icon: "activity",
+  description:
+    "The Executive's memory and heartbeat — what it knows and the rhythm it runs on.",
+};
+
+// Single rail/sidebar entry that leads to the Settings hub.
+export const SETTINGS_NAV_ITEM: NavItem = {
+  href: "/settings",
+  label: "Settings",
+  icon: "cog",
+  description: "Configuration, diagnostics, and power-user tools.",
+};
+
+// User Guide — pinned next to Settings in both nav footers so help is
+// always one click away (it also stays listed on the Settings hub).
+export const GUIDE_NAV_ITEM: NavItem = {
+  href: "/guide",
+  label: "User Guide",
+  icon: "info",
+  description: "Plain-language overviews of every feature — what each one is and what it does.",
+};
+
+// Descriptions for the two chat-home actions that aren't NavItems (they
+// toggle modes rather than navigate). Shared by MOBILE_PRIMARY, the rail
+// (AppShell), and the chat-home sidebar so the copy lives once.
+export const NEW_CHAT_DESCRIPTION = "Start a fresh conversation with the Executive.";
+export const BRIEFING_DESCRIPTION =
+  "Land on a daily brief of what's happened and what needs you.";
+
+// Where a Settings tool sits on that page: what you open to check on the
+// install, to change how it runs, or to learn how it works.
+export type AdvancedGroupKey = "diagnose" | "configure" | "learn";
+
+export interface AdvancedItem extends NavItem {
+  group: AdvancedGroupKey;
+}
+
+export const ADVANCED_GROUPS: { key: AdvancedGroupKey; label: string }[] = [
+  { key: "diagnose", label: "Check & diagnose" },
+  { key: "configure", label: "Configure" },
+  { key: "learn", label: "Learn" },
+];
+
+// Admin / power-user tools surfaced on the Settings page rather than
+// in the primary nav — they aren't part of the day-to-day loop.
+export const ADVANCED_ITEMS: AdvancedItem[] = [
+  {
+    href: "/settings/status",
+    label: "Setup status",
+    icon: "check-circle",
+    group: "diagnose",
+    description:
+      "A light for each part of your setup — AI key, sign-in, channels, schedule — and what to do about anything that isn't working.",
+  },
+  {
+    href: "/audit",
+    label: "Audit log",
+    icon: "doc-search",
+    group: "diagnose",
+    description:
+      "Searchable event log of every chat turn, specialist consult, tool call, and scheduled action.",
+  },
+  {
+    href: "/audit/usage",
+    label: "Token usage",
+    icon: "activity",
+    group: "diagnose",
+    description:
+      "Aggregate token usage and cost across all sessions — totals, by day, and by model.",
+  },
+  {
+    href: "/guide",
+    label: "User Guide",
+    icon: "info",
+    group: "learn",
+    description:
+      "Plain-language overviews of every feature — what each one is and what it does.",
+  },
+  {
+    href: "/architecture",
+    label: "Architecture",
+    icon: "grid",
+    group: "learn",
+    description: "Interactive reference docs explaining how the system is built.",
+  },
+  {
+    href: "/demo",
+    label: "Company Simulator",
+    icon: "cog",
+    group: "configure",
+    description:
+      "Load prebuilt company fixtures, snapshot your current data, or generate a new scenario with AI.",
+  },
+  {
+    href: "/clients",
+    label: "Client Companies",
+    icon: "building",
+    group: "configure",
+    description:
+      "Multi-client mode for fractional work — switch the live company between named client slots.",
+  },
+];
+
+// The tools as the Settings page lists them: by group, in ADVANCED_GROUPS
+// order, each keeping its ADVANCED_ITEMS order within the group.
+export function advancedItemsByGroup(): {
+  key: AdvancedGroupKey;
+  label: string;
+  items: AdvancedItem[];
+}[] {
+  return ADVANCED_GROUPS.map((group) => ({
+    ...group,
+    items: ADVANCED_ITEMS.filter((item) => item.group === group.key),
+  }));
+}
+
+// The Settings page's sections in page order. Its in-page nav and the page
+// itself both read this list, so the two can't drift; the ids are the
+// hashes a link can land on (`/settings#workspace`). "act-as-me" is only
+// on the page for the owner — the page drops it when the card is hidden.
+export type SettingsSectionId = "executive" | "workspace" | "act-as-me" | "tools" | "about";
+
+export interface SettingsSectionDef {
+  id: SettingsSectionId;
+  label: string;
+}
+
+export const SETTINGS_SECTIONS: SettingsSectionDef[] = [
+  { id: "executive", label: "Executive" },
+  { id: "workspace", label: "Workspace" },
+  { id: "act-as-me", label: "Act as me" },
+  { id: "tools", label: "Tools" },
+  { id: "about", label: "About" },
+];
+
+// Anchors the mobile bottom nav. ≤5 per Material guidance; "More" opens
+// the drawer with the full menu. `/` lands on the briefing surface. Solo
+// swaps People for Goals — the page a team of one visits most.
+export function buildMobilePrimary(mode: WorkspaceMode = "team"): NavItem[] {
+  return [
+    { href: "/", label: "Briefing", icon: "clipboard", description: BRIEFING_DESCRIPTION },
+    PULSE_NAV_ITEM,
+    // `?new=1` signals the chat home to reset to a fresh chat and strip
+    // the query — see the effect in app/page.tsx.
+    { href: "/?new=1", label: "New chat", icon: "plus", description: NEW_CHAT_DESCRIPTION },
+    mode === "solo"
+      ? GOALS_ITEM
+      : {
+          href: "/people",
+          label: "People",
+          icon: "users",
+          description: PEOPLE_DESCRIPTION,
+        },
+    {
+      href: "/jobs",
+      label: "Workflows",
+      icon: "doc",
+      description:
+        "Multi-step workflows that produce a deliverable — board prep, GTM plans, reviews.",
+    },
+  ];
+}
+
+// Is `href` the active destination for `pathname`? Active on an exact match
+// or anywhere below it (`/jobs` is active on `/jobs/runs/42`).
+export function isNavActive(href: string, pathname: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}

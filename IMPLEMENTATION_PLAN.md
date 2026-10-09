@@ -4,6 +4,43 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 20261009T021022Z: K2 — shared client context in the cockpit (with the absorbed-fork tracking fix)
+
+- **Selected item:** K2 (shared workspace/engagement context in the cockpit), the
+  highest-value ready item: it unblocks K3-K8 and K11/K12 (the whole single-shell
+  context line) and `[7/7]` condition 3 needs it. K9/K10 are independent but
+  lower value.
+- **Blocker found and fixed:** K2's additive cockpit files could not be
+  committed. `vendor/openexecutive` was still an unresolvable gitlink (no
+  `.gitmodules`, no nested `.git`, target commit `31e5533` absent from the object
+  store), so git ignored the whole tree and `git add` refused every path inside
+  it. ADR 0014 decision 1 requires the tree to be ordinary tracked files.
+  Removed the gitlink and committed the baseline tree (1266 files) as tracked
+  source; the working tree is unchanged, so `scripts/check_vendor_additive.sh`
+  still reports 1225 locked files matching the baseline.
+- **Outcome:** the shared RED client context (SPEC.md section 14 condition 3) is
+  additive files in the cockpit tree: `src/lib/redClientApi.ts` (tenant-scoped
+  `GET /red/clients` listing), `src/components/workspace/redClientSelection.ts`
+  (pure persistence/resolution), `RedClientContext.tsx` (provider + `useRedClient`
+  hook, persisted to `localStorage`), and `RedClientPicker.tsx` (shell picker).
+  The RED-owned `src/app/layout.tsx` mounts the provider and `AppShell.tsx`
+  renders the picker in the TopBar. The ported `/operations/*` screens (K3-K6)
+  read the selection from `useRedClient()` instead of per-screen free-text
+  defaults. The repo-side `tests/cockpit-ui/` suite (vitest + testing-library;
+  vendor `package.json` untouched) covers the listing load, persistence, restore,
+  picker change and the pure selection rules.
+- **Evidence:** `tests/cockpit-ui` 6 passed; `make check` 2730 passed / 3 skipped
+  / 799 subtests; `scripts/check_vendor_additive.sh` ok (1225 locked files match);
+  `tsc --noEmit` in the vendor UI clean; `[7/7]` still fails at `[14.1]` (the
+  thin client is retired in K7), as expected.
+- **Not done (deliberately):** the `/operations/*` pages, the nav rewrite and the
+  thin-client retirement are K3-K7; no send, spend, publication or client
+  commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is not
+  touched because `make done` still fails `[7/7]`.
+- **Next ready item:** K3 (port command center, client workspace and approval
+  inbox to `/operations/*`), unblocked by K2; K9 and K10 are independent.
+- **Blockers:** none.
+
 ### Cycle 20261008T130457Z: K1 — the 3F pilot workspace seed (interrupted agent run completed by the operator)
 
 - **Selected item:** K1 (seed the 3F pilot workspace end to end), the only
@@ -41,44 +78,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   this reality).
 - **Next ready item:** K2 (shared workspace/engagement context in the cockpit),
   unblocked by K1; K9 and K10 are independent and may interleave.
-- **Blockers:** none.
-
-### Owner decision 2026-10-08: single-shell cockpit overhaul phase opened (K queue)
-
-- **Selected item:** none (planning entry, no cycle). The owner reviewed the
-  deployed two-app state and directed the next phase: the rebranded
-  OpenExecutive cockpit becomes the only RED UI, and the cockpit takes on the
-  context and fundamentals of the RED system and canon (ADR 0013, SPEC.md
-  section 14).
-- **Outcome:** planning foundation plus the vendor-absorption mechanics.
-  ADR 0013 records the single-shell decision; SPEC.md section 2 (cockpit row)
-  and the new section 14 record the phase definition of done; the K queue below
-  tracks the work; `make done` gained the `[7/7]` single-shell gate
-  (`scripts/check_cockpit_overhaul.sh`) so `.ralph/DONE` cannot be touched
-  while the phase is open; the stale prototype `.ralph/DONE` marker is removed
-  at handoff. Same-day owner decision on the vendor rule: the fork is absorbed
-  into this repository as ordinary tracked source (submodule and ADR 0011
-  overlay retired, ADR 0014), upstream stays reachable through the recorded
-  pin, RED changes inside the vendor tree are additive by default with
-  RED-adopted surfaces free and owner-approved exceptions recorded in
-  `docs/fork_inventory.md`, and the DoD `[4/7]` step now runs
-  `scripts/check_vendor_additive.sh` against the baseline manifest.
-- **Evidence:** the owner's 2026-10-08 review found the enforcement spec too
-  tight for the vision: substantial cockpit modification must be allowed, so
-  the minimal-vendor-change stance (ADR 0008/0011) is revised rather than
-  respected. The live findings that motivated the phase: the cockpit's RED
-  Operations group links out to a second app at `/screens/*` (ADR 0012 called
-  this a stepping stone, rejected as the end state); the twelve screens carry
-  per-screen free-text tenant/engagement forms defaulting to `3fmindset`, which
-  does not exist in the deployed database (`GET /red/clients?tenant_id=3fmindset`
-  returned zero workspaces), so screens render raw 404/422 errors or silent
-  empty states; and the thin client's bespoke palette shares nothing with the
-  cockpit's Tailwind v4 tokens.
-- **Not done (deliberately):** no code change in this entry; R1/R2 stay
-  deferred and are not picked up unattended; no send, spend, publication or
-  client commitment is authorized (SPEC.md sections 4 and 9).
-- **Next ready item:** K1 (seed the 3F pilot workspace end to end) — it unblocks
-  the context work and makes every later screen verification meaningful.
 - **Blockers:** none.
 
 
