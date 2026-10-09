@@ -7,8 +7,9 @@
 # directory). When the target repository differs from the spec/plan repository,
 # the cycle commits code in the target and spec/plan changes in their own repo.
 # Optional environment: RALPH_SPEC, RALPH_PLAN, RALPH_CANON, RALPH_OPENCODE,
-# RALPH_MODEL, RALPH_PUSH_REMOTES, RALPH_PLAN_PUSH_REMOTES, RALPH_DB_PREFLIGHT,
-# RALPH_DB_WAIT, RALPH_DB_PROBE_TIMEOUT, RALPH_SNAPSHOT, RALPH_OPENCODE_CONFIG.
+# RALPH_MODEL, RALPH_SESSION_ID, RALPH_PUSH_REMOTES, RALPH_PLAN_PUSH_REMOTES,
+# RALPH_DB_PREFLIGHT, RALPH_DB_WAIT, RALPH_DB_PROBE_TIMEOUT, RALPH_SNAPSHOT,
+# RALPH_OPENCODE_CONFIG.
 
 set -Eeuo pipefail
 
@@ -39,6 +40,26 @@ readonly LOCK_DIR="$RUN_DIR/cycle.lock"
 
 die() { printf 'ralph: %s\n' "$*" >&2; exit 1; }
 release_lock() { rm -rf "$LOCK_DIR"; }
+
+# A single static OpenCode session per project: every cycle continues the same
+# session so the OpenRouter call carries one stable session id across the whole
+# run (request affinity/caching and one continuous run history) instead of a new
+# session per cycle. RALPH_SESSION_ID overrides; otherwise the id is created once
+# with a minimal run and persisted in .ralph/session-id. Creation is best effort:
+# on failure the cycle proceeds without --session and tries again next time.
+project_session_exists() {
+  "$OPENCODE_BIN" session list 2>/dev/null | awk '{print $1}' | grep -qx "$1"
+}
+
+create_project_session() {
+  local args=(run --format json) out
+  if [[ -n "${RALPH_MODEL:-}" ]]; then
+    args+=(--model "$RALPH_MODEL")
+  fi
+  args+=("Reply with exactly: OK")
+  out="$("$OPENCODE_BIN" "${args[@]}" 2>/dev/null || true)"
+  printf '%s' "$out" | grep -o '"sessionID":"[^"]*"' | head -n1 | cut -d'"' -f4 || true
+}
 
 # Acquire the single-cycle lock. A lock whose recorded pid is gone (a hard kill,
 # host restart or OOM) is reclaimed instead of wedging the loop. A lock with no
@@ -182,6 +203,7 @@ fi
 readonly RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 readonly LOG_FILE="$RUN_DIR/$RUN_ID.log"
 readonly COMMIT_MSG_FILE="$RUN_DIR/$RUN_ID.commit-msg.txt"
+readonly SESSION_FILE="$RUN_DIR/session-id"
 readonly SPEC_PATH="$(cd "$(dirname "$SPEC_FILE")" && pwd -P)/$(basename "$SPEC_FILE")"
 readonly PLAN_PATH="$(cd "$(dirname "$PLAN_FILE")" && pwd -P)/$(basename "$PLAN_FILE")"
 
@@ -295,9 +317,39 @@ fi
 printf 'ralph: starting one cycle; log: %s\n' "$LOG_FILE"
 cd "$RUN_CWD"
 
+# Resolve the static project session (see project_session_* above). An explicit
+# RALPH_SESSION_ID wins; otherwise the persisted id is reused, recreated when it
+# no longer exists, and created once when absent.
+session_id="${RALPH_SESSION_ID:-}"
+session_from_env=0
+[[ -n "$session_id" ]] && session_from_env=1
+if [[ -z "$session_id" && -s "$SESSION_FILE" ]]; then
+  session_id="$(head -n1 "$SESSION_FILE")"
+fi
+if [[ -n "$session_id" ]] && ! project_session_exists "$session_id"; then
+  if (( session_from_env )); then
+    printf 'ralph: RALPH_SESSION_ID %s does not exist; continuing without --session\n' "$session_id" >&2
+  else
+    printf 'ralph: project session %s no longer exists; recreating\n' "$session_id" >&2
+  fi
+  session_id=""
+fi
+if [[ -z "$session_id" && "$session_from_env" == "0" ]]; then
+  session_id="$(create_project_session || true)"
+  if [[ -n "$session_id" ]]; then
+    printf '%s\n' "$session_id" > "$SESSION_FILE"
+    printf 'ralph: created static project session %s\n' "$session_id"
+  else
+    printf 'ralph: could not create a project session; continuing without --session\n' >&2
+  fi
+fi
+
 opencode_args=(run)
 if [[ -n "${RALPH_MODEL:-}" ]]; then
   opencode_args+=(--model "$RALPH_MODEL")
+fi
+if [[ -n "$session_id" ]]; then
+  opencode_args+=(--session "$session_id")
 fi
 opencode_args+=("$PROMPT")
 
