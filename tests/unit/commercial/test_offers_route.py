@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import unittest
 
-from .fixtures import TENANT, production_ready_offer
+from redops.contexts.commercial.domain.value_objects import OfferState
+
+from .fixtures import TENANT, offer_version, production_ready_offer
 
 OTHER_TENANT = "client-other"
 
@@ -62,6 +64,66 @@ class OffersRouteTests(unittest.TestCase):
         self.assertEqual("offer-1", body["offers"][0]["offer_id"])
         self.assertTrue(body["offers"][0]["is_production_ready"])
         self.assertEqual(1, len(body["offers"][0]["method_refs"]))
+
+    def test_the_stored_delivery_specification_is_projected_in_full(self) -> None:
+        self.offers.save(production_ready_offer(offer_id="offer-1"))
+
+        listed = self.client.get("/red/offers", params={"tenant_id": TENANT})
+
+        self.assertEqual(200, listed.status_code, listed.text)
+        delivery = listed.json()["offers"][0]["delivery"]
+        self.assertEqual("delivery-3f", delivery["delivery_id"])
+        self.assertEqual("client-3f", delivery["tenant_id"])
+        self.assertEqual("done-with-you implementation", delivery["delivery_model"])
+        self.assertEqual("12 weeks", delivery["duration"])
+        self.assertEqual(["diagnose", "productize", "launch"], delivery["modules"])
+        self.assertEqual(
+            ["red builds", "client reviews"], delivery["responsibilities"]
+        )
+        self.assertEqual("weekly working session", delivery["support_cadence"])
+        self.assertEqual(
+            ["qualified referrals per month"], delivery["outcome_measures"]
+        )
+        self.assertEqual(
+            "USD 7,500 in three instalments", delivery["pricing_payments"]
+        )
+        self.assertEqual("one campaign, one offer, one avatar", delivery["scope"])
+        self.assertEqual("no guarantee in the pilot", delivery["guarantee_decision"])
+        self.assertEqual(
+            "service businesses with a proven offer", delivery["eligibility"]
+        )
+        self.assertEqual(
+            ["core engagement", "follow-on optimization"], delivery["offer_stack"]
+        )
+        rows = delivery["step_deliveries"]
+        self.assertEqual(9, len(rows))
+        self.assertEqual("step-1", rows[0]["step_id"])
+        self.assertEqual("deliver step-1", rows[0]["action"])
+        self.assertEqual("red-specialist", rows[0]["actor"])
+        self.assertEqual("step-1 artifact", rows[0]["deliverable"])
+        self.assertEqual("within the engagement phase", rows[0]["timing"])
+        self.assertEqual("step-1 outcome observed", rows[0]["measure"])
+        solution = delivery["signature_solution"]
+        self.assertEqual("solution-3f", solution["solution_id"])
+        self.assertEqual(
+            "from chaotic delivery to a launched campaign",
+            solution["transformation_map"],
+        )
+
+    def test_an_offer_without_a_delivery_specification_projects_none(self) -> None:
+        self.offers.save(
+            offer_version(
+                state=OfferState.PRODUCTION_READY,
+                delivery_specification=None,
+            )
+        )
+
+        listed = self.client.get("/red/offers", params={"tenant_id": TENANT})
+
+        self.assertEqual(200, listed.status_code, listed.text)
+        offer = listed.json()["offers"][0]
+        self.assertTrue(offer["is_production_ready"])
+        self.assertIsNone(offer["delivery"])
 
     def test_an_offer_is_not_listed_for_another_client(self) -> None:
         self.offers.save(production_ready_offer(offer_id="offer-1"))

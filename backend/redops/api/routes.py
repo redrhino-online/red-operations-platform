@@ -106,6 +106,9 @@ from redops.contexts.commercial.domain.errors import (
     CommercialError,
     OfferVersionConflictError,
 )
+from redops.contexts.commercial.infrastructure.mappers import (
+    delivery_to_payload,
+)
 from redops.contexts.commercial.infrastructure.repositories import (
     campaign_message_repository_from_env,
     offer_version_repository_from_env,
@@ -330,6 +333,8 @@ from redops.contexts.method.domain.value_objects import (
     TransformationPhase,
 )
 from redops.contexts.method.infrastructure.mappers import (
+    diagnostic_model_to_payload,
+    primary_currency_to_payload,
     signature_solution_to_payload,
 )
 from redops.contexts.method.infrastructure.repositories import (
@@ -4376,9 +4381,17 @@ def _method_payload(method: MethodVersion) -> dict[str, Any]:
             None if method.primary_currency is None
             else method.primary_currency.currency
         ),
+        "primary_currency_detail": (
+            None if method.primary_currency is None
+            else primary_currency_to_payload(method.primary_currency)
+        ),
         "diagnostic_model_id": (
             None if method.diagnostic_model is None
             else method.diagnostic_model.model_id
+        ),
+        "diagnostic_model": (
+            None if method.diagnostic_model is None
+            else diagnostic_model_to_payload(method.diagnostic_model)
         ),
         "signature_solution_id": (
             None if method.signature_solution is None
@@ -4449,6 +4462,10 @@ def _offer_payload(offer: OfferVersion) -> OfferVersionResponse:
             _method_reference_payload(reference)
             for reference in offer.method_refs
         ],
+        delivery=(
+            None if offer.delivery_specification is None
+            else delivery_to_payload(offer.delivery_specification)
+        ),
         review_reason=offer.review_reason,
     )
 

@@ -275,6 +275,44 @@ export interface SignatureSolution {
   visual: string;
 }
 
+// The full stored stage 2 primary currency (asset review and approval spec
+// section 6a, M1). Optional and null-tolerant: a payload predating the
+// addendum carries only the `primary_currency` id string.
+export interface PrimaryCurrencyDetail {
+  currency?: string | null;
+  version?: string | null;
+  audience?: string | null;
+  current_measure?: string | null;
+  desired_measure?: string | null;
+  mechanism?: string | null;
+}
+
+// One level of the stored stage 3 diagnostic model (asset review and approval
+// spec section 6a, M1). A level is distinguishable by observation, so the
+// panel renders its four observable lists verbatim.
+export interface DiagnosticModelLevel {
+  level_id?: string | null;
+  name?: string | null;
+  observable_measures?: string[];
+  symptoms?: string[];
+  behaviors?: string[];
+  problems?: string[];
+}
+
+// The full stored stage 3 diagnostic model (asset review and approval spec
+// section 6a, M1). Optional and null-tolerant: a payload predating the
+// addendum carries only the `diagnostic_model_id` reference.
+export interface DiagnosticModelDetail {
+  model_id?: string | null;
+  version?: string | null;
+  name?: string | null;
+  levels?: DiagnosticModelLevel[];
+  progression?: string | null;
+  qualification_logic?: string | null;
+  visual?: string | null;
+  explanatory_copy?: string | null;
+}
+
 export interface MethodVersion {
   method_id: string;
   tenant_id: string;
@@ -291,6 +329,8 @@ export interface MethodVersion {
   diagnostic_model_id: string | null;
   signature_solution_id: string | null;
   signature_solution: SignatureSolution | null;
+  primary_currency_detail?: PrimaryCurrencyDetail | null;
+  diagnostic_model?: DiagnosticModelDetail | null;
 }
 
 export interface MethodVersionList {
@@ -313,6 +353,38 @@ export interface MethodReference {
   intended_use: string;
 }
 
+// One stored stage 5 step delivery row (asset review and approval spec
+// section 6a, M2): the named method step, who acts on it, what it produces,
+// when, and how it is measured.
+export interface StepDeliveryRow {
+  step_id?: string | null;
+  action?: string | null;
+  actor?: string | null;
+  deliverable?: string | null;
+  timing?: string | null;
+  measure?: string | null;
+}
+
+// The full stored stage 5 delivery specification (asset review and approval
+// spec section 6a, M2). Optional and null-tolerant: a payload predating the
+// addendum carries no `delivery` object.
+export interface DeliverySpecification {
+  delivery_id?: string | null;
+  delivery_model?: string | null;
+  duration?: string | null;
+  modules?: string[];
+  responsibilities?: string[];
+  support_cadence?: string | null;
+  step_deliveries?: StepDeliveryRow[];
+  outcome_measures?: string[];
+  pricing_payments?: string | null;
+  scope?: string | null;
+  guarantee_decision?: string | null;
+  eligibility?: string | null;
+  offer_stack?: string[];
+  signature_solution?: SignatureSolution | null;
+}
+
 export interface OfferVersion {
   offer_id: string;
   tenant_id: string;
@@ -325,6 +397,7 @@ export interface OfferVersion {
   is_production_ready: boolean;
   method_refs: MethodReference[];
   review_reason: string | null;
+  delivery?: DeliverySpecification | null;
 }
 
 export interface OfferList {
@@ -873,13 +946,13 @@ export function recordStageGate(
 }
 
 // The content source a pinned asset kind resolves to (asset review and
-// approval spec section 5), derived from the canonical stage template kinds in
-// `backend/redops/contexts/governance/domain/templates.py`. Kinds absent from
-// the map — the stage 0 intake, stage 1 diagnose, stage 2 position and stage 4
-// IP-architecture kinds, plus any unlisted kind — have no stored content
-// source and render provenance only. `swimlanes-plan` appears in both the
-// stage 8 and stage 9 template lists; the stage 8 funnel source wins, matching
-// template order.
+// approval spec sections 5 and 6a), derived from the canonical stage template
+// kinds in `backend/redops/contexts/governance/domain/templates.py`. Kinds
+// absent from the map — the stage 0 intake, stage 1 diagnose, the stage 2
+// position kinds other than `primary-currency`, plus any unlisted kind — have
+// no stored content source and render provenance only. `swimlanes-plan`
+// appears in both the stage 8 and stage 9 template lists; the stage 8 funnel
+// source wins, matching template order.
 export type AssetContentSource =
   | "methods"
   | "offers"
@@ -892,6 +965,10 @@ export type AssetContentSource =
 export const ASSET_CONTENT_SOURCES: Readonly<
   Record<string, AssetContentSource>
 > = {
+  // Stage 2 Position: only `primary-currency` is stored in full (the method's
+  // primary currency object); the other stage 2 kinds are not persisted after
+  // the gate and stay provenance-only.
+  "primary-currency": "methods",
   // Stage 3 Model kinds → /red/methods.
   "profit-pyramid-levels": "methods",
   "observable-measures": "methods",
@@ -903,6 +980,20 @@ export const ASSET_CONTENT_SOURCES: Readonly<
   "diagnostic-model-name": "methods",
   "diagnostic-model-visual": "methods",
   "diagnostic-model-copy": "methods",
+  // Stage 4 Package IP kinds → /red/methods (the pinned signature solution).
+  "transformation-map": "methods",
+  "process-inventory": "methods",
+  "three-phases": "methods",
+  "nine-steps": "methods",
+  "named-stages": "methods",
+  "starting-state": "methods",
+  "final-state": "methods",
+  "stage-inputs": "methods",
+  "stage-actions": "methods",
+  "stage-outputs": "methods",
+  "transformation-narrative": "methods",
+  "transformation-visual": "methods",
+  "thirteen-transformations": "methods",
   // Stage 5 Productize kinds → /red/offers.
   "delivery-model": "offers",
   duration: "offers",

@@ -7,6 +7,7 @@ import type {
   ApprovalRecord,
   DecisionRecord,
   EngagementProductionView,
+  StageProductionView,
 } from "@/lib/redOperationsApi";
 
 // U1 (asset review and approval spec sections 3.1, 5 and 7): every approved
@@ -198,13 +199,242 @@ function messageList() {
   };
 }
 
-function installApi(approvals: unknown = approvalsList()) {
+function stage(
+  stageNumber: number,
+  name: string,
+  checkpoint: string,
+  approvedAssets: { asset_id: string; version: number }[],
+): StageProductionView {
+  return {
+    stage_number: stageNumber,
+    name,
+    checkpoint,
+    status: "approved",
+    required_asset_kinds: approvedAssets.map((asset) => asset.asset_id),
+    approved_assets: approvedAssets,
+    missing_asset_kinds: [],
+    accountable_role: "production",
+    approver_role: "client-authority",
+    dependencies: [],
+    blocking_dependencies: [],
+    assigned_owner: "production",
+    recorded_approver: "client-authority",
+    due_on: null,
+    next_action: "",
+    blockers: [],
+    entered_at: "2026-10-04",
+    is_approved: true,
+  };
+}
+
+// A production view whose stage 2-5 gates pinned one asset kind each, so the
+// stored-content tests can open a pin of every newly mapped kind.
+function stagedProductionView(): EngagementProductionView {
+  const base = productionView();
+  return {
+    ...base,
+    stages: [
+      ...base.stages,
+      stage(2, "Position", "Currency Locked", [
+        { asset_id: "primary-currency", version: 1 },
+        { asset_id: "million-dollar-message", version: 1 },
+      ]),
+      stage(3, "Model", "Diagnostic Model Approved", [
+        { asset_id: "diagnostic-model-name", version: 1 },
+      ]),
+      stage(4, "Package IP", "IP Architecture Locked", [
+        { asset_id: "transformation-map", version: 1 },
+      ]),
+      stage(5, "Productize", "Offer Locked", [
+        { asset_id: "delivery-model", version: 1 },
+      ]),
+    ],
+  };
+}
+
+// One method carrying the full stored stage 2, 3 and 4 sections (asset review
+// and approval spec section 6a, M1), plus a bare method with none of them.
+function methodList() {
+  return {
+    tenant_id: "3fmindset",
+    total: 2,
+    limit: 50,
+    offset: 0,
+    methods: [
+      {
+        method_id: "method-3f-1",
+        tenant_id: "3fmindset",
+        parent_method: "",
+        semantic_version: "1.0.0",
+        stages: ["position", "model", "package-ip"],
+        currency: "predictable pipeline",
+        claims: ["90-day pipeline"],
+        is_approved: true,
+        approved_by: "client-authority",
+        intended_use: "campaign production",
+        approved_on: "2026-10-05",
+        primary_currency: "predictable pipeline",
+        diagnostic_model_id: "model-3f-1",
+        signature_solution_id: "solution-3f-1",
+        signature_solution: {
+          solution_id: "solution-3f-1",
+          tenant_id: "3fmindset",
+          transformation_map: "Stuck operator to productized program",
+          process_inventory: ["diagnose", "productize", "deliver"],
+          phases: [
+            {
+              phase_id: "phase-1",
+              tenant_id: "3fmindset",
+              name: "Diagnose",
+              steps: [
+                {
+                  step_id: "step-1",
+                  tenant_id: "3fmindset",
+                  name: "Audit the funnel",
+                  starting_state: "unmeasured",
+                  final_state: "measured",
+                  inputs: ["funnel access"],
+                  actions: ["audit the funnel"],
+                  outputs: ["audit report"],
+                },
+              ],
+            },
+          ],
+          starting_state: "stuck operator",
+          final_state: "productized program",
+          narrative: "The owner stops trading time for leads.",
+          visual: "three-phase map",
+        },
+        primary_currency_detail: {
+          currency: "predictable pipeline",
+          version: "1",
+          audience: "owner-operators",
+          current_measure: "leads bought per month",
+          desired_measure: "booked calls per week",
+          mechanism: "one diagnostic funnel",
+        },
+        diagnostic_model: {
+          model_id: "model-3f-1",
+          version: "1",
+          name: "Operator pyramid",
+          levels: [
+            {
+              level_id: "level-1",
+              name: "Stuck",
+              observable_measures: ["no pipeline"],
+              symptoms: ["erratic leads"],
+              behaviors: ["buys leads"],
+              problems: ["no system"],
+            },
+            {
+              level_id: "level-2",
+              name: "Scaling",
+              observable_measures: ["steady calls"],
+              symptoms: ["full calendar"],
+              behaviors: ["hires help"],
+              problems: ["no offer"],
+            },
+          ],
+          progression: "stuck to scaling in 90 days",
+          qualification_logic: "a booked call qualifies",
+          visual: "pyramid diagram",
+          explanatory_copy: "Four levels of operator maturity.",
+        },
+      },
+      {
+        method_id: "method-3f-2",
+        tenant_id: "3fmindset",
+        parent_method: "",
+        semantic_version: "1.1.0",
+        stages: [],
+        currency: "time",
+        claims: [],
+        is_approved: false,
+        approved_by: null,
+        intended_use: null,
+        approved_on: null,
+        primary_currency: null,
+        diagnostic_model_id: null,
+        signature_solution_id: null,
+        signature_solution: null,
+      },
+    ],
+  };
+}
+
+// One offer carrying the full stored stage 5 delivery specification (asset
+// review and approval spec section 6a, M2).
+function offerList() {
+  return {
+    tenant_id: "3fmindset",
+    total: 1,
+    limit: 50,
+    offset: 0,
+    offers: [
+      {
+        offer_id: "offer-3f-1",
+        tenant_id: "3fmindset",
+        audience: "owner-operators",
+        promise: "a predictable pipeline in 90 days",
+        eligibility: "owner-operator with a delivery team",
+        price_hypothesis: "$12k program",
+        owner: "production",
+        state: "production_ready",
+        is_production_ready: true,
+        method_refs: [],
+        review_reason: null,
+        delivery: {
+          delivery_id: "delivery-3f-1",
+          delivery_model: "group coaching program",
+          duration: "12 weeks",
+          modules: ["pipeline audit", "offer build", "funnel launch"],
+          responsibilities: ["client does the work", "coach reviews"],
+          support_cadence: "weekly group call",
+          step_deliveries: [
+            {
+              step_id: "step-1",
+              action: "audit the funnel",
+              actor: "delivery lead",
+              deliverable: "audit report",
+              timing: "week 1",
+              measure: "audit complete",
+            },
+          ],
+          outcome_measures: ["booked calls per week"],
+          pricing_payments: "$12k over three payments",
+          scope: "one funnel, one offer",
+          guarantee_decision: "refund if no calls in 90 days",
+          eligibility: "owner-operator with a delivery team",
+          offer_stack: ["core program", "audit intensive"],
+        },
+      },
+    ],
+  };
+}
+
+function installApi(
+  approvals: unknown = approvalsList(),
+  options: {
+    view?: EngagementProductionView;
+    methods?: unknown;
+    offers?: unknown;
+  } = {},
+) {
+  const view = options.view ?? productionView();
+  const methods =
+    options.methods ??
+    ({ tenant_id: "3fmindset", total: 0, limit: 50, offset: 0, methods: [] });
+  const offers =
+    options.offers ??
+    ({ tenant_id: "3fmindset", total: 0, limit: 50, offset: 0, offers: [] });
   fetchMock.mockImplementation(async (url: string) => {
     if (url.startsWith("/red/clients?")) return jsonResponse(listing());
-    if (url.includes("/production-view?")) return jsonResponse(productionView());
+    if (url.includes("/production-view?")) return jsonResponse(view);
     if (url.startsWith("/red/approvals?")) return jsonResponse(approvals);
     if (url.startsWith("/red/decisions?")) return jsonResponse(decisionsList());
     if (url.startsWith("/red/messages?")) return jsonResponse(messageList());
+    if (url.startsWith("/red/methods?")) return jsonResponse(methods);
+    if (url.startsWith("/red/offers?")) return jsonResponse(offers);
     throw new Error(`unexpected fetch ${url}`);
   });
 }
@@ -344,5 +574,160 @@ describe("the client workspace asset detail panel (U1)", () => {
     expect(
       screen.getByTestId("asset-detail-approvals-empty").textContent,
     ).toContain("No approval records found");
+  });
+});
+
+// The stored content sections of the addendum (asset review and approval spec
+// section 6a, M1-M3): stage 4 kinds read the method's signature solution,
+// stage 3 kinds its diagnostic model, stage 2 `primary-currency` its primary
+// currency, and stage 5 kinds the offer's delivery specification.
+describe("the client workspace asset detail panel stored sections (6a)", () => {
+  it("renders the signature solution content for a stage-4 kind pin", async () => {
+    installApi(approvalsList(), {
+      view: stagedProductionView(),
+      methods: methodList(),
+    });
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByText("Package IP")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("asset-pin-transformation-map@v1"));
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("asset-detail-content").textContent,
+      ).toContain("method-3f-1"),
+    );
+
+    const content = screen.getByTestId("asset-detail-content");
+    expect(content.textContent).toContain("Signature solution");
+    expect(content.textContent).toContain(
+      "Narrative: The owner stops trading time for leads.",
+    );
+    expect(content.textContent).toContain("Starting state: stuck operator");
+    expect(content.textContent).toContain("Final state: productized program");
+    expect(screen.getByTestId("method-no-content-sections").textContent).toBe(
+      "No stored content sections for this method.",
+    );
+  });
+
+  it("renders the diagnostic model with its levels for a stage-3 kind pin", async () => {
+    installApi(approvalsList(), {
+      view: stagedProductionView(),
+      methods: methodList(),
+    });
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByText("Model")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("asset-pin-diagnostic-model-name@v1"));
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("asset-detail-content").textContent,
+      ).toContain("Operator pyramid"),
+    );
+
+    const content = screen.getByTestId("asset-detail-content");
+    expect(content.textContent).toContain("Diagnostic model");
+    expect(content.textContent).toContain("Observable measures: no pipeline");
+    expect(content.textContent).toContain("Symptoms: erratic leads");
+    expect(content.textContent).toContain("Behaviors: buys leads");
+    expect(content.textContent).toContain("Problems: no system");
+    expect(content.textContent).toContain("Observable measures: steady calls");
+    expect(content.textContent).toContain(
+      "Progression: stuck to scaling in 90 days",
+    );
+    expect(content.textContent).toContain(
+      "Qualification logic: a booked call qualifies",
+    );
+    expect(content.textContent).toContain("Visual: pyramid diagram");
+    expect(content.textContent).toContain(
+      "Explanatory copy: Four levels of operator maturity.",
+    );
+  });
+
+  it("renders the primary currency detail for primary-currency and provenance only for its stage-2 sibling", async () => {
+    installApi(approvalsList(), {
+      view: stagedProductionView(),
+      methods: methodList(),
+    });
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByText("Position")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("asset-pin-primary-currency@v1"));
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("asset-detail-content").textContent,
+      ).toContain("Primary currency"),
+    );
+
+    const content = screen.getByTestId("asset-detail-content");
+    expect(content.textContent).toContain("Currency: predictable pipeline");
+    expect(content.textContent).toContain("Audience: owner-operators");
+    expect(content.textContent).toContain(
+      "Current measure: leads bought per month",
+    );
+    expect(content.textContent).toContain(
+      "Desired measure: booked calls per week",
+    );
+    expect(content.textContent).toContain("Mechanism: one diagnostic funnel");
+
+    fireEvent.click(screen.getByTestId("asset-pin-million-dollar-message@v1"));
+    await waitFor(() =>
+      expect(screen.getByTestId("asset-detail-no-content")).toBeTruthy(),
+    );
+    expect(screen.getByTestId("asset-detail-no-content").textContent).toBe(
+      "No stored content for this asset kind — the approval records above are the record of what was approved.",
+    );
+  });
+
+  it("renders the delivery specification fields for a stage-5 kind pin", async () => {
+    installApi(approvalsList(), {
+      view: stagedProductionView(),
+      offers: offerList(),
+    });
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByText("Productize")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("asset-pin-delivery-model@v1"));
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("asset-detail-content").textContent,
+      ).toContain("offer-3f-1"),
+    );
+
+    const content = screen.getByTestId("asset-detail-content");
+    expect(content.textContent).toContain("Delivery specification");
+    expect(content.textContent).toContain(
+      "Delivery model: group coaching program",
+    );
+    expect(content.textContent).toContain("Duration: 12 weeks");
+    expect(content.textContent).toContain(
+      "Modules: pipeline audit, offer build, funnel launch",
+    );
+    expect(content.textContent).toContain(
+      "Responsibilities: client does the work, coach reviews",
+    );
+    expect(content.textContent).toContain("Support cadence: weekly group call");
+    expect(content.textContent).toContain("step-1");
+    expect(content.textContent).toContain("Action: audit the funnel");
+    expect(content.textContent).toContain("Actor: delivery lead");
+    expect(content.textContent).toContain("Deliverable: audit report");
+    expect(content.textContent).toContain("Timing: week 1");
+    expect(content.textContent).toContain("Measure: audit complete");
+    expect(content.textContent).toContain(
+      "Outcome measures: booked calls per week",
+    );
+    expect(content.textContent).toContain(
+      "Pricing and payments: $12k over three payments",
+    );
+    expect(content.textContent).toContain("Scope: one funnel, one offer");
+    expect(content.textContent).toContain(
+      "Guarantee decision: refund if no calls in 90 days",
+    );
+    expect(content.textContent).toContain(
+      "Offer stack: core program, audit intensive",
+    );
   });
 });

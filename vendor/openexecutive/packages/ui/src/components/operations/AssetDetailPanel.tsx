@@ -77,32 +77,96 @@ function MethodsContent({ methods }: { methods: MethodVersion[] }) {
   if (methods.length === 0) return <EmptyContent label="methods" />;
   return (
     <ul className="mt-2 space-y-2">
-      {methods.map((method) => (
-        <li
-          key={method.method_id}
-          className="rounded-lg border border-line bg-surface p-3 text-xs text-fg"
-        >
-          <p className="font-medium">
-            {method.method_id}
-            {approvalMark(method.is_approved)}
-          </p>
-          <Field label="Semantic version" value={method.semantic_version} />
-          <Field label="Diagnostic model" value={method.diagnostic_model_id} />
-          <Field
-            label="Narrative"
-            value={method.signature_solution?.narrative ?? null}
-          />
-          <Field
-            label="Starting state"
-            value={method.signature_solution?.starting_state ?? null}
-          />
-          <Field
-            label="Final state"
-            value={method.signature_solution?.final_state ?? null}
-          />
-          <FieldList label="Claims" values={method.claims} />
-        </li>
-      ))}
+      {methods.map((method) => {
+        const solution = method.signature_solution;
+        const model = method.diagnostic_model;
+        const currency = method.primary_currency_detail;
+        return (
+          <li
+            key={method.method_id}
+            className="rounded-lg border border-line bg-surface p-3 text-xs text-fg"
+          >
+            <p className="font-medium">
+              {method.method_id}
+              {approvalMark(method.is_approved)}
+            </p>
+            <Field label="Semantic version" value={method.semantic_version} />
+            <Field label="Diagnostic model" value={method.diagnostic_model_id} />
+            <FieldList label="Claims" values={method.claims} />
+            {solution || model || currency ? (
+              <>
+                {solution ? (
+                  <div className="mt-2">
+                    <p className="font-medium text-fg">Signature solution</p>
+                    <Field label="Narrative" value={solution.narrative} />
+                    <Field
+                      label="Starting state"
+                      value={solution.starting_state}
+                    />
+                    <Field label="Final state" value={solution.final_state} />
+                  </div>
+                ) : null}
+                {model ? (
+                  <div className="mt-2">
+                    <p className="font-medium text-fg">Diagnostic model</p>
+                    <Field label="Name" value={model.name} />
+                    {(model.levels ?? []).map((level, index) => (
+                      <div
+                        key={level.level_id ?? index}
+                        className="mt-1 border-l-2 border-line pl-2"
+                      >
+                        <p className="font-medium text-fg">
+                          {level.name ?? level.level_id ?? `Level ${index + 1}`}
+                        </p>
+                        <FieldList
+                          label="Observable measures"
+                          values={level.observable_measures}
+                        />
+                        <FieldList label="Symptoms" values={level.symptoms} />
+                        <FieldList label="Behaviors" values={level.behaviors} />
+                        <FieldList label="Problems" values={level.problems} />
+                      </div>
+                    ))}
+                    <Field label="Progression" value={model.progression} />
+                    <Field
+                      label="Qualification logic"
+                      value={model.qualification_logic}
+                    />
+                    <Field label="Visual" value={model.visual} />
+                    <Field
+                      label="Explanatory copy"
+                      value={model.explanatory_copy}
+                    />
+                  </div>
+                ) : null}
+                {currency ? (
+                  <div className="mt-2">
+                    <p className="font-medium text-fg">Primary currency</p>
+                    <Field label="Currency" value={currency.currency} />
+                    <Field label="Audience" value={currency.audience} />
+                    <Field
+                      label="Current measure"
+                      value={currency.current_measure}
+                    />
+                    <Field
+                      label="Desired measure"
+                      value={currency.desired_measure}
+                    />
+                    <Field label="Mechanism" value={currency.mechanism} />
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p
+                data-testid="method-no-content-sections"
+                className="mt-2 text-xs text-fg-muted"
+              >
+                No stored content sections for this method.
+              </p>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -111,22 +175,71 @@ function OffersContent({ offers }: { offers: OfferVersion[] }) {
   if (offers.length === 0) return <EmptyContent label="offers" />;
   return (
     <ul className="mt-2 space-y-2">
-      {offers.map((offer) => (
-        <li
-          key={offer.offer_id}
-          className="rounded-lg border border-line bg-surface p-3 text-xs text-fg"
-        >
-          <p className="font-medium">
-            {offer.offer_id}
-            {approvalMark(offer.is_production_ready, "production ready")}
-          </p>
-          <Field label="Audience" value={offer.audience} />
-          <Field label="Promise" value={offer.promise} />
-          <Field label="Eligibility" value={offer.eligibility} />
-          <Field label="Price" value={offer.price_hypothesis} />
-          <Field label="State" value={offer.state} />
-        </li>
-      ))}
+      {offers.map((offer) => {
+        const delivery = offer.delivery;
+        return (
+          <li
+            key={offer.offer_id}
+            className="rounded-lg border border-line bg-surface p-3 text-xs text-fg"
+          >
+            <p className="font-medium">
+              {offer.offer_id}
+              {approvalMark(offer.is_production_ready, "production ready")}
+            </p>
+            <Field label="Audience" value={offer.audience} />
+            <Field label="Promise" value={offer.promise} />
+            <Field label="Eligibility" value={offer.eligibility} />
+            <Field label="Price" value={offer.price_hypothesis} />
+            <Field label="State" value={offer.state} />
+            {delivery ? (
+              <div className="mt-2">
+                <p className="font-medium text-fg">Delivery specification</p>
+                <Field label="Delivery model" value={delivery.delivery_model} />
+                <Field label="Duration" value={delivery.duration} />
+                <FieldList label="Modules" values={delivery.modules} />
+                <FieldList
+                  label="Responsibilities"
+                  values={delivery.responsibilities}
+                />
+                <Field
+                  label="Support cadence"
+                  value={delivery.support_cadence}
+                />
+                {(delivery.step_deliveries ?? []).map((step, index) => (
+                  <div
+                    key={step.step_id ?? index}
+                    className="mt-1 border-l-2 border-line pl-2"
+                  >
+                    <p className="font-medium text-fg">
+                      {step.step_id ?? `Step ${index + 1}`}
+                    </p>
+                    <Field label="Action" value={step.action} />
+                    <Field label="Actor" value={step.actor} />
+                    <Field label="Deliverable" value={step.deliverable} />
+                    <Field label="Timing" value={step.timing} />
+                    <Field label="Measure" value={step.measure} />
+                  </div>
+                ))}
+                <FieldList
+                  label="Outcome measures"
+                  values={delivery.outcome_measures}
+                />
+                <Field
+                  label="Pricing and payments"
+                  value={delivery.pricing_payments}
+                />
+                <Field label="Scope" value={delivery.scope} />
+                <Field
+                  label="Guarantee decision"
+                  value={delivery.guarantee_decision}
+                />
+                <Field label="Eligibility" value={delivery.eligibility} />
+                <FieldList label="Offer stack" values={delivery.offer_stack} />
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }

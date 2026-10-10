@@ -146,6 +146,19 @@ def _delivery_from_payload(
     )
 
 
+def delivery_to_payload(
+    delivery: DeliverySpecification,
+) -> dict[str, Any]:
+    """Public wrapper for a Delivery Specification payload, reused by other contexts.
+
+    The read API projects the stage 5 delivery an offer pins exactly as this
+    mapper persists it, so the API layer reuses this serialisation rather than
+    restating the field list and drifting from storage.
+    """
+
+    return _delivery_to_payload(delivery)
+
+
 def offer_to_payload(offer: OfferVersion) -> dict[str, Any]:
     """Serialise a production ready offer into the JSONB payload the table stores.
 

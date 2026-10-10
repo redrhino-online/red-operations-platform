@@ -189,6 +189,46 @@ decisions do not record content entity ids, so where a tenant holds several
 entities of a group the panel lists them all with approved ones marked. A
 durable pin→entity reference is a follow-up, not this spec.
 
+## 6a. Addendum (2026-10-10): definitive per-stage content truth
+
+Owner requirement: state clearly per artifact whether text content exists in
+the platform, and make every piece of stored content readable in the UI.
+Persistence trace of the stage 0-4 gate routes (validate-and-decide: they
+build typed packages, validate, append a `GateDecision`, upsert a `StageRun`):
+
+| Stage | Submitted content | In durable storage? | Readable before this addendum |
+| --- | --- | --- | --- |
+| 0 Intake (the 12 kinds) | intake asset summaries, owners, evidence refs | **NO — discarded after validation**; only approval refs + rationale + checkpoint evidence persist | provenance only (correct) |
+| 1 Diagnose | avatar, business snapshot, funnel audit, awareness map, reach estimate, market match | **NO — discarded** | provenance only (correct) |
+| 2 Position | currency package | **NO at gate time**; survives only via the stage 6-10 `method` field → `method_versions.method` | `primary-currency` stored full but exposed as a string only |
+| 3 Model | diagnostic model | **NO at gate time**; survives via stage 6-10 `method` field | stored full but exposed as an id only |
+| 4 Package IP | signature solution / transformation map | survives via stage 6-10 `method`/`offer.delivery.signature_solution` | readable (`/red/methods`, TransformationMap) but not mapped in the panel |
+| 5 Productize | offer + full delivery specification | YES (`offer_versions.offer`) | delivery spec not exposed by `/red/offers` |
+| 6-10 | message / amplifier / funnel / QA / measurements | YES | readable (this spec's §4.1) |
+
+Gaps closed by this addendum (stored but unreadable):
+
+- **M1** `GET /red/methods` exposes the FULL stored `primary_currency` object
+  (currency, version, audience, current_measure, desired_measure, mechanism)
+  and the FULL stored `diagnostic_model` (model_id, version, name, levels with
+  observable_measures/symptoms/behaviors/problems, progression,
+  qualification_logic, visual, explanatory_copy) — additive fields, mirroring
+  `method/infrastructure/mappers.py:238-275`.
+- **M2** `GET /red/offers` exposes the FULL stored `delivery` specification
+  (delivery_model, duration, modules, responsibilities, support_cadence,
+  step_deliveries, outcome_measures, pricing_payments, scope,
+  guarantee_decision, eligibility, offer_stack, signature_solution) —
+  mirroring `commercial/infrastructure/mappers.py:92-115`.
+- **M3** Panel mapping fix: stage 3 kinds → methods (diagnostic model), stage 4
+  kinds → methods (signature solution), stage 2 `primary-currency` → methods
+  (primary currency). The other stage 2 kinds stay provenance-only — their
+  content is genuinely not stored. Method/offer renderers render the new
+  sections.
+
+Stage 0 and 1 content remains non-existent in the platform (nothing to
+render); persisting it at gate time is a separate follow-up requiring new
+tables and write-path changes, not part of this spec.
+
 ## 6. Non-goals
 
 - No HTTP authentication layer or authenticated-user→actor binding (existing

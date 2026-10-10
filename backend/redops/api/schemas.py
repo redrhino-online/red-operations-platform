@@ -1744,16 +1744,66 @@ class SignatureSolutionResponse(BaseModel):
     visual: str
 
 
+class PrimaryCurrencyResponse(BaseModel):
+    """The full stored stage 2 primary currency an approved method pins.
+
+    The asset review panel (spec §3.1 addendum M1) renders the currency's
+    complete stored content, so the read projects exactly the fields the method
+    mapper persists, verbatim and never re-derived.
+    """
+
+    tenant_id: str
+    currency: str
+    audience: str
+    current_measure: str
+    desired_measure: str
+    mechanism: str
+
+
+class ProfitPyramidLevelResponse(BaseModel):
+    """One stored Profit Pyramid level of a pinned diagnostic model.
+
+    Every level carries observable measures, symptoms, behaviors and problems,
+    so the panel can show how a prospect recognizes which level they are on.
+    """
+
+    level_id: str
+    tenant_id: str
+    name: str
+    observable_measures: list[str]
+    symptoms: list[str]
+    behaviors: list[str]
+    problems: list[str]
+
+
+class DiagnosticModelResponse(BaseModel):
+    """The full stored stage 3 diagnostic model an approved method pins.
+
+    The asset review panel (spec §3.1 addendum M1) renders the model's complete
+    stored content, so the read projects exactly the fields the method mapper
+    persists, verbatim and never re-derived.
+    """
+
+    model_id: str
+    tenant_id: str
+    name: str
+    levels: list[ProfitPyramidLevelResponse]
+    progression: str
+    qualification_logic: str
+    visual: str
+    explanatory_copy: str
+
+
 class MethodVersionResponse(BaseModel):
     """One approved method version, read back from the durable method store.
 
     SPEC.md section 3 pins an exact version and intended use at approval and
     section 4 keeps the approved version identifiable. The read surface projects
     the method's identity, its approval, the ids of the stage 2 to 4
-    dependencies it pins, and -- for the transformation map screen -- the pinned
-    stage 4 Signature Solution itself (the exact approved structure, not a
-    re-derivation). The stage 2 and 3 assets stay referenced by id here; their
-    exact content is retrieved elsewhere through the gate seam.
+    dependencies it pins, and -- for the transformation map screen and the asset
+    review panel (spec §3.1 addendum M1) -- the pinned stage 4 Signature
+    Solution, stage 2 primary currency and stage 3 diagnostic model themselves
+    (the exact stored structures, not re-derivations).
     """
 
     method_id: str
@@ -1768,7 +1818,9 @@ class MethodVersionResponse(BaseModel):
     intended_use: str | None
     approved_on: date | None
     primary_currency: str | None
+    primary_currency_detail: PrimaryCurrencyResponse | None
     diagnostic_model_id: str | None
+    diagnostic_model: DiagnosticModelResponse | None
     signature_solution_id: str | None
     signature_solution: SignatureSolutionResponse | None
 
@@ -1791,13 +1843,51 @@ class MethodReferenceResponse(BaseModel):
     intended_use: str
 
 
+class StepDeliveryResponse(BaseModel):
+    """One stored stage 5 delivery row for a named method step."""
+
+    step_id: str
+    tenant_id: str
+    action: str
+    actor: str
+    deliverable: str
+    timing: str
+    measure: str
+
+
+class DeliverySpecificationResponse(BaseModel):
+    """The full stored stage 5 delivery specification an offer pins.
+
+    The asset review panel (spec §3.1 addendum M2) renders the delivery's
+    complete stored content, so the read projects exactly the fields the offer
+    mapper persists, verbatim and never re-derived.
+    """
+
+    delivery_id: str
+    tenant_id: str
+    signature_solution: SignatureSolutionResponse
+    delivery_model: str
+    duration: str
+    modules: list[str]
+    responsibilities: list[str]
+    support_cadence: str
+    step_deliveries: list[StepDeliveryResponse]
+    outcome_measures: list[str]
+    pricing_payments: str
+    scope: str
+    guarantee_decision: str
+    eligibility: str
+    offer_stack: list[str]
+
+
 class OfferVersionResponse(BaseModel):
     """One production ready offer version, read from the durable offer store.
 
     SPEC.md section 3 makes production require approved dependencies and section
     4 keeps an approved version identifiable. The read surface projects the
-    offer's identity, its pinned method references and its readiness; the exact
-    asset content is retrieved through the gate seam, not re-declared here.
+    offer's identity, its pinned method references, its readiness and -- for the
+    asset review panel (spec §3.1 addendum M2) -- the pinned stage 5 delivery
+    specification itself (the exact stored structure, not a re-derivation).
     """
 
     offer_id: str
@@ -1810,6 +1900,7 @@ class OfferVersionResponse(BaseModel):
     state: str
     is_production_ready: bool
     method_refs: list[MethodReferenceResponse]
+    delivery: DeliverySpecificationResponse | None
     review_reason: str | None
 
 

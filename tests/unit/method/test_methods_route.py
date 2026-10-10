@@ -15,7 +15,13 @@ the class skips cleanly when the domain-only interpreter runs the suite.
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from datetime import date
+
+from redops.contexts.method.domain.value_objects import (
+    MethodApproval,
+    SemanticVersion,
+)
 
 from .test_method_version import method_version
 
@@ -101,6 +107,99 @@ class MethodsRouteTests(unittest.TestCase):
         self.assertEqual(["Diagnose inputs"], steps[0]["inputs"])
         self.assertEqual(["Diagnose actions"], steps[0]["actions"])
         self.assertEqual(["Diagnose outputs"], steps[0]["outputs"])
+
+    def test_the_pinned_primary_currency_is_projected_in_full(self) -> None:
+        self.methods.save(approved_method())
+
+        listed = self.client.get("/red/methods", params={"tenant_id": TENANT})
+
+        self.assertEqual(200, listed.status_code, listed.text)
+        method = listed.json()["methods"][0]
+        self.assertEqual("qualified referrals", method["primary_currency"])
+        detail = method["primary_currency_detail"]
+        self.assertEqual("client-3f", detail["tenant_id"])
+        self.assertEqual("qualified referrals", detail["currency"])
+        self.assertEqual(
+            "owner-operators of two to five person service firms",
+            detail["audience"],
+        )
+        self.assertEqual(
+            "4 qualified referrals per month", detail["current_measure"]
+        )
+        self.assertEqual(
+            "12 qualified referrals per month", detail["desired_measure"]
+        )
+        self.assertEqual("referral partner network", detail["mechanism"])
+
+    def test_the_pinned_diagnostic_model_is_projected_in_full(self) -> None:
+        self.methods.save(approved_method())
+
+        listed = self.client.get("/red/methods", params={"tenant_id": TENANT})
+
+        self.assertEqual(200, listed.status_code, listed.text)
+        method = listed.json()["methods"][0]
+        self.assertEqual("model-3f", method["diagnostic_model_id"])
+        model = method["diagnostic_model"]
+        self.assertEqual("model-3f", model["model_id"])
+        self.assertEqual("client-3f", model["tenant_id"])
+        self.assertEqual("Growth Pyramid", model["name"])
+        self.assertEqual(
+            "climb from Stuck to Scaling by installing the referral network",
+            model["progression"],
+        )
+        self.assertEqual(
+            "rank the prospect by observable monthly referral count",
+            model["qualification_logic"],
+        )
+        self.assertEqual(
+            "asset://diagnostic/3f-growth-pyramid.png", model["visual"]
+        )
+        self.assertEqual(
+            "Four levels from Stuck to Scaling, each placed by observable "
+            "monthly referral count",
+            model["explanatory_copy"],
+        )
+        levels = model["levels"]
+        self.assertEqual(2, len(levels))
+        self.assertEqual("level-1", levels[0]["level_id"])
+        self.assertEqual("Stuck", levels[0]["name"])
+        self.assertEqual(
+            ["under 4 qualified referrals per month"],
+            levels[0]["observable_measures"],
+        )
+        self.assertEqual(["Stuck symptoms"], levels[0]["symptoms"])
+        self.assertEqual(["Stuck behaviors"], levels[0]["behaviors"])
+        self.assertEqual(["Stuck problems"], levels[0]["problems"])
+        self.assertEqual("level-2", levels[1]["level_id"])
+        self.assertEqual(
+            ["12 or more qualified referrals per month"],
+            levels[1]["observable_measures"],
+        )
+
+    def test_a_method_without_the_stage_2_and_3_assets_projects_them_as_none(
+        self,
+    ) -> None:
+        bare = replace(
+            method_version(),
+            approval=MethodApproval(
+                version=SemanticVersion(1, 0, 0),
+                intended_use="3f pilot campaign",
+                approved_by="client-approver-1",
+                approved_on=ON,
+            ),
+            primary_currency=None,
+            diagnostic_model=None,
+        )
+        self.methods.save(bare)
+
+        listed = self.client.get("/red/methods", params={"tenant_id": TENANT})
+
+        self.assertEqual(200, listed.status_code, listed.text)
+        method = listed.json()["methods"][0]
+        self.assertIsNone(method["primary_currency"])
+        self.assertIsNone(method["primary_currency_detail"])
+        self.assertIsNone(method["diagnostic_model_id"])
+        self.assertIsNone(method["diagnostic_model"])
 
     def test_a_method_is_not_listed_for_another_client(self) -> None:
         self.methods.save(approved_method())

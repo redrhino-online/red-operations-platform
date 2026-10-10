@@ -217,6 +217,28 @@ def signature_solution_from_payload(
     return _solution_from_payload(payload)
 
 
+def primary_currency_to_payload(currency: PrimaryCurrency) -> dict[str, Any]:
+    """Public wrapper for a Primary Currency payload, reused by other contexts.
+
+    The read API projects the stage 2 currency an approved method pins exactly
+    as this mapper persists it, so the API layer reuses this serialisation
+    rather than restating the field list and drifting from storage.
+    """
+
+    return _primary_currency_to_payload(currency)
+
+
+def diagnostic_model_to_payload(model: DiagnosticModel) -> dict[str, Any]:
+    """Public wrapper for a Diagnostic Model payload, reused by other contexts.
+
+    The read API projects the stage 3 model an approved method pins exactly as
+    this mapper persists it, so the API layer reuses this serialisation rather
+    than restating the field list and drifting from storage.
+    """
+
+    return _model_to_payload(model)
+
+
 def _approval_to_payload(approval: MethodApproval) -> dict[str, Any]:
     return {
         "version": str(approval.version),
