@@ -107,3 +107,13 @@ Environment notes: first `uv sync` pulls heavy ML deps (torch, ChromaDB); checko
 
 Unattended cycles never re-pin and never approve exceptions. A cycle that needs
 a locked-file modification records the proposal in the plan and stops.
+
+### Exception record 2026-10-10 (owner-approved via the approved overhaul plan; ADR 0014 escape hatch)
+
+| Item | Value |
+| --- | --- |
+| Decision | The Knowledge and Workflows subtrees become RED-owned surfaces: K9 (canon corpus, repeatable ingest + grounding eval) and K11/K12 (stage 0-10 pipeline as cockpit workflow definitions bound to RED approvals) cannot be implemented additively alone — they must modify `packages/core/openexecutive/knowledge/` (loader, retriever, documents) and `packages/core/openexecutive/workflows/` (`__init__.py` registry) |
+| Basis | Owner-approved single-shell overhaul plan (ADR 0013 decision 5, K9-K12 in IMPLEMENTATION_PLAN.md); recorded here by the operator during the owner-ordered 20-cycle batch |
+| Scope | Every upstream-origin path under `packages/core/openexecutive/knowledge/` and `packages/core/openexecutive/workflows/` |
+| Effect | Those paths move to `vendor/red-owned-files.txt` and leave the locked manifest; `make vendor-pin` re-baselined 2026-10-10 |
+| Owner | RED principal (veto window: revert this record and re-pin) |

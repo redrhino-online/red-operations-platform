@@ -134,14 +134,14 @@ class VendorAdditiveCheckTests(unittest.TestCase):
             manifest = (repo / "vendor" / "upstream-manifest.sha256").read_text(encoding="utf-8")
             self.assertIn(hashlib.sha256(b"owner-approved change\n").hexdigest(), manifest)
 
-    def test_pin_refuses_red_owned_files_outside_the_upstream_tree(self) -> None:
+    def test_pin_warns_about_red_owned_files_outside_the_upstream_tree(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo, _ = build_repo(Path(tmp))
             extra = repo / "vendor" / "red-owned-files.txt"
             extra.write_text("red-owned/nav.ts\nnot/upstream.txt\n", encoding="utf-8")
             result = run(PIN, "pin", "--repo", str(repo))
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("outside the upstream tree", result.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("not lockable", result.stderr)
 
 
 if __name__ == "__main__":

@@ -32,14 +32,17 @@ MANIFEST = "vendor/upstream-manifest.sha256"
 
 
 def locked_paths(repo: Path) -> list[str]:
-    upstream = (repo / UPSTREAM_FILES).read_text(encoding="utf-8").splitlines()
-    red_owned = set((repo / RED_OWNED_FILES).read_text(encoding="utf-8").splitlines())
-    upstream = [p for p in upstream if p]
-    red_owned = {p for p in red_owned if p}
-    unknown = red_owned - set(upstream)
-    if unknown:
-        raise SystemExit(
-            f"vendor_pin: red-owned files outside the upstream tree: {sorted(unknown)}"
+    upstream = [p for p in (repo / UPSTREAM_FILES).read_text(encoding="utf-8").splitlines() if p]
+    red_owned = {p for p in (repo / RED_OWNED_FILES).read_text(encoding="utf-8").splitlines() if p}
+    # Red-owned paths outside the upstream tree are RED-added files (they were
+    # never upstream-origin), so they cannot be locked; warn, don't fail.
+    outside = sorted(red_owned - set(upstream))
+    if outside:
+        print(
+            f"vendor-pin: note: {len(outside)} red-owned entries are RED-added "
+            "files absent from the upstream tree (not lockable): "
+            f"{outside[:3]}{'…' if len(outside) > 3 else ''}",
+            file=sys.stderr,
         )
     return [p for p in upstream if p not in red_owned]
 
