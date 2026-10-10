@@ -117,3 +117,15 @@ a locked-file modification records the proposal in the plan and stops.
 | Scope | Every upstream-origin path under `packages/core/openexecutive/knowledge/` and `packages/core/openexecutive/workflows/` |
 | Effect | Those paths move to `vendor/red-owned-files.txt` and leave the locked manifest; `make vendor-pin` re-baselined 2026-10-10 |
 | Owner | RED principal (veto window: revert this record and re-pin) |
+
+### Single-shell disposition (K7, 2026-10-10; ADR 0013)
+
+The rebranded cockpit is the only user-facing RED UI. The separate `/screens`
+thin client is retired: the repo-side `frontend/` app, `Dockerfile.ui`, the
+chart's `redop-ui` Deployment/Service/PDB and the ingress `/screens` route are
+gone, and the section 13 condition 6 gate exercises the cockpit pages. The
+retirement removed no vendor file — the thin client was RED's own repo-side
+app — so the absorbed vendor tree and its baseline manifest are unchanged by it;
+the vendor `packages/ui` gained the RED overlay additively (native
+`/operations/*` pages, shared workspace context, RED-first navigation, landing
+rewrite) under the additive rule and the owner-approved RED-owned surfaces.

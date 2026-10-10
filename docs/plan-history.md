@@ -2,6 +2,56 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 20261010T012000Z: K11 — the stage 0-10 pipeline as cockpit workflow definitions
+
+- **Selected item:** K11 (register the stage 0-10 pipeline as cockpit workflow
+  definitions), the highest-value ready item: the owner-approved ADR 0014
+  exception made the Workflows subtree a RED-owned surface, so K11's blocker is
+  gone and K11 is the `[7/7]` condition 8 registration half that unblocks K12;
+  K13 needs K9-K12 and K9 is done.
+- **Outcome:** `backend/redops/workflows/pipeline.py` (repo-side) turns the
+  canonical `stage_zero_to_ten_template()` into a versioned
+  `WorkflowDefinition` — one `stage-N` task step and one `gate-N` approval step
+  per stage, 22 steps in template order, so the definition cannot drift from the
+  template the gates are evaluated against — registered in
+  `RED_WORKFLOW_DEFINITIONS` and resolved by `red_workflow_definition`.
+  `pipeline_runtime_from_env` composes the `RunWorkflowHandler` with the same
+  durable run store and connector-backed executor the worker uses, so an
+  API-started run and a worker-resumed run share one database. The new RED route
+  `POST /red/clients/{tenant}/workflows/{definition}` starts a durable run
+  through that handler and returns the same payload the workflow run detail read
+  serves, so a started run's transitions appear on the K4 screen; the executor
+  is an overridable dependency (`get_workflow_step_executor`) so the composition
+  stays behind the port. The vendor Jobs surface is a new additive
+  `workflows/redops_pipeline.py` — a self-contained catalog entry that mirrors
+  the gated stage sequence (no `redops` import, per the ADR 0014 composition
+  rule) — registered in the RED-owned `WORKFLOW_REGISTRY` under a new
+  `WorkflowSection.RED`, so Jobs lists the pipeline; a repo test holds the
+  mirror in sync with the canonical template.
+- **Prerequisite fix:** the test runs left an untracked `chroma_db/` at the repo
+  root (the vendored config's default vector-store path, created whenever a
+  store is instantiated with the repository as the working directory). Added
+  `chroma_db/` to `.gitignore` beside the other generated trees so the harness
+  cannot commit a test artifact.
+- **Evidence:** `tests/unit/workflows/test_stage_pipeline.py` 9 passed (the
+  definition is one task and one gate per stage in template order, the registry
+  resolves it and refuses an unknown name, the runtime composes the injected
+  store, Jobs lists the pipeline and the mirror matches the template and the RED
+  definition's stage steps, and a run started through the API pauses at
+  `gate-0` with `stage-0` committed and its transitions readable at the run
+  detail read, with unknown definitions and blank actors refused); `make check`
+  2749 passed / 3 skipped / 799 subtests; vendor workflow suites 229 passed /
+  2 skipped; `scripts/check_vendor_additive.sh` ok (1053 locked files match);
+  `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]`.
+- **Not done (deliberately):** the approval binding (a run resumes only after
+  the corresponding RED approval is recorded) is K12; the live single-shell
+  verification and the docs update are K13; no send, spend, publication or
+  client commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is
+  not touched because `make done` still fails `[7/7]` at the live `[14.6]` check.
+- **Next ready item:** K12 (bind the workflow human gates to RED approvals),
+  unblocked by K11 and K3; K13 needs K9-K12.
+- **Blockers:** none.
+
 ### Cycle 20261010T011139Z: K9 — canon into Knowledge, repeatably
 
 - **Selected item:** K9 (canon into Knowledge, repeatably), the highest-value

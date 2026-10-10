@@ -4,6 +4,67 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 20261010T014351Z: K13 — the cockpit overhaul phase definition of done
+
+- **Selected item:** K13 (run `make done` end to end with the `[7/7]` gate,
+  verify the deployed single shell on Atlas, update the docs for the retired
+  thin client), the only ready item: every K dependency (K4-K12) is done, so
+  K13 is the phase's stop condition.
+- **Gate-honesty fix:** the `[7/7]` live check passed while the pilot workspace
+  was NOT seeded — it grepped the `/red/clients` response for the tenant id,
+  which the response echoes as its `tenant_id` field even when `workspaces` is
+  empty, so an empty listing turned the live check green and every screen would
+  have rendered an empty state. `scripts/check_cockpit_overhaul.sh` now requires
+  an actual workspace row (`"workspace_id"` in the response), and
+  `tests/unit/shared/test_cockpit_overhaul_check.py` gained a live-seeding pair
+  (an empty listing fails with "not seeded"; a seeded workspace passes) served
+  by a fake cockpit HTTP server.
+- **Deployed state seeded and verified:** the pilot workspace was seeded into
+  the deployed PostgreSQL through the real seed use case
+  (`kubectl -n redop exec deploy/redop-api -- python -m redops.seed`; first run
+  `workspace_created: true`, rerun `false` — idempotent), and the live read
+  `GET /red/clients?tenant_id=3fmindset` now returns `ws-3f`. Every navigation
+  item lands on a working screen: the twelve `/operations/*` routes, the
+  cockpit's own surfaces (`/`, `/memories`, `/jobs`, `/artifacts`, `/watchlist`,
+  `/goals`, `/company-profile`, `/knowledge`, `/departments`, `/people`,
+  `/settings`, `/review`→307 to the Knowledge review view) all answer 200, and
+  the seeded production view reports 11 approved gates with the interventions
+  read at zero active cards (a fully gated demo engagement has no blockers —
+  the recorded K1 behavior).
+- **Docs updated:** the README's publishing section no longer says publishing is
+  source-only — it records the Gitea build workflow, the GitOps promotion, the
+  Argo CD reconciliation and the single-shell cockpit with the retired
+  `/screens` thin client (no `frontend/`, no `Dockerfile.ui`, no `redop-ui`
+  Deployment, no `/screens` ingress route); `docs/fork_inventory.md` gained the
+  single-shell disposition record (the retirement removed no vendor file, so the
+  absorbed tree and its baseline manifest are unchanged by it).
+- **Canon drift recorded:** the owner is actively editing the canon — the pin
+  moved `ef00388d…` → `50f25ce7…` → `3cbb6028…` → `cda727e6…` during this cycle,
+  each reported by the harness's strict preflight as `CANON DRIFT` and re-pinned
+  with the harness's own idempotent `make canon-lock`. The K9 canon seed's pin
+  verification verifies against whatever pin is current; the owner still owns
+  the canon content.
+- **Evidence:** `make done` **PASSES end to end** — `[1/7]` `make check` 2760
+  passed / 3 skipped / 799 subtests, `[2/7]` e2e + acceptance + provider paths,
+  `[3/7]` cross-tenant security, `[4/7]` vendor-additive (1053 locked files),
+  `[5/7]` cockpit screens + build + charters + branding, `[6/7]` deployed RED
+  health, `[7/7]` single shell with the live seeded-workspace check;
+  `tests/unit/shared/test_cockpit_overhaul_check.py` 10 passed; the live
+  verification above is against the deployed images `sha-51b69f3` (through K8) —
+  the K9-K12 changes are repo-side and their live effects (canon grounding, RED
+  departments, pipeline runs) land on the next CI promote after the harness
+  publishes this cycle's commits; the gate's live checks are route- and
+  seed-level, which those versions preserve.
+- **`.ralph/DONE` touched:** the cockpit overhaul phase's definition of done
+  (SPEC.md sections 13 and 14) passes end to end, so the build loop's stop
+  condition is met. No send, spend, publication or client commitment was
+  authorized (SPEC.md sections 4 and 9); the seeded data is demo-marked and is
+  never represented as client-approved fact.
+- **Next ready item:** none — the phase definition of done is met. Post-phase
+  work (production readiness: the backup/restore and GitOps rollback drills,
+  ADR 0009/0010) remains owner-gated and is never picked up unattended.
+- **Blockers:** none.
+
 ### Cycle 20261010T013059Z: K12 — the workflow human gates bound to RED approvals
 
 - **Selected item:** K12 (bind the workflow human gates to RED approvals), the
@@ -40,18 +101,19 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   canon seed's pin verification now verifies against the new pin; the owner
   still owns any canon-content decision.
 - **Evidence:** `tests/unit/workflows/test_gate_approval_binding.py` 10 passed
-  and `tests/cockpit-ui/operationsScreensK12.test.tsx` 3 passed (the pending
-  gates surface with the exact pinned version, the empty state, and the
-  container fetches the awaiting-approval read with the context tenant and no
-  free-text tenant input); `tests/cockpit-ui` 52 passed in total
   (the binding maps `gate-3`/`gate-10` and leaves non-gate steps unbound; a run
   pauses at the bound gate; resuming without the RED approval is refused with
   `ApprovalNotRecordedError`; resuming after it is recorded commits the gate and
   advances; an unbound step keeps the generic behavior; the adapter answers from
   the ledger; the awaiting-approval read lists the waiting run with its exact
-  version; the approval route refuses then resumes); `make check` 2759 passed /
-  3 skipped / 799 subtests; `scripts/check_vendor_additive.sh` ok (1053 locked
-  files match); `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]`.
+  version; the approval route refuses then resumes) and
+  `tests/cockpit-ui/operationsScreensK12.test.tsx` 3 passed (the pending gates
+  surface with the exact pinned version, the empty state, and the container
+  fetches the awaiting-approval read with the context tenant and no free-text
+  tenant input; `tests/cockpit-ui` 52 passed in total); `make check` 2759
+  passed / 3 skipped / 799 subtests; `scripts/check_vendor_additive.sh` ok
+  (1053 locked files match); `check_cockpit_overhaul.sh` passes
+  `[14.1]`-`[14.5]`.
 - **Not done (deliberately):** the live single-shell verification and the docs
   update are K13; no send, spend, publication or client commitment is authorized
   (SPEC.md sections 4 and 9); `.ralph/DONE` is not touched because `make done`
@@ -60,56 +122,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   with the `[7/7]` gate, verify the deployed single shell on Atlas, update
   `docs/fork_inventory.md` and the README for the retired thin client) — every
   K dependency is now done.
-- **Blockers:** none.
-
-### Cycle 20261010T012000Z: K11 — the stage 0-10 pipeline as cockpit workflow definitions
-
-- **Selected item:** K11 (register the stage 0-10 pipeline as cockpit workflow
-  definitions), the highest-value ready item: the owner-approved ADR 0014
-  exception made the Workflows subtree a RED-owned surface, so K11's blocker is
-  gone and K11 is the `[7/7]` condition 8 registration half that unblocks K12;
-  K13 needs K9-K12 and K9 is done.
-- **Outcome:** `backend/redops/workflows/pipeline.py` (repo-side) turns the
-  canonical `stage_zero_to_ten_template()` into a versioned
-  `WorkflowDefinition` — one `stage-N` task step and one `gate-N` approval step
-  per stage, 22 steps in template order, so the definition cannot drift from the
-  template the gates are evaluated against — registered in
-  `RED_WORKFLOW_DEFINITIONS` and resolved by `red_workflow_definition`.
-  `pipeline_runtime_from_env` composes the `RunWorkflowHandler` with the same
-  durable run store and connector-backed executor the worker uses, so an
-  API-started run and a worker-resumed run share one database. The new RED route
-  `POST /red/clients/{tenant}/workflows/{definition}` starts a durable run
-  through that handler and returns the same payload the workflow run detail read
-  serves, so a started run's transitions appear on the K4 screen; the executor
-  is an overridable dependency (`get_workflow_step_executor`) so the composition
-  stays behind the port. The vendor Jobs surface is a new additive
-  `workflows/redops_pipeline.py` — a self-contained catalog entry that mirrors
-  the gated stage sequence (no `redops` import, per the ADR 0014 composition
-  rule) — registered in the RED-owned `WORKFLOW_REGISTRY` under a new
-  `WorkflowSection.RED`, so Jobs lists the pipeline; a repo test holds the
-  mirror in sync with the canonical template.
-- **Prerequisite fix:** the test runs left an untracked `chroma_db/` at the repo
-  root (the vendored config's default vector-store path, created whenever a
-  store is instantiated with the repository as the working directory). Added
-  `chroma_db/` to `.gitignore` beside the other generated trees so the harness
-  cannot commit a test artifact.
-- **Evidence:** `tests/unit/workflows/test_stage_pipeline.py` 9 passed (the
-  definition is one task and one gate per stage in template order, the registry
-  resolves it and refuses an unknown name, the runtime composes the injected
-  store, Jobs lists the pipeline and the mirror matches the template and the RED
-  definition's stage steps, and a run started through the API pauses at
-  `gate-0` with `stage-0` committed and its transitions readable at the run
-  detail read, with unknown definitions and blank actors refused); `make check`
-  2749 passed / 3 skipped / 799 subtests; vendor workflow suites 229 passed /
-  2 skipped; `scripts/check_vendor_additive.sh` ok (1053 locked files match);
-  `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]`.
-- **Not done (deliberately):** the approval binding (a run resumes only after
-  the corresponding RED approval is recorded) is K12; the live single-shell
-  verification and the docs update are K13; no send, spend, publication or
-  client commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is
-  not touched because `make done` still fails `[7/7]` at the live `[14.6]` check.
-- **Next ready item:** K12 (bind the workflow human gates to RED approvals),
-  unblocked by K11 and K3; K13 needs K9-K12.
 - **Blockers:** none.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.

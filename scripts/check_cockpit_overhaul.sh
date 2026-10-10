@@ -96,7 +96,11 @@ if [[ -n "${REDOP_HEALTH_URL:-}" ]]; then
     || fail "the cockpit does not serve /operations/command-center at $base (deploy the overhauled cockpit)"
   cockpit_clients="$(curl "${curl_args[@]}" "$base/red/clients?tenant_id=$tenant")" \
     || fail "the RED API does not answer /red/clients?tenant_id=$tenant at $base"
-  grep -qF "$tenant" <<<"$cockpit_clients" \
+  # The tenant id echoes in the response even when nothing is seeded, so the
+  # gate must require an actual workspace row (SPEC.md section 14 condition 4):
+  # a seeded workspace serializes with a "workspace_id", an empty listing does
+  # not, and a screen that renders an empty state is not a working screen.
+  grep -q '"workspace_id"' <<<"$cockpit_clients" \
     || fail "the pilot workspace $tenant is not seeded; screens would render empty states (K1)"
 fi
 

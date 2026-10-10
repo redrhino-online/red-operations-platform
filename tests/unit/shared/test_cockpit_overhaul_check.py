@@ -190,5 +190,83 @@ class CockpitOverhaulCheckTests(unittest.TestCase):
             self.assertIn("/operations/command-center", result.stderr)
 
 
+class _FakeCockpitServer:
+    """A one-response HTTP server standing in for the deployed cockpit."""
+
+    def __init__(self, clients_body: str) -> None:
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        body = clients_body.encode("utf-8")
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802 - http.server API
+                if self.path.startswith("/red/clients"):
+                    payload, status = body, 200
+                else:
+                    payload, status = b"<html>RED Operations</html>", 200
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, *args) -> None:
+                return None
+
+        self._server = HTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(
+            target=self._server.serve_forever, daemon=True
+        )
+        outer._thread.start()
+
+    @property
+    def url(self) -> str:
+        host, port = self._server.server_address
+        return f"http://{host}:{port}/"
+
+    def stop(self) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+
+
+class LiveSeedingCheckTests(unittest.TestCase):
+    """The live gate requires a seeded workspace, not an echoed tenant id."""
+
+    def _run(self, body: str) -> subprocess.CompletedProcess[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = build_repo(Path(tmp))
+            server = _FakeCockpitServer(body)
+            try:
+                env = dict(os.environ)
+                env["REDOP_HEALTH_URL"] = server.url
+                return subprocess.run(
+                    ["bash", str(CHECK), str(repo)],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    check=False,
+                )
+            finally:
+                server.stop()
+
+    def test_an_empty_listing_fails_the_seeding_check(self) -> None:
+        result = self._run(
+            '{"tenant_id":"3fmindset","total":0,"limit":50,"offset":0,'
+            '"workspaces":[]}'
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not seeded", result.stderr)
+
+    def test_a_seeded_workspace_passes_the_live_check(self) -> None:
+        result = self._run(
+            '{"tenant_id":"3fmindset","total":1,"limit":50,"offset":0,'
+            '"workspaces":[{"workspace_id":"ws-3f","tenant_id":"3fmindset",'
+            '"lifecycle":"intake","authorities":[],"children":[]}]}'
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

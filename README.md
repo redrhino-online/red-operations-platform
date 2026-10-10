@@ -112,10 +112,24 @@ remote that is not configured is skipped. The `upstream` fork remote
   ssh alias uses `~/.ssh/id_rsa` on port 2222), not the platform/GitOps repo
   (`github.com/211lab/atlas`).
 
-Publishing is source-only for now: the container build workflow, Helm chart and
-Argo CD Application are deferred until the platform has a real HTTP service and
-`Dockerfile`, following the atlas repository's `.opencode/skills/atlas-deploy-app`
-contract. To publish manually, push the branch, then tag a release:
+Publishing is no longer source-only: a push to `atlas` `main` (or a `v*` tag)
+triggers the Gitea build workflow (`.gitea/workflows/build.yaml`), which builds
+the RED API and cockpit images, pushes them to `registry.atlas.lan`, and
+promotes the tag into the GitOps repo (`atlas-admin/atlas`,
+`apps/redop/chart/values.yaml`). Argo CD reconciles the `redop` application from
+that repo, running the migration Job before the API serves.
+
+The deployed app is the single-shell cockpit (ADR 0013): the rebranded
+OpenExecutive cockpit at `https://redop.atlas.lan/` is the only user-facing UI,
+serving the twelve RED Operations screens at native `/operations/*` routes with
+the portfolio command center as the landing surface. The separate `/screens`
+thin client is retired — there is no `frontend/` app, no `Dockerfile.ui`, no
+`redop-ui` Deployment and no `/screens` ingress route (K7) — so the chart
+carries only the API, cockpit, worker, migration Job and PostgreSQL. The
+definition-of-done gate (`make done`) proves the single shell live as its
+`[7/7]` check.
+
+To publish manually, push the branch, then tag a release:
 
 ```bash
 git push atlas main && git push origin main
