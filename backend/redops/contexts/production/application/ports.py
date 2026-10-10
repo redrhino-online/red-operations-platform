@@ -36,6 +36,10 @@ class AuthorityAmplifierRepository(abc.ABC):
         """Return the exact approved amplifier, or ``None`` if unknown."""
 
     @abc.abstractmethod
+    def list(self, tenant_id: str) -> tuple[AuthorityAmplifier, ...]:
+        """Return the tenant's approved amplifiers, ordered by amplifier id."""
+
+    @abc.abstractmethod
     def save(self, amplifier: AuthorityAmplifier) -> None:
         """Store an approved amplifier, refusing a different same-id body."""
 

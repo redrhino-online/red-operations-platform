@@ -3,10 +3,12 @@
 // Approval inbox container, native cockpit page (K3; SPEC.md section 14
 // conditions 2 and 3). Additive file (ADR 0014). It reads the shared workspace
 // selection from `useRedClient()` (K2) and owns the tenant-scoped read from
-// `GET /red/approvals`; there is no per-screen free-text tenant input. It can
-// approve nothing; a read authorizes no action.
+// `GET /red/approvals`; there is no per-screen free-text tenant input. The
+// pending gates' Approve forms suggest the actors of the selected workspace's
+// authority registry (asset review and approval spec section 3.2) and refresh
+// the reads after a successful approval; the backend validates every approval.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useRedClient } from "@/components/workspace/RedClientContext";
 import {
@@ -18,11 +20,20 @@ import {
 import { ApprovalInbox } from "./ApprovalInbox";
 
 export function ApprovalInboxScreen() {
-  const { tenantId } = useRedClient();
+  const { tenantId, workspaceId, workspaces } = useRedClient();
   const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
   const [awaiting, setAwaiting] = useState<AwaitingApprovalRun[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The selected workspace's registered actors, from the listing the shared
+  // context already loaded; the inbox only suggests them.
+  const authorities = useMemo(() => {
+    const workspace = workspaces.find(
+      (candidate) => candidate.workspace_id === workspaceId,
+    );
+    return workspace ? workspace.authorities.map((entry) => entry.actor) : [];
+  }, [workspaces, workspaceId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,6 +74,8 @@ export function ApprovalInboxScreen() {
           loading={loading}
           error={error}
           tenantId={tenantId}
+          authorities={authorities}
+          onApproved={() => void load()}
         />
       </div>
     </main>

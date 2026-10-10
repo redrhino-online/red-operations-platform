@@ -104,6 +104,22 @@ class PostgresCampaignMessageRepositoryTests(unittest.TestCase):
         self.assertTrue(reloaded.is_approved)
         self.assertTrue(reloaded.offer.is_production_ready)
 
+    def test_list_returns_the_tenant_rows_ordered_by_message_id(self):
+        second = approved_campaign_message(message_id="message-a")
+        self.repository.save(approved_campaign_message())
+        self.repository.save(second)
+
+        listed = self.repository.list(TENANT)
+
+        self.assertEqual(
+            ["message-3f", "message-a"],
+            [message.message_id for message in listed],
+        )
+
+    def test_a_blank_tenant_is_refused_on_a_list_read(self):
+        with self.assertRaises(CampaignMessageVersionTenantBoundaryError):
+            self.repository.list("")
+
     def test_an_unknown_message_resolves_to_none(self):
         self.repository.save(approved_campaign_message())
 

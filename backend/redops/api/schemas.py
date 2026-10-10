@@ -1823,6 +1823,200 @@ class OfferListResponse(BaseModel):
     offers: list[OfferVersionResponse]
 
 
+class CampaignMessageResponse(BaseModel):
+    """One approved stage 6 campaign message with its full stored content.
+
+    The asset review panel (spec §3.1) renders the message's twelve canonical
+    parts verbatim, so the read surface projects every content field the
+    aggregate stores -- avatar, currency, problem, promise, CTA, problem
+    hierarchy, desired outcome, proof and objections, story, method
+    explanation, lead magnet, hook, angles, landing message and the Authority
+    Amplifier outline -- plus the refs it carries (the pinned method reference
+    and the grounding offer id) and the approval state the aggregate exposes,
+    so approved entities can be marked in the panel.
+    """
+
+    message_id: str
+    tenant_id: str
+    owner: str
+    avatar: str
+    currency: str
+    problem: str
+    promise: str
+    cta: str
+    problem_hierarchy: list[str]
+    desired_outcome: str
+    proof_objections: list[str]
+    story: str
+    method_explanation: str
+    lead_magnet: str
+    hook: str
+    angles: list[str]
+    landing_message: str
+    authority_amplifier_outline: str
+    product_offer_id: str
+    method_ref: MethodReferenceResponse
+    offer_id: str
+    state: str
+    is_approved: bool
+    review_reason: str | None
+
+
+class CampaignMessageListResponse(BaseModel):
+    """A paginated page of one client tenant's approved campaign messages."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    messages: list[CampaignMessageResponse]
+
+
+class ScriptSectionResponse(BaseModel):
+    """One canonical script section of a stage 7 amplifier (kind and content)."""
+
+    kind: str
+    content: str
+
+
+class AmplifierApprovalResponse(BaseModel):
+    """One version-scoped stage 7 amplifier approval (script or creative)."""
+
+    approved_by: str
+    intended_use: str
+    approved_on: date
+
+
+class VisualProductionPackageResponse(BaseModel):
+    """The stage 7 visual and video asset references produced after script approval."""
+
+    storyboard: str
+    brand_treatment: str
+    presentation: str
+    speaker_notes: str
+    recording: str
+    edited_video: str
+    hosted_video: str
+    player_assets: str
+
+
+class AuthorityAmplifierResponse(BaseModel):
+    """One approved stage 7 amplifier with its script, visuals and approvals.
+
+    The asset review panel (spec §3.1) renders the script sections in their
+    canonical Promise, Proof, Problems, Steps, Context, Action order with each
+    section's content, the visual and video asset references, and the two
+    distinct approvals the aggregate exposes, so approved entities can be
+    marked. The grounding stage 6 message and its method and offer references
+    are surfaced as ids so the panel can link the dependency chain without
+    restating their content.
+    """
+
+    amplifier_id: str
+    tenant_id: str
+    owner: str
+    message_id: str
+    method_ref: MethodReferenceResponse
+    offer_id: str
+    script: list[ScriptSectionResponse]
+    proof_claim_ids: list[str]
+    visuals: VisualProductionPackageResponse | None
+    script_approval: AmplifierApprovalResponse | None
+    creative_approval: AmplifierApprovalResponse | None
+    state: str
+    is_script_approved: bool
+    is_approved: bool
+    is_terminal: bool
+    review_reason: str | None
+
+
+class AuthorityAmplifierListResponse(BaseModel):
+    """A paginated page of one client tenant's approved authority amplifiers."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    amplifiers: list[AuthorityAmplifierResponse]
+
+
+class FunnelAssetRefsResponse(BaseModel):
+    """The thirteen canonical stage 8 funnel asset references."""
+
+    campaign_architecture: str
+    pages: str
+    forms: str
+    qualification: str
+    booking: str
+    sequences: str
+    crm: str
+    tags: str
+    automation: str
+    analytics: str
+    tracking: str
+    sales_handoff: str
+    sops: str
+
+
+class HandoffRecordResponse(BaseModel):
+    """One recorded capture, engagement or conversion handoff of the dry run."""
+
+    kind: str
+    outcome: str
+    record_id: str
+    owner: str
+    detail: str
+
+
+class ProspectPathDryRunResponse(BaseModel):
+    """The pinned prospect path dry run: the funnel's routing evidence."""
+
+    dry_run_id: str
+    handoffs: list[HandoffRecordResponse]
+
+
+class FunnelIntegrationResponse(BaseModel):
+    """One completed stage 8 funnel integration with its assets and routing.
+
+    The asset review panel (spec §3.1) renders the funnel's thirteen canonical
+    asset references and its routing, so the read surface projects the stored
+    ``FunnelAssetPackage`` verbatim and the pinned ``ProspectPathDryRun`` (the
+    funnel's routing evidence) with each handoff's outcome, record and owner,
+    plus the state flags the aggregate exposes. The grounding stage 7
+    amplifier, its stage 6 message and their method and offer references are
+    surfaced as ids so the panel can link the dependency chain.
+
+    Spec deviation (asset-review-and-approval-ui §4.1): the funnel aggregate
+    carries no ``configuration_digest``, ``rollback_ref`` or ``released_kinds``;
+    those live on the ``JourneyRelease`` aggregate and are already served by
+    ``GET /red/journeys``, so they are not restated here.
+    """
+
+    integration_id: str
+    tenant_id: str
+    owner: str
+    amplifier_id: str
+    message_id: str
+    method_ref: MethodReferenceResponse
+    offer_id: str
+    assets: FunnelAssetRefsResponse
+    routing: ProspectPathDryRunResponse | None
+    state: str
+    is_complete: bool
+    is_terminal: bool
+    review_reason: str | None
+
+
+class FunnelListResponse(BaseModel):
+    """A paginated page of one client tenant's completed funnel integrations."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    funnels: list[FunnelIntegrationResponse]
+
+
 class CreateBuildRequest(BaseModel):
     """Record one production work item with a named owner and next action.
 
@@ -1897,7 +2091,9 @@ class DecisionRecordResponse(BaseModel):
     governance decision record for the gated pipeline, so the read surface
     projects its disposition, reviewer, intended scope, the exact pinned asset
     versions and the next action; the exact asset content is retrieved through
-    the gate seam, not re-declared here.
+    the gate seam, not re-declared here. The checkpoint evidence is projected
+    too, so the asset review panel (spec §3.1) can show what was presented at
+    the checkpoint alongside the rationale.
     """
 
     stage_number: int
@@ -1907,6 +2103,7 @@ class DecisionRecordResponse(BaseModel):
     reviewer: str
     scope: str
     rationale: str
+    checkpoint_evidence: str
     decided_on: date
     assigned_owner: str
     due_on: date

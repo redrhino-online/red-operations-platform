@@ -85,6 +85,16 @@ class InMemoryAuthorityAmplifierRepository(AuthorityAmplifierRepository):
         _require_amplifier_tenant(tenant_id, "read")
         return self._amplifiers.get((tenant_id, amplifier_id))
 
+    def list(self, tenant_id: str) -> tuple[AuthorityAmplifier, ...]:
+        _require_amplifier_tenant(tenant_id, "read")
+        return tuple(
+            self._amplifiers[key]
+            for key in sorted(
+                (key for key in self._amplifiers if key[0] == tenant_id),
+                key=lambda key: key[1],
+            )
+        )
+
     def save(self, amplifier: AuthorityAmplifier) -> None:
         _require_amplifier_tenant(amplifier.tenant_id, "write")
         if not amplifier.is_approved:
@@ -152,6 +162,21 @@ class PostgresAuthorityAmplifierRepository(AuthorityAmplifierRepository):
         if row is None:
             return None
         return authority_amplifier_from_payload(row[0])
+
+    def list(self, tenant_id: str) -> tuple[AuthorityAmplifier, ...]:
+        _require_amplifier_tenant(tenant_id, "read")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT amplifier
+                FROM authority_amplifiers
+                WHERE tenant_id = %s
+                ORDER BY amplifier_id
+                """,
+                (tenant_id,),
+            )
+            rows = cursor.fetchall()
+        return tuple(authority_amplifier_from_payload(row[0]) for row in rows)
 
     def save(self, amplifier: AuthorityAmplifier) -> None:
         _require_amplifier_tenant(amplifier.tenant_id, "write")

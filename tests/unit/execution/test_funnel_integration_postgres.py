@@ -112,6 +112,22 @@ class PostgresFunnelIntegrationRepositoryTests(unittest.TestCase):
         self.assertTrue(reloaded.amplifier.is_approved)
         self.assertTrue(reloaded.dry_run.is_complete)
 
+    def test_list_returns_the_tenant_rows_ordered_by_integration_id(self):
+        second = complete_funnel(integration_id="funnel-a")
+        self.repository.save(complete_funnel())
+        self.repository.save(second)
+
+        listed = self.repository.list(TENANT)
+
+        self.assertEqual(
+            ["funnel-3f", "funnel-a"],
+            [funnel.integration_id for funnel in listed],
+        )
+
+    def test_a_blank_tenant_is_refused_on_a_list_read(self):
+        with self.assertRaises(FunnelVersionTenantBoundaryError):
+            self.repository.list("")
+
     def test_an_unknown_funnel_resolves_to_none(self):
         self.repository.save(complete_funnel())
 

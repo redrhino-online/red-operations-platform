@@ -502,6 +502,37 @@ async function redGet<T>(path: string, params: Record<string, string>): Promise<
   return (await res.json()) as T;
 }
 
+// The write twin of `redGet`: same base and path handling with a JSON body. A
+// failure raises with the backend's own error detail when it provides one (a
+// FastAPI string detail or the `{error, message}` dict the domain refusals
+// use), so a caller renders the refusal verbatim and never re-derives it.
+async function redPost<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${redApiBase()}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await redRequestError(res));
+  }
+  return (await res.json()) as T;
+}
+
+async function redRequestError(res: Response): Promise<string> {
+  try {
+    const parsed = (await res.json()) as { detail?: unknown };
+    const detail = parsed?.detail;
+    if (typeof detail === "string" && detail !== "") return detail;
+    if (detail !== null && typeof detail === "object") {
+      const message = (detail as { message?: unknown }).message;
+      if (typeof message === "string" && message !== "") return message;
+    }
+  } catch {
+    // Not a JSON error body; fall through to the status-only message.
+  }
+  return `RED request failed (${res.status})`;
+}
+
 // The command center read (SPEC.md sections 7 and 8). Tenant, engagement and the
 // evaluation date are all required by the backend, which refuses an unscoped
 // query; the route is read-only, so listing a card authorizes no action.
@@ -657,4 +688,349 @@ export function listAwaitingApprovals(
     `/red/clients/${encodeURIComponent(tenantId)}/workflows/awaiting-approval`,
     {},
   );
+}
+
+// One stored campaign message with its full stage 6 content (asset review and
+// approval spec sections 4.1 and 5). Mirrors the tenant-scoped list route
+// `GET /red/messages`. The fields are tolerant: the backend may omit any
+// optional content field and the panel renders only what an aggregate carries.
+export interface MessageRecord {
+  message_id: string;
+  owner?: string | null;
+  avatar?: string | null;
+  currency?: string | null;
+  problem?: string | null;
+  promise?: string | null;
+  cta?: string | null;
+  problem_hierarchy?: string[];
+  desired_outcome?: string | null;
+  proof_objections?: string[];
+  story?: string | null;
+  method_explanation?: string | null;
+  lead_magnet?: string | null;
+  hook?: string | null;
+  angles?: string[];
+  landing_message?: string | null;
+  authority_amplifier_outline?: string | null;
+  product_offer_id?: string | null;
+  is_approved?: boolean | null;
+}
+
+export interface MessageList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  messages: MessageRecord[];
+}
+
+// One stored authority amplifier with its script sections and visual refs
+// (asset review and approval spec sections 4.1 and 5). Mirrors the
+// tenant-scoped list route `GET /red/amplifiers`.
+export interface AmplifierScriptSection {
+  kind: string;
+  content: string;
+}
+
+export interface AmplifierRecord {
+  amplifier_id: string;
+  method_ref?: string | null;
+  offer_ref?: string | null;
+  script_sections?: AmplifierScriptSection[];
+  storyboard?: string | null;
+  recording?: string | null;
+  edited_video?: string | null;
+  hosted_video?: string | null;
+  player_assets?: string[];
+  is_approved?: boolean | null;
+}
+
+export interface AmplifierList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  amplifiers: AmplifierRecord[];
+}
+
+// One stored funnel integration with its asset references and routing (asset
+// review and approval spec sections 4.1 and 5). Mirrors the tenant-scoped list
+// route `GET /red/funnels`.
+export interface FunnelAssetRef {
+  asset_id: string;
+  kind?: string | null;
+  version?: number | null;
+}
+
+export interface FunnelRecord {
+  funnel_id: string;
+  asset_refs?: FunnelAssetRef[];
+  routing?: string | null;
+  is_released?: boolean | null;
+  is_authorized?: boolean | null;
+  is_approved?: boolean | null;
+}
+
+export interface FunnelList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  funnels: FunnelRecord[];
+}
+
+// One append-only governance decision read from the durable ledger (asset
+// review and approval spec section 3.1). Mirrors `DecisionRecordResponse` in
+// `backend/redops/api/schemas.py`; `checkpoint_evidence` is optional because a
+// decision may predate the evidence field.
+export interface DecisionRecord {
+  stage_number: number;
+  checkpoint: string;
+  disposition: string;
+  reviewer: string;
+  scope: string;
+  rationale: string;
+  checkpoint_evidence?: string | null;
+  decided_on?: string | null;
+  required_assets: AssetVersion[];
+}
+
+export interface DecisionList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  decisions: DecisionRecord[];
+}
+
+// The campaign message read (asset review and approval spec section 4.1). The
+// tenant is a required query scope and the route is read-only; listing the
+// stored messages approves nothing.
+export function listMessages(tenantId: string): Promise<MessageList> {
+  return redGet<MessageList>("/red/messages", { tenant_id: tenantId });
+}
+
+// The authority amplifier read (asset review and approval spec section 4.1).
+// The tenant is a required query scope and the route is read-only; listing the
+// stored amplifiers approves nothing.
+export function listAmplifiers(tenantId: string): Promise<AmplifierList> {
+  return redGet<AmplifierList>("/red/amplifiers", { tenant_id: tenantId });
+}
+
+// The funnel integration read (asset review and approval spec section 4.1).
+// The tenant is a required query scope and the route is read-only; listing the
+// stored funnels releases nothing.
+export function listFunnels(tenantId: string): Promise<FunnelList> {
+  return redGet<FunnelList>("/red/funnels", { tenant_id: tenantId });
+}
+
+// The governance decision history read (asset review and approval spec section
+// 3.1). The tenant is a required query scope and the route is read-only; the
+// ledger is append-only, so reading it changes no decision.
+export function listDecisions(tenantId: string): Promise<DecisionList> {
+  return redGet<DecisionList>("/red/decisions", { tenant_id: tenantId });
+}
+
+// The stage gate schema read (asset review and approval spec section 4.2). The
+// schema describes exactly the body `POST /red/clients/{t}/stages/{n}/gate`
+// accepts, so the form renders it and re-implements no validation rule.
+export type GateSchema = Record<string, unknown>;
+
+export function getGateSchema(stageNumber: number): Promise<GateSchema> {
+  return redGet<GateSchema>(`/red/stages/${stageNumber}/gate-schema`, {});
+}
+
+// The workflow approval write (asset review and approval spec section 3.2).
+// The backend validates the actor against the workspace authority registry and
+// refuses a run whose gate has no passing decision; the UI renders whatever
+// error the backend returns and re-implements no approval rule.
+export function approveWorkflowRun(
+  tenantId: string,
+  runId: string,
+  actor: string,
+  reason: string,
+): Promise<unknown> {
+  return redPost(
+    `/red/clients/${encodeURIComponent(tenantId)}/workflows/${encodeURIComponent(
+      runId,
+    )}/approval`,
+    { actor, reason },
+  );
+}
+
+// The stage gate write (asset review and approval spec section 3.3). The body
+// is the stage's typed gate request, assembled by the schema-driven form; the
+// backend remains the sole enforcer of prerequisites and authority.
+export function recordStageGate(
+  tenantId: string,
+  stageNumber: number,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  return redPost(
+    `/red/clients/${encodeURIComponent(tenantId)}/stages/${stageNumber}/gate`,
+    body,
+  );
+}
+
+// The content source a pinned asset kind resolves to (asset review and
+// approval spec section 5), derived from the canonical stage template kinds in
+// `backend/redops/contexts/governance/domain/templates.py`. Kinds absent from
+// the map — the stage 0 intake, stage 1 diagnose, stage 2 position and stage 4
+// IP-architecture kinds, plus any unlisted kind — have no stored content
+// source and render provenance only. `swimlanes-plan` appears in both the
+// stage 8 and stage 9 template lists; the stage 8 funnel source wins, matching
+// template order.
+export type AssetContentSource =
+  | "methods"
+  | "offers"
+  | "messages"
+  | "amplifiers"
+  | "funnels"
+  | "launch-qas"
+  | "measurements";
+
+export const ASSET_CONTENT_SOURCES: Readonly<
+  Record<string, AssetContentSource>
+> = {
+  // Stage 3 Model kinds → /red/methods.
+  "profit-pyramid-levels": "methods",
+  "observable-measures": "methods",
+  "level-symptoms": "methods",
+  "level-behaviors": "methods",
+  "level-problems": "methods",
+  progression: "methods",
+  "qualification-logic": "methods",
+  "diagnostic-model-name": "methods",
+  "diagnostic-model-visual": "methods",
+  "diagnostic-model-copy": "methods",
+  // Stage 5 Productize kinds → /red/offers.
+  "delivery-model": "offers",
+  duration: "offers",
+  modules: "offers",
+  responsibilities: "offers",
+  "support-cadence": "offers",
+  "stage-deliverables": "offers",
+  "outcome-measures": "offers",
+  "pricing-payments": "offers",
+  scope: "offers",
+  "guarantee-decision": "offers",
+  eligibility: "offers",
+  "offer-stack": "offers",
+  "product-program": "offers",
+  // Stage 6 Message kinds → /red/messages.
+  promise: "messages",
+  "problem-hierarchy": "messages",
+  "desired-outcome": "messages",
+  "proof-objections": "messages",
+  story: "messages",
+  "method-explanation": "messages",
+  cta: "messages",
+  "lead-magnet": "messages",
+  hook: "messages",
+  angles: "messages",
+  "landing-message": "messages",
+  "authority-amplifier-outline": "messages",
+  "content-roadmap": "messages",
+  "content-crusher": "messages",
+  "content-plan": "messages",
+  // Stage 7 Produce kinds → /red/amplifiers.
+  "authority-amplifier-script": "amplifiers",
+  "aa-storyboard": "amplifiers",
+  "brand-treatment": "amplifiers",
+  "aa-presentation": "amplifiers",
+  "aa-speaker-notes": "amplifiers",
+  "aa-recording": "amplifiers",
+  "aa-edited-video": "amplifiers",
+  "aa-hosted-video": "amplifiers",
+  "aa-player-assets": "amplifiers",
+  // Stage 8 Integrate kinds → /red/funnels.
+  "campaign-architecture": "funnels",
+  pages: "funnels",
+  forms: "funnels",
+  qualification: "funnels",
+  booking: "funnels",
+  sequences: "funnels",
+  crm: "funnels",
+  tags: "funnels",
+  automation: "funnels",
+  analytics: "funnels",
+  tracking: "funnels",
+  "sales-handoff": "funnels",
+  sops: "funnels",
+  "swimlanes-plan": "funnels",
+  // Stage 9 QA kinds → /red/launch-qas.
+  "recorded-message": "launch-qas",
+  "technical-tests": "launch-qas",
+  "commercial-tests": "launch-qas",
+  "qa-forms": "launch-qas",
+  "qa-crm": "launch-qas",
+  "qa-email": "launch-qas",
+  "qa-automation": "launch-qas",
+  "qa-booking": "launch-qas",
+  "qa-tracking": "launch-qas",
+  "qa-payment": "launch-qas",
+  "qa-handoff": "launch-qas",
+  "client-approval": "launch-qas",
+  "budget-approval": "launch-qas",
+  "creative-approval": "launch-qas",
+  "launch-dashboard": "launch-qas",
+  "launch-decision": "launch-qas",
+  "compliance-package": "launch-qas",
+  "enrollment-plan": "launch-qas",
+  "client-process": "launch-qas",
+  // Stage 10 Launch kinds → /red/measurements.
+  "live-campaign": "measurements",
+  "spend-records": "measurements",
+  "lead-records": "measurements",
+  "conversion-measures": "measurements",
+  "engagement-measures": "measurements",
+  applications: "measurements",
+  bookings: "measurements",
+  shows: "measurements",
+  closes: "measurements",
+  "acquisition-cost": "measurements",
+  attribution: "measurements",
+  "issue-log": "measurements",
+  "nurture-plan": "measurements",
+};
+
+export function contentSourceForKind(kind: string): AssetContentSource | null {
+  return ASSET_CONTENT_SOURCES[kind] ?? null;
+}
+
+// The stored content entities for one asset kind's mapped source (asset review
+// and approval spec sections 3.1 and 5). The panel renders the matching
+// group's entities and marks the ones whose approval state is approved.
+export type AssetContentEntry =
+  | { source: "methods"; methods: MethodVersion[] }
+  | { source: "offers"; offers: OfferVersion[] }
+  | { source: "messages"; messages: MessageRecord[] }
+  | { source: "amplifiers"; amplifiers: AmplifierRecord[] }
+  | { source: "funnels"; funnels: FunnelRecord[] }
+  | { source: "launch-qas"; launch_qas: LaunchQA[] }
+  | { source: "measurements"; records: MeasurementRecord[] };
+
+// The tenant's stored entities for one mapped content source, reusing the
+// existing list getters; the panel shows the group, not a single pinned entity,
+// because gate decisions record kinds rather than content entity ids.
+export async function listAssetContent(
+  tenantId: string,
+  source: AssetContentSource,
+): Promise<AssetContentEntry> {
+  switch (source) {
+    case "methods":
+      return { source, methods: (await listMethods(tenantId)).methods };
+    case "offers":
+      return { source, offers: (await listOffers(tenantId)).offers };
+    case "messages":
+      return { source, messages: (await listMessages(tenantId)).messages };
+    case "amplifiers":
+      return { source, amplifiers: (await listAmplifiers(tenantId)).amplifiers };
+    case "funnels":
+      return { source, funnels: (await listFunnels(tenantId)).funnels };
+    case "launch-qas":
+      return { source, launch_qas: (await listLaunchQAs(tenantId)).launch_qas };
+    case "measurements":
+      return { source, records: (await listMeasurements(tenantId)).records };
+  }
 }

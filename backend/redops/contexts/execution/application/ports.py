@@ -38,6 +38,10 @@ class FunnelIntegrationRepository(abc.ABC):
         """Return the exact completed funnel, or ``None`` if unknown."""
 
     @abc.abstractmethod
+    def list(self, tenant_id: str) -> tuple[FunnelIntegration, ...]:
+        """Return the tenant's completed funnels, ordered by integration id."""
+
+    @abc.abstractmethod
     def save(self, funnel: FunnelIntegration) -> None:
         """Store a completed funnel, refusing a different same-id body."""
 

@@ -7,12 +7,18 @@
 // version it sealed and the exact diff against the previous version of the same
 // asset. The diff is computed only from the append-only approval records the
 // backend already returns; it asserts no approval rule, resolves no asset
-// content and grants no authority. The backend owns the gate, so the inbox can
-// approve nothing.
+// content and grants no authority. Pending pipeline gates gain an Approve
+// control (asset review and approval spec section 3.2): the form collects the
+// actor and a required reason, the backend validates both against the
+// workspace's authority registry, and a refusal is rendered verbatim with no
+// optimistic state change.
 
-import type {
-  ApprovalRecord,
-  AwaitingApprovalRun,
+import { useState } from "react";
+
+import {
+  approveWorkflowRun,
+  type ApprovalRecord,
+  type AwaitingApprovalRun,
 } from "@/lib/redOperationsApi";
 
 export interface ApprovalInboxProps {
@@ -21,6 +27,12 @@ export interface ApprovalInboxProps {
   error?: string | null;
   tenantId?: string;
   awaiting?: AwaitingApprovalRun[];
+  // The actors registered in the selected workspace's authority registry
+  // (GET /red/clients); they prefill the Approve form's actor suggestions.
+  authorities?: string[];
+  // Refresh path wired by the screen; called after a successful approval so
+  // the pending list re-reads and the approved run leaves it.
+  onApproved?: () => void;
 }
 
 // One field that changed between two versions of the same pinned asset, with
@@ -148,9 +160,51 @@ export function ApprovalInbox({
   error = null,
   tenantId,
   awaiting = [],
+  authorities = [],
+  onApproved,
 }: ApprovalInboxProps) {
   const histories = approvalHistories(approvals);
   const pending = pendingGateApprovals(awaiting);
+  const [approvingRunId, setApprovingRunId] = useState<string | null>(null);
+  const [actor, setActor] = useState("");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [approvedRunId, setApprovedRunId] = useState<string | null>(null);
+
+  const openApprove = (run: AwaitingApprovalRun) => {
+    setApprovingRunId(run.run_id);
+    setActor("");
+    setReason("");
+    setSubmitError(null);
+    setApprovedRunId(null);
+  };
+
+  const closeApprove = () => {
+    setApprovingRunId(null);
+    setActor("");
+    setReason("");
+    setSubmitError(null);
+  };
+
+  const submitApproval = (run: AwaitingApprovalRun) => {
+    if (!tenantId || submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    approveWorkflowRun(tenantId, run.run_id, actor, reason)
+      .then(() => {
+        setSubmitting(false);
+        closeApprove();
+        setApprovedRunId(run.run_id);
+        onApproved?.();
+      })
+      .catch((err) => {
+        setSubmitting(false);
+        setSubmitError(
+          err instanceof Error ? err.message : "Failed to approve the run",
+        );
+      });
+  };
 
   return (
     <section aria-labelledby="approval-inbox-heading">
@@ -190,6 +244,15 @@ export function ApprovalInbox({
           {pending.length} pipeline gate{pending.length === 1 ? "" : "s"} waiting
           for their RED approval
         </p>
+        {approvedRunId ? (
+          <p
+            role="status"
+            data-testid="approve-confirmation"
+            className="mt-2 text-xs text-fg"
+          >
+            Run {approvedRunId} approved.
+          </p>
+        ) : null}
         {pending.length === 0 ? (
           <p className="mt-2 text-sm text-fg-muted">
             No pipeline gate is waiting for an approval.
@@ -210,6 +273,75 @@ export function ApprovalInbox({
                   Run: {run.run_id} | Committed:{" "}
                   {run.completed_steps.join(", ") || "none"}
                 </p>
+                {approvingRunId === run.run_id ? (
+                  <form
+                    data-testid={`approve-form-${run.run_id}`}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      submitApproval(run);
+                    }}
+                    className="mt-3 space-y-2"
+                  >
+                    <label className="text-xs text-fg-muted flex items-center gap-2">
+                      Actor
+                      <input
+                        list={`approve-actor-options-${run.run_id}`}
+                        value={actor}
+                        onChange={(event) => setActor(event.target.value)}
+                        className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg focus:outline-none focus:border-line-strong"
+                      />
+                    </label>
+                    <datalist id={`approve-actor-options-${run.run_id}`}>
+                      {authorities.map((authority) => (
+                        <option key={authority} value={authority} />
+                      ))}
+                    </datalist>
+                    <label className="text-xs text-fg-muted flex flex-col gap-1">
+                      Reason
+                      <textarea
+                        required
+                        rows={3}
+                        value={reason}
+                        onChange={(event) => setReason(event.target.value)}
+                        className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg focus:outline-none focus:border-line-strong"
+                      />
+                    </label>
+                    {submitError ? (
+                      <p
+                        role="alert"
+                        data-testid={`approve-error-${run.run_id}`}
+                        className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-400"
+                      >
+                        {submitError}
+                      </p>
+                    ) : null}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={submitting}
+                        className="rounded-lg border border-line bg-surface-overlay px-3 py-1.5 text-xs font-medium text-fg hover:border-line-strong focus:outline-none focus:border-line-strong"
+                      >
+                        Confirm approval
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeApprove}
+                        className="rounded-lg border border-line bg-surface-overlay px-3 py-1.5 text-xs font-medium text-fg hover:border-line-strong focus:outline-none focus:border-line-strong"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid={`approve-${run.run_id}`}
+                    onClick={() => openApprove(run)}
+                    className="mt-2 rounded-lg border border-line bg-surface-overlay px-3 py-1.5 text-xs font-medium text-fg hover:border-line-strong focus:outline-none focus:border-line-strong"
+                  >
+                    Approve
+                  </button>
+                )}
               </li>
             ))}
           </ul>

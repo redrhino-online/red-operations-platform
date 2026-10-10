@@ -112,6 +112,22 @@ class PostgresAuthorityAmplifierRepositoryTests(unittest.TestCase):
         self.assertTrue(reloaded.message.is_approved)
         self.assertIsNotNone(reloaded.visuals)
 
+    def test_list_returns_the_tenant_rows_ordered_by_amplifier_id(self):
+        second = approved_amplifier(amplifier_id="amplifier-a")
+        self.repository.save(approved_amplifier())
+        self.repository.save(second)
+
+        listed = self.repository.list(TENANT)
+
+        self.assertEqual(
+            ["amplifier-3f", "amplifier-a"],
+            [amplifier.amplifier_id for amplifier in listed],
+        )
+
+    def test_a_blank_tenant_is_refused_on_a_list_read(self):
+        with self.assertRaises(AuthorityAmplifierVersionTenantBoundaryError):
+            self.repository.list("")
+
     def test_an_unknown_amplifier_resolves_to_none(self):
         self.repository.save(approved_amplifier())
 

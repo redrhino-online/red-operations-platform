@@ -155,6 +155,9 @@ class GovernanceReadRouteTests(unittest.TestCase):
         self.assertEqual(SCOPE, decision["scope"])
         self.assertEqual(TENANT, decision["tenant_id"])
         self.assertEqual(ON, decision["decided_on"])
+        self.assertEqual(
+            "all twelve stage 0 assets reviewed", decision["checkpoint_evidence"]
+        )
 
         from redops.contexts.engagement.domain.value_objects import (
             CANONICAL_INTAKE_KINDS,

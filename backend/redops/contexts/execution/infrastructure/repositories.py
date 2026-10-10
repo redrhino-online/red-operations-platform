@@ -89,6 +89,16 @@ class InMemoryFunnelIntegrationRepository(FunnelIntegrationRepository):
         _require_funnel_tenant(tenant_id, "read")
         return self._funnels.get((tenant_id, integration_id))
 
+    def list(self, tenant_id: str) -> tuple[FunnelIntegration, ...]:
+        _require_funnel_tenant(tenant_id, "read")
+        return tuple(
+            self._funnels[key]
+            for key in sorted(
+                (key for key in self._funnels if key[0] == tenant_id),
+                key=lambda key: key[1],
+            )
+        )
+
     def save(self, funnel: FunnelIntegration) -> None:
         _require_funnel_tenant(funnel.tenant_id, "write")
         if not funnel.is_complete:
@@ -156,6 +166,21 @@ class PostgresFunnelIntegrationRepository(FunnelIntegrationRepository):
         if row is None:
             return None
         return funnel_integration_from_payload(row[0])
+
+    def list(self, tenant_id: str) -> tuple[FunnelIntegration, ...]:
+        _require_funnel_tenant(tenant_id, "read")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT funnel
+                FROM funnel_integrations
+                WHERE tenant_id = %s
+                ORDER BY integration_id
+                """,
+                (tenant_id,),
+            )
+            rows = cursor.fetchall()
+        return tuple(funnel_integration_from_payload(row[0]) for row in rows)
 
     def save(self, funnel: FunnelIntegration) -> None:
         _require_funnel_tenant(funnel.tenant_id, "write")

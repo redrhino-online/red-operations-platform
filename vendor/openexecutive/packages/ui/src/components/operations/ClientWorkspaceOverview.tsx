@@ -18,6 +18,13 @@ export interface ClientWorkspaceOverviewProps {
   view: EngagementProductionView | null;
   loading?: boolean;
   error?: string | null;
+  // Selecting an approved-asset pin opens the asset detail panel (asset review
+  // and approval spec section 3.1); the overview itself fetches nothing.
+  onSelectAsset?: (assetId: string) => void;
+  // Opens the schema-driven record-gate form for one stage (asset review and
+  // approval spec section 3.3). Rendered for every stage 0-10; the backend
+  // remains the sole enforcer of prerequisites, expiry and authority.
+  onRecordGate?: (stageNumber: number) => void;
 }
 
 // Provenance: an approved asset is only ever shown at an exact pinned version.
@@ -39,6 +46,8 @@ export function ClientWorkspaceOverview({
   view,
   loading = false,
   error = null,
+  onSelectAsset,
+  onRecordGate,
 }: ClientWorkspaceOverviewProps) {
   return (
     <section aria-labelledby="client-workspace-heading">
@@ -88,6 +97,9 @@ export function ClientWorkspaceOverview({
                   <th scope="col" className="px-3 py-2 font-medium">Owner</th>
                   <th scope="col" className="px-3 py-2 font-medium">Next action</th>
                   <th scope="col" className="px-3 py-2 font-medium">Due</th>
+                  {onRecordGate ? (
+                    <th scope="col" className="px-3 py-2 font-medium">Gate</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -102,7 +114,27 @@ export function ClientWorkspaceOverview({
                       {stage.is_approved ? "approved" : stage.status}
                     </td>
                     <td className="px-3 py-2 text-fg">
-                      {assetPins(stage.approved_assets).join(", ") || "none"}
+                      {stage.approved_assets.length === 0 ? (
+                        "none"
+                      ) : (
+                        <span className="inline-flex flex-wrap gap-x-2 gap-y-1">
+                          {stage.approved_assets.map((asset) => {
+                            const pin = `${asset.asset_id}@v${asset.version}`;
+                            return (
+                              <button
+                                key={pin}
+                                type="button"
+                                data-testid={`asset-pin-${pin}`}
+                                aria-label={`Asset detail for ${asset.asset_id}`}
+                                onClick={() => onSelectAsset?.(asset.asset_id)}
+                                className="rounded border border-line bg-surface px-1.5 py-0.5 text-left text-xs text-fg hover:border-line-strong focus:outline-none focus:border-line-strong"
+                              >
+                                {pin}
+                              </button>
+                            );
+                          })}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-fg">
                       {stage.missing_asset_kinds.join(", ") || "none"}
@@ -113,6 +145,18 @@ export function ClientWorkspaceOverview({
                     </td>
                     <td className="px-3 py-2 text-fg">{stage.next_action || "none"}</td>
                     <td className="px-3 py-2 text-fg">{stage.due_on ?? "no due date"}</td>
+                    {onRecordGate ? (
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          data-testid={`record-gate-${stage.stage_number}`}
+                          onClick={() => onRecordGate(stage.stage_number)}
+                          className="rounded-lg border border-line bg-surface-overlay px-2 py-1 text-xs font-medium text-fg hover:border-line-strong focus:outline-none focus:border-line-strong"
+                        >
+                          Record gate
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

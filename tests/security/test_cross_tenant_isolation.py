@@ -2,8 +2,10 @@
 
 Condition 3 requires that cross tenant isolation holds at the API, retrieval,
 background worker and artifact URL layers. This suite covers the API layer that
-exists in the running platform today: the stage 0-10 gate write routes and the
-production-manager view read route, together with the tenant-scoped
+exists in the running platform today: the stage 0-10 gate write routes, the
+production-manager view read route, and the tenant-scoped content read routes
+for the stored stage 6-8 assets (``/red/messages``, ``/red/amplifiers``,
+``/red/funnels``), together with the tenant-scoped
 ``GateLedgerRepository`` and ``StageRunRepository`` ports they sit on. It drives
 the real FastAPI app over HTTP and proves that a gate decision, a stage run and a
 progress projection recorded for one client are invisible to another client,
@@ -166,6 +168,46 @@ class CrossTenantIsolationTests(unittest.TestCase):
                     OTHER_TENANT,
                 )
             )
+
+    def test_content_read_routes_do_not_leak_another_clients_assets(self) -> None:
+        # Both clients run the full pipeline through their own routes, so each
+        # tenant's message, amplifier and funnel store holds exactly one row.
+        # The seed payloads share asset ids across tenants, so a leak would
+        # show up as a second row (or a foreign tenant_id) in the other
+        # client's page.
+        self._seed_full_pipeline(TENANT)
+        self.driver.register_workspace(OTHER_TENANT)
+        self._seed_full_pipeline(OTHER_TENANT)
+
+        for route, key in (
+            ("/red/messages", "messages"),
+            ("/red/amplifiers", "amplifiers"),
+            ("/red/funnels", "funnels"),
+        ):
+            with self.subTest(route=route):
+                own = self.client.get(route, params={"tenant_id": TENANT})
+                self.assertEqual(200, own.status_code, own.text)
+                self.assertEqual(1, own.json()["total"], own.text)
+                self.assertTrue(
+                    all(
+                        item["tenant_id"] == TENANT
+                        for item in own.json()[key]
+                    ),
+                    own.text,
+                )
+
+                other = self.client.get(
+                    route, params={"tenant_id": OTHER_TENANT}
+                )
+                self.assertEqual(200, other.status_code, other.text)
+                self.assertEqual(1, other.json()["total"], other.text)
+                self.assertTrue(
+                    all(
+                        item["tenant_id"] == OTHER_TENANT
+                        for item in other.json()[key]
+                    ),
+                    other.text,
+                )
 
     def test_an_unscoped_gate_read_is_refused(self) -> None:
         from redops.contexts.governance.domain.errors import (

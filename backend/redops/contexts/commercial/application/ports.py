@@ -64,6 +64,10 @@ class CampaignMessageRepository(abc.ABC):
         """Return the exact approved message, or ``None`` if unknown."""
 
     @abc.abstractmethod
+    def list(self, tenant_id: str) -> tuple[CampaignMessage, ...]:
+        """Return the tenant's approved messages, ordered by message id."""
+
+    @abc.abstractmethod
     def save(self, message: CampaignMessage) -> None:
         """Store an approved message, refusing a different same-id body."""
 

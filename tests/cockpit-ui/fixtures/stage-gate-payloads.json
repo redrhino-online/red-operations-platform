@@ -1,0 +1,4197 @@
+{
+  "0": {
+    "approver": "demo-client-approver",
+    "assets": [
+      {
+        "asset_id": "demo-client-record-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "client-record",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded client-record",
+        "version": 1
+      },
+      {
+        "asset_id": "demo-signed-scope-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "signed-scope",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded signed-scope",
+        "version": 1
+      },
+      {
+        "asset_id": "demo-billing-confirmation-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "billing-confirmation",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded billing-confirmation",
+        "version": 1
+      },
+      {
+        "asset_id": "demo-intake-questionnaire-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "intake-questionnaire",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded intake-questionnaire",
+        "version": 1
+      },
+      {
+        "asset_id": "demo-brand-asset-inventory-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "brand-asset-inventory",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded brand-asset-inventory",
+        "version": 1
+      },
+      {
+        "asset_id": "demo-access-checklist-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "access-checklist",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded access-checklist",
+        "version": 1
+      },
+      {
+        "asset_id": "demo-baseline-measures-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "baseline-measures",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded baseline-measures",
+        "version": 1
+      },
+      {
+        "asset_id": "demo-workspace-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "workspace",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded workspace",
+        "version": 1
+      },
+      {
+        "asset_id": "demo-communication-channel-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "communication-channel",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded communication-channel",
+        "version": 1
+      },
+      {
+        "asset_id": "demo-timeline-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "timeline",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded timeline",
+        "version": 1
+      },
+      {
+        "asset_id": "demo-responsibilities-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "responsibilities",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded responsibilities",
+        "version": 1
+      },
+      {
+        "asset_id": "demo-launch-definition-3f@1",
+        "evidence_claim_ids": [
+          "demo-claim-intake-1"
+        ],
+        "kind": "launch-definition",
+        "owner": "demo-red-principal",
+        "summary": "Demo: recorded launch-definition",
+        "version": 1
+      }
+    ],
+    "assigned_owner": "demo-red-principal",
+    "checkpoint_evidence": "Demo: all stage 0 assets reviewed",
+    "claims": [
+      {
+        "citations": [
+          {
+            "checksum": "sha256:demo-intake",
+            "location": "p.1",
+            "source_id": "demo-source-intake"
+          }
+        ],
+        "claim_id": "demo-claim-intake-1",
+        "confidence_note": "demo: captured during intake",
+        "provenance": "known",
+        "statement": "Demo: intake fact recorded with the client"
+      }
+    ],
+    "correlation_id": "demo-corr-stage-0",
+    "due_on": "2026-10-02",
+    "intake_package_id": "demo-intake-3f",
+    "on": "2026-10-02",
+    "proposed_by": "demo-red-principal",
+    "rationale": "Demo: intake complete and owned",
+    "scope": "stage-1-diagnosis",
+    "stage_owner": "demo-red-principal",
+    "workspace_id": "ws-3f"
+  },
+  "1": {
+    "approver": "demo-client-approver",
+    "assigned_owner": "demo-red-principal",
+    "audience_reach_estimate": {
+      "audience": {
+        "age": "Demo: 35-50",
+        "gender": "all",
+        "interests": [
+          {
+            "kind": "expert",
+            "value": "Demo: small service firm coach"
+          }
+        ],
+        "location": "Demo: United States"
+      },
+      "captured_on": "2026-10-03",
+      "estimate_id": "demo-reach-3f",
+      "estimated_reach": 180000,
+      "owner": "demo-red-principal",
+      "platform": "facebook_audience_insights",
+      "source_note": "Demo: Facebook Audience Insights sizing",
+      "version": 1
+    },
+    "avatar": {
+      "avatar_id": "demo-avatar-3f",
+      "awareness": "problem aware, not solution aware",
+      "consequences_of_inaction": [
+        "Demo: hires then lays off as work dries up"
+      ],
+      "customer_evidence_claim_ids": [
+        "demo-claim-voice-1"
+      ],
+      "demographics": "Demo: 35-50, runs a small local service firm",
+      "goals": [
+        "Demo: predictable qualified demand"
+      ],
+      "name": "Demo: owner-operator of a small service firm",
+      "pains": [
+        "Demo: feast and famine pipeline"
+      ],
+      "psychographics": "Demo: proud of craft, skeptical of marketing",
+      "version": 1,
+      "voice_notes": [
+        "Demo: I cannot plan payroll when the phone is quiet"
+      ]
+    },
+    "awareness_map": {
+      "map_id": "demo-awareness-3f",
+      "message_requirements": [
+        "Demo: lead with the predictable pipeline outcome"
+      ],
+      "primary_level": "problem_aware",
+      "research_evidence": [
+        "Demo: reviews name the unpredictable pipeline"
+      ],
+      "retarget_level": "solution_aware",
+      "version": 1
+    },
+    "business_snapshot": {
+      "business_model": "Demo: project based service work billed hourly",
+      "constraints": [
+        "Demo: two delivery people, no marketing owner"
+      ],
+      "current_offers": [
+        "Demo: hourly support retainer"
+      ],
+      "evidence_claim_ids": [
+        "demo-claim-offer-1"
+      ],
+      "lead_sources": [
+        "Demo: referrals"
+      ],
+      "narrative": "Demo: steady referrals but no predictable pipeline",
+      "snapshot_id": "demo-snapshot-3f",
+      "version": 1
+    },
+    "checkpoint_evidence": "Demo: all nine stage 1 assets reviewed",
+    "claims": [
+      {
+        "citations": [
+          {
+            "checksum": "sha256:demo-diagnosis",
+            "location": "p.2",
+            "source_id": "demo-source-diagnosis"
+          }
+        ],
+        "claim_id": "demo-claim-voice-1",
+        "confidence_note": "demo: captured during diagnosis",
+        "provenance": "known",
+        "statement": "Demo: stage 1 diagnosis fact recorded with the client"
+      },
+      {
+        "citations": [
+          {
+            "checksum": "sha256:demo-diagnosis",
+            "location": "p.2",
+            "source_id": "demo-source-diagnosis"
+          }
+        ],
+        "claim_id": "demo-claim-offer-1",
+        "confidence_note": "demo: captured during diagnosis",
+        "provenance": "known",
+        "statement": "Demo: stage 1 diagnosis fact recorded with the client"
+      },
+      {
+        "citations": [
+          {
+            "checksum": "sha256:demo-diagnosis",
+            "location": "p.2",
+            "source_id": "demo-source-diagnosis"
+          }
+        ],
+        "claim_id": "demo-claim-offer-2",
+        "confidence_note": "demo: captured during diagnosis",
+        "provenance": "known",
+        "statement": "Demo: stage 1 diagnosis fact recorded with the client"
+      }
+    ],
+    "correlation_id": "demo-corr-stage-1",
+    "diagnosis_package_id": "demo-diagnosis-3f",
+    "due_on": "2026-10-02",
+    "offer_funnel_audit": {
+      "audit_id": "demo-audit-3f",
+      "conversion_evidence": [
+        "Demo: quotes are tracked in a spreadsheet"
+      ],
+      "evidence_claim_ids": [
+        "demo-claim-offer-2"
+      ],
+      "funnel_steps": [
+        "Demo: referral",
+        "Demo: call",
+        "Demo: quote",
+        "Demo: project"
+      ],
+      "gaps": [
+        "Demo: no qualification step before the call"
+      ],
+      "narrative": "Demo: the funnel has no owner between referral and quote",
+      "offer_findings": [
+        "Demo: the retainer has no stated outcome"
+      ],
+      "version": 1
+    },
+    "on": "2026-10-02",
+    "proposed_by": "demo-red-principal",
+    "rationale": "Demo: avatar locked and owned",
+    "scope": "stage-2-position",
+    "stage_owner": "demo-red-principal",
+    "target_market_match": {
+      "candidates": [
+        {
+          "market_id": "demo-market-referrals",
+          "name": "Demo: referral-starved service business owners",
+          "passion": "Demo: we have run this play inside the trade",
+          "pathway": "Demo: from a referral drought to a referral partner engine",
+          "problem": "Demo: unpredictable referral flow",
+          "profit": "Demo: they already spend on lead generation",
+          "reachability": "Demo: active in two owner-operator communities"
+        },
+        {
+          "market_id": "demo-market-coaches",
+          "name": "Demo: new executive coaches",
+          "passion": "Demo: we coach this transition",
+          "pathway": "Demo: from no pipeline to a repeatable acquisition engine",
+          "problem": "Demo: no repeatable client acquisition",
+          "profit": "Demo: they invest in their practice",
+          "reachability": "Demo: active in coach communities"
+        }
+      ],
+      "matchmaker_id": "demo-match-3f",
+      "selected_market_id": "demo-market-referrals",
+      "version": 1
+    },
+    "workspace_id": "ws-3f"
+  },
+  "10": {
+    "amplifier": {
+      "amplifier_id": "demo-amplifier-3f",
+      "creative_approval": {
+        "approved_by": "demo-client-authority",
+        "approved_on": "2026-10-03",
+        "intended_use": "Demo: 3f pilot campaign"
+      },
+      "owner": "demo-production-manager",
+      "proof_claim_ids": [
+        "demo-claim-1"
+      ],
+      "script": [
+        {
+          "content": "Demo: promise content",
+          "kind": "promise"
+        },
+        {
+          "content": "Demo: proof content",
+          "kind": "proof"
+        },
+        {
+          "content": "Demo: problems content",
+          "kind": "problems"
+        },
+        {
+          "content": "Demo: steps content",
+          "kind": "steps"
+        },
+        {
+          "content": "Demo: context content",
+          "kind": "context"
+        },
+        {
+          "content": "Demo: action content",
+          "kind": "action"
+        }
+      ],
+      "script_approval": {
+        "approved_by": "demo-production-manager",
+        "approved_on": "2026-10-02",
+        "intended_use": "Demo: 3f pilot campaign"
+      },
+      "visuals": {
+        "brand_treatment": "asset://demo/aa/brand",
+        "edited_video": "asset://demo/aa/edited",
+        "hosted_video": "asset://demo/aa/hosted",
+        "player_assets": "asset://demo/aa/player",
+        "presentation": "asset://demo/aa/slides",
+        "recording": "asset://demo/aa/recording",
+        "speaker_notes": "asset://demo/aa/notes",
+        "storyboard": "asset://demo/aa/storyboard"
+      }
+    },
+    "approver": "demo-client-approver",
+    "assigned_owner": "demo-red-principal",
+    "baseline": {
+      "assets": {
+        "acquisition_cost": "asset://demo/acquisition-cost/3f",
+        "applications": "asset://demo/applications/3f",
+        "attribution": "asset://demo/attribution/3f",
+        "bookings": "asset://demo/bookings/3f",
+        "closes": "asset://demo/closes/3f",
+        "conversion_measures": "asset://demo/conversion/3f",
+        "engagement_measures": "asset://demo/engagement/3f",
+        "issue_log": "asset://demo/issue-log/3f",
+        "lead_records": "asset://demo/leads/3f",
+        "live_campaign": "asset://demo/campaign/3f",
+        "shows": "asset://demo/shows/3f",
+        "spend_records": "asset://demo/spend/3f"
+      },
+      "baseline_id": "demo-baseline-3f",
+      "milestones": [
+        {
+          "kind": "first_qualified_traffic",
+          "observed_on": "2026-10-03",
+          "source": "Demo: analytics://traffic/3f",
+          "status": "observed"
+        },
+        {
+          "kind": "lead",
+          "status": "pending"
+        },
+        {
+          "kind": "appointment",
+          "status": "pending"
+        },
+        {
+          "kind": "sale",
+          "status": "pending"
+        }
+      ],
+      "owner": "demo-baseline-owner"
+    },
+    "baseline_package_id": "demo-baseline-package-3f",
+    "baseline_version": 1,
+    "checkpoint_evidence": "Demo: first qualified traffic observed and recorded",
+    "claims": [
+      {
+        "citations": [
+          {
+            "checksum": "sha256:demo-method",
+            "location": "p.1",
+            "source_id": "demo-source-method"
+          }
+        ],
+        "claim_id": "demo-claim-1",
+        "confidence_note": "demo: directly observed",
+        "provenance": "known",
+        "statement": "Demo: method fact recorded with the client"
+      }
+    ],
+    "correlation_id": "demo-corr-stage-10",
+    "due_on": "2026-10-17",
+    "funnel": {
+      "assets": {
+        "analytics": "asset://demo/funnel/analytics",
+        "automation": "asset://demo/funnel/automation",
+        "booking": "asset://demo/funnel/booking",
+        "campaign_architecture": "asset://demo/funnel/architecture",
+        "crm": "asset://demo/funnel/crm",
+        "forms": "asset://demo/funnel/forms",
+        "pages": "asset://demo/funnel/pages",
+        "qualification": "asset://demo/funnel/qualification",
+        "sales_handoff": "asset://demo/funnel/sales-handoff",
+        "sequences": "asset://demo/funnel/sequences",
+        "sops": "asset://demo/funnel/sops",
+        "tags": "asset://demo/funnel/tags",
+        "tracking": "asset://demo/funnel/tracking"
+      },
+      "dry_run": {
+        "dry_run_id": "demo-dryrun-3f",
+        "handoffs": [
+          {
+            "kind": "capture",
+            "outcome": "routed",
+            "owner": "demo-sdr",
+            "record_id": "demo-record-capture"
+          },
+          {
+            "kind": "engagement",
+            "outcome": "routed",
+            "owner": "demo-setter",
+            "record_id": "demo-record-engagement"
+          },
+          {
+            "kind": "conversion",
+            "outcome": "routed",
+            "owner": "demo-closer",
+            "record_id": "demo-record-conversion"
+          }
+        ]
+      },
+      "integration_id": "demo-funnel-3f",
+      "owner": "demo-integration-manager"
+    },
+    "message": {
+      "angles": [
+        "Demo: referral drought",
+        "Demo: referral engine"
+      ],
+      "authority_amplifier_outline": "Demo: promise, proof, problems, steps, context, action",
+      "avatar": "Demo: owner-operators of small service firms",
+      "cta": "Demo: book a diagnostic call",
+      "currency": "Demo: qualified referrals",
+      "desired_outcome": "Demo: a predictable referral engine",
+      "hook": "Demo: why referrals stall at four a month",
+      "landing_message": "Demo: turn referrals into a system",
+      "lead_magnet": "Demo: referral readiness checklist",
+      "message_id": "demo-message-3f",
+      "method_explanation": "Demo: install the referral network in nine steps",
+      "owner": "demo-message-owner",
+      "problem": "Demo: cannot forecast revenue",
+      "problem_hierarchy": [
+        "Demo: no predictable referral flow",
+        "Demo: referrals depend on luck"
+      ],
+      "product_offer_id": "demo-offer-3f",
+      "promise": "Demo: twice the qualified referrals",
+      "proof_objections": [
+        "Demo: proof: referral partner network",
+        "Demo: objection: no time to build it"
+      ],
+      "story": "Demo: an owner-operator story"
+    },
+    "method": {
+      "approved_by": "demo-client-approver",
+      "approved_on": "2026-10-02",
+      "claims": [
+        "demo-claim-1"
+      ],
+      "currency": "Demo: qualified referrals",
+      "diagnostic_model": {
+        "explanatory_copy": "Demo: two levels placed by referral count",
+        "levels": [
+          {
+            "behaviors": [
+              "Demo: waits for referrals"
+            ],
+            "level_id": "demo-level-stuck",
+            "name": "Demo: stuck",
+            "observable_measures": [
+              "Demo: under 4 per month"
+            ],
+            "problems": [
+              "Demo: cannot forecast revenue"
+            ],
+            "symptoms": [
+              "Demo: quiet months"
+            ]
+          },
+          {
+            "behaviors": [
+              "Demo: runs the network"
+            ],
+            "level_id": "demo-level-scaling",
+            "name": "Demo: scaling",
+            "observable_measures": [
+              "Demo: 12 or more per month"
+            ],
+            "problems": [
+              "Demo: lead flow stalls"
+            ],
+            "symptoms": [
+              "Demo: pipeline visible"
+            ]
+          }
+        ],
+        "model_id": "demo-model-3f",
+        "name": "Demo: growth pyramid",
+        "progression": "Demo: climb by installing the referral network",
+        "qualification_logic": "Demo: rank by monthly referral count",
+        "version": 1,
+        "visual": "Demo: asset://diagnostic/3f-growth-pyramid.png"
+      },
+      "intended_use": "Demo: 3f pilot campaign",
+      "method_id": "demo-method-3f",
+      "parent_method": "Demo: signature-solution",
+      "primary_currency": {
+        "audience": "Demo: owner-operators of small service firms",
+        "currency": "Demo: qualified referrals",
+        "current_measure": "Demo: 4 per month",
+        "desired_measure": "Demo: 12 per month",
+        "mechanism": "Demo: referral partner network",
+        "version": 1
+      },
+      "semantic_version": {
+        "major": 1,
+        "minor": 0,
+        "patch": 0
+      },
+      "stages": [
+        "Demo: diagnose",
+        "Demo: position",
+        "Demo: model"
+      ]
+    },
+    "nurture": {
+      "owner": "demo-campaign-operator",
+      "plan_id": "demo-nurture-3f",
+      "sequences": [
+        {
+          "audience_state": "opted_in_not_booked",
+          "messages": [
+            {
+              "audience_state": "opted_in_not_booked",
+              "message_id": "demo-nurture-1",
+              "modality": "problem",
+              "name": "Demo: what stalls your referrals",
+              "purpose": "Demo: name the problem so the lead recognizes it",
+              "signature_step": "Demo: extract the diagnosis",
+              "subject": "Demo: the referral question you keep avoiding"
+            },
+            {
+              "audience_state": "opted_in_not_booked",
+              "message_id": "demo-nurture-2",
+              "modality": "promotion",
+              "name": "Demo: book a referral diagnostic",
+              "purpose": "Demo: promote the next step",
+              "signature_step": "Demo: extract the diagnosis",
+              "subject": "Demo: your referral diagnostic is open"
+            }
+          ],
+          "sequence_id": "demo-sequence-opted"
+        }
+      ]
+    },
+    "nurture_version": 1,
+    "offer": {
+      "audience": "Demo: owner-operators of small service firms",
+      "delivery": {
+        "delivery_id": "demo-delivery-3f",
+        "delivery_model": "Demo: group coaching program",
+        "duration": "Demo: eight weeks",
+        "eligibility": "Demo: owner-operator with a delivery team",
+        "guarantee_decision": "Demo: no guarantee until results are measured",
+        "modules": [
+          "Demo: one module per named stage"
+        ],
+        "offer_stack": [
+          "Demo: diagnostic offer",
+          "Demo: core program"
+        ],
+        "outcome_measures": [
+          "Demo: qualified conversations per month"
+        ],
+        "pricing_payments": "Demo: outcome based fee in three payments",
+        "responsibilities": [
+          "Demo: RED builds the machine",
+          "Demo: client serves"
+        ],
+        "scope": "Demo: the full nine step transformation",
+        "signature_solution": {
+          "final_state": "Demo: state-9",
+          "narrative": "Demo: nine named stages move the client across three phases",
+          "phases": [
+            {
+              "name": "Demo: extract",
+              "phase_id": "demo-phase-extract",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-0"
+                  ],
+                  "final_state": "Demo: state-1",
+                  "inputs": [
+                    "Demo: input-0"
+                  ],
+                  "name": "Demo: extract the diagnosis",
+                  "outputs": [
+                    "Demo: output-0"
+                  ],
+                  "starting_state": "Demo: state-0",
+                  "step_id": "demo-step-0"
+                },
+                {
+                  "actions": [
+                    "Demo: action-1"
+                  ],
+                  "final_state": "Demo: state-2",
+                  "inputs": [
+                    "Demo: input-1"
+                  ],
+                  "name": "Demo: draft the map",
+                  "outputs": [
+                    "Demo: output-1"
+                  ],
+                  "starting_state": "Demo: state-1",
+                  "step_id": "demo-step-1"
+                },
+                {
+                  "actions": [
+                    "Demo: action-2"
+                  ],
+                  "final_state": "Demo: state-3",
+                  "inputs": [
+                    "Demo: input-2"
+                  ],
+                  "name": "Demo: name the phases",
+                  "outputs": [
+                    "Demo: output-2"
+                  ],
+                  "starting_state": "Demo: state-2",
+                  "step_id": "demo-step-2"
+                }
+              ]
+            },
+            {
+              "name": "Demo: content",
+              "phase_id": "demo-phase-content",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-3"
+                  ],
+                  "final_state": "Demo: state-4",
+                  "inputs": [
+                    "Demo: input-3"
+                  ],
+                  "name": "Demo: write the steps",
+                  "outputs": [
+                    "Demo: output-3"
+                  ],
+                  "starting_state": "Demo: state-3",
+                  "step_id": "demo-step-3"
+                },
+                {
+                  "actions": [
+                    "Demo: action-4"
+                  ],
+                  "final_state": "Demo: state-5",
+                  "inputs": [
+                    "Demo: input-4"
+                  ],
+                  "name": "Demo: bind the inputs",
+                  "outputs": [
+                    "Demo: output-4"
+                  ],
+                  "starting_state": "Demo: state-4",
+                  "step_id": "demo-step-4"
+                },
+                {
+                  "actions": [
+                    "Demo: action-5"
+                  ],
+                  "final_state": "Demo: state-6",
+                  "inputs": [
+                    "Demo: input-5"
+                  ],
+                  "name": "Demo: define the actions",
+                  "outputs": [
+                    "Demo: output-5"
+                  ],
+                  "starting_state": "Demo: state-5",
+                  "step_id": "demo-step-5"
+                }
+              ]
+            },
+            {
+              "name": "Demo: expand",
+              "phase_id": "demo-phase-expand",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-6"
+                  ],
+                  "final_state": "Demo: state-7",
+                  "inputs": [
+                    "Demo: input-6"
+                  ],
+                  "name": "Demo: pin the outputs",
+                  "outputs": [
+                    "Demo: output-6"
+                  ],
+                  "starting_state": "Demo: state-6",
+                  "step_id": "demo-step-6"
+                },
+                {
+                  "actions": [
+                    "Demo: action-7"
+                  ],
+                  "final_state": "Demo: state-8",
+                  "inputs": [
+                    "Demo: input-7"
+                  ],
+                  "name": "Demo: write the narrative",
+                  "outputs": [
+                    "Demo: output-7"
+                  ],
+                  "starting_state": "Demo: state-7",
+                  "step_id": "demo-step-7"
+                },
+                {
+                  "actions": [
+                    "Demo: action-8"
+                  ],
+                  "final_state": "Demo: state-9",
+                  "inputs": [
+                    "Demo: input-8"
+                  ],
+                  "name": "Demo: draw the visual",
+                  "outputs": [
+                    "Demo: output-8"
+                  ],
+                  "starting_state": "Demo: state-8",
+                  "step_id": "demo-step-8"
+                }
+              ]
+            }
+          ],
+          "process_inventory": [
+            "Demo: discovery",
+            "Demo: build",
+            "Demo: launch"
+          ],
+          "solution_id": "demo-signature-3f",
+          "starting_state": "Demo: state-0",
+          "transformation_map": "Demo: from referral chaos to predictable demand",
+          "version": 1,
+          "visual": "Demo: a three lane map with nine labelled stages"
+        },
+        "step_deliveries": [
+          {
+            "action": "Demo: deliver action 0",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 0",
+            "measure": "Demo: measure 0",
+            "step_id": "demo-step-0",
+            "timing": "Demo: week 1"
+          },
+          {
+            "action": "Demo: deliver action 1",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 1",
+            "measure": "Demo: measure 1",
+            "step_id": "demo-step-1",
+            "timing": "Demo: week 2"
+          },
+          {
+            "action": "Demo: deliver action 2",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 2",
+            "measure": "Demo: measure 2",
+            "step_id": "demo-step-2",
+            "timing": "Demo: week 3"
+          },
+          {
+            "action": "Demo: deliver action 3",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 3",
+            "measure": "Demo: measure 3",
+            "step_id": "demo-step-3",
+            "timing": "Demo: week 4"
+          },
+          {
+            "action": "Demo: deliver action 4",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 4",
+            "measure": "Demo: measure 4",
+            "step_id": "demo-step-4",
+            "timing": "Demo: week 5"
+          },
+          {
+            "action": "Demo: deliver action 5",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 5",
+            "measure": "Demo: measure 5",
+            "step_id": "demo-step-5",
+            "timing": "Demo: week 6"
+          },
+          {
+            "action": "Demo: deliver action 6",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 6",
+            "measure": "Demo: measure 6",
+            "step_id": "demo-step-6",
+            "timing": "Demo: week 7"
+          },
+          {
+            "action": "Demo: deliver action 7",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 7",
+            "measure": "Demo: measure 7",
+            "step_id": "demo-step-7",
+            "timing": "Demo: week 8"
+          },
+          {
+            "action": "Demo: deliver action 8",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 8",
+            "measure": "Demo: measure 8",
+            "step_id": "demo-step-8",
+            "timing": "Demo: week 9"
+          }
+        ],
+        "support_cadence": "Demo: weekly training and weekly coaching",
+        "version": 1
+      },
+      "eligibility": "Demo: service businesses with a proven offer",
+      "offer_id": "demo-offer-3f",
+      "owner": "demo-offer-owner",
+      "price_hypothesis": "Demo: USD 7,500",
+      "promise": "Demo: twice the qualified referrals"
+    },
+    "on": "2026-10-03",
+    "proposed_by": "demo-red-principal",
+    "qa": {
+      "authorization": {
+        "authorized_by": "demo-client-authority",
+        "authorized_on": "2026-10-03",
+        "intended_use": "Demo: 3f pilot launch"
+      },
+      "checks": [
+        {
+          "evidence": "Demo: evidence://recorded_message",
+          "kind": "recorded_message",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://technical_desktop",
+          "kind": "technical_desktop",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://technical_mobile",
+          "kind": "technical_mobile",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://commercial_desktop",
+          "kind": "commercial_desktop",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://commercial_mobile",
+          "kind": "commercial_mobile",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://forms",
+          "kind": "forms",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://crm",
+          "kind": "crm",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://email",
+          "kind": "email",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://automation",
+          "kind": "automation",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://booking",
+          "kind": "booking",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://tracking",
+          "kind": "tracking",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://payment",
+          "kind": "payment",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://sales_handoff",
+          "kind": "sales_handoff",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://client_approval",
+          "kind": "client_approval",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://budget",
+          "kind": "budget",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://creative",
+          "kind": "creative",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://dashboard",
+          "kind": "dashboard",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://launch_decision",
+          "kind": "launch_decision",
+          "outcome": "passed"
+        }
+      ],
+      "compliance": {
+        "assets": [
+          {
+            "kind": "gdpr_consent",
+            "reference": "asset://demo/compliance/gdpr_consent",
+            "version": 1
+          },
+          {
+            "kind": "facebook_disclaimer",
+            "reference": "asset://demo/compliance/facebook_disclaimer",
+            "version": 1
+          },
+          {
+            "kind": "income_disclaimer",
+            "reference": "asset://demo/compliance/income_disclaimer",
+            "version": 1
+          },
+          {
+            "kind": "privacy_policy",
+            "reference": "asset://demo/compliance/privacy_policy",
+            "version": 1
+          },
+          {
+            "kind": "terms_of_use",
+            "reference": "asset://demo/compliance/terms_of_use",
+            "version": 1
+          },
+          {
+            "kind": "attorney_review",
+            "reference": "asset://demo/compliance/attorney_review",
+            "version": 1
+          }
+        ],
+        "package_id": "demo-compliance-3f",
+        "target_markets": [
+          "us"
+        ]
+      },
+      "designated_authority": "demo-client-authority",
+      "owner": "demo-qa-owner",
+      "qa_id": "demo-qa-3f"
+    },
+    "rationale": "Demo: the baseline is grounded on the authorized launch",
+    "scope": "stage-10-baseline",
+    "stage_owner": "demo-red-principal",
+    "workspace_id": "ws-3f"
+  },
+  "2": {
+    "approver": "demo-client-approver",
+    "assigned_owner": "demo-red-principal",
+    "checkpoint_evidence": "Demo: all ten stage 2 assets reviewed",
+    "correlation_id": "demo-corr-stage-2",
+    "currency_package_id": "demo-currency-3f",
+    "due_on": "2026-10-02",
+    "inventory": {
+      "category": "Demo: marketing operations for service firms",
+      "currencies_to_decrease": [
+        "Demo: cost per lead",
+        "Demo: owner hours"
+      ],
+      "currencies_to_increase": [
+        "Demo: qualified leads",
+        "Demo: margin"
+      ],
+      "inventory_id": "demo-inventory-3f",
+      "version": 1
+    },
+    "million_dollar_message": {
+      "avatar": "Demo: owner-operator of a small local service firm",
+      "currency": "Demo: qualified sales conversations",
+      "message": "Demo: owner-operators of small local service firms get from 3 to 12 qualified sales conversations a month in 90 days without feast-and-famine referrals",
+      "message_id": "demo-mdm-3f",
+      "metric": "Demo: 3 to 12 per month",
+      "pain": "Demo: feast and famine pipeline",
+      "timeline": "Demo: 90 days",
+      "version": 1
+    },
+    "on": "2026-10-02",
+    "positioning": {
+      "core_problem": "Demo: referrals are unpredictable and unmeasurable",
+      "decision_id": "demo-positioning-3f",
+      "disqualifications": [
+        "Demo: wants done-for-you sales calls"
+      ],
+      "horizon": "Demo: 90 days",
+      "qualifications": [
+        "Demo: has a delivery team already"
+      ],
+      "transformation_statement": "Demo: a predictable qualified demand pipeline the owner controls",
+      "version": 1
+    },
+    "primary_currency": {
+      "audience": "Demo: owner-operators of small local service firms",
+      "currency": "Demo: qualified sales conversations",
+      "current_measure": "Demo: 3 per month from referrals",
+      "desired_measure": "Demo: 12 per month on a repeatable path",
+      "mechanism": "Demo: a positioned diagnostic offer with one CTA",
+      "version": 1
+    },
+    "proposed_by": "demo-red-principal",
+    "rationale": "Demo: one primary currency locked and owned",
+    "scope": "stage-3-model",
+    "stage_owner": "demo-red-principal",
+    "workspace_id": "ws-3f"
+  },
+  "3": {
+    "approver": "demo-client-approver",
+    "assigned_owner": "demo-red-principal",
+    "checkpoint_evidence": "Demo: all ten stage 3 assets reviewed",
+    "correlation_id": "demo-corr-stage-3",
+    "diagnostic_package_id": "demo-diagnostic-model-3f",
+    "due_on": "2026-10-02",
+    "model": {
+      "explanatory_copy": "Demo: each tier states its measure and its next move",
+      "levels": [
+        {
+          "behaviors": [
+            "Demo: asks for referrals after delivery"
+          ],
+          "level_id": "demo-level-reference",
+          "name": "Demo: referral dependent",
+          "observable_measures": [
+            "Demo: 3 conversations per month"
+          ],
+          "problems": [
+            "Demo: cannot forecast revenue"
+          ],
+          "symptoms": [
+            "Demo: quiet weeks between projects"
+          ]
+        },
+        {
+          "behaviors": [
+            "Demo: runs one offer inconsistently"
+          ],
+          "level_id": "demo-level-emerging",
+          "name": "Demo: emerging pipeline",
+          "observable_measures": [
+            "Demo: 6 conversations per month"
+          ],
+          "problems": [
+            "Demo: lead flow still spikes and stalls"
+          ],
+          "symptoms": [
+            "Demo: some months fill, some do not"
+          ]
+        },
+        {
+          "behaviors": [
+            "Demo: runs one CTA on a schedule"
+          ],
+          "level_id": "demo-level-systematic",
+          "name": "Demo: systematic demand",
+          "observable_measures": [
+            "Demo: 12 conversations per month"
+          ],
+          "problems": [
+            "Demo: still dependent on the owner"
+          ],
+          "symptoms": [
+            "Demo: pipeline is visible weekly"
+          ]
+        },
+        {
+          "behaviors": [
+            "Demo: delegates the daily funnel checks"
+          ],
+          "level_id": "demo-level-predictable",
+          "name": "Demo: predictable demand",
+          "observable_measures": [
+            "Demo: 12 plus conversations per month"
+          ],
+          "problems": [
+            "Demo: scaling without diluting fit"
+          ],
+          "symptoms": [
+            "Demo: pipeline covers two months out"
+          ]
+        }
+      ],
+      "model_id": "demo-diagnostic-model-3f",
+      "name": "Demo: the predictable pipeline pyramid",
+      "progression": "Demo: each level adds repeatable demand and removes owner dependence",
+      "qualification_logic": "Demo: place by the observable conversations per month",
+      "version": 1,
+      "visual": "Demo: a four step pyramid with one measure per tier"
+    },
+    "on": "2026-10-02",
+    "proposed_by": "demo-red-principal",
+    "rationale": "Demo: levels are distinguishable by observation and owned",
+    "scope": "stage-4-package-ip",
+    "stage_owner": "demo-red-principal",
+    "workspace_id": "ws-3f"
+  },
+  "4": {
+    "approver": "demo-client-approver",
+    "assigned_owner": "demo-red-principal",
+    "checkpoint_evidence": "Demo: all twelve stage 4 assets reviewed",
+    "correlation_id": "demo-corr-stage-4",
+    "due_on": "2026-10-02",
+    "on": "2026-10-02",
+    "proposed_by": "demo-red-principal",
+    "rationale": "Demo: the transformation is coherent and owned",
+    "scope": "stage-5-productize",
+    "signature_package_id": "demo-signature-3f",
+    "solution": {
+      "final_state": "Demo: state-9",
+      "narrative": "Demo: nine named stages move the client across three phases",
+      "phases": [
+        {
+          "name": "Demo: extract",
+          "phase_id": "demo-phase-extract",
+          "steps": [
+            {
+              "actions": [
+                "Demo: action-0"
+              ],
+              "final_state": "Demo: state-1",
+              "inputs": [
+                "Demo: input-0"
+              ],
+              "name": "Demo: extract the diagnosis",
+              "outputs": [
+                "Demo: output-0"
+              ],
+              "starting_state": "Demo: state-0",
+              "step_id": "demo-step-0"
+            },
+            {
+              "actions": [
+                "Demo: action-1"
+              ],
+              "final_state": "Demo: state-2",
+              "inputs": [
+                "Demo: input-1"
+              ],
+              "name": "Demo: draft the map",
+              "outputs": [
+                "Demo: output-1"
+              ],
+              "starting_state": "Demo: state-1",
+              "step_id": "demo-step-1"
+            },
+            {
+              "actions": [
+                "Demo: action-2"
+              ],
+              "final_state": "Demo: state-3",
+              "inputs": [
+                "Demo: input-2"
+              ],
+              "name": "Demo: name the phases",
+              "outputs": [
+                "Demo: output-2"
+              ],
+              "starting_state": "Demo: state-2",
+              "step_id": "demo-step-2"
+            }
+          ]
+        },
+        {
+          "name": "Demo: content",
+          "phase_id": "demo-phase-content",
+          "steps": [
+            {
+              "actions": [
+                "Demo: action-3"
+              ],
+              "final_state": "Demo: state-4",
+              "inputs": [
+                "Demo: input-3"
+              ],
+              "name": "Demo: write the steps",
+              "outputs": [
+                "Demo: output-3"
+              ],
+              "starting_state": "Demo: state-3",
+              "step_id": "demo-step-3"
+            },
+            {
+              "actions": [
+                "Demo: action-4"
+              ],
+              "final_state": "Demo: state-5",
+              "inputs": [
+                "Demo: input-4"
+              ],
+              "name": "Demo: bind the inputs",
+              "outputs": [
+                "Demo: output-4"
+              ],
+              "starting_state": "Demo: state-4",
+              "step_id": "demo-step-4"
+            },
+            {
+              "actions": [
+                "Demo: action-5"
+              ],
+              "final_state": "Demo: state-6",
+              "inputs": [
+                "Demo: input-5"
+              ],
+              "name": "Demo: define the actions",
+              "outputs": [
+                "Demo: output-5"
+              ],
+              "starting_state": "Demo: state-5",
+              "step_id": "demo-step-5"
+            }
+          ]
+        },
+        {
+          "name": "Demo: expand",
+          "phase_id": "demo-phase-expand",
+          "steps": [
+            {
+              "actions": [
+                "Demo: action-6"
+              ],
+              "final_state": "Demo: state-7",
+              "inputs": [
+                "Demo: input-6"
+              ],
+              "name": "Demo: pin the outputs",
+              "outputs": [
+                "Demo: output-6"
+              ],
+              "starting_state": "Demo: state-6",
+              "step_id": "demo-step-6"
+            },
+            {
+              "actions": [
+                "Demo: action-7"
+              ],
+              "final_state": "Demo: state-8",
+              "inputs": [
+                "Demo: input-7"
+              ],
+              "name": "Demo: write the narrative",
+              "outputs": [
+                "Demo: output-7"
+              ],
+              "starting_state": "Demo: state-7",
+              "step_id": "demo-step-7"
+            },
+            {
+              "actions": [
+                "Demo: action-8"
+              ],
+              "final_state": "Demo: state-9",
+              "inputs": [
+                "Demo: input-8"
+              ],
+              "name": "Demo: draw the visual",
+              "outputs": [
+                "Demo: output-8"
+              ],
+              "starting_state": "Demo: state-8",
+              "step_id": "demo-step-8"
+            }
+          ]
+        }
+      ],
+      "process_inventory": [
+        "Demo: discovery",
+        "Demo: build",
+        "Demo: launch"
+      ],
+      "solution_id": "demo-signature-3f",
+      "starting_state": "Demo: state-0",
+      "transformation_map": "Demo: from referral chaos to predictable demand",
+      "version": 1,
+      "visual": "Demo: a three lane map with nine labelled stages"
+    },
+    "stage_owner": "demo-red-principal",
+    "transformations": {
+      "million_dollar_message": "Demo: from referral chaos to predictable demand in 90 days",
+      "transformations_id": "demo-transformations-3f",
+      "version": 1
+    },
+    "workspace_id": "ws-3f"
+  },
+  "5": {
+    "approver": "demo-client-approver",
+    "assigned_owner": "demo-red-principal",
+    "checkpoint_evidence": "Demo: all thirteen stage 5 assets reviewed",
+    "correlation_id": "demo-corr-stage-5",
+    "delivery": {
+      "delivery_id": "demo-delivery-3f",
+      "delivery_model": "Demo: group coaching program",
+      "duration": "Demo: eight weeks",
+      "eligibility": "Demo: owner-operator with a delivery team",
+      "guarantee_decision": "Demo: no guarantee until results are measured",
+      "modules": [
+        "Demo: one module per named stage"
+      ],
+      "offer_stack": [
+        "Demo: diagnostic offer",
+        "Demo: core program"
+      ],
+      "outcome_measures": [
+        "Demo: qualified conversations per month"
+      ],
+      "pricing_payments": "Demo: outcome based fee in three payments",
+      "responsibilities": [
+        "Demo: RED builds the machine",
+        "Demo: client serves"
+      ],
+      "scope": "Demo: the full nine step transformation",
+      "signature_solution": {
+        "final_state": "Demo: state-9",
+        "narrative": "Demo: nine named stages move the client across three phases",
+        "phases": [
+          {
+            "name": "Demo: extract",
+            "phase_id": "demo-phase-extract",
+            "steps": [
+              {
+                "actions": [
+                  "Demo: action-0"
+                ],
+                "final_state": "Demo: state-1",
+                "inputs": [
+                  "Demo: input-0"
+                ],
+                "name": "Demo: extract the diagnosis",
+                "outputs": [
+                  "Demo: output-0"
+                ],
+                "starting_state": "Demo: state-0",
+                "step_id": "demo-step-0"
+              },
+              {
+                "actions": [
+                  "Demo: action-1"
+                ],
+                "final_state": "Demo: state-2",
+                "inputs": [
+                  "Demo: input-1"
+                ],
+                "name": "Demo: draft the map",
+                "outputs": [
+                  "Demo: output-1"
+                ],
+                "starting_state": "Demo: state-1",
+                "step_id": "demo-step-1"
+              },
+              {
+                "actions": [
+                  "Demo: action-2"
+                ],
+                "final_state": "Demo: state-3",
+                "inputs": [
+                  "Demo: input-2"
+                ],
+                "name": "Demo: name the phases",
+                "outputs": [
+                  "Demo: output-2"
+                ],
+                "starting_state": "Demo: state-2",
+                "step_id": "demo-step-2"
+              }
+            ]
+          },
+          {
+            "name": "Demo: content",
+            "phase_id": "demo-phase-content",
+            "steps": [
+              {
+                "actions": [
+                  "Demo: action-3"
+                ],
+                "final_state": "Demo: state-4",
+                "inputs": [
+                  "Demo: input-3"
+                ],
+                "name": "Demo: write the steps",
+                "outputs": [
+                  "Demo: output-3"
+                ],
+                "starting_state": "Demo: state-3",
+                "step_id": "demo-step-3"
+              },
+              {
+                "actions": [
+                  "Demo: action-4"
+                ],
+                "final_state": "Demo: state-5",
+                "inputs": [
+                  "Demo: input-4"
+                ],
+                "name": "Demo: bind the inputs",
+                "outputs": [
+                  "Demo: output-4"
+                ],
+                "starting_state": "Demo: state-4",
+                "step_id": "demo-step-4"
+              },
+              {
+                "actions": [
+                  "Demo: action-5"
+                ],
+                "final_state": "Demo: state-6",
+                "inputs": [
+                  "Demo: input-5"
+                ],
+                "name": "Demo: define the actions",
+                "outputs": [
+                  "Demo: output-5"
+                ],
+                "starting_state": "Demo: state-5",
+                "step_id": "demo-step-5"
+              }
+            ]
+          },
+          {
+            "name": "Demo: expand",
+            "phase_id": "demo-phase-expand",
+            "steps": [
+              {
+                "actions": [
+                  "Demo: action-6"
+                ],
+                "final_state": "Demo: state-7",
+                "inputs": [
+                  "Demo: input-6"
+                ],
+                "name": "Demo: pin the outputs",
+                "outputs": [
+                  "Demo: output-6"
+                ],
+                "starting_state": "Demo: state-6",
+                "step_id": "demo-step-6"
+              },
+              {
+                "actions": [
+                  "Demo: action-7"
+                ],
+                "final_state": "Demo: state-8",
+                "inputs": [
+                  "Demo: input-7"
+                ],
+                "name": "Demo: write the narrative",
+                "outputs": [
+                  "Demo: output-7"
+                ],
+                "starting_state": "Demo: state-7",
+                "step_id": "demo-step-7"
+              },
+              {
+                "actions": [
+                  "Demo: action-8"
+                ],
+                "final_state": "Demo: state-9",
+                "inputs": [
+                  "Demo: input-8"
+                ],
+                "name": "Demo: draw the visual",
+                "outputs": [
+                  "Demo: output-8"
+                ],
+                "starting_state": "Demo: state-8",
+                "step_id": "demo-step-8"
+              }
+            ]
+          }
+        ],
+        "process_inventory": [
+          "Demo: discovery",
+          "Demo: build",
+          "Demo: launch"
+        ],
+        "solution_id": "demo-signature-3f",
+        "starting_state": "Demo: state-0",
+        "transformation_map": "Demo: from referral chaos to predictable demand",
+        "version": 1,
+        "visual": "Demo: a three lane map with nine labelled stages"
+      },
+      "step_deliveries": [
+        {
+          "action": "Demo: deliver action 0",
+          "actor": "Demo: RED delivery lead",
+          "deliverable": "Demo: deliverable 0",
+          "measure": "Demo: measure 0",
+          "step_id": "demo-step-0",
+          "timing": "Demo: week 1"
+        },
+        {
+          "action": "Demo: deliver action 1",
+          "actor": "Demo: RED delivery lead",
+          "deliverable": "Demo: deliverable 1",
+          "measure": "Demo: measure 1",
+          "step_id": "demo-step-1",
+          "timing": "Demo: week 2"
+        },
+        {
+          "action": "Demo: deliver action 2",
+          "actor": "Demo: RED delivery lead",
+          "deliverable": "Demo: deliverable 2",
+          "measure": "Demo: measure 2",
+          "step_id": "demo-step-2",
+          "timing": "Demo: week 3"
+        },
+        {
+          "action": "Demo: deliver action 3",
+          "actor": "Demo: RED delivery lead",
+          "deliverable": "Demo: deliverable 3",
+          "measure": "Demo: measure 3",
+          "step_id": "demo-step-3",
+          "timing": "Demo: week 4"
+        },
+        {
+          "action": "Demo: deliver action 4",
+          "actor": "Demo: RED delivery lead",
+          "deliverable": "Demo: deliverable 4",
+          "measure": "Demo: measure 4",
+          "step_id": "demo-step-4",
+          "timing": "Demo: week 5"
+        },
+        {
+          "action": "Demo: deliver action 5",
+          "actor": "Demo: RED delivery lead",
+          "deliverable": "Demo: deliverable 5",
+          "measure": "Demo: measure 5",
+          "step_id": "demo-step-5",
+          "timing": "Demo: week 6"
+        },
+        {
+          "action": "Demo: deliver action 6",
+          "actor": "Demo: RED delivery lead",
+          "deliverable": "Demo: deliverable 6",
+          "measure": "Demo: measure 6",
+          "step_id": "demo-step-6",
+          "timing": "Demo: week 7"
+        },
+        {
+          "action": "Demo: deliver action 7",
+          "actor": "Demo: RED delivery lead",
+          "deliverable": "Demo: deliverable 7",
+          "measure": "Demo: measure 7",
+          "step_id": "demo-step-7",
+          "timing": "Demo: week 8"
+        },
+        {
+          "action": "Demo: deliver action 8",
+          "actor": "Demo: RED delivery lead",
+          "deliverable": "Demo: deliverable 8",
+          "measure": "Demo: measure 8",
+          "step_id": "demo-step-8",
+          "timing": "Demo: week 9"
+        }
+      ],
+      "support_cadence": "Demo: weekly training and weekly coaching",
+      "version": 1
+    },
+    "due_on": "2026-10-02",
+    "offer_package_id": "demo-offer-3f",
+    "on": "2026-10-02",
+    "product_program": {
+      "cadence": "monday_training_thursday_coaching",
+      "duration_weeks": 9,
+      "model": "group_consulting",
+      "modules": [
+        {
+          "deliverable": "Demo: the Demo: extract the diagnosis worksheet",
+          "module_id": "demo-module-1",
+          "outcome": "Demo: the client reaches Demo: extract the diagnosis",
+          "position": 1,
+          "signature_step": "Demo: extract the diagnosis"
+        },
+        {
+          "deliverable": "Demo: the Demo: draft the map worksheet",
+          "module_id": "demo-module-2",
+          "outcome": "Demo: the client reaches Demo: draft the map",
+          "position": 2,
+          "signature_step": "Demo: draft the map"
+        },
+        {
+          "deliverable": "Demo: the Demo: name the phases worksheet",
+          "module_id": "demo-module-3",
+          "outcome": "Demo: the client reaches Demo: name the phases",
+          "position": 3,
+          "signature_step": "Demo: name the phases"
+        },
+        {
+          "deliverable": "Demo: the Demo: write the steps worksheet",
+          "module_id": "demo-module-4",
+          "outcome": "Demo: the client reaches Demo: write the steps",
+          "position": 4,
+          "signature_step": "Demo: write the steps"
+        },
+        {
+          "deliverable": "Demo: the Demo: bind the inputs worksheet",
+          "module_id": "demo-module-5",
+          "outcome": "Demo: the client reaches Demo: bind the inputs",
+          "position": 5,
+          "signature_step": "Demo: bind the inputs"
+        },
+        {
+          "deliverable": "Demo: the Demo: define the actions worksheet",
+          "module_id": "demo-module-6",
+          "outcome": "Demo: the client reaches Demo: define the actions",
+          "position": 6,
+          "signature_step": "Demo: define the actions"
+        },
+        {
+          "deliverable": "Demo: the Demo: pin the outputs worksheet",
+          "module_id": "demo-module-7",
+          "outcome": "Demo: the client reaches Demo: pin the outputs",
+          "position": 7,
+          "signature_step": "Demo: pin the outputs"
+        },
+        {
+          "deliverable": "Demo: the Demo: write the narrative worksheet",
+          "module_id": "demo-module-8",
+          "outcome": "Demo: the client reaches Demo: write the narrative",
+          "position": 8,
+          "signature_step": "Demo: write the narrative"
+        },
+        {
+          "deliverable": "Demo: the Demo: draw the visual worksheet",
+          "module_id": "demo-module-9",
+          "outcome": "Demo: the client reaches Demo: draw the visual",
+          "position": 9,
+          "signature_step": "Demo: draw the visual"
+        }
+      ],
+      "owner": "demo-red-offer-owner",
+      "pricing_basis": "outcome_value",
+      "program_id": "demo-program-3f",
+      "version": 1
+    },
+    "proposed_by": "demo-red-principal",
+    "rationale": "Demo: every method step is delivered and owned",
+    "scope": "stage-7-authority-amplifier",
+    "stage_owner": "demo-red-principal",
+    "workspace_id": "ws-3f"
+  },
+  "6": {
+    "approver": "demo-client-approver",
+    "assigned_owner": "demo-red-principal",
+    "campaign_message_package_id": "demo-message-package-3f",
+    "checkpoint_evidence": "Demo: all twelve stage 6 assets reviewed",
+    "content_crusher": {
+      "action": "Demo: book the next step",
+      "choice": "Demo: keep guessing or follow the method",
+      "context": "Demo: part of the signature program",
+      "crusher_id": "demo-crusher-3f",
+      "frustrations": [
+        "Demo: the current approach stalls"
+      ],
+      "goal": "Demo: reach the next level with confidence",
+      "metaphor": "Demo: a map for the journey",
+      "model": "Demo: the transformation model",
+      "owner": "demo-content-owner",
+      "promise_measure": "Demo: a measurable result",
+      "promise_timeline": "Demo: within 90 days",
+      "steps": [
+        "Demo: extract the diagnosis"
+      ],
+      "story": "Demo: a client who made the shift",
+      "title": "Demo: why the first step matters now",
+      "topic_id": "demo-topic-1",
+      "version": 1
+    },
+    "content_plan": {
+      "ideas": [
+        {
+          "channels": [
+            "email",
+            "social"
+          ],
+          "idea_id": "demo-idea-1",
+          "prompt": "Demo: what does the first step change for the client?",
+          "signature_step": "Demo: extract the diagnosis",
+          "source": "faq",
+          "theme_id": "demo-theme-1"
+        }
+      ],
+      "owner": "demo-content-owner",
+      "plan_id": "demo-plan-3f",
+      "primary_currency": {
+        "audience": "Demo: owner-operators of small service firms",
+        "currency": "Demo: qualified referrals",
+        "current_measure": "Demo: 4 per month",
+        "desired_measure": "Demo: 12 per month",
+        "mechanism": "Demo: referral partner network",
+        "version": 1
+      },
+      "themes": [
+        {
+          "currency_measure": "Demo: 4 per month",
+          "name": "Demo: the current measure",
+          "theme_id": "demo-theme-1"
+        }
+      ],
+      "version": 1
+    },
+    "content_roadmap": {
+      "owner": "demo-content-owner",
+      "roadmap_id": "demo-roadmap-3f",
+      "topics": [
+        {
+          "channels": [
+            "blog",
+            "youtube",
+            "facebook"
+          ],
+          "name": "Demo: Demo: extract the diagnosis audience questions",
+          "question": "Demo: what does Demo: extract the diagnosis change for the client?",
+          "signature_step": "Demo: extract the diagnosis",
+          "topic_id": "demo-topic-1"
+        },
+        {
+          "channels": [
+            "blog",
+            "youtube",
+            "facebook"
+          ],
+          "name": "Demo: Demo: draft the map audience questions",
+          "question": "Demo: what does Demo: draft the map change for the client?",
+          "signature_step": "Demo: draft the map",
+          "topic_id": "demo-topic-2"
+        },
+        {
+          "channels": [
+            "blog",
+            "youtube",
+            "facebook"
+          ],
+          "name": "Demo: Demo: name the phases audience questions",
+          "question": "Demo: what does Demo: name the phases change for the client?",
+          "signature_step": "Demo: name the phases",
+          "topic_id": "demo-topic-3"
+        },
+        {
+          "channels": [
+            "blog",
+            "youtube",
+            "facebook"
+          ],
+          "name": "Demo: Demo: write the steps audience questions",
+          "question": "Demo: what does Demo: write the steps change for the client?",
+          "signature_step": "Demo: write the steps",
+          "topic_id": "demo-topic-4"
+        },
+        {
+          "channels": [
+            "blog",
+            "youtube",
+            "facebook"
+          ],
+          "name": "Demo: Demo: bind the inputs audience questions",
+          "question": "Demo: what does Demo: bind the inputs change for the client?",
+          "signature_step": "Demo: bind the inputs",
+          "topic_id": "demo-topic-5"
+        },
+        {
+          "channels": [
+            "blog",
+            "youtube",
+            "facebook"
+          ],
+          "name": "Demo: Demo: define the actions audience questions",
+          "question": "Demo: what does Demo: define the actions change for the client?",
+          "signature_step": "Demo: define the actions",
+          "topic_id": "demo-topic-6"
+        },
+        {
+          "channels": [
+            "blog",
+            "youtube",
+            "facebook"
+          ],
+          "name": "Demo: Demo: pin the outputs audience questions",
+          "question": "Demo: what does Demo: pin the outputs change for the client?",
+          "signature_step": "Demo: pin the outputs",
+          "topic_id": "demo-topic-7"
+        },
+        {
+          "channels": [
+            "blog",
+            "youtube",
+            "facebook"
+          ],
+          "name": "Demo: Demo: write the narrative audience questions",
+          "question": "Demo: what does Demo: write the narrative change for the client?",
+          "signature_step": "Demo: write the narrative",
+          "topic_id": "demo-topic-8"
+        },
+        {
+          "channels": [
+            "blog",
+            "youtube",
+            "facebook"
+          ],
+          "name": "Demo: Demo: draw the visual audience questions",
+          "question": "Demo: what does Demo: draw the visual change for the client?",
+          "signature_step": "Demo: draw the visual",
+          "topic_id": "demo-topic-9"
+        }
+      ],
+      "version": 1
+    },
+    "correlation_id": "demo-corr-stage-6",
+    "due_on": "2026-10-17",
+    "message": {
+      "angles": [
+        "Demo: referral drought",
+        "Demo: referral engine"
+      ],
+      "authority_amplifier_outline": "Demo: promise, proof, problems, steps, context, action",
+      "avatar": "Demo: owner-operators of small service firms",
+      "cta": "Demo: book a diagnostic call",
+      "currency": "Demo: qualified referrals",
+      "desired_outcome": "Demo: a predictable referral engine",
+      "hook": "Demo: why referrals stall at four a month",
+      "landing_message": "Demo: turn referrals into a system",
+      "lead_magnet": "Demo: referral readiness checklist",
+      "message_id": "demo-message-3f",
+      "method_explanation": "Demo: install the referral network in nine steps",
+      "owner": "demo-message-owner",
+      "problem": "Demo: cannot forecast revenue",
+      "problem_hierarchy": [
+        "Demo: no predictable referral flow",
+        "Demo: referrals depend on luck"
+      ],
+      "product_offer_id": "demo-offer-3f",
+      "promise": "Demo: twice the qualified referrals",
+      "proof_objections": [
+        "Demo: proof: referral partner network",
+        "Demo: objection: no time to build it"
+      ],
+      "story": "Demo: an owner-operator story"
+    },
+    "message_version": 1,
+    "method": {
+      "approved_by": "demo-client-approver",
+      "approved_on": "2026-10-02",
+      "claims": [
+        "demo-claim-1"
+      ],
+      "currency": "Demo: qualified referrals",
+      "diagnostic_model": {
+        "explanatory_copy": "Demo: two levels placed by referral count",
+        "levels": [
+          {
+            "behaviors": [
+              "Demo: waits for referrals"
+            ],
+            "level_id": "demo-level-stuck",
+            "name": "Demo: stuck",
+            "observable_measures": [
+              "Demo: under 4 per month"
+            ],
+            "problems": [
+              "Demo: cannot forecast revenue"
+            ],
+            "symptoms": [
+              "Demo: quiet months"
+            ]
+          },
+          {
+            "behaviors": [
+              "Demo: runs the network"
+            ],
+            "level_id": "demo-level-scaling",
+            "name": "Demo: scaling",
+            "observable_measures": [
+              "Demo: 12 or more per month"
+            ],
+            "problems": [
+              "Demo: lead flow stalls"
+            ],
+            "symptoms": [
+              "Demo: pipeline visible"
+            ]
+          }
+        ],
+        "model_id": "demo-model-3f",
+        "name": "Demo: growth pyramid",
+        "progression": "Demo: climb by installing the referral network",
+        "qualification_logic": "Demo: rank by monthly referral count",
+        "version": 1,
+        "visual": "Demo: asset://diagnostic/3f-growth-pyramid.png"
+      },
+      "intended_use": "Demo: 3f pilot campaign",
+      "method_id": "demo-method-3f",
+      "parent_method": "Demo: signature-solution",
+      "primary_currency": {
+        "audience": "Demo: owner-operators of small service firms",
+        "currency": "Demo: qualified referrals",
+        "current_measure": "Demo: 4 per month",
+        "desired_measure": "Demo: 12 per month",
+        "mechanism": "Demo: referral partner network",
+        "version": 1
+      },
+      "semantic_version": {
+        "major": 1,
+        "minor": 0,
+        "patch": 0
+      },
+      "stages": [
+        "Demo: diagnose",
+        "Demo: position",
+        "Demo: model"
+      ]
+    },
+    "offer": {
+      "audience": "Demo: owner-operators of small service firms",
+      "delivery": {
+        "delivery_id": "demo-delivery-3f",
+        "delivery_model": "Demo: group coaching program",
+        "duration": "Demo: eight weeks",
+        "eligibility": "Demo: owner-operator with a delivery team",
+        "guarantee_decision": "Demo: no guarantee until results are measured",
+        "modules": [
+          "Demo: one module per named stage"
+        ],
+        "offer_stack": [
+          "Demo: diagnostic offer",
+          "Demo: core program"
+        ],
+        "outcome_measures": [
+          "Demo: qualified conversations per month"
+        ],
+        "pricing_payments": "Demo: outcome based fee in three payments",
+        "responsibilities": [
+          "Demo: RED builds the machine",
+          "Demo: client serves"
+        ],
+        "scope": "Demo: the full nine step transformation",
+        "signature_solution": {
+          "final_state": "Demo: state-9",
+          "narrative": "Demo: nine named stages move the client across three phases",
+          "phases": [
+            {
+              "name": "Demo: extract",
+              "phase_id": "demo-phase-extract",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-0"
+                  ],
+                  "final_state": "Demo: state-1",
+                  "inputs": [
+                    "Demo: input-0"
+                  ],
+                  "name": "Demo: extract the diagnosis",
+                  "outputs": [
+                    "Demo: output-0"
+                  ],
+                  "starting_state": "Demo: state-0",
+                  "step_id": "demo-step-0"
+                },
+                {
+                  "actions": [
+                    "Demo: action-1"
+                  ],
+                  "final_state": "Demo: state-2",
+                  "inputs": [
+                    "Demo: input-1"
+                  ],
+                  "name": "Demo: draft the map",
+                  "outputs": [
+                    "Demo: output-1"
+                  ],
+                  "starting_state": "Demo: state-1",
+                  "step_id": "demo-step-1"
+                },
+                {
+                  "actions": [
+                    "Demo: action-2"
+                  ],
+                  "final_state": "Demo: state-3",
+                  "inputs": [
+                    "Demo: input-2"
+                  ],
+                  "name": "Demo: name the phases",
+                  "outputs": [
+                    "Demo: output-2"
+                  ],
+                  "starting_state": "Demo: state-2",
+                  "step_id": "demo-step-2"
+                }
+              ]
+            },
+            {
+              "name": "Demo: content",
+              "phase_id": "demo-phase-content",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-3"
+                  ],
+                  "final_state": "Demo: state-4",
+                  "inputs": [
+                    "Demo: input-3"
+                  ],
+                  "name": "Demo: write the steps",
+                  "outputs": [
+                    "Demo: output-3"
+                  ],
+                  "starting_state": "Demo: state-3",
+                  "step_id": "demo-step-3"
+                },
+                {
+                  "actions": [
+                    "Demo: action-4"
+                  ],
+                  "final_state": "Demo: state-5",
+                  "inputs": [
+                    "Demo: input-4"
+                  ],
+                  "name": "Demo: bind the inputs",
+                  "outputs": [
+                    "Demo: output-4"
+                  ],
+                  "starting_state": "Demo: state-4",
+                  "step_id": "demo-step-4"
+                },
+                {
+                  "actions": [
+                    "Demo: action-5"
+                  ],
+                  "final_state": "Demo: state-6",
+                  "inputs": [
+                    "Demo: input-5"
+                  ],
+                  "name": "Demo: define the actions",
+                  "outputs": [
+                    "Demo: output-5"
+                  ],
+                  "starting_state": "Demo: state-5",
+                  "step_id": "demo-step-5"
+                }
+              ]
+            },
+            {
+              "name": "Demo: expand",
+              "phase_id": "demo-phase-expand",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-6"
+                  ],
+                  "final_state": "Demo: state-7",
+                  "inputs": [
+                    "Demo: input-6"
+                  ],
+                  "name": "Demo: pin the outputs",
+                  "outputs": [
+                    "Demo: output-6"
+                  ],
+                  "starting_state": "Demo: state-6",
+                  "step_id": "demo-step-6"
+                },
+                {
+                  "actions": [
+                    "Demo: action-7"
+                  ],
+                  "final_state": "Demo: state-8",
+                  "inputs": [
+                    "Demo: input-7"
+                  ],
+                  "name": "Demo: write the narrative",
+                  "outputs": [
+                    "Demo: output-7"
+                  ],
+                  "starting_state": "Demo: state-7",
+                  "step_id": "demo-step-7"
+                },
+                {
+                  "actions": [
+                    "Demo: action-8"
+                  ],
+                  "final_state": "Demo: state-9",
+                  "inputs": [
+                    "Demo: input-8"
+                  ],
+                  "name": "Demo: draw the visual",
+                  "outputs": [
+                    "Demo: output-8"
+                  ],
+                  "starting_state": "Demo: state-8",
+                  "step_id": "demo-step-8"
+                }
+              ]
+            }
+          ],
+          "process_inventory": [
+            "Demo: discovery",
+            "Demo: build",
+            "Demo: launch"
+          ],
+          "solution_id": "demo-signature-3f",
+          "starting_state": "Demo: state-0",
+          "transformation_map": "Demo: from referral chaos to predictable demand",
+          "version": 1,
+          "visual": "Demo: a three lane map with nine labelled stages"
+        },
+        "step_deliveries": [
+          {
+            "action": "Demo: deliver action 0",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 0",
+            "measure": "Demo: measure 0",
+            "step_id": "demo-step-0",
+            "timing": "Demo: week 1"
+          },
+          {
+            "action": "Demo: deliver action 1",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 1",
+            "measure": "Demo: measure 1",
+            "step_id": "demo-step-1",
+            "timing": "Demo: week 2"
+          },
+          {
+            "action": "Demo: deliver action 2",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 2",
+            "measure": "Demo: measure 2",
+            "step_id": "demo-step-2",
+            "timing": "Demo: week 3"
+          },
+          {
+            "action": "Demo: deliver action 3",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 3",
+            "measure": "Demo: measure 3",
+            "step_id": "demo-step-3",
+            "timing": "Demo: week 4"
+          },
+          {
+            "action": "Demo: deliver action 4",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 4",
+            "measure": "Demo: measure 4",
+            "step_id": "demo-step-4",
+            "timing": "Demo: week 5"
+          },
+          {
+            "action": "Demo: deliver action 5",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 5",
+            "measure": "Demo: measure 5",
+            "step_id": "demo-step-5",
+            "timing": "Demo: week 6"
+          },
+          {
+            "action": "Demo: deliver action 6",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 6",
+            "measure": "Demo: measure 6",
+            "step_id": "demo-step-6",
+            "timing": "Demo: week 7"
+          },
+          {
+            "action": "Demo: deliver action 7",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 7",
+            "measure": "Demo: measure 7",
+            "step_id": "demo-step-7",
+            "timing": "Demo: week 8"
+          },
+          {
+            "action": "Demo: deliver action 8",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 8",
+            "measure": "Demo: measure 8",
+            "step_id": "demo-step-8",
+            "timing": "Demo: week 9"
+          }
+        ],
+        "support_cadence": "Demo: weekly training and weekly coaching",
+        "version": 1
+      },
+      "eligibility": "Demo: service businesses with a proven offer",
+      "offer_id": "demo-offer-3f",
+      "owner": "demo-offer-owner",
+      "price_hypothesis": "Demo: USD 7,500",
+      "promise": "Demo: twice the qualified referrals"
+    },
+    "on": "2026-10-03",
+    "proposed_by": "demo-red-principal",
+    "rationale": "Demo: the message agrees with the offer and method",
+    "scope": "stage-7-authority-amplifier",
+    "stage_owner": "demo-red-principal",
+    "workspace_id": "ws-3f"
+  },
+  "7": {
+    "amplifier": {
+      "amplifier_id": "demo-amplifier-3f",
+      "creative_approval": {
+        "approved_by": "demo-client-authority",
+        "approved_on": "2026-10-03",
+        "intended_use": "Demo: 3f pilot campaign"
+      },
+      "owner": "demo-production-manager",
+      "proof_claim_ids": [
+        "demo-claim-1"
+      ],
+      "script": [
+        {
+          "content": "Demo: promise content",
+          "kind": "promise"
+        },
+        {
+          "content": "Demo: proof content",
+          "kind": "proof"
+        },
+        {
+          "content": "Demo: problems content",
+          "kind": "problems"
+        },
+        {
+          "content": "Demo: steps content",
+          "kind": "steps"
+        },
+        {
+          "content": "Demo: context content",
+          "kind": "context"
+        },
+        {
+          "content": "Demo: action content",
+          "kind": "action"
+        }
+      ],
+      "script_approval": {
+        "approved_by": "demo-production-manager",
+        "approved_on": "2026-10-02",
+        "intended_use": "Demo: 3f pilot campaign"
+      },
+      "visuals": {
+        "brand_treatment": "asset://demo/aa/brand",
+        "edited_video": "asset://demo/aa/edited",
+        "hosted_video": "asset://demo/aa/hosted",
+        "player_assets": "asset://demo/aa/player",
+        "presentation": "asset://demo/aa/slides",
+        "recording": "asset://demo/aa/recording",
+        "speaker_notes": "asset://demo/aa/notes",
+        "storyboard": "asset://demo/aa/storyboard"
+      }
+    },
+    "amplifier_package_id": "demo-amplifier-package-3f",
+    "amplifier_version": 1,
+    "approver": "demo-client-approver",
+    "assigned_owner": "demo-red-principal",
+    "checkpoint_evidence": "Demo: all nine stage 7 kinds reviewed",
+    "claims": [
+      {
+        "citations": [
+          {
+            "checksum": "sha256:demo-method",
+            "location": "p.1",
+            "source_id": "demo-source-method"
+          }
+        ],
+        "claim_id": "demo-claim-1",
+        "confidence_note": "demo: directly observed",
+        "provenance": "known",
+        "statement": "Demo: method fact recorded with the client"
+      }
+    ],
+    "correlation_id": "demo-corr-stage-7",
+    "due_on": "2026-10-17",
+    "message": {
+      "angles": [
+        "Demo: referral drought",
+        "Demo: referral engine"
+      ],
+      "authority_amplifier_outline": "Demo: promise, proof, problems, steps, context, action",
+      "avatar": "Demo: owner-operators of small service firms",
+      "cta": "Demo: book a diagnostic call",
+      "currency": "Demo: qualified referrals",
+      "desired_outcome": "Demo: a predictable referral engine",
+      "hook": "Demo: why referrals stall at four a month",
+      "landing_message": "Demo: turn referrals into a system",
+      "lead_magnet": "Demo: referral readiness checklist",
+      "message_id": "demo-message-3f",
+      "method_explanation": "Demo: install the referral network in nine steps",
+      "owner": "demo-message-owner",
+      "problem": "Demo: cannot forecast revenue",
+      "problem_hierarchy": [
+        "Demo: no predictable referral flow",
+        "Demo: referrals depend on luck"
+      ],
+      "product_offer_id": "demo-offer-3f",
+      "promise": "Demo: twice the qualified referrals",
+      "proof_objections": [
+        "Demo: proof: referral partner network",
+        "Demo: objection: no time to build it"
+      ],
+      "story": "Demo: an owner-operator story"
+    },
+    "method": {
+      "approved_by": "demo-client-approver",
+      "approved_on": "2026-10-02",
+      "claims": [
+        "demo-claim-1"
+      ],
+      "currency": "Demo: qualified referrals",
+      "diagnostic_model": {
+        "explanatory_copy": "Demo: two levels placed by referral count",
+        "levels": [
+          {
+            "behaviors": [
+              "Demo: waits for referrals"
+            ],
+            "level_id": "demo-level-stuck",
+            "name": "Demo: stuck",
+            "observable_measures": [
+              "Demo: under 4 per month"
+            ],
+            "problems": [
+              "Demo: cannot forecast revenue"
+            ],
+            "symptoms": [
+              "Demo: quiet months"
+            ]
+          },
+          {
+            "behaviors": [
+              "Demo: runs the network"
+            ],
+            "level_id": "demo-level-scaling",
+            "name": "Demo: scaling",
+            "observable_measures": [
+              "Demo: 12 or more per month"
+            ],
+            "problems": [
+              "Demo: lead flow stalls"
+            ],
+            "symptoms": [
+              "Demo: pipeline visible"
+            ]
+          }
+        ],
+        "model_id": "demo-model-3f",
+        "name": "Demo: growth pyramid",
+        "progression": "Demo: climb by installing the referral network",
+        "qualification_logic": "Demo: rank by monthly referral count",
+        "version": 1,
+        "visual": "Demo: asset://diagnostic/3f-growth-pyramid.png"
+      },
+      "intended_use": "Demo: 3f pilot campaign",
+      "method_id": "demo-method-3f",
+      "parent_method": "Demo: signature-solution",
+      "primary_currency": {
+        "audience": "Demo: owner-operators of small service firms",
+        "currency": "Demo: qualified referrals",
+        "current_measure": "Demo: 4 per month",
+        "desired_measure": "Demo: 12 per month",
+        "mechanism": "Demo: referral partner network",
+        "version": 1
+      },
+      "semantic_version": {
+        "major": 1,
+        "minor": 0,
+        "patch": 0
+      },
+      "stages": [
+        "Demo: diagnose",
+        "Demo: position",
+        "Demo: model"
+      ]
+    },
+    "offer": {
+      "audience": "Demo: owner-operators of small service firms",
+      "delivery": {
+        "delivery_id": "demo-delivery-3f",
+        "delivery_model": "Demo: group coaching program",
+        "duration": "Demo: eight weeks",
+        "eligibility": "Demo: owner-operator with a delivery team",
+        "guarantee_decision": "Demo: no guarantee until results are measured",
+        "modules": [
+          "Demo: one module per named stage"
+        ],
+        "offer_stack": [
+          "Demo: diagnostic offer",
+          "Demo: core program"
+        ],
+        "outcome_measures": [
+          "Demo: qualified conversations per month"
+        ],
+        "pricing_payments": "Demo: outcome based fee in three payments",
+        "responsibilities": [
+          "Demo: RED builds the machine",
+          "Demo: client serves"
+        ],
+        "scope": "Demo: the full nine step transformation",
+        "signature_solution": {
+          "final_state": "Demo: state-9",
+          "narrative": "Demo: nine named stages move the client across three phases",
+          "phases": [
+            {
+              "name": "Demo: extract",
+              "phase_id": "demo-phase-extract",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-0"
+                  ],
+                  "final_state": "Demo: state-1",
+                  "inputs": [
+                    "Demo: input-0"
+                  ],
+                  "name": "Demo: extract the diagnosis",
+                  "outputs": [
+                    "Demo: output-0"
+                  ],
+                  "starting_state": "Demo: state-0",
+                  "step_id": "demo-step-0"
+                },
+                {
+                  "actions": [
+                    "Demo: action-1"
+                  ],
+                  "final_state": "Demo: state-2",
+                  "inputs": [
+                    "Demo: input-1"
+                  ],
+                  "name": "Demo: draft the map",
+                  "outputs": [
+                    "Demo: output-1"
+                  ],
+                  "starting_state": "Demo: state-1",
+                  "step_id": "demo-step-1"
+                },
+                {
+                  "actions": [
+                    "Demo: action-2"
+                  ],
+                  "final_state": "Demo: state-3",
+                  "inputs": [
+                    "Demo: input-2"
+                  ],
+                  "name": "Demo: name the phases",
+                  "outputs": [
+                    "Demo: output-2"
+                  ],
+                  "starting_state": "Demo: state-2",
+                  "step_id": "demo-step-2"
+                }
+              ]
+            },
+            {
+              "name": "Demo: content",
+              "phase_id": "demo-phase-content",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-3"
+                  ],
+                  "final_state": "Demo: state-4",
+                  "inputs": [
+                    "Demo: input-3"
+                  ],
+                  "name": "Demo: write the steps",
+                  "outputs": [
+                    "Demo: output-3"
+                  ],
+                  "starting_state": "Demo: state-3",
+                  "step_id": "demo-step-3"
+                },
+                {
+                  "actions": [
+                    "Demo: action-4"
+                  ],
+                  "final_state": "Demo: state-5",
+                  "inputs": [
+                    "Demo: input-4"
+                  ],
+                  "name": "Demo: bind the inputs",
+                  "outputs": [
+                    "Demo: output-4"
+                  ],
+                  "starting_state": "Demo: state-4",
+                  "step_id": "demo-step-4"
+                },
+                {
+                  "actions": [
+                    "Demo: action-5"
+                  ],
+                  "final_state": "Demo: state-6",
+                  "inputs": [
+                    "Demo: input-5"
+                  ],
+                  "name": "Demo: define the actions",
+                  "outputs": [
+                    "Demo: output-5"
+                  ],
+                  "starting_state": "Demo: state-5",
+                  "step_id": "demo-step-5"
+                }
+              ]
+            },
+            {
+              "name": "Demo: expand",
+              "phase_id": "demo-phase-expand",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-6"
+                  ],
+                  "final_state": "Demo: state-7",
+                  "inputs": [
+                    "Demo: input-6"
+                  ],
+                  "name": "Demo: pin the outputs",
+                  "outputs": [
+                    "Demo: output-6"
+                  ],
+                  "starting_state": "Demo: state-6",
+                  "step_id": "demo-step-6"
+                },
+                {
+                  "actions": [
+                    "Demo: action-7"
+                  ],
+                  "final_state": "Demo: state-8",
+                  "inputs": [
+                    "Demo: input-7"
+                  ],
+                  "name": "Demo: write the narrative",
+                  "outputs": [
+                    "Demo: output-7"
+                  ],
+                  "starting_state": "Demo: state-7",
+                  "step_id": "demo-step-7"
+                },
+                {
+                  "actions": [
+                    "Demo: action-8"
+                  ],
+                  "final_state": "Demo: state-9",
+                  "inputs": [
+                    "Demo: input-8"
+                  ],
+                  "name": "Demo: draw the visual",
+                  "outputs": [
+                    "Demo: output-8"
+                  ],
+                  "starting_state": "Demo: state-8",
+                  "step_id": "demo-step-8"
+                }
+              ]
+            }
+          ],
+          "process_inventory": [
+            "Demo: discovery",
+            "Demo: build",
+            "Demo: launch"
+          ],
+          "solution_id": "demo-signature-3f",
+          "starting_state": "Demo: state-0",
+          "transformation_map": "Demo: from referral chaos to predictable demand",
+          "version": 1,
+          "visual": "Demo: a three lane map with nine labelled stages"
+        },
+        "step_deliveries": [
+          {
+            "action": "Demo: deliver action 0",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 0",
+            "measure": "Demo: measure 0",
+            "step_id": "demo-step-0",
+            "timing": "Demo: week 1"
+          },
+          {
+            "action": "Demo: deliver action 1",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 1",
+            "measure": "Demo: measure 1",
+            "step_id": "demo-step-1",
+            "timing": "Demo: week 2"
+          },
+          {
+            "action": "Demo: deliver action 2",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 2",
+            "measure": "Demo: measure 2",
+            "step_id": "demo-step-2",
+            "timing": "Demo: week 3"
+          },
+          {
+            "action": "Demo: deliver action 3",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 3",
+            "measure": "Demo: measure 3",
+            "step_id": "demo-step-3",
+            "timing": "Demo: week 4"
+          },
+          {
+            "action": "Demo: deliver action 4",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 4",
+            "measure": "Demo: measure 4",
+            "step_id": "demo-step-4",
+            "timing": "Demo: week 5"
+          },
+          {
+            "action": "Demo: deliver action 5",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 5",
+            "measure": "Demo: measure 5",
+            "step_id": "demo-step-5",
+            "timing": "Demo: week 6"
+          },
+          {
+            "action": "Demo: deliver action 6",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 6",
+            "measure": "Demo: measure 6",
+            "step_id": "demo-step-6",
+            "timing": "Demo: week 7"
+          },
+          {
+            "action": "Demo: deliver action 7",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 7",
+            "measure": "Demo: measure 7",
+            "step_id": "demo-step-7",
+            "timing": "Demo: week 8"
+          },
+          {
+            "action": "Demo: deliver action 8",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 8",
+            "measure": "Demo: measure 8",
+            "step_id": "demo-step-8",
+            "timing": "Demo: week 9"
+          }
+        ],
+        "support_cadence": "Demo: weekly training and weekly coaching",
+        "version": 1
+      },
+      "eligibility": "Demo: service businesses with a proven offer",
+      "offer_id": "demo-offer-3f",
+      "owner": "demo-offer-owner",
+      "price_hypothesis": "Demo: USD 7,500",
+      "promise": "Demo: twice the qualified referrals"
+    },
+    "on": "2026-10-03",
+    "proposed_by": "demo-red-principal",
+    "rationale": "Demo: the amplifier message and supported proof passed review",
+    "scope": "stage-8-funnel-integration",
+    "stage_owner": "demo-red-principal",
+    "workspace_id": "ws-3f"
+  },
+  "8": {
+    "amplifier": {
+      "amplifier_id": "demo-amplifier-3f",
+      "creative_approval": {
+        "approved_by": "demo-client-authority",
+        "approved_on": "2026-10-03",
+        "intended_use": "Demo: 3f pilot campaign"
+      },
+      "owner": "demo-production-manager",
+      "proof_claim_ids": [
+        "demo-claim-1"
+      ],
+      "script": [
+        {
+          "content": "Demo: promise content",
+          "kind": "promise"
+        },
+        {
+          "content": "Demo: proof content",
+          "kind": "proof"
+        },
+        {
+          "content": "Demo: problems content",
+          "kind": "problems"
+        },
+        {
+          "content": "Demo: steps content",
+          "kind": "steps"
+        },
+        {
+          "content": "Demo: context content",
+          "kind": "context"
+        },
+        {
+          "content": "Demo: action content",
+          "kind": "action"
+        }
+      ],
+      "script_approval": {
+        "approved_by": "demo-production-manager",
+        "approved_on": "2026-10-02",
+        "intended_use": "Demo: 3f pilot campaign"
+      },
+      "visuals": {
+        "brand_treatment": "asset://demo/aa/brand",
+        "edited_video": "asset://demo/aa/edited",
+        "hosted_video": "asset://demo/aa/hosted",
+        "player_assets": "asset://demo/aa/player",
+        "presentation": "asset://demo/aa/slides",
+        "recording": "asset://demo/aa/recording",
+        "speaker_notes": "asset://demo/aa/notes",
+        "storyboard": "asset://demo/aa/storyboard"
+      }
+    },
+    "approver": "demo-client-approver",
+    "assigned_owner": "demo-red-principal",
+    "checkpoint_evidence": "Demo: prospect path dry run routed all handoffs",
+    "claims": [
+      {
+        "citations": [
+          {
+            "checksum": "sha256:demo-method",
+            "location": "p.1",
+            "source_id": "demo-source-method"
+          }
+        ],
+        "claim_id": "demo-claim-1",
+        "confidence_note": "demo: directly observed",
+        "provenance": "known",
+        "statement": "Demo: method fact recorded with the client"
+      }
+    ],
+    "correlation_id": "demo-corr-stage-8",
+    "due_on": "2026-10-17",
+    "funnel": {
+      "assets": {
+        "analytics": "asset://demo/funnel/analytics",
+        "automation": "asset://demo/funnel/automation",
+        "booking": "asset://demo/funnel/booking",
+        "campaign_architecture": "asset://demo/funnel/architecture",
+        "crm": "asset://demo/funnel/crm",
+        "forms": "asset://demo/funnel/forms",
+        "pages": "asset://demo/funnel/pages",
+        "qualification": "asset://demo/funnel/qualification",
+        "sales_handoff": "asset://demo/funnel/sales-handoff",
+        "sequences": "asset://demo/funnel/sequences",
+        "sops": "asset://demo/funnel/sops",
+        "tags": "asset://demo/funnel/tags",
+        "tracking": "asset://demo/funnel/tracking"
+      },
+      "dry_run": {
+        "dry_run_id": "demo-dryrun-3f",
+        "handoffs": [
+          {
+            "kind": "capture",
+            "outcome": "routed",
+            "owner": "demo-sdr",
+            "record_id": "demo-record-capture"
+          },
+          {
+            "kind": "engagement",
+            "outcome": "routed",
+            "owner": "demo-setter",
+            "record_id": "demo-record-engagement"
+          },
+          {
+            "kind": "conversion",
+            "outcome": "routed",
+            "owner": "demo-closer",
+            "record_id": "demo-record-conversion"
+          }
+        ]
+      },
+      "integration_id": "demo-funnel-3f",
+      "owner": "demo-integration-manager"
+    },
+    "funnel_package_id": "demo-funnel-package-3f",
+    "funnel_version": 1,
+    "message": {
+      "angles": [
+        "Demo: referral drought",
+        "Demo: referral engine"
+      ],
+      "authority_amplifier_outline": "Demo: promise, proof, problems, steps, context, action",
+      "avatar": "Demo: owner-operators of small service firms",
+      "cta": "Demo: book a diagnostic call",
+      "currency": "Demo: qualified referrals",
+      "desired_outcome": "Demo: a predictable referral engine",
+      "hook": "Demo: why referrals stall at four a month",
+      "landing_message": "Demo: turn referrals into a system",
+      "lead_magnet": "Demo: referral readiness checklist",
+      "message_id": "demo-message-3f",
+      "method_explanation": "Demo: install the referral network in nine steps",
+      "owner": "demo-message-owner",
+      "problem": "Demo: cannot forecast revenue",
+      "problem_hierarchy": [
+        "Demo: no predictable referral flow",
+        "Demo: referrals depend on luck"
+      ],
+      "product_offer_id": "demo-offer-3f",
+      "promise": "Demo: twice the qualified referrals",
+      "proof_objections": [
+        "Demo: proof: referral partner network",
+        "Demo: objection: no time to build it"
+      ],
+      "story": "Demo: an owner-operator story"
+    },
+    "method": {
+      "approved_by": "demo-client-approver",
+      "approved_on": "2026-10-02",
+      "claims": [
+        "demo-claim-1"
+      ],
+      "currency": "Demo: qualified referrals",
+      "diagnostic_model": {
+        "explanatory_copy": "Demo: two levels placed by referral count",
+        "levels": [
+          {
+            "behaviors": [
+              "Demo: waits for referrals"
+            ],
+            "level_id": "demo-level-stuck",
+            "name": "Demo: stuck",
+            "observable_measures": [
+              "Demo: under 4 per month"
+            ],
+            "problems": [
+              "Demo: cannot forecast revenue"
+            ],
+            "symptoms": [
+              "Demo: quiet months"
+            ]
+          },
+          {
+            "behaviors": [
+              "Demo: runs the network"
+            ],
+            "level_id": "demo-level-scaling",
+            "name": "Demo: scaling",
+            "observable_measures": [
+              "Demo: 12 or more per month"
+            ],
+            "problems": [
+              "Demo: lead flow stalls"
+            ],
+            "symptoms": [
+              "Demo: pipeline visible"
+            ]
+          }
+        ],
+        "model_id": "demo-model-3f",
+        "name": "Demo: growth pyramid",
+        "progression": "Demo: climb by installing the referral network",
+        "qualification_logic": "Demo: rank by monthly referral count",
+        "version": 1,
+        "visual": "Demo: asset://diagnostic/3f-growth-pyramid.png"
+      },
+      "intended_use": "Demo: 3f pilot campaign",
+      "method_id": "demo-method-3f",
+      "parent_method": "Demo: signature-solution",
+      "primary_currency": {
+        "audience": "Demo: owner-operators of small service firms",
+        "currency": "Demo: qualified referrals",
+        "current_measure": "Demo: 4 per month",
+        "desired_measure": "Demo: 12 per month",
+        "mechanism": "Demo: referral partner network",
+        "version": 1
+      },
+      "semantic_version": {
+        "major": 1,
+        "minor": 0,
+        "patch": 0
+      },
+      "stages": [
+        "Demo: diagnose",
+        "Demo: position",
+        "Demo: model"
+      ]
+    },
+    "offer": {
+      "audience": "Demo: owner-operators of small service firms",
+      "delivery": {
+        "delivery_id": "demo-delivery-3f",
+        "delivery_model": "Demo: group coaching program",
+        "duration": "Demo: eight weeks",
+        "eligibility": "Demo: owner-operator with a delivery team",
+        "guarantee_decision": "Demo: no guarantee until results are measured",
+        "modules": [
+          "Demo: one module per named stage"
+        ],
+        "offer_stack": [
+          "Demo: diagnostic offer",
+          "Demo: core program"
+        ],
+        "outcome_measures": [
+          "Demo: qualified conversations per month"
+        ],
+        "pricing_payments": "Demo: outcome based fee in three payments",
+        "responsibilities": [
+          "Demo: RED builds the machine",
+          "Demo: client serves"
+        ],
+        "scope": "Demo: the full nine step transformation",
+        "signature_solution": {
+          "final_state": "Demo: state-9",
+          "narrative": "Demo: nine named stages move the client across three phases",
+          "phases": [
+            {
+              "name": "Demo: extract",
+              "phase_id": "demo-phase-extract",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-0"
+                  ],
+                  "final_state": "Demo: state-1",
+                  "inputs": [
+                    "Demo: input-0"
+                  ],
+                  "name": "Demo: extract the diagnosis",
+                  "outputs": [
+                    "Demo: output-0"
+                  ],
+                  "starting_state": "Demo: state-0",
+                  "step_id": "demo-step-0"
+                },
+                {
+                  "actions": [
+                    "Demo: action-1"
+                  ],
+                  "final_state": "Demo: state-2",
+                  "inputs": [
+                    "Demo: input-1"
+                  ],
+                  "name": "Demo: draft the map",
+                  "outputs": [
+                    "Demo: output-1"
+                  ],
+                  "starting_state": "Demo: state-1",
+                  "step_id": "demo-step-1"
+                },
+                {
+                  "actions": [
+                    "Demo: action-2"
+                  ],
+                  "final_state": "Demo: state-3",
+                  "inputs": [
+                    "Demo: input-2"
+                  ],
+                  "name": "Demo: name the phases",
+                  "outputs": [
+                    "Demo: output-2"
+                  ],
+                  "starting_state": "Demo: state-2",
+                  "step_id": "demo-step-2"
+                }
+              ]
+            },
+            {
+              "name": "Demo: content",
+              "phase_id": "demo-phase-content",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-3"
+                  ],
+                  "final_state": "Demo: state-4",
+                  "inputs": [
+                    "Demo: input-3"
+                  ],
+                  "name": "Demo: write the steps",
+                  "outputs": [
+                    "Demo: output-3"
+                  ],
+                  "starting_state": "Demo: state-3",
+                  "step_id": "demo-step-3"
+                },
+                {
+                  "actions": [
+                    "Demo: action-4"
+                  ],
+                  "final_state": "Demo: state-5",
+                  "inputs": [
+                    "Demo: input-4"
+                  ],
+                  "name": "Demo: bind the inputs",
+                  "outputs": [
+                    "Demo: output-4"
+                  ],
+                  "starting_state": "Demo: state-4",
+                  "step_id": "demo-step-4"
+                },
+                {
+                  "actions": [
+                    "Demo: action-5"
+                  ],
+                  "final_state": "Demo: state-6",
+                  "inputs": [
+                    "Demo: input-5"
+                  ],
+                  "name": "Demo: define the actions",
+                  "outputs": [
+                    "Demo: output-5"
+                  ],
+                  "starting_state": "Demo: state-5",
+                  "step_id": "demo-step-5"
+                }
+              ]
+            },
+            {
+              "name": "Demo: expand",
+              "phase_id": "demo-phase-expand",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-6"
+                  ],
+                  "final_state": "Demo: state-7",
+                  "inputs": [
+                    "Demo: input-6"
+                  ],
+                  "name": "Demo: pin the outputs",
+                  "outputs": [
+                    "Demo: output-6"
+                  ],
+                  "starting_state": "Demo: state-6",
+                  "step_id": "demo-step-6"
+                },
+                {
+                  "actions": [
+                    "Demo: action-7"
+                  ],
+                  "final_state": "Demo: state-8",
+                  "inputs": [
+                    "Demo: input-7"
+                  ],
+                  "name": "Demo: write the narrative",
+                  "outputs": [
+                    "Demo: output-7"
+                  ],
+                  "starting_state": "Demo: state-7",
+                  "step_id": "demo-step-7"
+                },
+                {
+                  "actions": [
+                    "Demo: action-8"
+                  ],
+                  "final_state": "Demo: state-9",
+                  "inputs": [
+                    "Demo: input-8"
+                  ],
+                  "name": "Demo: draw the visual",
+                  "outputs": [
+                    "Demo: output-8"
+                  ],
+                  "starting_state": "Demo: state-8",
+                  "step_id": "demo-step-8"
+                }
+              ]
+            }
+          ],
+          "process_inventory": [
+            "Demo: discovery",
+            "Demo: build",
+            "Demo: launch"
+          ],
+          "solution_id": "demo-signature-3f",
+          "starting_state": "Demo: state-0",
+          "transformation_map": "Demo: from referral chaos to predictable demand",
+          "version": 1,
+          "visual": "Demo: a three lane map with nine labelled stages"
+        },
+        "step_deliveries": [
+          {
+            "action": "Demo: deliver action 0",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 0",
+            "measure": "Demo: measure 0",
+            "step_id": "demo-step-0",
+            "timing": "Demo: week 1"
+          },
+          {
+            "action": "Demo: deliver action 1",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 1",
+            "measure": "Demo: measure 1",
+            "step_id": "demo-step-1",
+            "timing": "Demo: week 2"
+          },
+          {
+            "action": "Demo: deliver action 2",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 2",
+            "measure": "Demo: measure 2",
+            "step_id": "demo-step-2",
+            "timing": "Demo: week 3"
+          },
+          {
+            "action": "Demo: deliver action 3",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 3",
+            "measure": "Demo: measure 3",
+            "step_id": "demo-step-3",
+            "timing": "Demo: week 4"
+          },
+          {
+            "action": "Demo: deliver action 4",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 4",
+            "measure": "Demo: measure 4",
+            "step_id": "demo-step-4",
+            "timing": "Demo: week 5"
+          },
+          {
+            "action": "Demo: deliver action 5",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 5",
+            "measure": "Demo: measure 5",
+            "step_id": "demo-step-5",
+            "timing": "Demo: week 6"
+          },
+          {
+            "action": "Demo: deliver action 6",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 6",
+            "measure": "Demo: measure 6",
+            "step_id": "demo-step-6",
+            "timing": "Demo: week 7"
+          },
+          {
+            "action": "Demo: deliver action 7",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 7",
+            "measure": "Demo: measure 7",
+            "step_id": "demo-step-7",
+            "timing": "Demo: week 8"
+          },
+          {
+            "action": "Demo: deliver action 8",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 8",
+            "measure": "Demo: measure 8",
+            "step_id": "demo-step-8",
+            "timing": "Demo: week 9"
+          }
+        ],
+        "support_cadence": "Demo: weekly training and weekly coaching",
+        "version": 1
+      },
+      "eligibility": "Demo: service businesses with a proven offer",
+      "offer_id": "demo-offer-3f",
+      "owner": "demo-offer-owner",
+      "price_hypothesis": "Demo: USD 7,500",
+      "promise": "Demo: twice the qualified referrals"
+    },
+    "on": "2026-10-03",
+    "proposed_by": "demo-red-principal",
+    "rationale": "Demo: the funnel completed capture, engagement and conversion",
+    "scope": "stage-9-launch-qa",
+    "stage_owner": "demo-red-principal",
+    "swimlanes": {
+      "moves": [
+        {
+          "channel": "messages",
+          "move_id": "demo-move-messages",
+          "next_action": "Demo: drive the prospect to the next step",
+          "next_step": "opt_in",
+          "stalled_step": "traffic",
+          "vehicle": "email"
+        },
+        {
+          "channel": "ads",
+          "move_id": "demo-move-ads",
+          "next_action": "Demo: drive the prospect to the next step",
+          "next_step": "watch_amplifier",
+          "stalled_step": "opt_in",
+          "vehicle": "email"
+        },
+        {
+          "channel": "human_outreach",
+          "move_id": "demo-move-human_outreach",
+          "next_action": "Demo: drive the prospect to the next step",
+          "next_step": "book_call",
+          "stalled_step": "watch_amplifier",
+          "vehicle": "email"
+        },
+        {
+          "channel": "offline_direct_mail",
+          "move_id": "demo-move-offline_direct_mail",
+          "next_action": "Demo: drive the prospect to the next step",
+          "next_step": "show",
+          "stalled_step": "book_call",
+          "vehicle": "email"
+        },
+        {
+          "channel": "content",
+          "move_id": "demo-move-content",
+          "next_action": "Demo: drive the prospect to the next step",
+          "next_step": "enroll",
+          "stalled_step": "show",
+          "vehicle": "email"
+        }
+      ],
+      "owner": "demo-recovery-owner",
+      "plan_id": "demo-swimlanes-3f"
+    },
+    "swimlanes_version": 1,
+    "workspace_id": "ws-3f"
+  },
+  "9": {
+    "amplifier": {
+      "amplifier_id": "demo-amplifier-3f",
+      "creative_approval": {
+        "approved_by": "demo-client-authority",
+        "approved_on": "2026-10-03",
+        "intended_use": "Demo: 3f pilot campaign"
+      },
+      "owner": "demo-production-manager",
+      "proof_claim_ids": [
+        "demo-claim-1"
+      ],
+      "script": [
+        {
+          "content": "Demo: promise content",
+          "kind": "promise"
+        },
+        {
+          "content": "Demo: proof content",
+          "kind": "proof"
+        },
+        {
+          "content": "Demo: problems content",
+          "kind": "problems"
+        },
+        {
+          "content": "Demo: steps content",
+          "kind": "steps"
+        },
+        {
+          "content": "Demo: context content",
+          "kind": "context"
+        },
+        {
+          "content": "Demo: action content",
+          "kind": "action"
+        }
+      ],
+      "script_approval": {
+        "approved_by": "demo-production-manager",
+        "approved_on": "2026-10-02",
+        "intended_use": "Demo: 3f pilot campaign"
+      },
+      "visuals": {
+        "brand_treatment": "asset://demo/aa/brand",
+        "edited_video": "asset://demo/aa/edited",
+        "hosted_video": "asset://demo/aa/hosted",
+        "player_assets": "asset://demo/aa/player",
+        "presentation": "asset://demo/aa/slides",
+        "recording": "asset://demo/aa/recording",
+        "speaker_notes": "asset://demo/aa/notes",
+        "storyboard": "asset://demo/aa/storyboard"
+      }
+    },
+    "approver": "demo-client-approver",
+    "assigned_owner": "demo-red-principal",
+    "checkpoint_evidence": "Demo: all critical path checks passed and owned",
+    "claims": [
+      {
+        "citations": [
+          {
+            "checksum": "sha256:demo-method",
+            "location": "p.1",
+            "source_id": "demo-source-method"
+          }
+        ],
+        "claim_id": "demo-claim-1",
+        "confidence_note": "demo: directly observed",
+        "provenance": "known",
+        "statement": "Demo: method fact recorded with the client"
+      }
+    ],
+    "client_process": {
+      "acceptance_criteria": [
+        "Demo: existing business with a delivered offer"
+      ],
+      "approver": "demo-client-authority",
+      "checkpoints": [
+        {
+          "kind": "intent",
+          "on_fail_action": "Demo: step back and reset before continuing",
+          "question": "Demo: the client's question for intent"
+        },
+        {
+          "kind": "commitment",
+          "on_fail_action": "Demo: step back and reset before continuing",
+          "question": "Demo: the client's question for commitment"
+        },
+        {
+          "kind": "value",
+          "on_fail_action": "Demo: step back and reset before continuing",
+          "question": "Demo: the client's question for value"
+        },
+        {
+          "kind": "confidence",
+          "on_fail_action": "Demo: step back and reset before continuing",
+          "question": "Demo: the client's question for confidence"
+        },
+        {
+          "kind": "desire",
+          "on_fail_action": "Demo: step back and reset before continuing",
+          "question": "Demo: the client's question for desire"
+        }
+      ],
+      "homework": {
+        "booking_window_days": 3,
+        "questions": [
+          "Demo: what is your current measure?",
+          "Demo: what is stopping you?"
+        ],
+        "signature_step": "Demo: extract the diagnosis"
+      },
+      "objections": [
+        {
+          "answer": "Demo: the client asks how many clients make it pay",
+          "concern": "Demo: how much does it cost?"
+        }
+      ],
+      "owner": "demo-red-process-owner",
+      "process_id": "demo-process-3f",
+      "rejection_criteria": [
+        "Demo: no product and no revenue"
+      ],
+      "steps": [
+        {
+          "prompt": "Demo: the client's own wording for frame",
+          "purpose": "Demo: run the frame part",
+          "step_kind": "frame"
+        },
+        {
+          "prompt": "Demo: the client's own wording for discover-problems",
+          "purpose": "Demo: run the discover-problems part",
+          "step_kind": "discover-problems"
+        },
+        {
+          "prompt": "Demo: the client's own wording for prescription",
+          "purpose": "Demo: run the prescription part",
+          "step_kind": "prescription"
+        },
+        {
+          "prompt": "Demo: the client's own wording for application",
+          "purpose": "Demo: run the application part",
+          "step_kind": "application"
+        },
+        {
+          "prompt": "Demo: the client's own wording for invitation",
+          "purpose": "Demo: run the invitation part",
+          "step_kind": "invitation"
+        },
+        {
+          "prompt": "Demo: the client's own wording for objection-crusher",
+          "purpose": "Demo: run the objection-crusher part",
+          "step_kind": "objection-crusher"
+        }
+      ],
+      "strategy": "paid-strategy-session",
+      "terms": {
+        "no_show_rules": [
+          "Demo: confirm within the booking window"
+        ],
+        "price_floor": 3000
+      }
+    },
+    "client_process_version": 1,
+    "correlation_id": "demo-corr-stage-9",
+    "due_on": "2026-10-17",
+    "enrollment": {
+      "closer": "demo-sales-closer",
+      "homework": {
+        "max_days_to_call": 3,
+        "questions": [
+          "Demo: what are your current sales?",
+          "Demo: what is holding you back?"
+        ],
+        "signature_step": "Demo: extract the diagnosis"
+      },
+      "owner": "demo-journey-owner",
+      "payment": {
+        "collected_live": true,
+        "deposit_amount": 2000,
+        "method": "card"
+      },
+      "plan_id": "demo-enrollment-3f",
+      "qualification": {
+        "accept_criteria": [
+          "Demo: established business at 10k per month"
+        ],
+        "reject_criteria": [
+          "Demo: still has a day job with no revenue"
+        ]
+      },
+      "steps": [
+        {
+          "opt_out_check": "Demo: confirm the prospect wants this now",
+          "purpose": "Demo: run the frame stage",
+          "step_kind": "frame"
+        },
+        {
+          "opt_out_check": "Demo: confirm the prospect wants this now",
+          "purpose": "Demo: run the examine stage",
+          "step_kind": "examine"
+        },
+        {
+          "opt_out_check": "Demo: confirm the prospect wants this now",
+          "purpose": "Demo: run the prescribe stage",
+          "step_kind": "prescribe"
+        },
+        {
+          "opt_out_check": "Demo: confirm the prospect wants this now",
+          "purpose": "Demo: run the prognosis stage",
+          "step_kind": "prognosis"
+        }
+      ]
+    },
+    "enrollment_version": 1,
+    "funnel": {
+      "assets": {
+        "analytics": "asset://demo/funnel/analytics",
+        "automation": "asset://demo/funnel/automation",
+        "booking": "asset://demo/funnel/booking",
+        "campaign_architecture": "asset://demo/funnel/architecture",
+        "crm": "asset://demo/funnel/crm",
+        "forms": "asset://demo/funnel/forms",
+        "pages": "asset://demo/funnel/pages",
+        "qualification": "asset://demo/funnel/qualification",
+        "sales_handoff": "asset://demo/funnel/sales-handoff",
+        "sequences": "asset://demo/funnel/sequences",
+        "sops": "asset://demo/funnel/sops",
+        "tags": "asset://demo/funnel/tags",
+        "tracking": "asset://demo/funnel/tracking"
+      },
+      "dry_run": {
+        "dry_run_id": "demo-dryrun-3f",
+        "handoffs": [
+          {
+            "kind": "capture",
+            "outcome": "routed",
+            "owner": "demo-sdr",
+            "record_id": "demo-record-capture"
+          },
+          {
+            "kind": "engagement",
+            "outcome": "routed",
+            "owner": "demo-setter",
+            "record_id": "demo-record-engagement"
+          },
+          {
+            "kind": "conversion",
+            "outcome": "routed",
+            "owner": "demo-closer",
+            "record_id": "demo-record-conversion"
+          }
+        ]
+      },
+      "integration_id": "demo-funnel-3f",
+      "owner": "demo-integration-manager"
+    },
+    "message": {
+      "angles": [
+        "Demo: referral drought",
+        "Demo: referral engine"
+      ],
+      "authority_amplifier_outline": "Demo: promise, proof, problems, steps, context, action",
+      "avatar": "Demo: owner-operators of small service firms",
+      "cta": "Demo: book a diagnostic call",
+      "currency": "Demo: qualified referrals",
+      "desired_outcome": "Demo: a predictable referral engine",
+      "hook": "Demo: why referrals stall at four a month",
+      "landing_message": "Demo: turn referrals into a system",
+      "lead_magnet": "Demo: referral readiness checklist",
+      "message_id": "demo-message-3f",
+      "method_explanation": "Demo: install the referral network in nine steps",
+      "owner": "demo-message-owner",
+      "problem": "Demo: cannot forecast revenue",
+      "problem_hierarchy": [
+        "Demo: no predictable referral flow",
+        "Demo: referrals depend on luck"
+      ],
+      "product_offer_id": "demo-offer-3f",
+      "promise": "Demo: twice the qualified referrals",
+      "proof_objections": [
+        "Demo: proof: referral partner network",
+        "Demo: objection: no time to build it"
+      ],
+      "story": "Demo: an owner-operator story"
+    },
+    "method": {
+      "approved_by": "demo-client-approver",
+      "approved_on": "2026-10-02",
+      "claims": [
+        "demo-claim-1"
+      ],
+      "currency": "Demo: qualified referrals",
+      "diagnostic_model": {
+        "explanatory_copy": "Demo: two levels placed by referral count",
+        "levels": [
+          {
+            "behaviors": [
+              "Demo: waits for referrals"
+            ],
+            "level_id": "demo-level-stuck",
+            "name": "Demo: stuck",
+            "observable_measures": [
+              "Demo: under 4 per month"
+            ],
+            "problems": [
+              "Demo: cannot forecast revenue"
+            ],
+            "symptoms": [
+              "Demo: quiet months"
+            ]
+          },
+          {
+            "behaviors": [
+              "Demo: runs the network"
+            ],
+            "level_id": "demo-level-scaling",
+            "name": "Demo: scaling",
+            "observable_measures": [
+              "Demo: 12 or more per month"
+            ],
+            "problems": [
+              "Demo: lead flow stalls"
+            ],
+            "symptoms": [
+              "Demo: pipeline visible"
+            ]
+          }
+        ],
+        "model_id": "demo-model-3f",
+        "name": "Demo: growth pyramid",
+        "progression": "Demo: climb by installing the referral network",
+        "qualification_logic": "Demo: rank by monthly referral count",
+        "version": 1,
+        "visual": "Demo: asset://diagnostic/3f-growth-pyramid.png"
+      },
+      "intended_use": "Demo: 3f pilot campaign",
+      "method_id": "demo-method-3f",
+      "parent_method": "Demo: signature-solution",
+      "primary_currency": {
+        "audience": "Demo: owner-operators of small service firms",
+        "currency": "Demo: qualified referrals",
+        "current_measure": "Demo: 4 per month",
+        "desired_measure": "Demo: 12 per month",
+        "mechanism": "Demo: referral partner network",
+        "version": 1
+      },
+      "semantic_version": {
+        "major": 1,
+        "minor": 0,
+        "patch": 0
+      },
+      "stages": [
+        "Demo: diagnose",
+        "Demo: position",
+        "Demo: model"
+      ]
+    },
+    "offer": {
+      "audience": "Demo: owner-operators of small service firms",
+      "delivery": {
+        "delivery_id": "demo-delivery-3f",
+        "delivery_model": "Demo: group coaching program",
+        "duration": "Demo: eight weeks",
+        "eligibility": "Demo: owner-operator with a delivery team",
+        "guarantee_decision": "Demo: no guarantee until results are measured",
+        "modules": [
+          "Demo: one module per named stage"
+        ],
+        "offer_stack": [
+          "Demo: diagnostic offer",
+          "Demo: core program"
+        ],
+        "outcome_measures": [
+          "Demo: qualified conversations per month"
+        ],
+        "pricing_payments": "Demo: outcome based fee in three payments",
+        "responsibilities": [
+          "Demo: RED builds the machine",
+          "Demo: client serves"
+        ],
+        "scope": "Demo: the full nine step transformation",
+        "signature_solution": {
+          "final_state": "Demo: state-9",
+          "narrative": "Demo: nine named stages move the client across three phases",
+          "phases": [
+            {
+              "name": "Demo: extract",
+              "phase_id": "demo-phase-extract",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-0"
+                  ],
+                  "final_state": "Demo: state-1",
+                  "inputs": [
+                    "Demo: input-0"
+                  ],
+                  "name": "Demo: extract the diagnosis",
+                  "outputs": [
+                    "Demo: output-0"
+                  ],
+                  "starting_state": "Demo: state-0",
+                  "step_id": "demo-step-0"
+                },
+                {
+                  "actions": [
+                    "Demo: action-1"
+                  ],
+                  "final_state": "Demo: state-2",
+                  "inputs": [
+                    "Demo: input-1"
+                  ],
+                  "name": "Demo: draft the map",
+                  "outputs": [
+                    "Demo: output-1"
+                  ],
+                  "starting_state": "Demo: state-1",
+                  "step_id": "demo-step-1"
+                },
+                {
+                  "actions": [
+                    "Demo: action-2"
+                  ],
+                  "final_state": "Demo: state-3",
+                  "inputs": [
+                    "Demo: input-2"
+                  ],
+                  "name": "Demo: name the phases",
+                  "outputs": [
+                    "Demo: output-2"
+                  ],
+                  "starting_state": "Demo: state-2",
+                  "step_id": "demo-step-2"
+                }
+              ]
+            },
+            {
+              "name": "Demo: content",
+              "phase_id": "demo-phase-content",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-3"
+                  ],
+                  "final_state": "Demo: state-4",
+                  "inputs": [
+                    "Demo: input-3"
+                  ],
+                  "name": "Demo: write the steps",
+                  "outputs": [
+                    "Demo: output-3"
+                  ],
+                  "starting_state": "Demo: state-3",
+                  "step_id": "demo-step-3"
+                },
+                {
+                  "actions": [
+                    "Demo: action-4"
+                  ],
+                  "final_state": "Demo: state-5",
+                  "inputs": [
+                    "Demo: input-4"
+                  ],
+                  "name": "Demo: bind the inputs",
+                  "outputs": [
+                    "Demo: output-4"
+                  ],
+                  "starting_state": "Demo: state-4",
+                  "step_id": "demo-step-4"
+                },
+                {
+                  "actions": [
+                    "Demo: action-5"
+                  ],
+                  "final_state": "Demo: state-6",
+                  "inputs": [
+                    "Demo: input-5"
+                  ],
+                  "name": "Demo: define the actions",
+                  "outputs": [
+                    "Demo: output-5"
+                  ],
+                  "starting_state": "Demo: state-5",
+                  "step_id": "demo-step-5"
+                }
+              ]
+            },
+            {
+              "name": "Demo: expand",
+              "phase_id": "demo-phase-expand",
+              "steps": [
+                {
+                  "actions": [
+                    "Demo: action-6"
+                  ],
+                  "final_state": "Demo: state-7",
+                  "inputs": [
+                    "Demo: input-6"
+                  ],
+                  "name": "Demo: pin the outputs",
+                  "outputs": [
+                    "Demo: output-6"
+                  ],
+                  "starting_state": "Demo: state-6",
+                  "step_id": "demo-step-6"
+                },
+                {
+                  "actions": [
+                    "Demo: action-7"
+                  ],
+                  "final_state": "Demo: state-8",
+                  "inputs": [
+                    "Demo: input-7"
+                  ],
+                  "name": "Demo: write the narrative",
+                  "outputs": [
+                    "Demo: output-7"
+                  ],
+                  "starting_state": "Demo: state-7",
+                  "step_id": "demo-step-7"
+                },
+                {
+                  "actions": [
+                    "Demo: action-8"
+                  ],
+                  "final_state": "Demo: state-9",
+                  "inputs": [
+                    "Demo: input-8"
+                  ],
+                  "name": "Demo: draw the visual",
+                  "outputs": [
+                    "Demo: output-8"
+                  ],
+                  "starting_state": "Demo: state-8",
+                  "step_id": "demo-step-8"
+                }
+              ]
+            }
+          ],
+          "process_inventory": [
+            "Demo: discovery",
+            "Demo: build",
+            "Demo: launch"
+          ],
+          "solution_id": "demo-signature-3f",
+          "starting_state": "Demo: state-0",
+          "transformation_map": "Demo: from referral chaos to predictable demand",
+          "version": 1,
+          "visual": "Demo: a three lane map with nine labelled stages"
+        },
+        "step_deliveries": [
+          {
+            "action": "Demo: deliver action 0",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 0",
+            "measure": "Demo: measure 0",
+            "step_id": "demo-step-0",
+            "timing": "Demo: week 1"
+          },
+          {
+            "action": "Demo: deliver action 1",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 1",
+            "measure": "Demo: measure 1",
+            "step_id": "demo-step-1",
+            "timing": "Demo: week 2"
+          },
+          {
+            "action": "Demo: deliver action 2",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 2",
+            "measure": "Demo: measure 2",
+            "step_id": "demo-step-2",
+            "timing": "Demo: week 3"
+          },
+          {
+            "action": "Demo: deliver action 3",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 3",
+            "measure": "Demo: measure 3",
+            "step_id": "demo-step-3",
+            "timing": "Demo: week 4"
+          },
+          {
+            "action": "Demo: deliver action 4",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 4",
+            "measure": "Demo: measure 4",
+            "step_id": "demo-step-4",
+            "timing": "Demo: week 5"
+          },
+          {
+            "action": "Demo: deliver action 5",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 5",
+            "measure": "Demo: measure 5",
+            "step_id": "demo-step-5",
+            "timing": "Demo: week 6"
+          },
+          {
+            "action": "Demo: deliver action 6",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 6",
+            "measure": "Demo: measure 6",
+            "step_id": "demo-step-6",
+            "timing": "Demo: week 7"
+          },
+          {
+            "action": "Demo: deliver action 7",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 7",
+            "measure": "Demo: measure 7",
+            "step_id": "demo-step-7",
+            "timing": "Demo: week 8"
+          },
+          {
+            "action": "Demo: deliver action 8",
+            "actor": "Demo: RED delivery lead",
+            "deliverable": "Demo: deliverable 8",
+            "measure": "Demo: measure 8",
+            "step_id": "demo-step-8",
+            "timing": "Demo: week 9"
+          }
+        ],
+        "support_cadence": "Demo: weekly training and weekly coaching",
+        "version": 1
+      },
+      "eligibility": "Demo: service businesses with a proven offer",
+      "offer_id": "demo-offer-3f",
+      "owner": "demo-offer-owner",
+      "price_hypothesis": "Demo: USD 7,500",
+      "promise": "Demo: twice the qualified referrals"
+    },
+    "on": "2026-10-03",
+    "product_program": {
+      "cadence": "monday_training_thursday_coaching",
+      "duration_weeks": 9,
+      "model": "group_consulting",
+      "modules": [
+        {
+          "deliverable": "Demo: the Demo: extract the diagnosis worksheet",
+          "module_id": "demo-module-1",
+          "outcome": "Demo: the client reaches Demo: extract the diagnosis",
+          "position": 1,
+          "signature_step": "Demo: extract the diagnosis"
+        },
+        {
+          "deliverable": "Demo: the Demo: draft the map worksheet",
+          "module_id": "demo-module-2",
+          "outcome": "Demo: the client reaches Demo: draft the map",
+          "position": 2,
+          "signature_step": "Demo: draft the map"
+        },
+        {
+          "deliverable": "Demo: the Demo: name the phases worksheet",
+          "module_id": "demo-module-3",
+          "outcome": "Demo: the client reaches Demo: name the phases",
+          "position": 3,
+          "signature_step": "Demo: name the phases"
+        },
+        {
+          "deliverable": "Demo: the Demo: write the steps worksheet",
+          "module_id": "demo-module-4",
+          "outcome": "Demo: the client reaches Demo: write the steps",
+          "position": 4,
+          "signature_step": "Demo: write the steps"
+        },
+        {
+          "deliverable": "Demo: the Demo: bind the inputs worksheet",
+          "module_id": "demo-module-5",
+          "outcome": "Demo: the client reaches Demo: bind the inputs",
+          "position": 5,
+          "signature_step": "Demo: bind the inputs"
+        },
+        {
+          "deliverable": "Demo: the Demo: define the actions worksheet",
+          "module_id": "demo-module-6",
+          "outcome": "Demo: the client reaches Demo: define the actions",
+          "position": 6,
+          "signature_step": "Demo: define the actions"
+        },
+        {
+          "deliverable": "Demo: the Demo: pin the outputs worksheet",
+          "module_id": "demo-module-7",
+          "outcome": "Demo: the client reaches Demo: pin the outputs",
+          "position": 7,
+          "signature_step": "Demo: pin the outputs"
+        },
+        {
+          "deliverable": "Demo: the Demo: write the narrative worksheet",
+          "module_id": "demo-module-8",
+          "outcome": "Demo: the client reaches Demo: write the narrative",
+          "position": 8,
+          "signature_step": "Demo: write the narrative"
+        },
+        {
+          "deliverable": "Demo: the Demo: draw the visual worksheet",
+          "module_id": "demo-module-9",
+          "outcome": "Demo: the client reaches Demo: draw the visual",
+          "position": 9,
+          "signature_step": "Demo: draw the visual"
+        }
+      ],
+      "owner": "demo-red-offer-owner",
+      "pricing_basis": "outcome_value",
+      "program_id": "demo-program-3f",
+      "version": 1
+    },
+    "proposed_by": "demo-red-principal",
+    "qa": {
+      "authorization": {
+        "authorized_by": "demo-client-authority",
+        "authorized_on": "2026-10-03",
+        "intended_use": "Demo: 3f pilot launch"
+      },
+      "checks": [
+        {
+          "evidence": "Demo: evidence://recorded_message",
+          "kind": "recorded_message",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://technical_desktop",
+          "kind": "technical_desktop",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://technical_mobile",
+          "kind": "technical_mobile",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://commercial_desktop",
+          "kind": "commercial_desktop",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://commercial_mobile",
+          "kind": "commercial_mobile",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://forms",
+          "kind": "forms",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://crm",
+          "kind": "crm",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://email",
+          "kind": "email",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://automation",
+          "kind": "automation",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://booking",
+          "kind": "booking",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://tracking",
+          "kind": "tracking",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://payment",
+          "kind": "payment",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://sales_handoff",
+          "kind": "sales_handoff",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://client_approval",
+          "kind": "client_approval",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://budget",
+          "kind": "budget",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://creative",
+          "kind": "creative",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://dashboard",
+          "kind": "dashboard",
+          "outcome": "passed"
+        },
+        {
+          "evidence": "Demo: evidence://launch_decision",
+          "kind": "launch_decision",
+          "outcome": "passed"
+        }
+      ],
+      "compliance": {
+        "assets": [
+          {
+            "kind": "gdpr_consent",
+            "reference": "asset://demo/compliance/gdpr_consent",
+            "version": 1
+          },
+          {
+            "kind": "facebook_disclaimer",
+            "reference": "asset://demo/compliance/facebook_disclaimer",
+            "version": 1
+          },
+          {
+            "kind": "income_disclaimer",
+            "reference": "asset://demo/compliance/income_disclaimer",
+            "version": 1
+          },
+          {
+            "kind": "privacy_policy",
+            "reference": "asset://demo/compliance/privacy_policy",
+            "version": 1
+          },
+          {
+            "kind": "terms_of_use",
+            "reference": "asset://demo/compliance/terms_of_use",
+            "version": 1
+          },
+          {
+            "kind": "attorney_review",
+            "reference": "asset://demo/compliance/attorney_review",
+            "version": 1
+          }
+        ],
+        "package_id": "demo-compliance-3f",
+        "target_markets": [
+          "us"
+        ]
+      },
+      "designated_authority": "demo-client-authority",
+      "owner": "demo-qa-owner",
+      "qa_id": "demo-qa-3f"
+    },
+    "qa_package_id": "demo-launch-package-3f",
+    "qa_version": 1,
+    "rationale": "Demo: the designated authority authorized traffic",
+    "scope": "stage-10-traffic",
+    "stage_owner": "demo-red-principal",
+    "swimlanes": {
+      "moves": [
+        {
+          "channel": "messages",
+          "move_id": "demo-move-messages",
+          "next_action": "Demo: drive the prospect to the next step",
+          "next_step": "opt_in",
+          "stalled_step": "traffic",
+          "vehicle": "email"
+        },
+        {
+          "channel": "ads",
+          "move_id": "demo-move-ads",
+          "next_action": "Demo: drive the prospect to the next step",
+          "next_step": "watch_amplifier",
+          "stalled_step": "opt_in",
+          "vehicle": "email"
+        },
+        {
+          "channel": "human_outreach",
+          "move_id": "demo-move-human_outreach",
+          "next_action": "Demo: drive the prospect to the next step",
+          "next_step": "book_call",
+          "stalled_step": "watch_amplifier",
+          "vehicle": "email"
+        },
+        {
+          "channel": "offline_direct_mail",
+          "move_id": "demo-move-offline_direct_mail",
+          "next_action": "Demo: drive the prospect to the next step",
+          "next_step": "show",
+          "stalled_step": "book_call",
+          "vehicle": "email"
+        },
+        {
+          "channel": "content",
+          "move_id": "demo-move-content",
+          "next_action": "Demo: drive the prospect to the next step",
+          "next_step": "enroll",
+          "stalled_step": "show",
+          "vehicle": "email"
+        }
+      ],
+      "owner": "demo-recovery-owner",
+      "plan_id": "demo-swimlanes-3f"
+    },
+    "swimlanes_version": 1,
+    "workspace_id": "ws-3f"
+  }
+}

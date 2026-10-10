@@ -27,6 +27,8 @@ from redops.api.schemas import (
     BuildListResponse,
     BuildObjectResponse,
     CampaignMessageInput,
+    CampaignMessageListResponse,
+    CampaignMessageResponse,
     ClaimInput,
     ClaimListResponse,
     ClaimResponse,
@@ -39,7 +41,11 @@ from redops.api.schemas import (
     DecisionListResponse,
     DecisionRecordResponse,
     EngagementProductionViewResponse,
+    FunnelAssetRefsResponse,
     FunnelIntegrationInput,
+    FunnelIntegrationResponse,
+    FunnelListResponse,
+    HandoffRecordResponse,
     JourneyReleaseAssetResponse,
     JourneyReleaseListResponse,
     JourneyReleaseResponse,
@@ -77,9 +83,15 @@ from redops.api.schemas import (
     RecordStageThreeGateRequest,
     RecordStageTwoGateRequest,
     RecordStageZeroGateRequest,
+    ScriptSectionResponse,
+    AmplifierApprovalResponse,
+    AuthorityAmplifierListResponse,
+    AuthorityAmplifierResponse,
     SourceRecordListResponse,
     SourceRecordResponse,
+    ProspectPathDryRunResponse,
     TrafficAuthorizationResponse,
+    VisualProductionPackageResponse,
 )
 from redops.contexts.commercial.application.ports import (
     CampaignMessageRepository,
@@ -1296,6 +1308,49 @@ def stages() -> list[dict[str, Any]]:
         }
         for stage in template.stages
     ]
+
+
+_GATE_REQUEST_MODELS: tuple[type[BaseModel], ...] = (
+    RecordStageZeroGateRequest,
+    RecordStageOneGateRequest,
+    RecordStageTwoGateRequest,
+    RecordStageThreeGateRequest,
+    RecordStageFourGateRequest,
+    RecordStageFiveGateRequest,
+    RecordStageSixGateRequest,
+    RecordStageSevenGateRequest,
+    RecordStageEightGateRequest,
+    RecordStageNineGateRequest,
+    RecordStageTenGateRequest,
+)
+
+
+@router.get("/stages/{stage_number}/gate-schema")
+def get_stage_gate_schema(stage_number: int) -> dict[str, Any]:
+    """Return the JSON Schema of one stage's gate request body (spec §4.2).
+
+    The schema-driven record-gate form is built from the exact
+    ``RecordStageNGateRequest`` model the ``POST
+    /red/clients/{tenant_id}/stages/{n}/gate`` routes accept, so the schema and
+    the route body cannot drift: both are generated from the same Pydantic
+    model. Internal ``$defs`` are returned unresolved; the form resolves them.
+    The schema is reference data about the canonical template, not a
+    tenant-scoped resource, so it carries no tenant parameter and computes no
+    rule.
+    """
+
+    if stage_number < 0 or stage_number >= len(_GATE_REQUEST_MODELS):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "UnknownStageError",
+                "message": (
+                    f"stage {stage_number} is not one of the canonical stages "
+                    "0-10; the template declares no gate schema for it"
+                ),
+            },
+        )
+    return _GATE_REQUEST_MODELS[stage_number].model_json_schema()
 
 
 @router.post("/clients/{tenant_id}/stages/0/gate", status_code=201)
@@ -4429,6 +4484,293 @@ def list_offer_versions(
     )
 
 
+def _campaign_message_payload(message: CampaignMessage) -> CampaignMessageResponse:
+    """Project a stored approved stage 6 message, computing no rule.
+
+    The asset review panel (spec §3.1) renders the message's full stored
+    content, so every canonical message part is returned verbatim together with
+    the refs the aggregate carries (the pinned method reference and the
+    grounding offer id) and the approval state, so approved entities can be
+    marked. The route computes no rule; the aggregate already re-validated on
+    load.
+    """
+
+    return CampaignMessageResponse(
+        message_id=message.message_id,
+        tenant_id=message.tenant_id,
+        owner=message.owner,
+        avatar=message.avatar,
+        currency=message.currency,
+        problem=message.problem,
+        promise=message.promise,
+        cta=message.cta,
+        problem_hierarchy=list(message.problem_hierarchy),
+        desired_outcome=message.desired_outcome,
+        proof_objections=list(message.proof_objections),
+        story=message.story,
+        method_explanation=message.method_explanation,
+        lead_magnet=message.lead_magnet,
+        hook=message.hook,
+        angles=list(message.angles),
+        landing_message=message.landing_message,
+        authority_amplifier_outline=message.authority_amplifier_outline,
+        product_offer_id=message.product_offer_id,
+        method_ref=MethodReferenceResponse(
+            method_id=message.method_reference.method_id,
+            version=str(message.method_reference.version),
+            intended_use=message.method_reference.intended_use,
+        ),
+        offer_id=message.offer.offer_id,
+        state=message.state.value,
+        is_approved=message.is_approved,
+        review_reason=message.review_reason,
+    )
+
+
+@router.get("/messages", response_model=CampaignMessageListResponse)
+def list_campaign_messages(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose approved messages are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repository: CampaignMessageRepository = Depends(
+        get_campaign_message_repository
+    ),
+) -> CampaignMessageListResponse:
+    """List one client tenant's approved stage 6 messages (spec §4.1).
+
+    The asset review panel needs the stage 6 message kinds' stored content,
+    which no read route exposed before: a message was write-only through its
+    stage 6 gate. SPEC.md section 9 requires every tenant resource query to
+    carry ``tenant_id`` and section 7 requires list endpoints to enforce client
+    access and pagination, so the tenant is a required query parameter and the
+    repository read is tenant scoped; another client's messages are unreadable
+    here and an unknown tenant lists nothing. Pagination is applied after the
+    tenant-scoped read so a page is stable. The route is read-only: a message
+    is born approved through its stage gate and a direct write here would let a
+    caller confer the approval the governance gate owns, so no message write
+    path is exposed.
+    """
+
+    messages = repository.list(tenant_id)
+    page = messages[offset : offset + limit]
+    return CampaignMessageListResponse(
+        tenant_id=tenant_id,
+        total=len(messages),
+        limit=limit,
+        offset=offset,
+        messages=[_campaign_message_payload(message) for message in page],
+    )
+
+
+def _amplifier_payload(amplifier: AuthorityAmplifier) -> AuthorityAmplifierResponse:
+    """Project a stored approved stage 7 amplifier, computing no rule.
+
+    The asset review panel (spec §3.1) renders the script sections in their
+    canonical order with each section's content, the visual and video asset
+    references, and the two distinct approvals, so the payload returns them
+    verbatim from the aggregate. The route computes no rule; the aggregate
+    already re-validated on load.
+    """
+
+    script_approval = amplifier.script_approval
+    creative_approval = amplifier.creative_approval
+    return AuthorityAmplifierResponse(
+        amplifier_id=amplifier.amplifier_id,
+        tenant_id=amplifier.tenant_id,
+        owner=amplifier.owner,
+        message_id=amplifier.message.message_id,
+        method_ref=MethodReferenceResponse(
+            method_id=amplifier.message.method_reference.method_id,
+            version=str(amplifier.message.method_reference.version),
+            intended_use=amplifier.message.method_reference.intended_use,
+        ),
+        offer_id=amplifier.message.offer.offer_id,
+        script=[
+            ScriptSectionResponse(kind=section.kind.value, content=section.content)
+            for section in amplifier.script
+        ],
+        proof_claim_ids=sorted(amplifier.proof_claim_ids),
+        visuals=(
+            None
+            if amplifier.visuals is None
+            else VisualProductionPackageResponse(
+                storyboard=amplifier.visuals.storyboard,
+                brand_treatment=amplifier.visuals.brand_treatment,
+                presentation=amplifier.visuals.presentation,
+                speaker_notes=amplifier.visuals.speaker_notes,
+                recording=amplifier.visuals.recording,
+                edited_video=amplifier.visuals.edited_video,
+                hosted_video=amplifier.visuals.hosted_video,
+                player_assets=amplifier.visuals.player_assets,
+            )
+        ),
+        script_approval=(
+            None
+            if script_approval is None
+            else AmplifierApprovalResponse(
+                approved_by=script_approval.approved_by,
+                intended_use=script_approval.intended_use,
+                approved_on=script_approval.approved_on,
+            )
+        ),
+        creative_approval=(
+            None
+            if creative_approval is None
+            else AmplifierApprovalResponse(
+                approved_by=creative_approval.approved_by,
+                intended_use=creative_approval.intended_use,
+                approved_on=creative_approval.approved_on,
+            )
+        ),
+        state=amplifier.state.value,
+        is_script_approved=amplifier.is_script_approved,
+        is_approved=amplifier.is_approved,
+        is_terminal=amplifier.is_terminal,
+        review_reason=amplifier.review_reason,
+    )
+
+
+@router.get("/amplifiers", response_model=AuthorityAmplifierListResponse)
+def list_authority_amplifiers(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose approved amplifiers are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repository: AuthorityAmplifierRepository = Depends(
+        get_authority_amplifier_repository
+    ),
+) -> AuthorityAmplifierListResponse:
+    """List one client tenant's approved stage 7 amplifiers (spec §4.1).
+
+    The asset review panel needs the stage 7 amplifier kinds' stored content --
+    the script sections and the visual and video asset references -- which no
+    read route exposed before: an amplifier was write-only through its stage 7
+    gate. SPEC.md section 9 requires every tenant resource query to carry
+    ``tenant_id`` and section 7 requires list endpoints to enforce client
+    access and pagination, so the tenant is a required query parameter and the
+    repository read is tenant scoped; another client's amplifiers are unreadable
+    here and an unknown tenant lists nothing. Pagination is applied after the
+    tenant-scoped read so a page is stable. The route is read-only: an
+    amplifier is born approved through its stage gate and a direct write here
+    would let a caller confer the approval the governance gate owns, so no
+    amplifier write path is exposed.
+    """
+
+    amplifiers = repository.list(tenant_id)
+    page = amplifiers[offset : offset + limit]
+    return AuthorityAmplifierListResponse(
+        tenant_id=tenant_id,
+        total=len(amplifiers),
+        limit=limit,
+        offset=offset,
+        amplifiers=[_amplifier_payload(amplifier) for amplifier in page],
+    )
+
+
+def _funnel_payload(funnel: FunnelIntegration) -> FunnelIntegrationResponse:
+    """Project a stored completed stage 8 funnel, computing no rule.
+
+    The asset review panel (spec §3.1) renders the funnel's thirteen canonical
+    asset references and its routing, so the payload returns the stored asset
+    package verbatim and the pinned prospect path dry run -- the funnel's
+    routing evidence -- with each handoff's outcome, record and owner, plus the
+    state flags the aggregate exposes. The route computes no rule; the
+    aggregate already re-validated on load.
+    """
+
+    dry_run = funnel.dry_run
+    return FunnelIntegrationResponse(
+        integration_id=funnel.integration_id,
+        tenant_id=funnel.tenant_id,
+        owner=funnel.owner,
+        amplifier_id=funnel.amplifier.amplifier_id,
+        message_id=funnel.amplifier.message.message_id,
+        method_ref=MethodReferenceResponse(
+            method_id=funnel.amplifier.message.method_reference.method_id,
+            version=str(funnel.amplifier.message.method_reference.version),
+            intended_use=funnel.amplifier.message.method_reference.intended_use,
+        ),
+        offer_id=funnel.amplifier.message.offer.offer_id,
+        assets=FunnelAssetRefsResponse(
+            campaign_architecture=funnel.assets.campaign_architecture,
+            pages=funnel.assets.pages,
+            forms=funnel.assets.forms,
+            qualification=funnel.assets.qualification,
+            booking=funnel.assets.booking,
+            sequences=funnel.assets.sequences,
+            crm=funnel.assets.crm,
+            tags=funnel.assets.tags,
+            automation=funnel.assets.automation,
+            analytics=funnel.assets.analytics,
+            tracking=funnel.assets.tracking,
+            sales_handoff=funnel.assets.sales_handoff,
+            sops=funnel.assets.sops,
+        ),
+        routing=(
+            None
+            if dry_run is None
+            else ProspectPathDryRunResponse(
+                dry_run_id=dry_run.dry_run_id,
+                handoffs=[
+                    HandoffRecordResponse(
+                        kind=record.kind.value,
+                        outcome=record.outcome.value,
+                        record_id=record.record_id,
+                        owner=record.owner,
+                        detail=record.detail,
+                    )
+                    for record in dry_run.handoffs
+                ],
+            )
+        ),
+        state=funnel.state.value,
+        is_complete=funnel.is_complete,
+        is_terminal=funnel.is_terminal,
+        review_reason=funnel.review_reason,
+    )
+
+
+@router.get("/funnels", response_model=FunnelListResponse)
+def list_funnel_integrations(
+    tenant_id: str = Query(
+        ..., description="The client tenant whose completed funnels are returned"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    repository: FunnelIntegrationRepository = Depends(
+        get_funnel_integration_repository
+    ),
+) -> FunnelListResponse:
+    """List one client tenant's completed stage 8 funnels (spec §4.1).
+
+    The asset review panel needs the stage 8 funnel kinds' stored content --
+    the thirteen canonical asset references and the routing -- which no read
+    route exposed before: a funnel was write-only through its stage 8 gate.
+    SPEC.md section 9 requires every tenant resource query to carry
+    ``tenant_id`` and section 7 requires list endpoints to enforce client
+    access and pagination, so the tenant is a required query parameter and the
+    repository read is tenant scoped; another client's funnels are unreadable
+    here and an unknown tenant lists nothing. Pagination is applied after the
+    tenant-scoped read so a page is stable. The route is read-only: a funnel is
+    born complete through its stage gate and a direct write here would let a
+    caller confer the completion the governance gate owns, so no funnel write
+    path is exposed.
+    """
+
+    funnels = repository.list(tenant_id)
+    page = funnels[offset : offset + limit]
+    return FunnelListResponse(
+        tenant_id=tenant_id,
+        total=len(funnels),
+        limit=limit,
+        offset=offset,
+        funnels=[_funnel_payload(funnel) for funnel in page],
+    )
+
+
 def _build_payload(build: BuildObject) -> BuildObjectResponse:
     """Project a stored production work item, computing no rule."""
 
@@ -4589,6 +4931,7 @@ def _decision_payload(decision: Any) -> DecisionRecordResponse:
         reviewer=decision.reviewer,
         scope=decision.scope,
         rationale=decision.rationale,
+        checkpoint_evidence=decision.checkpoint_evidence,
         decided_on=decision.decided_on,
         assigned_owner=decision.assigned_owner,
         due_on=decision.due_on,
