@@ -39,6 +39,7 @@ from redops.workflows.domain.value_objects import (
 )
 from redops.workflows.infrastructure.executors import ConnectorStepExecutor
 from redops.workflows.infrastructure.repositories import workflow_run_store_from_env
+from redops.workflows.sop_library import ops_workflow_definitions
 from redops.worker import connector_transport_from_env
 
 PIPELINE_DEFINITION_ID = "red-stage-0-10-pipeline"
@@ -77,6 +78,9 @@ def stage_pipeline_definition(
 
 RED_WORKFLOW_DEFINITIONS: dict[str, WorkflowDefinition] = {
     PIPELINE_DEFINITION_ID: stage_pipeline_definition(),
+    # The canon SOPs and playbooks (K14): the same durable, gate-bound run
+    # machinery drives an imported operating procedure.
+    **ops_workflow_definitions(),
 }
 
 

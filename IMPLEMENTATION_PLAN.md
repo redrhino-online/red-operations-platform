@@ -4,6 +4,46 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Operator session 2026-10-10: K14 — the canon SOPs and playbooks as workflows (plus the root-redirect and New chat fixes)
+
+- **Selected item:** K14 (import the canon's SOPs and playbooks as versioned
+  workflow definitions), directed by the owner after the cockpit overhaul phase
+  reached its definition of done; the owner also reported two live cockpit bugs,
+  fixed in the same session.
+- **Outcome:** `backend/redops/workflows/sop_import.py` parses the pinned
+  canon's `docs/ops/sops` and `docs/ops/playbooks` (50 documents) into versioned
+  `WorkflowDefinition`s: every numbered procedure/step item becomes a task step,
+  every role whose duty says it approves becomes a `wait_for_human` approval
+  gate the K12 binding advances, and the version is `1.<sha256-8>` of the source
+  so a canon change advances it instead of drifting. The importer writes two
+  committed generated modules — `ops_documents_gen.py` (RED's durable registry
+  builds from it via `sop_library`; `RED_WORKFLOW_DEFINITIONS` now holds 51
+  definitions, so `POST /red/clients/{tenant}/workflows/<sop-id>` starts a
+  gate-bound run) and the cockpit's `redops_sops.py` (50 Jobs catalog entries in
+  the RED Operations section, spliced into `WORKFLOW_REGISTRY`). Fixes: the K8
+  landing rewrite left the browser on exempt `/`, so the command center rendered
+  without navigation — the middleware now redirects the bare root to
+  `/operations/command-center` (5faa9e0, deployed); and the chat home stripped
+  `?new=1`/`?session=` with `router.replace('/')`, which re-entered the
+  middleware and yanked a new chat to the dashboard — the query is now stripped
+  in place with `window.history.replaceState` (43faa6c).
+- **Evidence:** `tests/unit/workflows/test_sop_import.py` 9 passed (parser,
+  gate derivation, registry merge, cockpit catalog, generated-module freshness
+  against the pinned canon); the funnel playbook derives 12 task steps; 32
+  approval gates across the library; the cockpit registry carries 76 entries
+  (50 RED ops); `make check` 2770 passed / 3 skipped / 799 subtests after the
+  canon re-pin (`make canon-pin`: the owner's canon edits moved the content
+  hash, which had also been failing the harness preflight inside
+  `test_ralph_cycle_prompt`); `check_vendor_additive.sh` ok.
+- **Not done (deliberately):** the canon checklists are reference assets and
+  stay in Knowledge (K9), not workflows; playbook `## Gate` prose is rendered as
+  catalog copy, not parsed into extra gates — gates come only from roles whose
+  duty says they approve; no send, spend, publication or client commitment is
+  authorized (SPEC.md sections 4 and 9).
+- **Next ready item:** none in the K phase; Q16 (optimistic-version conflict
+  half) remains the only partial queue item.
+- **Blockers:** none.
+
 ### Cycle 20261010T014351Z: K13 — the cockpit overhaul phase definition of done
 
 - **Selected item:** K13 (run `make done` end to end with the `[7/7]` gate,
@@ -65,64 +105,7 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   ADR 0009/0010) remains owner-gated and is never picked up unattended.
 - **Blockers:** none.
 
-### Cycle 20261010T013059Z: K12 — the workflow human gates bound to RED approvals
 
-- **Selected item:** K12 (bind the workflow human gates to RED approvals), the
-  highest-value ready item: K11 and K3 are done, so K12 is the `[7/7]` condition
-  8 binding half and the last K item K13 needs; it completes the pipeline's
-  approval loop so a run resumes only after the stage's RED approval is
-  recorded.
-- **Outcome:** the binding is a domain policy and a port, not a caller convention:
-  `GateStepBinding` (`workflows/domain/policies.py`) maps a pipeline
-  `gate-<stage>` step to its stage and leaves every other step unbound;
-  `StageGateApprovalPort` (`workflows/application/ports.py`) asks whether the
-  stage's RED approval is recorded, answered by
-  `StageGateApprovalRepository` (`workflows/infrastructure/approvals.py`) from
-  the tenant's durable `GateLedger` through the Governance repository port; and
-  `RunWorkflowHandler` takes an optional `gate_approvals` port whose
-  `_require_recorded_approval` raises the new `ApprovalNotRecordedError` when a
-  bound gate has no passing decision, so a run resumes only after that approval
-  is recorded (an unbound step keeps the generic behavior, so the existing
-  approval flows are unchanged). The store port gained
-  `list_awaiting_approval` (in-memory and PostgreSQL adapters) and the API
-  gained `GET /red/clients/{tenant}/workflows/awaiting-approval` (what is
-  waiting, with the exact pinned definition version) and
-  `POST /red/clients/{tenant}/workflows/{run_id}/approval` (a named human
-  resumes a waiting run through the handler composed with the gate-approval
-  seam). The approval experience is bridged: the approval inbox
-  (`ApprovalInbox`) gained a "Pending gate approvals" section fed by the new
-  read, and the cockpit Review queue (`ReviewQueue`) surfaces the pending gates
-  with a link to the approval inbox — one approval experience, the exact
-  version each run pins, and listing a pending gate approves nothing.
-- **Canon drift recorded:** the canon content changed mid-cycle (the owner added
-  `agent/` material; pinned `ef00388d…`, now `50f25ce7…`), which the harness's
-  strict preflight reports as `CANON DRIFT`. Re-pinned with the harness's own
-  idempotent `make canon-lock` (the step `make run` runs first), so the K9
-  canon seed's pin verification now verifies against the new pin; the owner
-  still owns any canon-content decision.
-- **Evidence:** `tests/unit/workflows/test_gate_approval_binding.py` 10 passed
-  (the binding maps `gate-3`/`gate-10` and leaves non-gate steps unbound; a run
-  pauses at the bound gate; resuming without the RED approval is refused with
-  `ApprovalNotRecordedError`; resuming after it is recorded commits the gate and
-  advances; an unbound step keeps the generic behavior; the adapter answers from
-  the ledger; the awaiting-approval read lists the waiting run with its exact
-  version; the approval route refuses then resumes) and
-  `tests/cockpit-ui/operationsScreensK12.test.tsx` 3 passed (the pending gates
-  surface with the exact pinned version, the empty state, and the container
-  fetches the awaiting-approval read with the context tenant and no free-text
-  tenant input; `tests/cockpit-ui` 52 passed in total); `make check` 2759
-  passed / 3 skipped / 799 subtests; `scripts/check_vendor_additive.sh` ok
-  (1053 locked files match); `check_cockpit_overhaul.sh` passes
-  `[14.1]`-`[14.5]`.
-- **Not done (deliberately):** the live single-shell verification and the docs
-  update are K13; no send, spend, publication or client commitment is authorized
-  (SPEC.md sections 4 and 9); `.ralph/DONE` is not touched because `make done`
-  still fails `[7/7]` at the live `[14.6]` check.
-- **Next ready item:** K13 (phase definition of done: run `make done` end to end
-  with the `[7/7]` gate, verify the deployed single shell on Atlas, update
-  `docs/fork_inventory.md` and the README for the retired thin client) — every
-  K dependency is now done.
-- **Blockers:** none.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ## Prototype definition of done
@@ -288,6 +271,7 @@ deferred and are not picked up unattended.
 | K11 | Register the stage 0-10 pipeline as cockpit workflow definitions (versioned; the definitions land additively, and surfacing them in Jobs may use the RED-adopted registration splice or an owner-approved exception recorded in `docs/fork_inventory.md` per ADR 0014) so Jobs lists them and a run's transitions appear in the workflow run detail screen | workflows | K1 | Jobs lists the pipeline; a started run shows its transitions |
 | K12 | Bind the workflow human gates to RED approvals: a run pauses at a `wait_for_human` gate that corresponds to a RED approval request and resumes only after that approval is recorded; bridge the approval inbox and the cockpit Review queue so there is one approval experience with the exact version diff | workflows, ui | K11, K3 | workflow test proves pause and resume on a RED approval; Review surfaces the pending approval |
 | K13 | Phase definition of done: run `make done` end to end with the `[7/7]` gate, verify the deployed single shell on Atlas (every nav item lands on a working screen with seeded data), update `docs/fork_inventory.md` and the README for the retired thin client | deploy, docs | K4, K5, K6, K7, K8, K9, K10, K11, K12 | `make done` passes with `[7/7]`; live verification recorded; docs updated |
+| K14 | Import the canon's SOPs and playbooks as versioned workflow definitions: the importer (`redops.workflows.sop_import`) derives task steps from each document's numbered procedure and approval gates from roles whose duty says they approve, writes committed generated modules for RED's durable registry and the cockpit Jobs catalog, and versions each definition from the source content hash so canon changes advance it | workflows, knowledge | K11, K12, K9 | `tests/unit/workflows/test_sop_import.py` (9 tests incl. generated-module freshness against the pinned canon); 51 registered definitions; Jobs lists the 50 ops entries; `make check` green |
 
 ## Production-readiness phase (after the prototype; not a prototype condition)
 

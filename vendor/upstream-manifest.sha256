@@ -942,7 +942,6 @@ bedd6c37bb9949a1f2652b8a9bd3790bd72415eb2134137d6eb8e736adb5ec7d  packages/ui/sr
 6f877c96ccb0a59cb87d835dc3fb1006981a764b0067f62083c98d477ef65a65  packages/ui/src/app/jobs/runs/[id]/page.tsx
 92c4b941038778d8d290ed901469ffd9100572f10aa7ae643fec6eebd45cda37  packages/ui/src/app/knowledge/page.tsx
 5ccd4294a0f6b0d20eb60a10825e148d6f9635f7ac2b86e28beb104394393c38  packages/ui/src/app/memories/page.tsx
-622c6e5466f9c9f1e06024bb298064dc3a43a75237eee39a8193822ea8ef2e70  packages/ui/src/app/page.tsx
 5911b22e8b30cbffcfd11b15d7ee5b004cda282d878fa50cc906355776488f4a  packages/ui/src/app/people/[id]/page.tsx
 71583b0cce160007fd18ffe995c3791be4401728dae7237ed94e98d401ef53c5  packages/ui/src/app/review/page.tsx
 5c6156b0f4fc587ce688ab8fcbbe9626e72b0127df9dd29ffc97b0c492e2d33d  packages/ui/src/app/settings/status/page.tsx

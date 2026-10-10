@@ -129,3 +129,13 @@ app — so the absorbed vendor tree and its baseline manifest are unchanged by i
 the vendor `packages/ui` gained the RED overlay additively (native
 `/operations/*` pages, shared workspace context, RED-first navigation, landing
 rewrite) under the additive rule and the owner-approved RED-owned surfaces.
+
+### Exception record 2026-10-10 (2): the chat home's deep-link query strip
+
+| Item | Value |
+| --- | --- |
+| Decision | `packages/ui/src/app/page.tsx` (the cockpit chat home) becomes a RED-owned surface |
+| Reason | The K8 landing redirect (5faa9e0) made the chat home's `router.replace("/")` query strip re-enter the middleware and yank `?new=1`/`?session=` deep links to the command center; the fix strips the query in place with `window.history.replaceState`. The chat home is functionally RED's surface (it carries the RED briefing landing and deep links) |
+| Basis | Owner-reported live bug ("New chat opens command center dash"); fix committed 43faa6c |
+| Effect | The path moves to `vendor/red-owned-files.txt`; `make vendor-pin` re-baselined 2026-10-10 |
+| Owner | RED principal |

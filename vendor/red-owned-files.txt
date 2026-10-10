@@ -191,6 +191,7 @@ packages/ui/src/app/clients/page.tsx
 packages/ui/src/app/guide/page.tsx
 packages/ui/src/app/layout.tsx
 packages/ui/src/app/onboard/page.tsx
+packages/ui/src/app/page.tsx
 packages/ui/src/app/people/page.tsx
 packages/ui/src/app/settings/page.tsx
 packages/ui/src/app/signin/page.tsx

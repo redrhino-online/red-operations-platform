@@ -2,6 +2,66 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 20261010T013059Z: K12 — the workflow human gates bound to RED approvals
+
+- **Selected item:** K12 (bind the workflow human gates to RED approvals), the
+  highest-value ready item: K11 and K3 are done, so K12 is the `[7/7]` condition
+  8 binding half and the last K item K13 needs; it completes the pipeline's
+  approval loop so a run resumes only after the stage's RED approval is
+  recorded.
+- **Outcome:** the binding is a domain policy and a port, not a caller convention:
+  `GateStepBinding` (`workflows/domain/policies.py`) maps a pipeline
+  `gate-<stage>` step to its stage and leaves every other step unbound;
+  `StageGateApprovalPort` (`workflows/application/ports.py`) asks whether the
+  stage's RED approval is recorded, answered by
+  `StageGateApprovalRepository` (`workflows/infrastructure/approvals.py`) from
+  the tenant's durable `GateLedger` through the Governance repository port; and
+  `RunWorkflowHandler` takes an optional `gate_approvals` port whose
+  `_require_recorded_approval` raises the new `ApprovalNotRecordedError` when a
+  bound gate has no passing decision, so a run resumes only after that approval
+  is recorded (an unbound step keeps the generic behavior, so the existing
+  approval flows are unchanged). The store port gained
+  `list_awaiting_approval` (in-memory and PostgreSQL adapters) and the API
+  gained `GET /red/clients/{tenant}/workflows/awaiting-approval` (what is
+  waiting, with the exact pinned definition version) and
+  `POST /red/clients/{tenant}/workflows/{run_id}/approval` (a named human
+  resumes a waiting run through the handler composed with the gate-approval
+  seam). The approval experience is bridged: the approval inbox
+  (`ApprovalInbox`) gained a "Pending gate approvals" section fed by the new
+  read, and the cockpit Review queue (`ReviewQueue`) surfaces the pending gates
+  with a link to the approval inbox — one approval experience, the exact
+  version each run pins, and listing a pending gate approves nothing.
+- **Canon drift recorded:** the canon content changed mid-cycle (the owner added
+  `agent/` material; pinned `ef00388d…`, now `50f25ce7…`), which the harness's
+  strict preflight reports as `CANON DRIFT`. Re-pinned with the harness's own
+  idempotent `make canon-lock` (the step `make run` runs first), so the K9
+  canon seed's pin verification now verifies against the new pin; the owner
+  still owns any canon-content decision.
+- **Evidence:** `tests/unit/workflows/test_gate_approval_binding.py` 10 passed
+  (the binding maps `gate-3`/`gate-10` and leaves non-gate steps unbound; a run
+  pauses at the bound gate; resuming without the RED approval is refused with
+  `ApprovalNotRecordedError`; resuming after it is recorded commits the gate and
+  advances; an unbound step keeps the generic behavior; the adapter answers from
+  the ledger; the awaiting-approval read lists the waiting run with its exact
+  version; the approval route refuses then resumes) and
+  `tests/cockpit-ui/operationsScreensK12.test.tsx` 3 passed (the pending gates
+  surface with the exact pinned version, the empty state, and the container
+  fetches the awaiting-approval read with the context tenant and no free-text
+  tenant input; `tests/cockpit-ui` 52 passed in total); `make check` 2759
+  passed / 3 skipped / 799 subtests; `scripts/check_vendor_additive.sh` ok
+  (1053 locked files match); `check_cockpit_overhaul.sh` passes
+  `[14.1]`-`[14.5]`.
+- **Not done (deliberately):** the live single-shell verification and the docs
+  update are K13; no send, spend, publication or client commitment is authorized
+  (SPEC.md sections 4 and 9); `.ralph/DONE` is not touched because `make done`
+  still fails `[7/7]` at the live `[14.6]` check.
+- **Next ready item:** K13 (phase definition of done: run `make done` end to end
+  with the `[7/7]` gate, verify the deployed single shell on Atlas, update
+  `docs/fork_inventory.md` and the README for the retired thin client) — every
+  K dependency is now done.
+- **Blockers:** none.
+
+Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ### Cycle 20261010T012000Z: K11 — the stage 0-10 pipeline as cockpit workflow definitions
 
 - **Selected item:** K11 (register the stage 0-10 pipeline as cockpit workflow
