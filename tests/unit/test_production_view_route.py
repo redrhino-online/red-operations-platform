@@ -221,10 +221,19 @@ class ProductionViewRouteTests(unittest.TestCase):
         self.assertEqual(0, view["progress"]["approved_gates"])
         self.assertEqual("not_started", view["stages"][0]["status"])
 
-    def test_the_evaluation_instant_is_required(self) -> None:
-        response = self.client.get(self.url())
+    def test_the_view_answers_without_on_and_defaults_to_today(self) -> None:
+        # docs/specs/stage-artifact-archive.md section 2: the review surfaces
+        # stop asking for a date, so omitting ``on`` evaluates the current
+        # instant. The answer must equal the explicit-today answer, and an
+        # explicit ``on`` keeps working (the other tests pass it).
+        omitted = self.client.get(self.url())
+        explicit = self.client.get(
+            self.url(), params={"on": date.today().isoformat()}
+        )
 
-        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(200, omitted.status_code, omitted.text)
+        self.assertEqual(200, explicit.status_code, explicit.text)
+        self.assertEqual(explicit.json(), omitted.json())
 
     @staticmethod
     def umbrella_plan(tenant_id: str = TENANT, workspace_id: str = ENGAGEMENT):

@@ -7,6 +7,7 @@ import type {
   ApprovalRecord,
   DecisionRecord,
   EngagementProductionView,
+  StageArtifact,
   StageProductionView,
 } from "@/lib/redOperationsApi";
 
@@ -412,12 +413,58 @@ function offerList() {
   };
 }
 
+function stageArtifact(overrides: Partial<StageArtifact> = {}): StageArtifact {
+  return {
+    artifact_id: "artifact-1",
+    workspace_id: "ws-3f",
+    stage_number: 6,
+    kind: "story",
+    asset_id: "story",
+    version: 1,
+    markdown: "Draft",
+    owner: "production",
+    note: null,
+    dropped_on: "2026-10-03",
+    ...overrides,
+  };
+}
+
+// Two archived versions of the story asset: v2 dropped after v1, so the panel
+// must render v2 first.
+function artifactList() {
+  return {
+    tenant_id: "3fmindset",
+    total: 2,
+    limit: 50,
+    offset: 0,
+    artifacts: [
+      stageArtifact({
+        artifact_id: "artifact-story-1",
+        version: 1,
+        markdown: "# Story draft\n\n- opening beat\n- closing beat",
+        owner: "production",
+        note: "first drop",
+        dropped_on: "2026-10-03",
+      }),
+      stageArtifact({
+        artifact_id: "artifact-story-2",
+        version: 2,
+        markdown: "## Story v2\n\n- revised beat",
+        owner: "message-design",
+        note: null,
+        dropped_on: "2026-10-05",
+      }),
+    ],
+  };
+}
+
 function installApi(
   approvals: unknown = approvalsList(),
   options: {
     view?: EngagementProductionView;
     methods?: unknown;
     offers?: unknown;
+    artifacts?: unknown;
   } = {},
 ) {
   const view = options.view ?? productionView();
@@ -427,9 +474,15 @@ function installApi(
   const offers =
     options.offers ??
     ({ tenant_id: "3fmindset", total: 0, limit: 50, offset: 0, offers: [] });
+  const artifacts =
+    options.artifacts ??
+    ({ tenant_id: "3fmindset", total: 0, limit: 50, offset: 0, artifacts: [] });
   fetchMock.mockImplementation(async (url: string) => {
     if (url.startsWith("/red/clients?")) return jsonResponse(listing());
     if (url.includes("/production-view?")) return jsonResponse(view);
+    if (url.startsWith("/red/clients/3fmindset/artifacts")) {
+      return jsonResponse(artifacts);
+    }
     if (url.startsWith("/red/approvals?")) return jsonResponse(approvals);
     if (url.startsWith("/red/decisions?")) return jsonResponse(decisionsList());
     if (url.startsWith("/red/messages?")) return jsonResponse(messageList());
@@ -728,6 +781,74 @@ describe("the client workspace asset detail panel stored sections (6a)", () => {
     );
     expect(content.textContent).toContain(
       "Offer stack: core program, audit intensive",
+    );
+  });
+});
+
+// U2 (stage artifact archive spec section 3): the panel lists the archived
+// markdown artifacts for the pinned asset, newest version first, each rendered
+// as markup with its version/owner/dropped_on/note header, and shows an
+// explicit empty state when nothing is archived yet.
+describe("the client workspace asset detail panel archive (U2)", () => {
+  it("renders an archived artifact's markdown as markup with its metadata, newest version first", async () => {
+    installApi(approvalsList(), { artifacts: artifactList() });
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByText("Message")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("asset-pin-story@v1"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("asset-detail-archive")).toBeTruthy(),
+    );
+
+    // The archive read is scoped to the workspace and the pinned asset.
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).includes(
+          "/red/clients/3fmindset/artifacts?workspace_id=ws-3f&asset_id=story",
+        ),
+      ),
+    ).toBe(true);
+
+    const newest = screen.getByTestId("archived-artifact-v2");
+    const oldest = screen.getByTestId("archived-artifact-v1");
+    // Newest version first in the rendered order.
+    expect(
+      newest.compareDocumentPosition(oldest) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    // The markdown renders as markup: a heading element and a list item
+    // element, not the raw "#"/"-" text.
+    expect(newest.querySelector("h2")?.textContent).toBe("Story v2");
+    expect(newest.querySelector("ul li")?.textContent).toBe("revised beat");
+    expect(newest.textContent).toContain("Version 2");
+    expect(newest.textContent).toContain("Owner: message-design");
+    expect(newest.textContent).toContain("Dropped: 2026-10-05");
+    expect(newest.textContent).not.toContain("Note:");
+
+    expect(oldest.querySelector("h1")?.textContent).toBe("Story draft");
+    expect(oldest.querySelector("ul li")?.textContent).toBe("opening beat");
+    expect(oldest.textContent).toContain("Version 1");
+    expect(oldest.textContent).toContain("Owner: production");
+    expect(oldest.textContent).toContain("Dropped: 2026-10-03");
+    expect(oldest.textContent).toContain("Note: first drop");
+  });
+
+  it("shows the explicit empty state when the asset has no archived artifacts", async () => {
+    installApi();
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByText("Message")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("asset-pin-story@v1"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("asset-detail-archive-empty")).toBeTruthy(),
+    );
+    expect(
+      screen.getByTestId("asset-detail-archive-empty").textContent,
+    ).toBe(
+      "No archived artifacts for this asset yet — use Add artifact on its stage.",
     );
   });
 });

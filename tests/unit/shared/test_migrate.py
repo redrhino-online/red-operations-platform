@@ -142,8 +142,12 @@ class MigrationRunnerTests(unittest.TestCase):
                 self.assertIsNotNone(cursor.fetchone()[0])
                 cursor.execute("SELECT to_regclass('public.umbrella_plans')")
                 self.assertIsNotNone(cursor.fetchone()[0])
+                cursor.execute(
+                    "SELECT to_regclass('public.stage_artifacts')"
+                )
+                self.assertIsNotNone(cursor.fetchone()[0])
                 cursor.execute("SELECT version_num FROM alembic_version")
-                self.assertEqual(cursor.fetchone()[0], "0019_umbrella_plans")
+                self.assertEqual(cursor.fetchone()[0], "0020_stage_artifacts")
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]

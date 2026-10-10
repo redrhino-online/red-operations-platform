@@ -2,9 +2,13 @@
 // spec section 3.1). Additive file (ADR 0014). Pure presentational provenance
 // view over the data the client workspace screen fetches for one pinned asset
 // kind: the exact-version approval records, the gate decisions whose required
-// assets pin the kind, and the stored content of the kind's mapped source
-// group. The backend decides what was approved; the panel renders it and can
+// assets pin the kind, the stored content of the kind's mapped source group and
+// the stage artifact archive for the asset (stage artifact archive spec section
+// 3). The backend decides what was approved; the panel renders it and can
 // approve nothing.
+
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import type {
   AmplifierRecord,
@@ -17,6 +21,7 @@ import type {
   MessageRecord,
   MethodVersion,
   OfferVersion,
+  StageArtifact,
 } from "@/lib/redOperationsApi";
 
 export interface AssetDetailPanelProps {
@@ -24,6 +29,9 @@ export interface AssetDetailPanelProps {
   approvals: ApprovalRecord[];
   decisions: DecisionRecord[];
   content: AssetContentEntry | null;
+  // The archived markdown artifacts for this asset, newest version first
+  // (stage artifact archive spec section 3); the panel re-sorts defensively.
+  artifacts?: StageArtifact[];
   loading?: boolean;
   error?: string | null;
 }
@@ -421,11 +429,86 @@ function AssetContentList({ entry }: { entry: AssetContentEntry }) {
   }
 }
 
+// The archived artifact's markdown, rendered with the MarkdownArticle pattern
+// (ArtifactViewer) and the Message.tsx URL-transform guard: javascript:, data:
+// and vbscript: links from a dropped artifact never become live URLs.
+function ArtifactMarkdown({ markdown }: { markdown: string }) {
+  return (
+    <article
+      className="prose prose-invert prose-sm max-w-none rounded-lg border border-line bg-surface/40 p-6
+        prose-headings:text-fg prose-headings:font-semibold
+        prose-p:text-fg prose-p:leading-relaxed
+        prose-strong:text-fg
+        prose-code:text-indigo-300 prose-code:bg-surface-overlay prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
+        prose-pre:bg-surface-overlay prose-pre:border prose-pre:border-line-strong
+        prose-blockquote:border-line-strong prose-blockquote:text-fg-muted
+        prose-ul:text-fg prose-ol:text-fg
+        prose-li:marker:text-fg-muted
+        prose-hr:border-line-strong
+        prose-a:text-indigo-400 prose-a:no-underline hover:prose-a:underline
+        prose-table:text-fg prose-th:text-fg prose-th:border-line-strong prose-td:border-line-strong"
+    >
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        urlTransform={(url) => {
+          // Block javascript: and data: URL schemes to prevent XSS via prompt injection
+          if (/^(javascript|data|vbscript):/i.test(url)) return "";
+          return url;
+        }}
+      >
+        {markdown}
+      </ReactMarkdown>
+    </article>
+  );
+}
+
+// The stage artifact archive for the pinned asset (stage artifact archive spec
+// section 3): every dropped markdown version, newest first, headed by its
+// version, owner, drop date and note. The archive is append-only; the panel
+// renders it and edits nothing.
+function ArchiveContent({ artifacts }: { artifacts: StageArtifact[] }) {
+  if (artifacts.length === 0) {
+    return (
+      <p
+        data-testid="asset-detail-archive-empty"
+        className="mt-1 text-xs text-fg-muted"
+      >
+        No archived artifacts for this asset yet — use Add artifact on its
+        stage.
+      </p>
+    );
+  }
+  const newestFirst = [...artifacts].sort((a, b) => b.version - a.version);
+  return (
+    <ul className="mt-2 space-y-2">
+      {newestFirst.map((artifact, index) => (
+        <li
+          key={`${artifact.asset_id}-${artifact.version}-${artifact.artifact_id ?? index}`}
+          data-testid={`archived-artifact-v${artifact.version}`}
+          className="rounded-lg border border-line bg-surface p-3 text-xs text-fg"
+        >
+          <p className="font-medium">Version {artifact.version}</p>
+          <p className="text-fg-muted">
+            Owner: {artifact.owner} | Dropped: {artifact.dropped_on}
+          </p>
+          {artifact.note ? (
+            <p className="text-fg-muted">Note: {artifact.note}</p>
+          ) : null}
+          <div className="mt-2">
+            <ArtifactMarkdown markdown={artifact.markdown} />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function AssetDetailPanel({
   assetId,
   approvals,
   decisions,
   content,
+  artifacts = [],
   loading = false,
   error = null,
 }: AssetDetailPanelProps) {
@@ -556,6 +639,20 @@ export function AssetDetailPanel({
             ) : (
               <AssetContentList entry={content} />
             )}
+          </section>
+
+          <section
+            aria-labelledby={`asset-detail-archive-${assetId}`}
+            data-testid="asset-detail-archive"
+            className="mt-3"
+          >
+            <h3
+              id={`asset-detail-archive-${assetId}`}
+              className="text-sm font-medium text-fg"
+            >
+              Archive
+            </h3>
+            <ArchiveContent artifacts={artifacts} />
           </section>
         </>
       ) : null}

@@ -192,6 +192,21 @@ class InterventionsRouteTests(unittest.TestCase):
 
         self.assertEqual(422, response.status_code, response.text)
 
+    def test_the_ranking_answers_without_on_and_defaults_to_today(self) -> None:
+        # docs/specs/stage-artifact-archive.md section 2: the review surfaces
+        # stop asking for a date, so omitting ``on`` ranks at the current
+        # instant and the response reports the instant it evaluated.
+        self.ledger.append(self.blocked_decision(0))
+
+        response = self.client.get(
+            "/red/interventions",
+            params={"tenant_id": TENANT, "engagement": ENGAGEMENT},
+        )
+
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertEqual(date.today().isoformat(), response.json()["on"])
+        self.assertEqual(1, response.json()["total"], response.text)
+
     def test_a_same_key_different_dismissal_is_a_409(self) -> None:
         self.client.post("/red/interventions/dismiss", json=self.dismiss_body())
 

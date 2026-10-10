@@ -1696,6 +1696,54 @@ class ClaimListResponse(BaseModel):
     claims: list[ClaimResponse]
 
 
+class CreateStageArtifactRequest(BaseModel):
+    """Drop one stage artifact into the markdown archive (stage-artifact spec §1.3).
+
+    The caller supplies the registered workspace, the stage the artifact
+    belongs to, its free-text kind, the markdown content itself and the
+    collection owner. The asset id defaults to the kind, the version to the
+    next free version for the asset and the drop date to today, so a plain
+    drop needs no version bookkeeping. The tenant is not a body field: the
+    path tenant is the authoritative client scope, so a caller cannot record
+    an artifact under another client.
+    """
+
+    workspace_id: str
+    stage_number: int
+    kind: str
+    markdown: str
+    owner: str
+    asset_id: str | None = None
+    version: int | None = None
+    note: str | None = None
+    dropped_on: date | None = None
+
+
+class StageArtifactResponse(BaseModel):
+    """One archived stage artifact, re-validated through the domain aggregate."""
+
+    tenant_id: str
+    workspace_id: str
+    stage_number: int
+    kind: str
+    asset_id: str
+    version: int
+    markdown: str
+    owner: str
+    dropped_on: date
+    note: str | None = None
+
+
+class StageArtifactListResponse(BaseModel):
+    """A paginated page of one client tenant's archived stage artifacts."""
+
+    tenant_id: str
+    total: int
+    limit: int
+    offset: int
+    artifacts: list[StageArtifactResponse]
+
+
 class SignatureStepResponse(BaseModel):
     """One named stage of an approved method's stage 4 Signature Solution.
 

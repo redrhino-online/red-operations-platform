@@ -606,34 +606,37 @@ async function redRequestError(res: Response): Promise<string> {
   return `RED request failed (${res.status})`;
 }
 
-// The command center read (SPEC.md sections 7 and 8). Tenant, engagement and the
-// evaluation date are all required by the backend, which refuses an unscoped
-// query; the route is read-only, so listing a card authorizes no action.
+// The command center read (SPEC.md sections 7 and 8). Tenant and engagement are
+// required by the backend, which refuses an unscoped query; `on` is optional —
+// omitted, the backend evaluates the current instant (stage artifact archive
+// spec section 2). The route is read-only, so listing a card authorizes no
+// action.
 export function listInterventions(
   tenantId: string,
   engagement: string,
-  on: string,
+  on?: string,
 ): Promise<InterventionList> {
   return redGet<InterventionList>("/red/interventions", {
     tenant_id: tenantId,
     engagement,
-    on,
+    ...(on ? { on } : {}),
   });
 }
 
 // The client workspace overview read (SPEC.md sections 4 and 8). Tenant and
-// engagement are the path authority and `on` is required by the backend, which
-// evaluates prerequisite expiry against a fixed instant.
+// engagement are the path authority; `on` is optional — omitted, the backend
+// evaluates the current instant (stage artifact archive spec section 2), an
+// explicit value still pins the expiry evaluation to that date.
 export function getProductionView(
   tenantId: string,
   engagement: string,
-  on: string,
+  on?: string,
 ): Promise<EngagementProductionView> {
   return redGet<EngagementProductionView>(
     `/red/clients/${encodeURIComponent(tenantId)}/engagements/${encodeURIComponent(
       engagement,
     )}/production-view`,
-    { on },
+    on ? { on } : {},
   );
 }
 
@@ -941,6 +944,96 @@ export function recordStageGate(
 ): Promise<unknown> {
   return redPost(
     `/red/clients/${encodeURIComponent(tenantId)}/stages/${stageNumber}/gate`,
+    body,
+  );
+}
+
+// One archived stage artifact with its full markdown text (stage artifact
+// archive spec section 1). Mirrors the tenant-scoped list route
+// `GET /red/clients/{t}/artifacts`. The fields are tolerant: the backend may
+// omit the id and the note, and the panel renders only what an aggregate
+// carries. The archive is append-only; the UI edits and deletes nothing.
+export interface StageArtifact {
+  artifact_id?: string | null;
+  workspace_id: string;
+  stage_number: number;
+  kind: string;
+  asset_id: string;
+  version: number;
+  markdown: string;
+  owner: string;
+  note?: string | null;
+  dropped_on: string;
+}
+
+export interface StageArtifactList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  artifacts: StageArtifact[];
+}
+
+// The body `POST /red/clients/{t}/artifacts` accepts (stage artifact archive
+// spec section 1.3). `asset_id` and `version` are optional — omitted, the
+// backend defaults the asset id to the kind and the version to the next free
+// one — and `dropped_on` defaults to today, so the form sends none of them
+// when the user leaves them blank.
+export interface StageArtifactDrop {
+  workspace_id: string;
+  stage_number: number;
+  kind: string;
+  asset_id?: string;
+  version?: number;
+  markdown: string;
+  owner: string;
+  note?: string;
+  dropped_on?: string;
+}
+
+// The optional list filters (stage artifact archive spec section 1.3): every
+// filter is optional and an absent one is omitted from the query string.
+export interface StageArtifactFilters {
+  workspace_id?: string;
+  stage_number?: number;
+  kind?: string;
+  asset_id?: string;
+  limit?: number;
+  offset?: number;
+}
+
+// The stage artifact archive read (stage artifact archive spec sections 1.3
+// and 3). The tenant is the path authority and the route is read-only; the
+// archive collects markdown drops, so listing them approves no gate.
+export function listArtifacts(
+  tenantId: string,
+  filters: StageArtifactFilters = {},
+): Promise<StageArtifactList> {
+  const params: Record<string, string> = {};
+  if (filters.workspace_id) params.workspace_id = filters.workspace_id;
+  if (filters.stage_number !== undefined) {
+    params.stage_number = String(filters.stage_number);
+  }
+  if (filters.kind) params.kind = filters.kind;
+  if (filters.asset_id) params.asset_id = filters.asset_id;
+  if (filters.limit !== undefined) params.limit = String(filters.limit);
+  if (filters.offset !== undefined) params.offset = String(filters.offset);
+  return redGet<StageArtifactList>(
+    `/red/clients/${encodeURIComponent(tenantId)}/artifacts`,
+    params,
+  );
+}
+
+// The stage artifact drop write (stage artifact archive spec sections 1.3 and
+// 3). The backend validates the workspace, the fields and the version
+// uniqueness; `redPost` surfaces its refusal detail verbatim, so the drop form
+// renders the error and records nothing locally.
+export function dropArtifact(
+  tenantId: string,
+  body: StageArtifactDrop,
+): Promise<unknown> {
+  return redPost(
+    `/red/clients/${encodeURIComponent(tenantId)}/artifacts`,
     body,
   );
 }

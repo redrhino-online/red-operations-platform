@@ -16,13 +16,8 @@ import {
 } from "@/lib/redOperationsApi";
 import { AuthoritySettings } from "./AuthoritySettings";
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function AuthoritySettingsScreen() {
   const { tenantId, workspaceId, workspaces } = useRedClient();
-  const [on, setOn] = useState(today());
   const [view, setView] = useState<EngagementProductionView | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +30,9 @@ export function AuthoritySettingsScreen() {
     setLoading(true);
     setError(null);
     try {
-      setView(await getProductionView(tenantId, workspaceId, on));
+      // No date filter: the review surface reads the current instant (stage
+      // artifact archive spec section 2).
+      setView(await getProductionView(tenantId, workspaceId));
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load authority settings",
@@ -43,7 +40,7 @@ export function AuthoritySettingsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, workspaceId, on]);
+  }, [tenantId, workspaceId]);
 
   useEffect(() => {
     void load();
@@ -53,15 +50,6 @@ export function AuthoritySettingsScreen() {
     <main className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-4 flex flex-wrap items-end gap-3">
-          <label className="text-xs text-fg-muted flex items-center gap-2">
-            On
-            <input
-              type="date"
-              value={on}
-              onChange={(event) => setOn(event.target.value)}
-              className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg focus:outline-none focus:border-line-strong"
-            />
-          </label>
           <button
             type="button"
             onClick={() => void load()}

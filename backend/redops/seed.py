@@ -1414,6 +1414,52 @@ def demo_builds() -> list[dict[str, Any]]:
     ]
 
 
+def demo_artifacts() -> list[dict[str, Any]]:
+    """The demo stage 0 artifacts dropped into the archive (archive spec §1.4).
+
+    The archive is the collection and archiving source for every artifact of
+    every stage, so the pilot drops two stage 0 markdown artifacts through the
+    real ``POST /red/clients/{tenant}/artifacts`` route. The asset id defaults
+    to the kind and the version to the next free version, so the body carries
+    only the workspace, stage, kind, markdown and owner. The kinds are the
+    canonical stage 0 intake kinds (never demo-marked); the markdown and owner
+    carry the demo markers per the module's demo-marking convention.
+    """
+
+    return [
+        {
+            "workspace_id": DEMO_WORKSPACE_ID,
+            "stage_number": 0,
+            "kind": "signed-scope",
+            "markdown": (
+                "Demo: signed scope for the 3F pilot\n"
+                "\n"
+                "## What was agreed with the client\n"
+                "\n"
+                "- one campaign, one offer, one avatar\n"
+                "- the nine named stages from intake to baseline\n"
+                "- weekly training and weekly coaching cadence\n"
+            ),
+            "owner": DEMO_OWNER,
+        },
+        {
+            "workspace_id": DEMO_WORKSPACE_ID,
+            "stage_number": 0,
+            "kind": "intake-questionnaire",
+            "markdown": (
+                "Demo: intake questionnaire answers for the 3F pilot\n"
+                "\n"
+                "## What the client answered\n"
+                "\n"
+                "- current offers and lead sources recorded\n"
+                "- constraints and goals captured with the client\n"
+                "- baseline measures named for the launch\n"
+            ),
+            "owner": DEMO_OWNER,
+        },
+    ]
+
+
 def _require_status(response: Any, expected: int) -> None:
     if response.status_code != expected:
         try:
@@ -1437,6 +1483,7 @@ def seed_pilot_workspace(
         "tenant_id": tenant_id,
         "workspace_id": DEMO_WORKSPACE_ID,
         "workspace_created": False,
+        "artifacts_created": [],
         "sources_created": [],
         "claims_created": [],
         "builds_created": [],
@@ -1467,6 +1514,22 @@ def seed_pilot_workspace(
         )
         _require_status(response, 201)
         report["workspace_created"] = True
+
+    response = client.get(f"/red/clients/{tenant_id}/artifacts")
+    _require_status(response, 200)
+    existing_artifacts = {
+        (artifact["workspace_id"], artifact["asset_id"], artifact["version"])
+        for artifact in response.json()["artifacts"]
+    }
+    for artifact in demo_artifacts():
+        key = (artifact["workspace_id"], artifact["kind"], 1)
+        if key in existing_artifacts:
+            continue
+        response = client.post(
+            f"/red/clients/{tenant_id}/artifacts", json=artifact
+        )
+        _require_status(response, 201)
+        report["artifacts_created"].append(artifact["kind"])
 
     response = client.get(f"/red/clients/{tenant_id}/sources")
     _require_status(response, 200)

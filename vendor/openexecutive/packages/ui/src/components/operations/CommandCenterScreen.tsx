@@ -16,13 +16,8 @@ import {
 } from "@/lib/redOperationsApi";
 import { CommandCenter } from "./CommandCenter";
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function CommandCenterScreen() {
   const { tenantId, workspaceId } = useRedClient();
-  const [on, setOn] = useState(today());
   const [interventions, setInterventions] = useState<InterventionCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,14 +30,16 @@ export function CommandCenterScreen() {
     setLoading(true);
     setError(null);
     try {
-      const page = await listInterventions(tenantId, workspaceId, on);
+      // No date filter: the review surface reads the current instant (stage
+      // artifact archive spec section 2).
+      const page = await listInterventions(tenantId, workspaceId);
       setInterventions(page.interventions);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load cards");
     } finally {
       setLoading(false);
     }
-  }, [tenantId, workspaceId, on]);
+  }, [tenantId, workspaceId]);
 
   useEffect(() => {
     void load();
@@ -52,15 +49,6 @@ export function CommandCenterScreen() {
     <main className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-4 flex flex-wrap items-end gap-3">
-          <label className="text-xs text-fg-muted flex items-center gap-2">
-            On
-            <input
-              type="date"
-              value={on}
-              onChange={(event) => setOn(event.target.value)}
-              className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg focus:outline-none focus:border-line-strong"
-            />
-          </label>
           <button
             type="button"
             onClick={() => void load()}
@@ -79,7 +67,6 @@ export function CommandCenterScreen() {
             loading={loading}
             error={error}
             engagement={workspaceId}
-            on={on}
           />
         )}
       </div>

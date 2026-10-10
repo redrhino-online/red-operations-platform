@@ -25,6 +25,10 @@ export interface ClientWorkspaceOverviewProps {
   // approval spec section 3.3). Rendered for every stage 0-10; the backend
   // remains the sole enforcer of prerequisites, expiry and authority.
   onRecordGate?: (stageNumber: number) => void;
+  // Opens the markdown artifact drop form for one stage (stage artifact
+  // archive spec section 3). Rendered for every stage 0-10 beside Record gate;
+  // the backend remains the sole enforcer of the archive's fields.
+  onAddArtifact?: (stageNumber: number) => void;
 }
 
 // Provenance: an approved asset is only ever shown at an exact pinned version.
@@ -48,6 +52,7 @@ export function ClientWorkspaceOverview({
   error = null,
   onSelectAsset,
   onRecordGate,
+  onAddArtifact,
 }: ClientWorkspaceOverviewProps) {
   return (
     <section aria-labelledby="client-workspace-heading">
@@ -97,8 +102,8 @@ export function ClientWorkspaceOverview({
                   <th scope="col" className="px-3 py-2 font-medium">Owner</th>
                   <th scope="col" className="px-3 py-2 font-medium">Next action</th>
                   <th scope="col" className="px-3 py-2 font-medium">Due</th>
-                  {onRecordGate ? (
-                    <th scope="col" className="px-3 py-2 font-medium">Gate</th>
+                  {onRecordGate || onAddArtifact ? (
+                    <th scope="col" className="px-3 py-2 font-medium">Actions</th>
                   ) : null}
                 </tr>
               </thead>
@@ -145,16 +150,30 @@ export function ClientWorkspaceOverview({
                     </td>
                     <td className="px-3 py-2 text-fg">{stage.next_action || "none"}</td>
                     <td className="px-3 py-2 text-fg">{stage.due_on ?? "no due date"}</td>
-                    {onRecordGate ? (
+                    {onRecordGate || onAddArtifact ? (
                       <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          data-testid={`record-gate-${stage.stage_number}`}
-                          onClick={() => onRecordGate(stage.stage_number)}
-                          className="rounded-lg border border-line bg-surface-overlay px-2 py-1 text-xs font-medium text-fg hover:border-line-strong focus:outline-none focus:border-line-strong"
-                        >
-                          Record gate
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {onRecordGate ? (
+                            <button
+                              type="button"
+                              data-testid={`record-gate-${stage.stage_number}`}
+                              onClick={() => onRecordGate(stage.stage_number)}
+                              className="rounded-lg border border-line bg-surface-overlay px-2 py-1 text-xs font-medium text-fg hover:border-line-strong focus:outline-none focus:border-line-strong"
+                            >
+                              Record gate
+                            </button>
+                          ) : null}
+                          {onAddArtifact ? (
+                            <button
+                              type="button"
+                              data-testid={`add-artifact-${stage.stage_number}`}
+                              onClick={() => onAddArtifact(stage.stage_number)}
+                              className="rounded-lg border border-line bg-surface-overlay px-2 py-1 text-xs font-medium text-fg hover:border-line-strong focus:outline-none focus:border-line-strong"
+                            >
+                              Add artifact
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                     ) : null}
                   </tr>

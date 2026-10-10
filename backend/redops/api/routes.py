@@ -38,6 +38,7 @@ from redops.api.schemas import (
     CreateClaimRequest,
     CreateClientWorkspaceRequest,
     CreateSourceRecordRequest,
+    CreateStageArtifactRequest,
     DecisionListResponse,
     DecisionRecordResponse,
     EngagementProductionViewResponse,
@@ -89,9 +90,20 @@ from redops.api.schemas import (
     AuthorityAmplifierResponse,
     SourceRecordListResponse,
     SourceRecordResponse,
+    StageArtifactListResponse,
+    StageArtifactResponse,
     ProspectPathDryRunResponse,
     TrafficAuthorizationResponse,
     VisualProductionPackageResponse,
+)
+from redops.contexts.archive.application.ports import StageArtifactStore
+from redops.contexts.archive.domain.entities import StageArtifact
+from redops.contexts.archive.domain.errors import (
+    ArchiveError,
+    StageArtifactVersionConflictError,
+)
+from redops.contexts.archive.infrastructure.repositories import (
+    stage_artifact_store_from_env,
 )
 from redops.contexts.commercial.application.ports import (
     CampaignMessageRepository,
@@ -511,6 +523,26 @@ def get_claim_store() -> Iterator[ClaimStore]:
     """
 
     store = claim_store_from_env(os.environ.get("DATABASE_URL"))
+    try:
+        yield store
+    finally:
+        store.close()
+
+
+def get_stage_artifact_store() -> Iterator[StageArtifactStore]:
+    """Provide the configured stage artifact archive seam to the API (SPEC.md §6).
+
+    docs/specs/stage-artifact-archive.md section 1 makes the platform the
+    collection and archiving source for every artifact of every stage, so the
+    ``/clients/{id}/artifacts`` surface must read and write the same durable
+    store the API and worker processes share. The dependency owns one adapter
+    for the request and releases any connection it opened when the request
+    ends; the store is chosen once from ``DATABASE_URL``, and a
+    set-but-unusable configuration raises before the route runs, so a
+    deployment cannot mistake a process-local archive for a durable one.
+    """
+
+    store = stage_artifact_store_from_env(os.environ.get("DATABASE_URL"))
     try:
         yield store
     finally:
@@ -3739,7 +3771,7 @@ def record_stage_ten_gate(
 def get_engagement_production_view(
     tenant_id: str,
     engagement: str,
-    on: date,
+    on: date | None = None,
     verified_post_launch_milestones: int = 0,
     activity_entries: int = 0,
     ledger_repository: GateLedgerRepository = Depends(
@@ -3763,13 +3795,17 @@ def get_engagement_production_view(
     integrity rule -- the tenant boundary, the stage dependency graph, exact
     pinned versions and the separation of activity from verified progress -- stays
     enforced by the pure domain view; the route computes none of it. The
-    evaluation instant ``on`` is required because a prerequisite's expiry is only
-    meaningful against a fixed time (SPEC.md section 4). The canon umbrella plan
+    evaluation instant ``on`` is optional and defaults to the current instant:
+    an explicit ``on`` still fixes the prerequisite expiry check (a
+    prerequisite's expiry is only meaningful against a fixed time, SPEC.md
+    section 4), and omitting it evaluates the view at today
+    (docs/specs/stage-artifact-archive.md section 2). The canon umbrella plan
     (SPEC.md section 12.5) is loaded through the Portfolio ``UmbrellaPlanRepository``
     port and projected into the view's tenant-scoped umbrella-plan row; an absent
     plan is omitted rather than invented.
     """
 
+    effective_on = on if on is not None else date.today()
     try:
         umbrella_plan = _umbrella_plan_for_engagement(
             umbrella_plan_repository, tenant_id=tenant_id, engagement=engagement
@@ -3784,7 +3820,7 @@ def get_engagement_production_view(
         template=stage_zero_to_ten_template(),
         engagement=engagement,
         tenant_id=tenant_id,
-        on=on,
+        on=effective_on,
         verified_post_launch_milestones=verified_post_launch_milestones,
         activity_entries=activity_entries,
         umbrella_plan=(
@@ -4359,6 +4395,160 @@ def create_claim(
         ) from exc
 
     return _claim_payload(claim)
+
+
+def _stage_artifact_payload(artifact: StageArtifact) -> StageArtifactResponse:
+    """Project one archived artifact onto the archive read surface.
+
+    docs/specs/stage-artifact-archive.md section 1.3 requires the list to
+    include the full markdown, so the payload carries the content verbatim and
+    computes no rule; the ``StageArtifact`` aggregate already validated the
+    drop.
+    """
+
+    return StageArtifactResponse(
+        tenant_id=artifact.tenant_id,
+        workspace_id=artifact.workspace_id,
+        stage_number=artifact.stage_number,
+        kind=artifact.kind,
+        asset_id=artifact.asset_id,
+        version=artifact.version,
+        markdown=artifact.markdown,
+        owner=artifact.owner,
+        dropped_on=artifact.dropped_on,
+        note=artifact.note,
+    )
+
+
+@router.get(
+    "/clients/{tenant_id}/artifacts",
+    response_model=StageArtifactListResponse,
+)
+def list_stage_artifacts(
+    tenant_id: str,
+    workspace_id: str | None = Query(
+        None, description="Restrict the page to one workspace's archive"
+    ),
+    stage_number: int | None = Query(
+        None, description="Restrict the page to one stage's artifacts"
+    ),
+    kind: str | None = Query(
+        None, description="Restrict the page to one artifact kind"
+    ),
+    asset_id: str | None = Query(
+        None, description="Restrict the page to one asset's versions"
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    store: StageArtifactStore = Depends(get_stage_artifact_store),
+) -> StageArtifactListResponse:
+    """List one client tenant's archived stage artifacts (stage-artifact spec §1.3).
+
+    The archive is the collection and archiving source for every artifact of
+    every stage, so the list includes the full markdown and is tenant scoped:
+    the path tenant is the authoritative scope and the store read returns only
+    that tenant's rows, so another client's archive is unreadable here. The
+    optional filters narrow the page to one workspace, stage, kind or asset,
+    and pagination is applied after the tenant-scoped read so a page is stable.
+    Rows are ordered by stage, kind, asset and newest version first, which is
+    the sequence the review surfaces organize by.
+    """
+
+    artifacts = store.list(
+        tenant_id,
+        workspace_id=workspace_id,
+        stage_number=stage_number,
+        kind=kind,
+        asset_id=asset_id,
+    )
+    page = artifacts[offset : offset + limit]
+    return StageArtifactListResponse(
+        tenant_id=tenant_id,
+        total=len(artifacts),
+        limit=limit,
+        offset=offset,
+        artifacts=[_stage_artifact_payload(artifact) for artifact in page],
+    )
+
+
+@router.post(
+    "/clients/{tenant_id}/artifacts",
+    status_code=201,
+    response_model=StageArtifactResponse,
+)
+def drop_stage_artifact(
+    tenant_id: str,
+    body: CreateStageArtifactRequest,
+    store: StageArtifactStore = Depends(get_stage_artifact_store),
+    workspace_store: ClientWorkspaceStore = Depends(get_client_workspace_store),
+) -> StageArtifactResponse:
+    """Drop one stage artifact into the markdown archive (stage-artifact spec §1.3).
+
+    The platform is the collection and archiving source for every artifact of
+    every stage, and collection (dropping an artifact) stays separate from
+    approval (recording a gate). The path tenant, not the body, is the
+    authoritative client scope, so a caller cannot archive under another
+    client; the workspace is resolved from the engagement store by
+    ``(tenant_id, workspace_id)`` and an unregistered workspace is a named 404.
+    The asset id defaults to the kind, the version to the next free version for
+    the asset and the drop date to today, so a plain drop needs no version
+    bookkeeping. The archive is append-only: an identical same-key replay is an
+    idempotent success and the same key with different content is a named 409 —
+    a change is dropped as a new version, never a rewrite. A refusal is a named
+    422 or 409 and never a partial write.
+    """
+
+    try:
+        workspace = workspace_store.get(tenant_id, body.workspace_id)
+        if workspace is None:
+            raise ClientWorkspaceNotFoundError(
+                f"workspace {body.workspace_id!r} is not registered for "
+                f"{tenant_id!r}"
+            )
+        asset_id = body.asset_id if body.asset_id is not None else body.kind
+        version = (
+            body.version
+            if body.version is not None
+            else store.next_version(tenant_id, body.workspace_id, asset_id)
+        )
+        dropped_on = (
+            body.dropped_on if body.dropped_on is not None else date.today()
+        )
+        artifact = StageArtifact(
+            tenant_id=tenant_id,
+            workspace_id=body.workspace_id,
+            stage_number=body.stage_number,
+            kind=body.kind,
+            asset_id=asset_id,
+            version=version,
+            markdown=body.markdown,
+            owner=body.owner,
+            dropped_on=dropped_on,
+            note=body.note,
+        )
+        store.save(artifact)
+    except ClientWorkspaceNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+    except ArchiveError as exc:
+        status = (
+            409
+            if isinstance(exc, StageArtifactVersionConflictError)
+            else 422
+        )
+        raise HTTPException(
+            status_code=status,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return _stage_artifact_payload(artifact)
 
 
 def _method_payload(method: MethodVersion) -> dict[str, Any]:
@@ -5460,8 +5650,12 @@ def list_interventions(
     engagement: str = Query(
         ..., description="The client engagement the command center is scoped to"
     ),
-    on: date = Query(
-        ..., description="The evaluation instant the ranking is computed against"
+    on: date | None = Query(
+        None,
+        description=(
+            "The evaluation instant the ranking is computed against; "
+            "defaults to the current instant (today)"
+        ),
     ),
     ledger_repository: GateLedgerRepository = Depends(
         get_gate_ledger_repository
@@ -5480,17 +5674,21 @@ def list_interventions(
     nearing commitments are caller-supplied signals the Execution, Measurement and
     Engagement contexts own; they are not fabricated here and their own surfaces
     remain a follow-up, so this read currently ranks the two signals the platform
-    itself derives. Stored operator dismissals are applied to the matching derived
-    cards so a suppressed card is returned dismissed with its rationale; a
-    dismissal whose card no longer surfaces is inert. Listing a card authorizes no
-    action.
+    itself derives. The evaluation instant ``on`` is optional and defaults to the
+    current instant: an explicit ``on`` still fixes the ranking's expiry and
+    overdue checks, and omitting it ranks at today
+    (docs/specs/stage-artifact-archive.md section 2). Stored operator dismissals
+    are applied to the matching derived cards so a suppressed card is returned
+    dismissed with its rationale; a dismissal whose card no longer surfaces is
+    inert. Listing a card authorizes no action.
     """
 
+    effective_on = on if on is not None else date.today()
     query = EngagementProductionViewQuery(
         template=stage_zero_to_ten_template(),
         engagement=engagement,
         tenant_id=tenant_id,
-        on=on,
+        on=effective_on,
         verified_post_launch_milestones=0,
         activity_entries=0,
     )
@@ -5499,7 +5697,7 @@ def list_interventions(
             ledger_repository=ledger_repository,
             run_repository=run_repository,
         ).handle(query)
-        cards = InterventionRankingPolicy().rank(view, on=on)
+        cards = InterventionRankingPolicy().rank(view, on=effective_on)
     except (GovernanceError, ValueError) as exc:
         raise HTTPException(
             status_code=422,
@@ -5519,7 +5717,7 @@ def list_interventions(
     return InterventionListResponse(
         tenant_id=tenant_id,
         engagement=engagement,
-        on=on,
+        on=effective_on,
         total=len(cards),
         interventions=[_intervention_payload(card) for card in cards],
     )

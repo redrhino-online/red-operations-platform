@@ -3,12 +3,15 @@
 Condition 3 requires that cross tenant isolation holds at the API, retrieval,
 background worker and artifact URL layers. This suite covers the API layer that
 exists in the running platform today: the stage 0-10 gate write routes, the
-production-manager view read route, and the tenant-scoped content read routes
+production-manager view read route, the tenant-scoped content read routes
 for the stored stage 6-8 assets (``/red/messages``, ``/red/amplifiers``,
-``/red/funnels``), together with the tenant-scoped
+``/red/funnels``), the stage artifact archive routes
+(``/red/clients/{id}/artifacts``, docs/specs/stage-artifact-archive.md section
+1.3), together with the tenant-scoped
 ``GateLedgerRepository`` and ``StageRunRepository`` ports they sit on. It drives
-the real FastAPI app over HTTP and proves that a gate decision, a stage run and a
-progress projection recorded for one client are invisible to another client,
+the real FastAPI app over HTTP and proves that a gate decision, a stage run, a
+progress projection and an archived artifact recorded for one client are
+invisible to another client,
 that a stage gate prerequisite is enforced per client so one client's approvals
 never satisfy another client's gate, that an unauthorized approver is rejected
 over the API without a write, and that the durable seams refuse an unscoped
@@ -208,6 +211,58 @@ class CrossTenantIsolationTests(unittest.TestCase):
                     ),
                     other.text,
                 )
+
+    def test_archived_artifacts_do_not_leak_another_clients_archive(self) -> None:
+        from redops.api.routes import get_stage_artifact_store
+        from redops.contexts.archive.infrastructure.repositories import (
+            InMemoryStageArtifactStore,
+        )
+
+        artifacts = InMemoryStageArtifactStore()
+        self.driver.app.dependency_overrides[get_stage_artifact_store] = (
+            lambda: artifacts
+        )
+        self.driver.register_workspace(OTHER_TENANT)
+
+        for tenant in (TENANT, OTHER_TENANT):
+            response = self.client.post(
+                f"/red/clients/{tenant}/artifacts",
+                json={
+                    "workspace_id": ENGAGEMENT,
+                    "stage_number": 0,
+                    "kind": "signed-scope",
+                    "markdown": f"Demo: {tenant} signed scope",
+                    "owner": "red-owner",
+                },
+            )
+            self.assertEqual(201, response.status_code, response.text)
+
+        own = self.client.get(f"/red/clients/{TENANT}/artifacts")
+        self.assertEqual(200, own.status_code, own.text)
+        self.assertEqual(1, own.json()["total"], own.text)
+        self.assertTrue(
+            all(item["tenant_id"] == TENANT for item in own.json()["artifacts"]),
+            own.text,
+        )
+        self.assertEqual(
+            f"Demo: {TENANT} signed scope",
+            own.json()["artifacts"][0]["markdown"],
+        )
+
+        other = self.client.get(f"/red/clients/{OTHER_TENANT}/artifacts")
+        self.assertEqual(200, other.status_code, other.text)
+        self.assertEqual(1, other.json()["total"], other.text)
+        self.assertTrue(
+            all(
+                item["tenant_id"] == OTHER_TENANT
+                for item in other.json()["artifacts"]
+            ),
+            other.text,
+        )
+        self.assertEqual(
+            f"Demo: {OTHER_TENANT} signed scope",
+            other.json()["artifacts"][0]["markdown"],
+        )
 
     def test_an_unscoped_gate_read_is_refused(self) -> None:
         from redops.contexts.governance.domain.errors import (

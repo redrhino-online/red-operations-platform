@@ -67,7 +67,11 @@ class SeedPilotWorkspaceTests(unittest.TestCase):
                 get_method_version_repository,
                 get_offer_version_repository,
                 get_source_record_store,
+                get_stage_artifact_store,
                 get_stage_run_repository,
+            )
+            from redops.contexts.archive.infrastructure.repositories import (
+                InMemoryStageArtifactStore,
             )
             from redops.contexts.commercial.infrastructure.repositories import (
                 InMemoryCampaignMessageRepository,
@@ -106,6 +110,7 @@ class SeedPilotWorkspaceTests(unittest.TestCase):
             get_gate_ledger_repository: InMemoryGateLedgerRepository,
             get_stage_run_repository: InMemoryStageRunRepository,
             get_client_workspace_store: InMemoryClientWorkspaceStore,
+            get_stage_artifact_store: InMemoryStageArtifactStore,
             get_source_record_store: InMemorySourceRecordStore,
             get_claim_store: InMemoryClaimStore,
             get_method_version_repository: InMemoryMethodVersionRepository,
@@ -137,6 +142,7 @@ class SeedPilotWorkspaceTests(unittest.TestCase):
         from redops.seed import (
             DEMO_TENANT,
             DEMO_WORKSPACE_ID,
+            demo_artifacts,
             demo_builds,
             demo_claims,
             demo_sources,
@@ -148,6 +154,10 @@ class SeedPilotWorkspaceTests(unittest.TestCase):
         self.assertEqual(DEMO_TENANT, report["tenant_id"])
         self.assertEqual(DEMO_WORKSPACE_ID, report["workspace_id"])
         self.assertTrue(report["workspace_created"])
+        self.assertEqual(
+            [artifact["kind"] for artifact in demo_artifacts()],
+            report["artifacts_created"],
+        )
         self.assertEqual(
             [source["source_id"] for source in demo_sources()],
             report["sources_created"],
@@ -213,6 +223,39 @@ class SeedPilotWorkspaceTests(unittest.TestCase):
         )
 
         response = self.client.get(
+            f"/red/clients/{DEMO_TENANT}/artifacts"
+        )
+        self.assertEqual(200, response.status_code, response.text)
+        artifacts = response.json()["artifacts"]
+        # The list is ordered by stage, kind, asset and newest version first,
+        # so the seeded kinds are compared as a set, not in drop order.
+        self.assertEqual(
+            sorted(artifact["kind"] for artifact in demo_artifacts()),
+            sorted(item["kind"] for item in artifacts),
+        )
+        self.assertTrue(
+            all(item["workspace_id"] == DEMO_WORKSPACE_ID for item in artifacts)
+        )
+        self.assertTrue(
+            all(item["stage_number"] == 0 for item in artifacts)
+        )
+        self.assertTrue(
+            all(item["version"] == 1 for item in artifacts)
+        )
+        self.assertTrue(
+            all(
+                item["markdown"].startswith("Demo:")
+                and "\n## " in item["markdown"]
+                and "\n- " in item["markdown"]
+                for item in artifacts
+            ),
+            artifacts,
+        )
+        self.assertTrue(
+            all("demo" in item["owner"].lower() for item in artifacts)
+        )
+
+        response = self.client.get(
             "/red/claims", params={"tenant_id": DEMO_TENANT}
         )
         self.assertEqual(200, response.status_code, response.text)
@@ -252,6 +295,9 @@ class SeedPilotWorkspaceTests(unittest.TestCase):
             clients = self.client.get(
                 "/red/clients", params={"tenant_id": DEMO_TENANT}
             ).json()
+            artifacts = self.client.get(
+                f"/red/clients/{DEMO_TENANT}/artifacts"
+            ).json()
             sources = self.client.get(
                 f"/red/clients/{DEMO_TENANT}/sources"
             ).json()
@@ -264,13 +310,14 @@ class SeedPilotWorkspaceTests(unittest.TestCase):
             decisions = self.client.get(
                 "/red/decisions", params={"tenant_id": DEMO_TENANT}
             ).json()
-            return clients, sources, claims, builds, decisions
+            return clients, artifacts, sources, claims, builds, decisions
 
         before = snapshot()
         second = seed_pilot_workspace(self.client)
         after = snapshot()
 
         self.assertFalse(second["workspace_created"])
+        self.assertEqual([], second["artifacts_created"])
         self.assertEqual([], second["sources_created"])
         self.assertEqual([], second["claims_created"])
         self.assertEqual([], second["builds_created"])

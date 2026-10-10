@@ -19,13 +19,8 @@ import {
 } from "@/lib/redOperationsApi";
 import { PerformanceReview } from "./PerformanceReview";
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function PerformanceReviewScreen() {
   const { tenantId, workspaceId } = useRedClient();
-  const [on, setOn] = useState(today());
   const [view, setView] = useState<EngagementProductionView | null>(null);
   const [measurements, setMeasurements] = useState<MeasurementRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,7 +32,9 @@ export function PerformanceReviewScreen() {
     try {
       const [productionView, measurementPage] = await Promise.all([
         workspaceId
-          ? getProductionView(tenantId, workspaceId, on)
+          ? // No date filter: the review surface reads the current instant
+            // (stage artifact archive spec section 2).
+            getProductionView(tenantId, workspaceId)
           : Promise.resolve(null),
         listMeasurements(tenantId),
       ]);
@@ -50,7 +47,7 @@ export function PerformanceReviewScreen() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, workspaceId, on]);
+  }, [tenantId, workspaceId]);
 
   useEffect(() => {
     void load();
@@ -60,15 +57,6 @@ export function PerformanceReviewScreen() {
     <main className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-4 flex flex-wrap items-end gap-3">
-          <label className="text-xs text-fg-muted flex items-center gap-2">
-            On
-            <input
-              type="date"
-              value={on}
-              onChange={(event) => setOn(event.target.value)}
-              className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg focus:outline-none focus:border-line-strong"
-            />
-          </label>
           <button
             type="button"
             onClick={() => void load()}
