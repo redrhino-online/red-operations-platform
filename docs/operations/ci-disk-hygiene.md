@@ -13,6 +13,19 @@ resolves only to that node) went dark until the disk was grown and the node
 reset. Pruning the dind is therefore required maintenance, and this page records
 the layers of defence.
 
+## Status
+
+| Layer | Where | State |
+| --- | --- | --- |
+| 1. per-build prune | app repo, `.gitea/workflows/build.yaml` | in force (18a420a) |
+| 2. dind daemon GC (buildkit) | Atlas repo, `apps/gitea-runner-hygiene/chart` ConfigMap, mounted via `helm/values/gitea-actions.yaml` | live 2026-10-10 |
+| 3. dind storage isolation | Atlas repo, runner values: `/var/lib/docker` on a 15Gi `emptyDir` | live 2026-10-10 |
+| 4. node-level timer | Atlas repo, `gitea-dind-prune` CronJob (hourly, RBAC to pods/exec) | live 2026-10-10 |
+
+The layers 2-4 resources are owned by the `gitea-runner-hygiene` Argo
+Application (in-house chart in the platform repo's
+`apps/gitea-runner-hygiene/chart`).
+
 ## Layer 1 — per-build prune (in force)
 
 `.gitea/workflows/build.yaml` ends with a `Prune the dind build cache` step that
@@ -32,11 +45,12 @@ This bounds the build cache at 10 GB and drops the images the build pushed and
 no longer needs. It does not touch a running image, so it is safe. This lives in
 the app repository, so it ships with the workflow that triggers the builds.
 
-## Layer 2 — dind daemon GC (recommended durable fix, Atlas repo)
+## Layer 2 — dind daemon GC (live)
 
 The workflow prune only runs on builds; a daemon-level GC keeps the build cache
-bounded continuously. Give the `dind` container a `daemon.json` with buildkit
-GC (mounted from a ConfigMap), for example:
+bounded continuously. The `dind` container's `daemon.json` is the
+`gitea-dind-daemon-json` ConfigMap (owned by the `gitea-runner-hygiene`
+Application) mounted at `/etc/docker/daemon.json`, containing:
 
 ```json
 {
@@ -52,25 +66,28 @@ GC (mounted from a ConfigMap), for example:
 }
 ```
 
-That file is part of the runner's StatefulSet in the **Atlas infra repository**
-(not this app repo). Mount it at `/etc/docker/daemon.json` on the `dind`
-container. Once present, buildkit garbage-collects automatically even if no
-build runs.
+Keep only documented dockerd builder-GC keys: an unrecognized key stops
+dockerd from starting and breaks CI (the dind `startupProbe` would fail). Once
+present, buildkit garbage-collects automatically even if no build runs.
 
-## Layer 3 — isolate dind storage (recommended)
+## Layer 3 — isolate dind storage (live)
 
-Because the dind data is the container's writable layer, it is charged to the
-node's `nodefs` and can evict unrelated pods. Give the `dind` container its own
-volume (a `local-path` PVC or an `emptyDir` with a `sizeLimit`) for
-`/var/lib/docker`, so growth is bounded and attributed to the runner, not the
-node. Also consider raising the k3s kubelet image-GC thresholds
-(`/etc/rancher/k3s/config.yaml`: `kubelet-arg: ["image-gc-high-threshold=70",
-"image-gc-low-threshold=60"]`).
+The dind data is now an `emptyDir` with `sizeLimit: 15Gi` mounted at
+`/var/lib/docker` (runner values): growth is pod-scoped, so a runaway build
+evicts the runner pod instead of starving the node. It deliberately is not a
+node-pinned `local-path` PVC: the runner must stay free to reschedule (it moved
+cp1 → worker1 during the 2026-10-10 incident). The k3s kubelet image-GC
+thresholds remain a further operator option (requires k3s restarts on every
+node, so it was not applied).
 
-## Layer 4 — node-level timer (fallback)
+## Layer 4 — scheduled prune (live)
 
-If the runner config is not under change control, a host `systemd` timer or a
-CronJob can run `docker system prune -af` inside the dind periodically:
+The `gitea-dind-prune` CronJob (hourly at :17, `concurrencyPolicy: Forbid`)
+execs into the dind and prunes containers, images unused for 48h, and builder
+cache beyond 10GB. It uses the distroless `registry.k8s.io/kubectl` image, so
+its command is exec-form and the shell runs on the dind side; its
+ServiceAccount may only `get` pods and create `pods/exec` in the `gitea`
+namespace. The same exec pattern works ad hoc:
 
 ```sh
 kubectl -n gitea exec gitea-actions-runner-0 -c dind -- docker system prune -af
