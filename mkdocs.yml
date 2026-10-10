@@ -70,6 +70,7 @@ nav:
       - Absorbed fork: platform/absorbed-fork.md
   - Operations:
       - Build harness and tests: operations/harness-and-tests.md
+      - CI disk hygiene: operations/ci-disk-hygiene.md
   - Contributing: contributing.md
   - Reference:
       - Developer guide: DEVELOPER_GUIDE.md

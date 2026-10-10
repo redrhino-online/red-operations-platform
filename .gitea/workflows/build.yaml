@@ -82,3 +82,17 @@ jobs:
           if git diff --quiet; then echo "already at ${TAG}"; exit 0; fi
           git -c user.email=ci@atlas.lan -c user.name=atlas-ci commit -am "ci: promote redop ${TAG}"
           git push origin main
+
+      # Bound the runner's docker-in-docker disk usage. The dind sidecar stores
+      # its images and build cache in the container's writable layer, i.e. on the
+      # node's ephemeral storage; unbounded growth filled atlas-k3s-cp1 and
+      # evicted pods on 2026-10-10 (the node went NotReady). Prune after every
+      # build, pass or fail, and keep a bounded build cache so rebuilds stay
+      # warm. See docs/operations/ci-disk-hygiene.md.
+      - name: Prune the dind build cache
+        if: always()
+        run: |
+          docker container prune -f || true
+          docker image prune -af || true
+          docker builder prune -af --keep-storage 10GB || true
+          docker system df || true
