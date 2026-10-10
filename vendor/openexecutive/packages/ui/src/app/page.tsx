@@ -16,7 +16,6 @@ import { useWorkspace } from "@/components/workspace/WorkspaceContext";
 import PausedBanner from "@/components/executive/PausedBanner";
 import { ChatMessage, DebugEvent, getSessionMessages } from "@/lib/api";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 interface HealthData {
   company_profile_loaded: boolean;
@@ -154,7 +153,6 @@ export default function HomePage() {
   // that hook opts the page out of static rendering in Next 15 unless
   // wrapped in <Suspense>, and the chat home is a heavy static page we
   // want to keep prerendered. The effect runs client-only anyway.
-  const router = useRouter();
   const deepLinkRef = useRef<{ sessionId: string; gen: number } | null>(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -167,12 +165,15 @@ export default function HomePage() {
         setPendingPrompt(draftParam.slice(0, MAX_DRAFT_PARAM_CHARS));
         setAutoSubmitPending(false);
       }
-      router.replace("/");
+      // Strip the query in place (no navigation): `router.replace("/")` would
+      // re-enter the middleware, which now redirects the bare root to the RED
+      // command center and would yank a fresh chat straight to the dashboard.
+      window.history.replaceState(null, "", "/");
     } else if (sessionParam) {
       deepLinkRef.current = { sessionId: sessionParam, gen: selectGenRef.current };
-      router.replace("/");
+      window.history.replaceState(null, "", "/");
     }
-  }, [handleNewChat, router]);
+  }, [handleNewChat]);
 
   useEffect(() => {
     const pending = deepLinkRef.current;
