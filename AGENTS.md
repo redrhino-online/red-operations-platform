@@ -13,6 +13,8 @@
   `revert`), subject under 72 characters, blank second line, then a body that
   explains why the change was made.
 - The `atlas` remote (Gitea forge) is published by the Ralph harness
-  (`ralph_cycle.sh`), including on the final cycle. Agents push to `origin` only
-  unless the user asks for `atlas` as well.
+  (`ralph_cycle.sh`), including on the final cycle. Harness cycles push to
+  `origin` only. **Any commit made at a user's request is pushed to both
+  `origin` and `atlas`** as part of the same step (owner rule, 2026-10-10);
+  a push to `atlas` `main` triggers the Gitea build workflow.
 - Never push to `upstream`.
