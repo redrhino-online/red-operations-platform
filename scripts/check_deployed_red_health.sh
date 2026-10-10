@@ -7,6 +7,10 @@
 # gate pass while RED was not deployed. This check requires a RED identity
 # marker in the response, so a wrong app cannot satisfy condition 9.
 #
+# The bare root redirects to the command center (K8), so the check follows
+# redirects (-L) and greps the final page; a wrong app's redirect target still
+# lacks the marker.
+#
 # Usage: scripts/check_deployed_red_health.sh [URL]
 #   URL defaults to $REDOP_HEALTH_URL, then to https://redop.atlas.lan/.
 #   REDOP_RED_MARKER overrides the required identity marker.
@@ -18,7 +22,7 @@ marker="${REDOP_RED_MARKER:-RED Operations}"
 
 fail() { printf 'deployed RED health FAIL: %s\n' "$*" >&2; exit 1; }
 
-curl_args=(-fsS --max-time 10)
+curl_args=(-fsSL --max-time 10)
 if [[ "${REDOP_HEALTH_INSECURE:-1}" == "1" ]]; then curl_args+=(-k); fi
 
 body="$(curl "${curl_args[@]}" "$url")" \

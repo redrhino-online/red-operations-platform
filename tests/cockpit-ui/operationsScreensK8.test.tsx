@@ -1,30 +1,32 @@
 import { describe, expect, it } from "vitest";
 
-import { landingRewrite, RED_LANDING_PATH } from "@/lib/redLanding";
+import { landingRedirect, RED_LANDING_PATH } from "@/lib/redLanding";
 import { BRIEFING_DESCRIPTION, buildPrimaryNav } from "@/components/shell/navConfig";
 
 // K8 (SPEC.md section 14 condition 5): the landing surface is the RED portfolio
-// command center. The root `/` (with no query) rewrites to the native command
-// center page, the chat-home deep links pass through, and the RED Operations
-// group leads the navigation. These tests exercise the pure landing decision and
-// the nav order; they approve nothing, spend nothing and deploy nothing.
+// command center. The root `/` (with no query) redirects to the native command
+// center page — a redirect, not a rewrite, so the browser lands on a route the
+// AppShell wraps with navigation (a rewritten root stayed on exempt `/` and lost
+// the nav) — the chat-home deep links pass through, and the RED Operations group
+// leads the navigation. These tests exercise the pure landing decision and the
+// nav order; they approve nothing, spend nothing and deploy nothing.
 
-describe("landingRewrite", () => {
-  it("rewrites the bare root to the RED command center", () => {
-    expect(landingRewrite("/", "")).toBe(RED_LANDING_PATH);
+describe("landingRedirect", () => {
+  it("redirects the bare root to the RED command center", () => {
+    expect(landingRedirect("/", "")).toBe(RED_LANDING_PATH);
     expect(RED_LANDING_PATH).toBe("/operations/command-center");
   });
 
   it("passes the chat-home deep links through unchanged", () => {
-    expect(landingRewrite("/", "?new=1")).toBeNull();
-    expect(landingRewrite("/", "?session=abc")).toBeNull();
-    expect(landingRewrite("/", "?new=1&draft=hi")).toBeNull();
+    expect(landingRedirect("/", "?new=1")).toBeNull();
+    expect(landingRedirect("/", "?session=abc")).toBeNull();
+    expect(landingRedirect("/", "?new=1&draft=hi")).toBeNull();
   });
 
   it("leaves every other route alone", () => {
-    expect(landingRewrite("/operations/command-center", "")).toBeNull();
-    expect(landingRewrite("/jobs", "")).toBeNull();
-    expect(landingRewrite("/operations/build-board", "")).toBeNull();
+    expect(landingRedirect("/operations/command-center", "")).toBeNull();
+    expect(landingRedirect("/jobs", "")).toBeNull();
+    expect(landingRedirect("/operations/build-board", "")).toBeNull();
   });
 });
 
