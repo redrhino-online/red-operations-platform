@@ -4,6 +4,53 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 20261010T010510Z: K10 — seed the runtime Departments/Council/People stores RED
+
+- **Selected item:** K10 (seed the runtime Departments/Council/People stores
+  RED), chosen over K9 and K11: all three are `[7/7]` conditions, but K9's
+  `redops-canon` domain needs new accepted-domain and retrieval wiring in the
+  locked `knowledge/loader.py`, `api/routes/documents.py` and `retriever.py`
+  (an owner-approved exception per ADR 0014), and K11's Jobs surfacing needs the
+  locked `workflows/__init__.py` registry — while K10 is fully additive through
+  the vendored departments store's public API, so it is the highest-value item
+  this cycle can complete without an owner decision.
+- **Outcome:** `backend/redops/seed_red_stores.py` (repo-side, no vendor file
+  modified) seeds the runtime departments RED through the vendored store's
+  public API: it runs the vendored default seed first (so a fresh database is
+  initialized and its one-time sentinel marked), deletes the eight generic
+  C-suite defaults, and inserts or updates RED's roster — the nine section 5
+  agents as departments with charters parsed from `docs/agents/charter-*.md`
+  (Mission → mission, "Owns:" → scope, "Does not own:" → out-of-scope) plus the
+  chartered proposal-only capability slots 10 and 11 with no specialist key, so
+  they render as informational rows and are never routed (ADR 0006). It only
+  writes when something differs, so a rerun is a true no-op. `make seed-stores`
+  runs it against `EPISODIC_DB_PATH`. The Council surface is the agent roster
+  the guide already renders RED (C4) and the seed aligns the runtime specialist
+  keys with `RED_SPECIALIST_AREAS`; the People store is left empty on purpose —
+  RED invents no humans and the human approvers are owner decisions (SPEC.md
+  section 11) — so Departments/Council/People render RED only.
+- **Evidence:** `tests/unit/test_seed_red_stores.py` 5 passed (RED roster
+  present and the generic 8 gone, idempotent rerun with empty created/removed/
+  updated, slots 10/11 proposal-only and unrouted, the nine specialist keys
+  equal `RED_SPECIALIST_AREAS`, the charter mission traced to the agent
+  charter); CLI verification: first run `created` 11 / `removed` 8, rerun
+  `{"created": [], "removed": [], "updated": []}`; `make check` 2735 passed /
+  3 skipped / 799 subtests; `scripts/check_vendor_additive.sh` ok (1225 locked
+  files match); `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]`.
+- **Not done (deliberately):** the People store stays empty (no invented
+  humans); the live single-shell verification and the docs update are K13; no
+  send, spend, publication or client commitment is authorized (SPEC.md sections
+  4 and 9); `.ralph/DONE` is not touched because `make done` still fails `[7/7]`
+  at the live `[14.6]` check.
+- **Next ready item:** K9 (canon into Knowledge) and K11 (register the stage
+  0-10 pipeline as cockpit workflows) remain ready but each needs an
+  owner-approved exception for a locked vendor file (ADR 0014); K12 needs K11;
+  K13 needs K9-K12.
+- **Blockers:** K9 and K11 each need an owner-approved exception recorded in
+  `docs/fork_inventory.md` (or a named RED-adopted surface) before an unattended
+  cycle can modify the locked `knowledge/loader.py` / `retriever.py` /
+  `documents.py` (K9) or `workflows/__init__.py` (K11); recorded for the owner.
+
 ### Cycle 20261009T023814Z: K8 — landing surface = the RED portfolio command center
 
 - **Selected item:** K8 (the landing surface is the RED portfolio command
@@ -36,45 +83,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 - **Next ready item:** K9 (canon into Knowledge), K10 (seed the runtime
   Departments/Council/People stores) and K11 (register the stage 0-10 pipeline as
   cockpit workflows) are all independent and ready; K13 needs them all.
-- **Blockers:** none.
-
-### Cycle 20261009T023128Z: K7 — retire the thin client and rewrite the section 13 screen gate for the cockpit
-
-- **Selected item:** K7 (retire the `/screens` thin client and rewrite the
-  section 13 condition 6 gate to exercise the cockpit pages), the highest-value
-  ready item: K4, K5 and K6 are done, so K7 satisfies `[7/7]` condition 1 (one
-  shell) and makes `[5/7]` honest for the cockpit; it unblocks K13. K8-K11 are
-  independent but lower value.
-- **Outcome:** the thin client is gone: `frontend/`, `Dockerfile.ui`, the chart's
-  `deployment-ui.yaml`, the `-ui` Service and PDB, the `redop.uiImage` helper,
-  the `ui:`/`uiTag` values, the ingress `/screens` route, the Gitea UI image
-  build/push and the `uiTag` promotion, and the `redop-ui` reference in
-  `scripts/reset_redop_data.sh` (now restarts the API and cockpit). The section
-  13 condition 6 gate now exercises the cockpit: `scripts/check_frontend_screens.sh`
-  reads a repo-side manifest (`tests/cockpit-ui/dod-screens.txt`) and requires a
-  native `/operations/<route>` cockpit page per section 8 screen plus the
-  component suite; `scripts/check_frontend_build.sh` builds the cockpit
-  (`next build`) and runs the repo-side component suite; `scripts/check_branding_and_notice.sh`
-  scans the RED-owned cockpit surfaces for OpenExecutive branding and the RED
-  Director name; `scripts/check_definition_of_done.sh` `[5/7]` calls all three
-  with the cockpit paths.
-- **Evidence:** `make check` 2730 passed / 3 skipped / 799 subtests (the
-  rewritten `test_frontend_screens_check.py`, `test_frontend_build_check.py`,
-  `test_branding_gate.py`, `test_red_helm_chart.py` and `test_deploy_artifacts.py`
-  pass); `scripts/check_frontend_screens.sh` ok (12 screens); `scripts/check_frontend_build.sh`
-  ok (cockpit compiled, 43 component tests); `scripts/check_branding_and_notice.sh`
-  ok; `scripts/check_vendor_additive.sh` ok (1225 locked files match); `tsc --noEmit`
-  clean; `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]` (the live `[14.6]`
-  still fails until the overhauled cockpit image is built and deployed, which is
-  K13's live verification).
-- **Not done (deliberately):** the live single-shell verification and the docs
-  update are K13; no send, spend, publication or client commitment is authorized
-  (SPEC.md sections 4 and 9); `.ralph/DONE` is not touched because `make done`
-  still fails `[7/7]` at the live `[14.6]` check.
-- **Next ready item:** K8 (landing surface = portfolio command center), K9 (canon
-  into Knowledge), K10 (seed the runtime Departments/Council/People stores) and
-  K11 (register the stage 0-10 pipeline as cockpit workflows) are all independent
-  and ready; K13 needs them all.
 - **Blockers:** none.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.

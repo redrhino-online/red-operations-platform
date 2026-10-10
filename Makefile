@@ -115,6 +115,12 @@ vendor-pin:
 seed:
 	@PYTHONPATH=backend uv run python -m redops.seed
 
+# Seed the RED runtime Departments/Council/People stores (K10; SPEC.md section
+# 14 condition 7) into the SQLite database named by EPISODIC_DB_PATH, through
+# the vendored store's public API. Idempotent: a rerun changes nothing.
+seed-stores:
+	@PYTHONPATH=backend uv run python -m redops.seed_red_stores
+
 reset-hosted:
 	@./scripts/reset_redop_data.sh
 
