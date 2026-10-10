@@ -24,6 +24,11 @@ import {
   updateBuiltinFile,
 } from "@/lib/api";
 import StatusPill from "@/components/ReviewStatusPill";
+import { useRedClient } from "@/components/workspace/RedClientContext";
+import {
+  listAwaitingApprovals,
+  type AwaitingApprovalRun,
+} from "@/lib/redOperationsApi";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -395,6 +400,12 @@ export default function ReviewQueue() {
   const [rejectModal, setRejectModal] = useState<RejectModalState>(null);
   const [trustedDefaults, setTrustedDefaults] = useState<Record<string, number>>({});
   const [pendingItems, setPendingItems] = useState<ReviewItem[]>([]);
+  // RED pipeline gates waiting for their approval (K12; SPEC.md section 14
+  // condition 8). The cockpit Review queue and the RED approval inbox are one
+  // approval experience, so the queue surfaces what is waiting; listing a
+  // pending gate approves nothing.
+  const { tenantId } = useRedClient();
+  const [pendingGates, setPendingGates] = useState<AwaitingApprovalRun[]>([]);
 
   const loadQueue = useCallback(async () => {
     setLoading(true);
@@ -406,10 +417,15 @@ export default function ReviewQueue() {
       ]);
       setItems([...pending, ...needsRevision]);
       setTrustedDefaults(defaults);
+      setPendingGates(
+        (await listAwaitingApprovals(tenantId).catch(() => null))?.runs.filter(
+          (run) => run.pending_approval !== null,
+        ) ?? [],
+      );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tenantId]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -550,6 +566,35 @@ export default function ReviewQueue() {
       {/* Queue tab */}
       {tab === "queue" && (
         <div>
+          {pendingGates.length > 0 && (
+            <div
+              data-testid="review-pending-gates"
+              className="mb-4 rounded-xl border border-line bg-surface-elevated p-4"
+            >
+              <h2 className="text-sm font-medium text-fg">
+                Pipeline gate approvals
+              </h2>
+              <p className="mt-1 text-sm text-fg-muted">
+                {pendingGates.length} RED pipeline gate
+                {pendingGates.length === 1 ? "" : "s"} waiting for their approval —
+                the exact version each run pins is in the{" "}
+                <a href="/operations/approval-inbox" className="underline">
+                  approval inbox
+                </a>
+                . Listing a pending gate approves nothing.
+              </p>
+              <ul className="mt-2 list-disc pl-5 text-xs text-fg-muted">
+                {pendingGates.map((run) => (
+                  <li key={run.run_id}>
+                    <code>{run.pending_approval}</code> on{" "}
+                    <code>
+                      {run.definition_id}@{run.definition_version}
+                    </code>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-fg-muted">
               {loading ? "Loading…" : `${items.length} item${items.length !== 1 ? "s" : ""} need review`}

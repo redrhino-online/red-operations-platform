@@ -80,6 +80,15 @@ class InMemoryWorkflowRunStore(WorkflowRunStore):
             if owner == tenant_id and run.resume_step() is not None
         )
 
+    def list_awaiting_approval(self, *, tenant_id: str) -> tuple[str, ...]:
+        _require_run_tenant(tenant_id, "load")
+        return tuple(
+            run_id
+            for (owner, run_id), run in self._runs.items()
+            if owner == tenant_id
+            and run.status is WorkflowRunStatus.AWAITING_APPROVAL
+        )
+
     def close(self) -> None:
         """A process-local store owns no external resource to release."""
 
@@ -169,6 +178,21 @@ class PostgresWorkflowRunStore(WorkflowRunStore):
                 ORDER BY id
                 """,
                 (tenant_id, WorkflowRunStatus.RUNNING.value),
+            )
+            rows = cursor.fetchall()
+        return tuple(row[0] for row in rows)
+
+    def list_awaiting_approval(self, *, tenant_id: str) -> tuple[str, ...]:
+        _require_run_tenant(tenant_id, "load")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT run_id
+                FROM workflow_runs
+                WHERE tenant_id = %s AND status = %s
+                ORDER BY id
+                """,
+                (tenant_id, WorkflowRunStatus.AWAITING_APPROVAL.value),
             )
             rows = cursor.fetchall()
         return tuple(row[0] for row in rows)

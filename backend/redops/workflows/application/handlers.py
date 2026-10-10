@@ -17,11 +17,16 @@ from __future__ import annotations
 from datetime import date
 
 from redops.workflows.application.ports import (
+    StageGateApprovalPort,
     WorkflowRunStore,
     WorkflowStepExecutor,
 )
 from redops.workflows.domain.entities import WorkflowRun
-from redops.workflows.domain.errors import WorkflowRunNotFoundError
+from redops.workflows.domain.errors import (
+    ApprovalNotRecordedError,
+    WorkflowRunNotFoundError,
+)
+from redops.workflows.domain.policies import GateStepBinding
 from redops.workflows.domain.value_objects import (
     WorkflowDefinition,
     WorkflowRunStatus,
@@ -39,10 +44,18 @@ class RunWorkflowHandler:
     """Start, resume and approve durable workflow runs."""
 
     def __init__(
-        self, *, store: WorkflowRunStore, executor: WorkflowStepExecutor
+        self,
+        *,
+        store: WorkflowRunStore,
+        executor: WorkflowStepExecutor,
+        gate_approvals: StageGateApprovalPort | None = None,
     ) -> None:
         self._store = store
         self._executor = executor
+        # Optional so the generic approval behavior is unchanged for callers
+        # that carry no RED gate binding; the pipeline composition always wires
+        # it, so a bound gate can never resume without its RED approval.
+        self._gate_approvals = gate_approvals
 
     def start(
         self,
@@ -99,11 +112,36 @@ class RunWorkflowHandler:
         case never infers or invents an approver (SPEC.md section 4).
         """
         run = self._load(run_id, tenant_id=tenant_id)
+        self._require_recorded_approval(run)
         run.approve(actor=actor, reason=reason, on=on, correlation_id=correlation_id)
         self._store.save(run)
         return self._advance(
             run, actor=actor, reason=reason, on=on, correlation_id=correlation_id
         )
+
+    def _require_recorded_approval(self, run: WorkflowRun) -> None:
+        """Refuse to resume a bound gate whose RED approval is not recorded.
+
+        SPEC.md section 14 condition 8: a run pauses at a ``wait_for_human``
+        gate that corresponds to a RED approval request and resumes only after
+        that approval is recorded. A gate step the pipeline definition bound to
+        a stage resumes only when the tenant's ledger holds a passing decision
+        for that stage; an unbound step keeps the generic behavior.
+        """
+
+        if self._gate_approvals is None or run.pending_approval is None:
+            return
+        binding = GateStepBinding.from_step_name(run.pending_approval)
+        if binding is None:
+            return
+        if not self._gate_approvals.has_passing_decision(
+            tenant_id=run.tenant_id, stage_number=binding.stage_number
+        ):
+            raise ApprovalNotRecordedError(
+                f"workflow gate {run.pending_approval!r} is bound to stage "
+                f"{binding.stage_number}, which has no passing RED approval for "
+                f"tenant {run.tenant_id!r}"
+            )
 
     def fail(
         self,

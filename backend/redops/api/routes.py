@@ -392,9 +392,11 @@ from redops.contexts.production.infrastructure.repositories import (
     build_object_repository_from_env,
 )
 from redops.workflows.application.ports import (
+    StageGateApprovalPort,
     WorkflowRunStore,
     WorkflowStepExecutor,
 )
+from redops.workflows.domain.errors import WorkflowError
 from redops.workflows.infrastructure.repositories import (
     workflow_run_store_from_env,
 )
@@ -3763,6 +3765,117 @@ def get_workflow_run_store() -> Iterator[WorkflowRunStore]:
         store.close()
 
 
+def get_workflow_step_executor() -> WorkflowStepExecutor:
+    """Provide the configured workflow step executor seam to the API (K11).
+
+    SPEC.md section 6 keeps infrastructure behind ports: the route depends on
+    the ``WorkflowStepExecutor`` port and the composition (which connector
+    transport carries a recorded operation) stays in one place, the same
+    composition the worker uses, so an API-started run and a worker-resumed run
+    resolve to the same recorded operations.
+    """
+
+    from redops.workflows.pipeline import pipeline_step_executor_from_env
+
+    return pipeline_step_executor_from_env()
+
+
+class ApproveWorkflowRunRequest(BaseModel):
+    """The body the workflow approval route accepts (K12).
+
+    ``actor`` is the named human resuming the gate; the route never infers one
+    (SPEC.md section 4).
+    """
+
+    actor: str
+    reason: str = "approve the stage gate"
+
+
+def get_stage_gate_approvals(
+    repository: GateLedgerRepository = Depends(get_gate_ledger_repository),
+) -> StageGateApprovalPort:
+    """Provide the RED gate-approval seam to the API (K12; SPEC.md section 14).
+
+    The adapter answers from the tenant's durable gate ledger, so a workflow
+    gate resumes only when the stage's RED approval is actually recorded.
+    """
+
+    from redops.workflows.infrastructure.approvals import StageGateApprovalRepository
+
+    return StageGateApprovalRepository(repository)
+
+
+@router.get("/clients/{tenant_id}/workflows/awaiting-approval")
+def list_workflows_awaiting_approval(
+    tenant_id: str,
+    store: WorkflowRunStore = Depends(get_workflow_run_store),
+) -> dict[str, Any]:
+    """List one client's durable runs waiting at a RED approval gate (K12).
+
+    SPEC.md section 14 condition 8 binds the pipeline's human gates to RED
+    approvals, and the approval experience must surface what is waiting. The
+    read is tenant scoped (SPEC.md section 9) and projects the same payload the
+    run detail read serves, so the approval inbox and the cockpit Review queue
+    show the pending gate with the exact pinned definition version.
+    """
+
+    runs: list[dict[str, Any]] = []
+    for run_id in store.list_awaiting_approval(tenant_id=tenant_id):
+        run = store.get(run_id, tenant_id=tenant_id)
+        if run is None or run.pending_approval is None:
+            continue
+        runs.append(_workflow_run_payload(run))
+    return {"tenant_id": tenant_id, "total": len(runs), "runs": runs}
+
+
+@router.post("/clients/{tenant_id}/workflows/{run_id}/approval")
+def approve_workflow_run(
+    tenant_id: str,
+    run_id: str,
+    body: ApproveWorkflowRunRequest,
+    store: WorkflowRunStore = Depends(get_workflow_run_store),
+    executor: WorkflowStepExecutor = Depends(get_workflow_step_executor),
+    gate_approvals: StageGateApprovalPort = Depends(get_stage_gate_approvals),
+) -> dict[str, Any]:
+    """Resume one durable run waiting at a RED approval gate (K12).
+
+    SPEC.md section 14 condition 8: a run pauses at a ``wait_for_human`` gate
+    that corresponds to a RED approval request and resumes only after that
+    approval is recorded. The route composes the same handler the start route
+    uses with the gate-approval seam, so the use case refuses to commit a bound
+    gate whose stage has no passing RED approval, and a named human — never an
+    agent — advances the run.
+    """
+
+    from redops.workflows.application.handlers import RunWorkflowHandler
+
+    if not body.actor.strip():
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "ValueError", "message": "actor is required"},
+        )
+
+    handler = RunWorkflowHandler(
+        store=store, executor=executor, gate_approvals=gate_approvals
+    )
+    try:
+        run = handler.approve(
+            run_id,
+            tenant_id=tenant_id,
+            actor=body.actor.strip(),
+            reason=body.reason,
+            on=date.today(),
+            correlation_id=uuid.uuid4().hex,
+        )
+    except WorkflowError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return _workflow_run_payload(run)
+
+
 @router.get("/clients/{tenant_id}/workflows/{run_id}")
 def get_workflow_run(
     tenant_id: str,
@@ -3808,20 +3921,6 @@ class StartWorkflowRunRequest(BaseModel):
     actor: str
     reason: str = "start the stage 0-10 pipeline"
 
-
-def get_workflow_step_executor() -> WorkflowStepExecutor:
-    """Provide the configured workflow step executor seam to the API (K11).
-
-    SPEC.md section 6 keeps infrastructure behind ports: the route depends on
-    the ``WorkflowStepExecutor`` port and the composition (which connector
-    transport carries a recorded operation) stays in one place, the same
-    composition the worker uses, so an API-started run and a worker-resumed run
-    resolve to the same recorded operations.
-    """
-
-    from redops.workflows.pipeline import pipeline_step_executor_from_env
-
-    return pipeline_step_executor_from_env()
 
 
 @router.post("/clients/{tenant_id}/workflows/{definition_name}", status_code=201)

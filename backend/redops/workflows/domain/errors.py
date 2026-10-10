@@ -76,3 +76,14 @@ class CrossTenantWorkflowRunError(WorkflowError):
     run to another, so the adapter refuses a blank tenant instead of falling
     back to a global key.
     """
+
+
+class ApprovalNotRecordedError(WorkflowError):
+    """A workflow gate was approved without the RED approval it is bound to.
+
+    SPEC.md section 14 condition 8 binds each pipeline gate to the RED approval
+    the stage gate records: a run pauses at the gate and resumes only after that
+    approval is recorded. Resuming a bound gate whose approval the ledger does
+    not hold would let a workflow run authorize downstream work the stage gate
+    never approved, so the use case refuses instead of committing.
+    """

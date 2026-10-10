@@ -2,6 +2,51 @@
 
 Cycle records older than the two current entries in `IMPLEMENTATION_PLAN.md`. Newest archived entry first.
 
+### Cycle 20261010T011139Z: K9 — canon into Knowledge, repeatably
+
+- **Selected item:** K9 (canon into Knowledge, repeatably), the highest-value
+  ready item: the owner approved the ADR 0014 exception (`3daced9`, recorded in
+  `docs/fork_inventory.md`) that made the Knowledge and Workflows subtrees
+  RED-owned surfaces, so K9's blocker is gone and K9 is the canon foundation
+  `[7/7]` condition 6 needs; the canon content also changed this cycle (new pin
+  `ef00388d…`), which is exactly what a verifiable seed over the pinned canon
+  must handle. K11 is also unblocked but K9 is first in the queue and K11
+  unblocks only K12.
+- **Outcome:** `backend/redops/seed_canon.py` (repo-side) seeds the pinned canon
+  corpus into the cockpit Knowledge domain `redops-canon` through the vendored
+  loader's ingest seam (`ingest_text_sync`, the same call `POST /documents`
+  makes). It is verifiable: `canon_content_hash` replicates
+  `scripts/canon_hash.sh` byte for byte (asserted against the script in a test)
+  and `verify_canon_pin` refuses to seed when the canon has drifted from
+  `canon.lock`. It is idempotent: chunk ids derive from the canon-relative
+  source name and chunk index, so a rerun upserts the same ids and changes
+  nothing. The excluded trees (`.git`, `.venv`, `site`) match the hash exactly,
+  so the seeded corpus is exactly the pinned content. The RED-owned
+  `knowledge/loader.py` gained the `redops-canon` domain in `UPLOAD_DOMAINS`, so
+  the cockpit upload API accepts it and the unfiltered company-docs query every
+  specialist reads retrieves it. `make seed-canon` runs it against
+  `RALPH_CANON`/`VECTOR_STORE_PATH`. The eval scenario
+  `evals/_scenarios/redops_canon_001.yaml` asserts an answer grounds on canon
+  files (the live eval run is K13's verification).
+- **Evidence:** `tests/unit/test_seed_canon.py` 5 passed (the Python hash equals
+  the script's, the corpus lands in `redops-canon` with canon-relative sources
+  and no excluded-tree content, a rerun changes the collection neither in count
+  nor in rows, a drifted canon is refused, and `canon_files` matches the hash's
+  file set); real-canon CLI verification: 256 files / 3103 chunks in ~69 s,
+  rerun 256 / 3103 with the collection count unchanged at 3103 and a grounding
+  query returning `redops-canon` chunks; vendor knowledge/documents suites 44 +
+  72 passed; `make check` 2740 passed / 3 skipped / 799 subtests;
+  `scripts/check_vendor_additive.sh` ok (1053 locked files match the re-baselined
+  manifest); `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]`.
+- **Not done (deliberately):** the live grounding eval run and the live
+  single-shell verification are K13; no send, spend, publication or client
+  commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is not
+  touched because `make done` still fails `[7/7]` at the live `[14.6]` check.
+- **Next ready item:** K11 (register the stage 0-10 pipeline as cockpit workflow
+  definitions), now unblocked by the same owner exception; K12 needs K11; K13
+  needs K9-K12.
+- **Blockers:** none.
+
 ### Cycle 20261010T010510Z: K10 — seed the runtime Departments/Council/People stores RED
 
 - **Selected item:** K10 (seed the runtime Departments/Council/People stores

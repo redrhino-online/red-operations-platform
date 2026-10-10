@@ -9,12 +9,18 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useRedClient } from "@/components/workspace/RedClientContext";
-import { listApprovals, type ApprovalRecord } from "@/lib/redOperationsApi";
+import {
+  listApprovals,
+  listAwaitingApprovals,
+  type ApprovalRecord,
+  type AwaitingApprovalRun,
+} from "@/lib/redOperationsApi";
 import { ApprovalInbox } from "./ApprovalInbox";
 
 export function ApprovalInboxScreen() {
   const { tenantId } = useRedClient();
   const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
+  const [awaiting, setAwaiting] = useState<AwaitingApprovalRun[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,8 +28,12 @@ export function ApprovalInboxScreen() {
     setLoading(true);
     setError(null);
     try {
-      const page = await listApprovals(tenantId);
+      const [page, waiting] = await Promise.all([
+        listApprovals(tenantId),
+        listAwaitingApprovals(tenantId),
+      ]);
       setApprovals(page.approvals);
+      setAwaiting(waiting.runs);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load approvals");
     } finally {
@@ -49,6 +59,7 @@ export function ApprovalInboxScreen() {
         </div>
         <ApprovalInbox
           approvals={approvals}
+          awaiting={awaiting}
           loading={loading}
           error={error}
           tenantId={tenantId}

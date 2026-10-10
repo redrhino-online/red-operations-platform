@@ -266,6 +266,9 @@ describe("ported cockpit screens read the shared workspace context", () => {
           approvals: [approval()],
         });
       }
+      if (url.includes("/workflows/awaiting-approval")) {
+        return jsonResponse({ tenant_id: "3fmindset", total: 0, runs: [] });
+      }
       throw new Error(`unexpected fetch ${url}`);
     });
 

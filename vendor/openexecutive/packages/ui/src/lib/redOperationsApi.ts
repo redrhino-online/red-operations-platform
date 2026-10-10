@@ -619,3 +619,42 @@ export function listMeasurements(tenantId: string): Promise<MeasurementList> {
 export function listOpportunities(tenantId: string): Promise<OpportunityList> {
   return redGet<OpportunityList>("/red/opportunities", { tenant_id: tenantId });
 }
+
+// One durable workflow run waiting at a RED approval gate (K12; SPEC.md section
+// 14 condition 8). Mirrors the workflow-run read payload: the run pins the exact
+// definition version it started on and names the gate it is waiting at, so the
+// approval experience shows the pending gate with its exact version.
+export interface AwaitingApprovalRun {
+  run_id: string;
+  tenant_id: string;
+  definition_id: string;
+  definition_version: string;
+  status: string;
+  completed_steps: string[];
+  in_progress_step: string | null;
+  pending_approval: string | null;
+  failure_reason: string | null;
+  next_step: string | null;
+  event_id: string;
+  transitions: WorkflowRunTransition[];
+}
+
+export interface AwaitingApprovalList {
+  tenant_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  runs: AwaitingApprovalRun[];
+}
+
+// The pending gate approval read (K12). The tenant is a required query scope
+// and the route is read-only: listing a waiting run approves nothing, so the
+// approval experience can surface the pending gate without granting authority.
+export function listAwaitingApprovals(
+  tenantId: string,
+): Promise<AwaitingApprovalList> {
+  return redGet<AwaitingApprovalList>(
+    `/red/clients/${encodeURIComponent(tenantId)}/workflows/awaiting-approval`,
+    {},
+  );
+}

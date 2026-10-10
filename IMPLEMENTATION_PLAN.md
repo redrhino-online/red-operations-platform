@@ -4,6 +4,64 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 20261010T013059Z: K12 — the workflow human gates bound to RED approvals
+
+- **Selected item:** K12 (bind the workflow human gates to RED approvals), the
+  highest-value ready item: K11 and K3 are done, so K12 is the `[7/7]` condition
+  8 binding half and the last K item K13 needs; it completes the pipeline's
+  approval loop so a run resumes only after the stage's RED approval is
+  recorded.
+- **Outcome:** the binding is a domain policy and a port, not a caller convention:
+  `GateStepBinding` (`workflows/domain/policies.py`) maps a pipeline
+  `gate-<stage>` step to its stage and leaves every other step unbound;
+  `StageGateApprovalPort` (`workflows/application/ports.py`) asks whether the
+  stage's RED approval is recorded, answered by
+  `StageGateApprovalRepository` (`workflows/infrastructure/approvals.py`) from
+  the tenant's durable `GateLedger` through the Governance repository port; and
+  `RunWorkflowHandler` takes an optional `gate_approvals` port whose
+  `_require_recorded_approval` raises the new `ApprovalNotRecordedError` when a
+  bound gate has no passing decision, so a run resumes only after that approval
+  is recorded (an unbound step keeps the generic behavior, so the existing
+  approval flows are unchanged). The store port gained
+  `list_awaiting_approval` (in-memory and PostgreSQL adapters) and the API
+  gained `GET /red/clients/{tenant}/workflows/awaiting-approval` (what is
+  waiting, with the exact pinned definition version) and
+  `POST /red/clients/{tenant}/workflows/{run_id}/approval` (a named human
+  resumes a waiting run through the handler composed with the gate-approval
+  seam). The approval experience is bridged: the approval inbox
+  (`ApprovalInbox`) gained a "Pending gate approvals" section fed by the new
+  read, and the cockpit Review queue (`ReviewQueue`) surfaces the pending gates
+  with a link to the approval inbox — one approval experience, the exact
+  version each run pins, and listing a pending gate approves nothing.
+- **Canon drift recorded:** the canon content changed mid-cycle (the owner added
+  `agent/` material; pinned `ef00388d…`, now `50f25ce7…`), which the harness's
+  strict preflight reports as `CANON DRIFT`. Re-pinned with the harness's own
+  idempotent `make canon-lock` (the step `make run` runs first), so the K9
+  canon seed's pin verification now verifies against the new pin; the owner
+  still owns any canon-content decision.
+- **Evidence:** `tests/unit/workflows/test_gate_approval_binding.py` 10 passed
+  and `tests/cockpit-ui/operationsScreensK12.test.tsx` 3 passed (the pending
+  gates surface with the exact pinned version, the empty state, and the
+  container fetches the awaiting-approval read with the context tenant and no
+  free-text tenant input); `tests/cockpit-ui` 52 passed in total
+  (the binding maps `gate-3`/`gate-10` and leaves non-gate steps unbound; a run
+  pauses at the bound gate; resuming without the RED approval is refused with
+  `ApprovalNotRecordedError`; resuming after it is recorded commits the gate and
+  advances; an unbound step keeps the generic behavior; the adapter answers from
+  the ledger; the awaiting-approval read lists the waiting run with its exact
+  version; the approval route refuses then resumes); `make check` 2759 passed /
+  3 skipped / 799 subtests; `scripts/check_vendor_additive.sh` ok (1053 locked
+  files match); `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]`.
+- **Not done (deliberately):** the live single-shell verification and the docs
+  update are K13; no send, spend, publication or client commitment is authorized
+  (SPEC.md sections 4 and 9); `.ralph/DONE` is not touched because `make done`
+  still fails `[7/7]` at the live `[14.6]` check.
+- **Next ready item:** K13 (phase definition of done: run `make done` end to end
+  with the `[7/7]` gate, verify the deployed single shell on Atlas, update
+  `docs/fork_inventory.md` and the README for the retired thin client) — every
+  K dependency is now done.
+- **Blockers:** none.
+
 ### Cycle 20261010T012000Z: K11 — the stage 0-10 pipeline as cockpit workflow definitions
 
 - **Selected item:** K11 (register the stage 0-10 pipeline as cockpit workflow
@@ -52,51 +110,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   not touched because `make done` still fails `[7/7]` at the live `[14.6]` check.
 - **Next ready item:** K12 (bind the workflow human gates to RED approvals),
   unblocked by K11 and K3; K13 needs K9-K12.
-- **Blockers:** none.
-
-### Cycle 20261010T011139Z: K9 — canon into Knowledge, repeatably
-
-- **Selected item:** K9 (canon into Knowledge, repeatably), the highest-value
-  ready item: the owner approved the ADR 0014 exception (`3daced9`, recorded in
-  `docs/fork_inventory.md`) that made the Knowledge and Workflows subtrees
-  RED-owned surfaces, so K9's blocker is gone and K9 is the canon foundation
-  `[7/7]` condition 6 needs; the canon content also changed this cycle (new pin
-  `ef00388d…`), which is exactly what a verifiable seed over the pinned canon
-  must handle. K11 is also unblocked but K9 is first in the queue and K11
-  unblocks only K12.
-- **Outcome:** `backend/redops/seed_canon.py` (repo-side) seeds the pinned canon
-  corpus into the cockpit Knowledge domain `redops-canon` through the vendored
-  loader's ingest seam (`ingest_text_sync`, the same call `POST /documents`
-  makes). It is verifiable: `canon_content_hash` replicates
-  `scripts/canon_hash.sh` byte for byte (asserted against the script in a test)
-  and `verify_canon_pin` refuses to seed when the canon has drifted from
-  `canon.lock`. It is idempotent: chunk ids derive from the canon-relative
-  source name and chunk index, so a rerun upserts the same ids and changes
-  nothing. The excluded trees (`.git`, `.venv`, `site`) match the hash exactly,
-  so the seeded corpus is exactly the pinned content. The RED-owned
-  `knowledge/loader.py` gained the `redops-canon` domain in `UPLOAD_DOMAINS`, so
-  the cockpit upload API accepts it and the unfiltered company-docs query every
-  specialist reads retrieves it. `make seed-canon` runs it against
-  `RALPH_CANON`/`VECTOR_STORE_PATH`. The eval scenario
-  `evals/_scenarios/redops_canon_001.yaml` asserts an answer grounds on canon
-  files (the live eval run is K13's verification).
-- **Evidence:** `tests/unit/test_seed_canon.py` 5 passed (the Python hash equals
-  the script's, the corpus lands in `redops-canon` with canon-relative sources
-  and no excluded-tree content, a rerun changes the collection neither in count
-  nor in rows, a drifted canon is refused, and `canon_files` matches the hash's
-  file set); real-canon CLI verification: 256 files / 3103 chunks in ~69 s,
-  rerun 256 / 3103 with the collection count unchanged at 3103 and a grounding
-  query returning `redops-canon` chunks; vendor knowledge/documents suites 44 +
-  72 passed; `make check` 2740 passed / 3 skipped / 799 subtests;
-  `scripts/check_vendor_additive.sh` ok (1053 locked files match the re-baselined
-  manifest); `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]`.
-- **Not done (deliberately):** the live grounding eval run and the live
-  single-shell verification are K13; no send, spend, publication or client
-  commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is not
-  touched because `make done` still fails `[7/7]` at the live `[14.6]` check.
-- **Next ready item:** K11 (register the stage 0-10 pipeline as cockpit workflow
-  definitions), now unblocked by the same owner exception; K12 needs K11; K13
-  needs K9-K12.
 - **Blockers:** none.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.

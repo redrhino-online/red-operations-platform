@@ -10,13 +10,17 @@
 // content and grants no authority. The backend owns the gate, so the inbox can
 // approve nothing.
 
-import type { ApprovalRecord } from "@/lib/redOperationsApi";
+import type {
+  ApprovalRecord,
+  AwaitingApprovalRun,
+} from "@/lib/redOperationsApi";
 
 export interface ApprovalInboxProps {
   approvals: ApprovalRecord[];
   loading?: boolean;
   error?: string | null;
   tenantId?: string;
+  awaiting?: AwaitingApprovalRun[];
 }
 
 // One field that changed between two versions of the same pinned asset, with
@@ -126,13 +130,27 @@ export function priorApproval(
   return index > 0 ? ordered[index - 1] : null;
 }
 
+// The pipeline gates waiting for their RED approval (K12; SPEC.md section 14
+// condition 8). A waiting run pins the exact definition version it started on
+// and names the gate it is waiting at, so the inbox shows the pending gate with
+// its exact version; listing one approves nothing.
+export function pendingGateApprovals(
+  awaiting: AwaitingApprovalRun[],
+): AwaitingApprovalRun[] {
+  return awaiting
+    .filter((run) => run.pending_approval !== null)
+    .sort((a, b) => a.run_id.localeCompare(b.run_id));
+}
+
 export function ApprovalInbox({
   approvals,
   loading = false,
   error = null,
   tenantId,
+  awaiting = [],
 }: ApprovalInboxProps) {
   const histories = approvalHistories(approvals);
+  const pending = pendingGateApprovals(awaiting);
 
   return (
     <section aria-labelledby="approval-inbox-heading">
@@ -159,6 +177,44 @@ export function ApprovalInbox({
       <p data-testid="approval-count" className="mt-4 text-sm text-fg-muted">
         {approvals.length} approval{approvals.length === 1 ? "" : "s"}
       </p>
+
+      <section
+        aria-labelledby="pending-gates-heading"
+        data-testid="pending-gate-approvals"
+        className="mt-6 rounded-xl border border-line bg-surface-elevated p-4"
+      >
+        <h2 id="pending-gates-heading" className="text-sm font-medium text-fg">
+          Pending gate approvals
+        </h2>
+        <p data-testid="pending-gate-count" className="mt-1 text-sm text-fg-muted">
+          {pending.length} pipeline gate{pending.length === 1 ? "" : "s"} waiting
+          for their RED approval
+        </p>
+        {pending.length === 0 ? (
+          <p className="mt-2 text-sm text-fg-muted">
+            No pipeline gate is waiting for an approval.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {pending.map((run) => (
+              <li
+                key={run.run_id}
+                data-testid={`pending-gate-${run.run_id}`}
+                className="rounded-lg border border-line bg-surface p-3 text-xs text-fg"
+              >
+                <p>
+                  <strong>{run.pending_approval}</strong> on{" "}
+                  <code>{run.definition_id}@{run.definition_version}</code>
+                </p>
+                <p className="text-fg-muted">
+                  Run: {run.run_id} | Committed:{" "}
+                  {run.completed_steps.join(", ") || "none"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {!loading && approvals.length === 0 ? (
         <p className="mt-2 text-sm text-fg-muted">No approvals.</p>

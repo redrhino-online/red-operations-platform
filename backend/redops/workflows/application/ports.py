@@ -13,6 +13,8 @@ indistinguishable from a missing one.
 
 from __future__ import annotations
 
+from typing import Protocol
+
 import abc
 
 from redops.workflows.domain.entities import WorkflowRun
@@ -44,6 +46,16 @@ class WorkflowRunStore(abc.ABC):
         restarts a terminal run (SPEC.md section 11).
         """
 
+    @abc.abstractmethod
+    def list_awaiting_approval(self, *, tenant_id: str) -> tuple[str, ...]:
+        """Return the tenant's run ids waiting at a human approval gate (K12).
+
+        SPEC.md section 14 condition 8 binds the pipeline's human gates to RED
+        approvals, and the approval experience must surface what is waiting. The
+        scan is tenant scoped like ``list_resumable`` (SPEC.md section 9) and
+        returns only the runs whose status is ``awaiting_approval``.
+        """
+
     def close(self) -> None:
         """Release any resource the adapter owns for the caller's request.
 
@@ -69,3 +81,17 @@ class WorkflowStepExecutor(abc.ABC):
     @abc.abstractmethod
     def execute(self, run: WorkflowRun, step: WorkflowStep) -> None:
         """Carry out the step's effect for the run."""
+
+
+class StageGateApprovalPort(Protocol):
+    """Whether a stage's RED approval is recorded (K12; SPEC.md section 14).
+
+    A pipeline gate step is bound to the stage gate the canonical template
+    defines, and that gate is approved only when the tenant's durable ledger
+    holds a passing decision for the stage. The port keeps that check behind a
+    seam so the workflow use case never reads the Governance store directly
+    (SPEC.md section 6).
+    """
+
+    def has_passing_decision(self, *, tenant_id: str, stage_number: int) -> bool:
+        """Whether stage ``stage_number`` authorizes downstream use for the tenant."""
