@@ -45,10 +45,16 @@ from openexecutive.workflows.performance_review import PerformanceReviewWorkflow
 from openexecutive.workflows.pricing_review import PricingReviewWorkflow
 from openexecutive.workflows.product_strategy import ProductStrategyWorkflow
 from openexecutive.workflows.quarterly_plan import QuarterlyPlanWorkflow
+from openexecutive.workflows.redops_pipeline import RedStagePipelineWorkflow
 from openexecutive.workflows.risk_register import RiskRegisterWorkflow
 from openexecutive.workflows.weekly_review import WeeklyReviewWorkflow
 
 WORKFLOW_REGISTRY: dict[str, Workflow] = {
+    # `red_stage_0_10_pipeline` is RED's gated production pipeline (K11;
+    # SPEC.md section 14 condition 8): the Jobs page lists it so the cockpit
+    # shows the pipeline the durable RED workflow runs drive. The catalog
+    # entry holds no RED business logic; the durable runs are RED's.
+    "red_stage_0_10_pipeline": RedStagePipelineWorkflow(),
     "annual_plan": AnnualPlanWorkflow(),
     "department_check_in": DepartmentCheckInWorkflow(),
     "board_prep": BoardPrepWorkflow(),

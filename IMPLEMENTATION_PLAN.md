@@ -4,6 +4,56 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 20261010T012000Z: K11 — the stage 0-10 pipeline as cockpit workflow definitions
+
+- **Selected item:** K11 (register the stage 0-10 pipeline as cockpit workflow
+  definitions), the highest-value ready item: the owner-approved ADR 0014
+  exception made the Workflows subtree a RED-owned surface, so K11's blocker is
+  gone and K11 is the `[7/7]` condition 8 registration half that unblocks K12;
+  K13 needs K9-K12 and K9 is done.
+- **Outcome:** `backend/redops/workflows/pipeline.py` (repo-side) turns the
+  canonical `stage_zero_to_ten_template()` into a versioned
+  `WorkflowDefinition` — one `stage-N` task step and one `gate-N` approval step
+  per stage, 22 steps in template order, so the definition cannot drift from the
+  template the gates are evaluated against — registered in
+  `RED_WORKFLOW_DEFINITIONS` and resolved by `red_workflow_definition`.
+  `pipeline_runtime_from_env` composes the `RunWorkflowHandler` with the same
+  durable run store and connector-backed executor the worker uses, so an
+  API-started run and a worker-resumed run share one database. The new RED route
+  `POST /red/clients/{tenant}/workflows/{definition}` starts a durable run
+  through that handler and returns the same payload the workflow run detail read
+  serves, so a started run's transitions appear on the K4 screen; the executor
+  is an overridable dependency (`get_workflow_step_executor`) so the composition
+  stays behind the port. The vendor Jobs surface is a new additive
+  `workflows/redops_pipeline.py` — a self-contained catalog entry that mirrors
+  the gated stage sequence (no `redops` import, per the ADR 0014 composition
+  rule) — registered in the RED-owned `WORKFLOW_REGISTRY` under a new
+  `WorkflowSection.RED`, so Jobs lists the pipeline; a repo test holds the
+  mirror in sync with the canonical template.
+- **Prerequisite fix:** the test runs left an untracked `chroma_db/` at the repo
+  root (the vendored config's default vector-store path, created whenever a
+  store is instantiated with the repository as the working directory). Added
+  `chroma_db/` to `.gitignore` beside the other generated trees so the harness
+  cannot commit a test artifact.
+- **Evidence:** `tests/unit/workflows/test_stage_pipeline.py` 9 passed (the
+  definition is one task and one gate per stage in template order, the registry
+  resolves it and refuses an unknown name, the runtime composes the injected
+  store, Jobs lists the pipeline and the mirror matches the template and the RED
+  definition's stage steps, and a run started through the API pauses at
+  `gate-0` with `stage-0` committed and its transitions readable at the run
+  detail read, with unknown definitions and blank actors refused); `make check`
+  2749 passed / 3 skipped / 799 subtests; vendor workflow suites 229 passed /
+  2 skipped; `scripts/check_vendor_additive.sh` ok (1053 locked files match);
+  `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]`.
+- **Not done (deliberately):** the approval binding (a run resumes only after
+  the corresponding RED approval is recorded) is K12; the live single-shell
+  verification and the docs update are K13; no send, spend, publication or
+  client commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is
+  not touched because `make done` still fails `[7/7]` at the live `[14.6]` check.
+- **Next ready item:** K12 (bind the workflow human gates to RED approvals),
+  unblocked by K11 and K3; K13 needs K9-K12.
+- **Blockers:** none.
+
 ### Cycle 20261010T011139Z: K9 — canon into Knowledge, repeatably
 
 - **Selected item:** K9 (canon into Knowledge, repeatably), the highest-value
@@ -48,53 +98,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   definitions), now unblocked by the same owner exception; K12 needs K11; K13
   needs K9-K12.
 - **Blockers:** none.
-
-### Cycle 20261010T010510Z: K10 — seed the runtime Departments/Council/People stores RED
-
-- **Selected item:** K10 (seed the runtime Departments/Council/People stores
-  RED), chosen over K9 and K11: all three are `[7/7]` conditions, but K9's
-  `redops-canon` domain needs new accepted-domain and retrieval wiring in the
-  locked `knowledge/loader.py`, `api/routes/documents.py` and `retriever.py`
-  (an owner-approved exception per ADR 0014), and K11's Jobs surfacing needs the
-  locked `workflows/__init__.py` registry — while K10 is fully additive through
-  the vendored departments store's public API, so it is the highest-value item
-  this cycle can complete without an owner decision.
-- **Outcome:** `backend/redops/seed_red_stores.py` (repo-side, no vendor file
-  modified) seeds the runtime departments RED through the vendored store's
-  public API: it runs the vendored default seed first (so a fresh database is
-  initialized and its one-time sentinel marked), deletes the eight generic
-  C-suite defaults, and inserts or updates RED's roster — the nine section 5
-  agents as departments with charters parsed from `docs/agents/charter-*.md`
-  (Mission → mission, "Owns:" → scope, "Does not own:" → out-of-scope) plus the
-  chartered proposal-only capability slots 10 and 11 with no specialist key, so
-  they render as informational rows and are never routed (ADR 0006). It only
-  writes when something differs, so a rerun is a true no-op. `make seed-stores`
-  runs it against `EPISODIC_DB_PATH`. The Council surface is the agent roster
-  the guide already renders RED (C4) and the seed aligns the runtime specialist
-  keys with `RED_SPECIALIST_AREAS`; the People store is left empty on purpose —
-  RED invents no humans and the human approvers are owner decisions (SPEC.md
-  section 11) — so Departments/Council/People render RED only.
-- **Evidence:** `tests/unit/test_seed_red_stores.py` 5 passed (RED roster
-  present and the generic 8 gone, idempotent rerun with empty created/removed/
-  updated, slots 10/11 proposal-only and unrouted, the nine specialist keys
-  equal `RED_SPECIALIST_AREAS`, the charter mission traced to the agent
-  charter); CLI verification: first run `created` 11 / `removed` 8, rerun
-  `{"created": [], "removed": [], "updated": []}`; `make check` 2735 passed /
-  3 skipped / 799 subtests; `scripts/check_vendor_additive.sh` ok (1225 locked
-  files match); `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]`.
-- **Not done (deliberately):** the People store stays empty (no invented
-  humans); the live single-shell verification and the docs update are K13; no
-  send, spend, publication or client commitment is authorized (SPEC.md sections
-  4 and 9); `.ralph/DONE` is not touched because `make done` still fails `[7/7]`
-  at the live `[14.6]` check.
-- **Next ready item:** K9 (canon into Knowledge) and K11 (register the stage
-  0-10 pipeline as cockpit workflows) remain ready but each needs an
-  owner-approved exception for a locked vendor file (ADR 0014); K12 needs K11;
-  K13 needs K9-K12.
-- **Blockers:** K9 and K11 each need an owner-approved exception recorded in
-  `docs/fork_inventory.md` (or a named RED-adopted surface) before an unattended
-  cycle can modify the locked `knowledge/loader.py` / `retriever.py` /
-  `documents.py` (K9) or `workflows/__init__.py` (K11); recorded for the owner.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ## Prototype definition of done

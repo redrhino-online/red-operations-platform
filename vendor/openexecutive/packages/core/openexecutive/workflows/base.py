@@ -26,6 +26,10 @@ class WorkflowSection(StrEnum):
     PEOPLE = "People"
     RISK = "Risk, Legal & Crisis"
     OPERATING = "Operating Cadence"
+    # RED's own production pipeline (K11; SPEC.md section 14 condition 8). The
+    # RED Operations group leads the navigation, so its workflows file under
+    # their own section rather than borrowing a corporate one.
+    RED = "RED Operations"
 
 
 class WorkflowStepDef(BaseModel):

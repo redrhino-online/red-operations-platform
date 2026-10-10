@@ -11,11 +11,13 @@ enforced and tested.
 from __future__ import annotations
 
 import os
+import uuid
 from collections.abc import Iterator
 from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from redops.api.schemas import (
     ApprovalListResponse,
@@ -389,7 +391,10 @@ from redops.contexts.production.infrastructure.repositories import (
     authority_amplifier_repository_from_env,
     build_object_repository_from_env,
 )
-from redops.workflows.application.ports import WorkflowRunStore
+from redops.workflows.application.ports import (
+    WorkflowRunStore,
+    WorkflowStepExecutor,
+)
 from redops.workflows.infrastructure.repositories import (
     workflow_run_store_from_env,
 )
@@ -3788,6 +3793,101 @@ def get_workflow_run(
                 ),
             },
         )
+
+    return _workflow_run_payload(run)
+
+
+class StartWorkflowRunRequest(BaseModel):
+    """The body ``POST /clients/{tenant}/workflows/{definition}`` accepts (K11).
+
+    ``actor`` is the named human starting the run; the route never infers one
+    (SPEC.md section 4). ``reason`` is optional and defaults to the pipeline
+    start reason.
+    """
+
+    actor: str
+    reason: str = "start the stage 0-10 pipeline"
+
+
+def get_workflow_step_executor() -> WorkflowStepExecutor:
+    """Provide the configured workflow step executor seam to the API (K11).
+
+    SPEC.md section 6 keeps infrastructure behind ports: the route depends on
+    the ``WorkflowStepExecutor`` port and the composition (which connector
+    transport carries a recorded operation) stays in one place, the same
+    composition the worker uses, so an API-started run and a worker-resumed run
+    resolve to the same recorded operations.
+    """
+
+    from redops.workflows.pipeline import pipeline_step_executor_from_env
+
+    return pipeline_step_executor_from_env()
+
+
+@router.post("/clients/{tenant_id}/workflows/{definition_name}", status_code=201)
+def start_workflow_run(
+    tenant_id: str,
+    definition_name: str,
+    body: StartWorkflowRunRequest,
+    store: WorkflowRunStore = Depends(get_workflow_run_store),
+    executor: WorkflowStepExecutor = Depends(get_workflow_step_executor),
+) -> dict[str, Any]:
+    """Start one durable run of a registered RED workflow definition (K11).
+
+    SPEC.md section 14 condition 8 requires the stage 0-10 pipeline to drive
+    cockpit workflows, and section 7 requires a run's status to be readable with
+    stable event ids. This route resolves the versioned definition by name,
+    starts the run through the same ``RunWorkflowHandler`` the worker resumes
+    with, and returns the same payload ``GET
+    /clients/{tenant}/workflows/{run_id}`` serves, so the workflow run detail
+    screen shows the started run's transitions. The run advances until it
+    completes or waits for a human at an approval gate; it is never advanced by
+    the route past a gate (SPEC.md section 4).
+    """
+
+    from redops.workflows.application.handlers import RunWorkflowHandler
+    from redops.workflows.pipeline import red_workflow_definition
+
+    if not body.actor.strip():
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "ValueError", "message": "actor is required"},
+        )
+
+    try:
+        definition = red_workflow_definition(definition_name)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "UnknownWorkflowDefinitionError",
+                "message": str(exc),
+            },
+        ) from exc
+
+    handler = RunWorkflowHandler(store=store, executor=executor)
+    run_id = f"{definition_name}-{uuid.uuid4().hex[:12]}"
+    try:
+        run = handler.start(
+            definition=definition,
+            tenant_id=tenant_id,
+            run_id=run_id,
+            actor=body.actor.strip(),
+            reason=body.reason,
+            on=date.today(),
+            correlation_id=uuid.uuid4().hex,
+        )
+    except (GovernanceError, ValueError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": type(exc).__name__, "message": str(exc)},
+        ) from exc
+
+    return _workflow_run_payload(run)
+
+
+def _workflow_run_payload(run: Any) -> dict[str, Any]:
+    """Project a durable run onto the workflow-run read shape, computing no rule."""
 
     transitions = run.transitions
     return {

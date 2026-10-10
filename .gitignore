@@ -4,6 +4,7 @@
 !.env.example
 project_sources/
 .venv/
+chroma_db/
 __pycache__/
 *.py[cod]
 .serena/
