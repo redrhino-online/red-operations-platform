@@ -4,6 +4,51 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
 
 ## Current cycle status
 
+### Cycle 20261010T011139Z: K9 — canon into Knowledge, repeatably
+
+- **Selected item:** K9 (canon into Knowledge, repeatably), the highest-value
+  ready item: the owner approved the ADR 0014 exception (`3daced9`, recorded in
+  `docs/fork_inventory.md`) that made the Knowledge and Workflows subtrees
+  RED-owned surfaces, so K9's blocker is gone and K9 is the canon foundation
+  `[7/7]` condition 6 needs; the canon content also changed this cycle (new pin
+  `ef00388d…`), which is exactly what a verifiable seed over the pinned canon
+  must handle. K11 is also unblocked but K9 is first in the queue and K11
+  unblocks only K12.
+- **Outcome:** `backend/redops/seed_canon.py` (repo-side) seeds the pinned canon
+  corpus into the cockpit Knowledge domain `redops-canon` through the vendored
+  loader's ingest seam (`ingest_text_sync`, the same call `POST /documents`
+  makes). It is verifiable: `canon_content_hash` replicates
+  `scripts/canon_hash.sh` byte for byte (asserted against the script in a test)
+  and `verify_canon_pin` refuses to seed when the canon has drifted from
+  `canon.lock`. It is idempotent: chunk ids derive from the canon-relative
+  source name and chunk index, so a rerun upserts the same ids and changes
+  nothing. The excluded trees (`.git`, `.venv`, `site`) match the hash exactly,
+  so the seeded corpus is exactly the pinned content. The RED-owned
+  `knowledge/loader.py` gained the `redops-canon` domain in `UPLOAD_DOMAINS`, so
+  the cockpit upload API accepts it and the unfiltered company-docs query every
+  specialist reads retrieves it. `make seed-canon` runs it against
+  `RALPH_CANON`/`VECTOR_STORE_PATH`. The eval scenario
+  `evals/_scenarios/redops_canon_001.yaml` asserts an answer grounds on canon
+  files (the live eval run is K13's verification).
+- **Evidence:** `tests/unit/test_seed_canon.py` 5 passed (the Python hash equals
+  the script's, the corpus lands in `redops-canon` with canon-relative sources
+  and no excluded-tree content, a rerun changes the collection neither in count
+  nor in rows, a drifted canon is refused, and `canon_files` matches the hash's
+  file set); real-canon CLI verification: 256 files / 3103 chunks in ~69 s,
+  rerun 256 / 3103 with the collection count unchanged at 3103 and a grounding
+  query returning `redops-canon` chunks; vendor knowledge/documents suites 44 +
+  72 passed; `make check` 2740 passed / 3 skipped / 799 subtests;
+  `scripts/check_vendor_additive.sh` ok (1053 locked files match the re-baselined
+  manifest); `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]`.
+- **Not done (deliberately):** the live grounding eval run and the live
+  single-shell verification are K13; no send, spend, publication or client
+  commitment is authorized (SPEC.md sections 4 and 9); `.ralph/DONE` is not
+  touched because `make done` still fails `[7/7]` at the live `[14.6]` check.
+- **Next ready item:** K11 (register the stage 0-10 pipeline as cockpit workflow
+  definitions), now unblocked by the same owner exception; K12 needs K11; K13
+  needs K9-K12.
+- **Blockers:** none.
+
 ### Cycle 20261010T010510Z: K10 — seed the runtime Departments/Council/People stores RED
 
 - **Selected item:** K10 (seed the runtime Departments/Council/People stores
@@ -50,40 +95,6 @@ Version: 0.2, September 27, 2026. Planning basis: the accompanying SPEC.md. This
   `docs/fork_inventory.md` (or a named RED-adopted surface) before an unattended
   cycle can modify the locked `knowledge/loader.py` / `retriever.py` /
   `documents.py` (K9) or `workflows/__init__.py` (K11); recorded for the owner.
-
-### Cycle 20261009T023814Z: K8 — landing surface = the RED portfolio command center
-
-- **Selected item:** K8 (the landing surface is the RED portfolio command
-  center, with RED-first navigation and the Briefing retargeted), the
-  highest-value ready item: K3 is done, so K8 satisfies `[7/7]` condition 5 and
-  is the first thing a user sees; it is bounded UI work and unblocks K13. K9,
-  K10 and K11 are independent but lower value.
-- **Outcome:** the bare root `/` now rewrites to the native command center page
-  so the deployed root renders the ranked interventions, while the chat-home
-  deep links (`/?new=1`, `/?session=<id>`) pass through so the Executive chat
-  stays reachable. The rewrite is a pure decision in the new additive
-  `src/lib/redLanding.ts` (`landingRewrite`), applied by the RED-owned
-  `src/middleware.ts` (matcher `["/"]`, Auth.js gate still disabled). The
-  RED-owned `navConfig` now leads with the RED Operations group (RED-first
-  order) and the Briefing copy is retargeted to RED's daily brief; the vendor
-  `navConfig.test.mjs` and `middleware-matcher.test.mjs` expectations were
-  updated. The repo-side `tests/cockpit-ui/operationsScreensK8.test.tsx` suite
-  covers the landing decision and the nav order.
-- **Evidence:** `tests/cockpit-ui` 49 passed (6 K2 + 9 K3 + 9 K4 + 9 K5 + 10 K6
-  + 6 K8); vendor `npm test` 233 passed; `make check` 2730 passed / 3 skipped /
-  799 subtests; `scripts/check_frontend_build.sh` ok (cockpit compiled, 49
-  component tests); `scripts/check_vendor_additive.sh` ok (1225 locked files
-  match); `tsc --noEmit` clean; `check_cockpit_overhaul.sh` passes `[14.1]`-`[14.5]`
-  (the live `[14.6]` still fails until the overhauled cockpit image is built and
-  deployed, which is K13's live verification).
-- **Not done (deliberately):** the live single-shell verification and the docs
-  update are K13; no send, spend, publication or client commitment is authorized
-  (SPEC.md sections 4 and 9); `.ralph/DONE` is not touched because `make done`
-  still fails `[7/7]` at the live `[14.6]` check.
-- **Next ready item:** K9 (canon into Knowledge), K10 (seed the runtime
-  Departments/Council/People stores) and K11 (register the stage 0-10 pipeline as
-  cockpit workflows) are all independent and ready; K13 needs them all.
-- **Blockers:** none.
 
 Older cycle notes and decisions: `docs/plan-history.md`. Keep only the latest two cycle entries here; older entries are archived by the Ralph harness.
 ## Prototype definition of done

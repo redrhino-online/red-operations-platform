@@ -1,0 +1,11 @@
+id: redops_canon_001
+title: An answer about the method grounds on the ingested canon corpus
+agent: knowledge
+turns:
+  - user: >
+      Explain the RED Method's three phases and nine motions, and name the canon
+      files you grounded that explanation on.
+    expect:
+      - names the three phases (Refine Offer, Engage Opportunity, Develop Audience)
+      - cites at least one canon file from the redops-canon domain as its source
+      - does not present canon reference material as client-approved fact

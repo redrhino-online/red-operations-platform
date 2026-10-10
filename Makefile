@@ -121,6 +121,13 @@ seed:
 seed-stores:
 	@PYTHONPATH=backend uv run python -m redops.seed_red_stores
 
+# Seed the pinned reference canon into the cockpit Knowledge domain
+# `redops-canon` (K9; SPEC.md section 14 condition 6). Verifiable: it refuses to
+# run when the canon content drifts from canon.lock. Idempotent: a rerun
+# upserts the same chunk ids and changes nothing.
+seed-canon:
+	@PYTHONPATH=backend uv run python -m redops.seed_canon
+
 reset-hosted:
 	@./scripts/reset_redop_data.sh
 

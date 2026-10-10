@@ -37,9 +37,19 @@ DOMAIN_MAP: dict[str, str] = {
 # upload is visible to all rather than to none.
 GENERAL_DOMAIN = "general"
 
+# RED's reference-canon domain (K9; SPEC.md sections 12 and 14 condition 6).
+# The pinned canon corpus is ingested into the cockpit Knowledge under this
+# domain so it is retrievable by the same unfiltered company-docs query every
+# specialist reads, while staying labelled as reference material rather than
+# client documents. Owner-approved RED-owned surface (docs/fork_inventory.md
+# exception record 2026-10-10).
+REDOPS_CANON_DOMAIN = "redops-canon"
+
 # Domains ``POST /documents`` accepts. Anything else is a typo that would
 # silently index the document where no specialist can ever retrieve it.
-UPLOAD_DOMAINS: frozenset[str] = frozenset(DOMAIN_MAP) | {GENERAL_DOMAIN}
+UPLOAD_DOMAINS: frozenset[str] = (
+    frozenset(DOMAIN_MAP) | {GENERAL_DOMAIN, REDOPS_CANON_DOMAIN}
+)
 
 # Chunk-id namespace for a file attached in an integration channel. The
 # sender picks the filename and the filename is the id namespace, so an
