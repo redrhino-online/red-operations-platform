@@ -12,19 +12,23 @@ the `red-canon` repository.
 - Each definition has a stable ID, version, purpose, review state, and ordered
   blocks.
 - Each block states its purpose and whether it is required or optional.
-- Seventeen templates describe patterns that can be inferred from the saved
-  card text or images.
-- Two templates have `needs_review` status because the saved material is blank
-  or too unclear to support a reliable structure.
+- Each of the 18 clear definitions includes its own fill-in email draft. Blanks
+  use clear square-bracket labels such as `[FIRST NAME]`.
+- Eighteen templates describe distinct email examples that can be inferred from
+  the saved card text or images. Each has its own full subject and body draft,
+  with slots that fit that example's sequence and purpose.
+- The remaining card has cover art, not an email. It has `needs_review` status
+  and no fill-in template.
 - Definitions contain no source email copy, links, names, or images.
-- The canon explains the common pattern groups, their sequence, and their use.
+- The canon includes all 18 fill-in templates and explains their purpose.
 
 ## Non-goals
 
 - Adding a draft editor, API route, persistence, or template-selection screen.
 - Changing stage templates, required asset kinds, or the artifact archive.
 - Copying source email text into implementation definitions or new canon prose.
-- Guessing the structure of the two unclear examples.
+- Guessing the email structure of the cover-art card.
+- Adding a rich-text or markdown email editor.
 - Expanding the pilot to other board lists.
 
 ## Acceptance criteria
@@ -38,10 +42,18 @@ the `red-canon` repository.
    sequence.
 4. Given a block list is defined, when the catalog tests run, then every block
    has a unique ID within its template and appears in the intended order.
-5. Given the domain model is added, when existing archive and governance tests
+5. Given a definition is classified, when the catalog is read, then it includes
+   a complete subject and body with square-bracket blanks specific to that
+   example's intent and order.
+6. Given two definitions are classified, when their drafts are compared, then
+   each draft is distinct and includes the example-specific steps rather than
+   only generic introduction, content, and call-to-action prompts.
+7. Given a definition needs review, when the catalog is read, then its body
+   template is absent.
+8. Given the domain model is added, when existing archive and governance tests
    run, then artifact storage and stage requirements behave as before.
-6. Given the canon note is added, when reviewed, then it explains the observed
-   patterns in plain words without copying source prose or editing
+9. Given the canon note is added, when reviewed, then it documents all 18
+   distinct fill-in templates in plain words without copying source prose or editing
    `framework-canon/`.
 
 ## Constraints
@@ -54,12 +66,12 @@ the `red-canon` repository.
 
 ## Pilot catalog IDs
 
-The catalog uses these stable IDs. The review-needed entries are labeled.
+The catalog uses these stable IDs. The cover-art entry is marked for review.
 
 - `appointment_confirmation_prep`
 - `authority_interview`
 - `interview_collection`
-- `bonus_with_purchase` (`needs_review`)
+- `bonus_with_purchase`
 - `cart_recovery`
 - `resource_roundup`
 - `product_faq`
@@ -82,19 +94,21 @@ The catalog uses these stable IDs. The review-needed entries are labeled.
   `/home/wsl/red-canon/internal/`, not the read-only `framework-canon/` source.
 - ASSUMPTION: “Model it in my implementation” means a domain-only definition
   catalog for this pilot. The user selected no API or draft UI.
-- ASSUMPTION: The source cards can be represented by 19 distinct definitions;
-  the two unclear cards remain visible in the catalog as review-needed entries.
+- ASSUMPTION: The 19-card list contains 18 email examples and one cover-art
+  card. The cover-art card remains visible as a review-needed entry without an
+  invented email template.
 - Open question: None for this pilot. API and UI use can be specified later.
 
 ## Ordered plan
 
-1. Add the email template definition types and 19-entry catalog in
-   `backend/redops/contexts/archive/domain/email_templates.py`. Verify unique
-   IDs, version, review state, and ordered blocks with a focused unit test in
+1. Extend the email template definitions and catalog in
+   `backend/redops/contexts/archive/domain/email_templates.py` with 18 distinct
+   subject/body drafts. Verify unique text, sequence-specific slots, and the
+   review-needed entry in
    `tests/unit/archive/test_email_templates.py`.
-2. Add `internal/email-template-structures.md` in `red-canon`. Document the
-   19-card analysis as reusable groups and link the source list backup.
-3. Run the focused new test and existing archive/governance tests. Review both
+2. Extend `internal/email-template-structures.md` in `red-canon` with the same
+   18 fill-in templates and link the source list backup.
+3. Run the focused tests and existing archive/governance tests. Review both
    repositories' diffs and ensure unrelated changes remain untouched.
 
 ## Rollback

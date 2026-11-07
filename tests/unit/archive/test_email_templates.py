@@ -2,28 +2,30 @@ from __future__ import annotations
 
 import unittest
 from dataclasses import FrozenInstanceError
+import re
 
 from redops.contexts.archive.domain.email_templates import EMAIL_TEMPLATES
 
 
 EXPECTED_CLASSIFIED_BLOCK_IDS = {
-    "appointment_confirmation_prep": ("confirmation", "preparation", "next_step"),
-    "authority_interview": ("introduction", "interview", "takeaway", "next_step"),
-    "interview_collection": ("context", "resources", "reader_action"),
-    "cart_recovery": ("reminder", "benefit", "return_link"),
-    "resource_roundup": ("introduction", "resources", "closing"),
-    "product_faq": ("introduction", "questions_and_answers", "next_step"),
-    "time_limited_offer": ("offer", "value", "deadline", "action"),
-    "strategy_call_invitation": ("context", "call_value", "booking"),
-    "problem_to_resource": ("problem", "resource", "action"),
-    "process_video": ("process", "video", "next_step"),
-    "process_article": ("process", "article", "next_step"),
-    "results_proof": ("result", "evidence", "context", "next_step"),
-    "audience_reply_question": ("question", "reply_request", "context"),
-    "webinar_attendance_commitment": ("event_details", "attendance_value", "commitment"),
-    "webinar_early_departure_recovery": ("acknowledgment", "missed_content", "next_step"),
-    "webinar_missed_event_recovery": ("acknowledgment", "replay", "next_step"),
-    "webinar_offer_recap": ("recap", "offer", "action", "deadline"),
+    "appointment_confirmation_prep": ("confirmation", "purpose", "preparation", "value", "close"),
+    "authority_interview": ("topic", "interview", "introduction", "resources"),
+    "interview_collection": ("value", "sections", "collection_link", "entries", "share", "community"),
+    "bonus_with_purchase": ("bonus", "claim", "assets", "benefits", "learn_more", "close"),
+    "cart_recovery": ("reminder", "support", "value", "checkout", "close"),
+    "resource_roundup": ("context", "resources", "implementation", "support"),
+    "product_faq": ("questions", "qualification", "booking", "conditions"),
+    "time_limited_offer": ("discount", "reasons", "price_access", "video", "refund_terms", "benefits", "value_stack", "repeated_action", "deadline_support"),
+    "strategy_call_invitation": ("session", "booking", "reason", "follow_on", "reassurance", "preparation", "qualification", "repeat_booking"),
+    "problem_to_resource": ("problem", "video", "feedback", "invitation"),
+    "process_video": ("template", "diagram", "stages", "application"),
+    "process_article": ("problem", "article", "application", "personal_note", "related_offer"),
+    "results_proof": ("walkthrough", "metrics", "interpretation", "fit"),
+    "audience_reply_question": ("question", "reply", "use"),
+    "webinar_attendance_commitment": ("confirmation", "commitment", "quality", "preparedness", "engagement"),
+    "webinar_early_departure_recovery": ("technical_check", "replay", "controls", "proof"),
+    "webinar_missed_event_recovery": ("acknowledgment", "value", "replay", "reassurance"),
+    "webinar_offer_recap": ("thanks", "offer", "items", "total", "action", "questions"),
 }
 
 
@@ -55,10 +57,26 @@ class EmailTemplateCatalogTests(unittest.TestCase):
 
     def test_review_needed_entries_have_no_inferred_blocks(self) -> None:
         review_needed = {template.id for template in EMAIL_TEMPLATES if template.review_state == "needs_review"}
-        self.assertEqual({"bonus_with_purchase", "unclassified_email"}, review_needed)
+        self.assertEqual({"unclassified_email"}, review_needed)
         for template in EMAIL_TEMPLATES:
             if template.review_state == "needs_review":
                 self.assertEqual((), template.blocks)
+                self.assertIsNone(template.body_template)
+
+    def test_all_classified_templates_have_distinct_subject_and_complete_body(self) -> None:
+        classified = [template for template in EMAIL_TEMPLATES if template.review_state == "classified"]
+        self.assertEqual(18, len(classified))
+        subjects = []
+        for template in classified:
+            with self.subTest(template=template.id):
+                self.assertIsNotNone(template.body_template)
+                subject, separator, body = template.body_template.partition("\n\n")
+                self.assertTrue(separator)
+                self.assertTrue(subject.startswith("Subject: "))
+                self.assertGreater(len(body.split()), 60)
+                self.assertTrue(re.search(r"\[([A-Z][A-Z0-9 ]+)\]", body))
+                subjects.append(subject)
+        self.assertEqual(len(subjects), len(set(subjects)))
 
     def test_definitions_are_immutable(self) -> None:
         with self.assertRaises(FrozenInstanceError):
